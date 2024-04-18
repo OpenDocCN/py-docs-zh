@@ -4506,6 +4506,7 @@
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[已删除对象](../glossary.html#term-deleted)在事务生命周期内被重新提升到[持久化](../glossary.html#term-persistent)状态，对应其DELETE语句被回滚。请注意，如果这些对象首先在事务内为[挂起状态](../glossary.html#term-pending)，那么该操作将优先进行。'
 - en: ''
   id: totrans-478
   prefs:
@@ -4525,11 +4526,14 @@
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 所有未清除的对象都将完全过期 - 这与[`Session.expire_on_commit`](session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session")设置无关。
 - en: With that state understood, the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") may safely continue usage after a rollback occurs.
   id: totrans-481
   prefs: []
   type: TYPE_NORMAL
+  zh: 了解了该状态后，[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")可以在回滚发生后安全地继续使用。
 - en: 'Changed in version 1.4: The [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") object now features deferred “begin” behavior, as described
     in [autobegin](#session-autobegin). If no transaction is begun, methods like [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
@@ -4540,6 +4544,9 @@
   id: totrans-482
   prefs: []
   type: TYPE_NORMAL
+  zh: 从1.4版本开始更改：[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")对象现在具有延迟“开始”行为，如[autobegin](#session-autobegin)中所述。如果未开始任何事务，则[`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit")和[`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback")等方法不会产生任何效果。在1.4版本之前不会观察到此行为，因为在非自动提交模式下，事务始终会隐式存在。
 - en: When a [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush "sqlalchemy.orm.Session.flush")
     fails, typically for reasons like primary key, foreign key, or “not nullable”
     constraint violations, a ROLLBACK is issued automatically (it’s currently not
@@ -4554,18 +4561,25 @@
   id: totrans-483
   prefs: []
   type: TYPE_NORMAL
+  zh: 当[`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush "sqlalchemy.orm.Session.flush")失败时，通常是由于主键、外键或“非空”约束违反等原因，将自动发出ROLLBACK（目前不可能在部分失败后继续flush）。但是，此时[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")处于一种称为“不活跃”的状态，并且调用应用程序必须始终显式调用[`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback")方法，以使[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")可以恢复到可用状态（也可以简单地关闭和丢弃）。有关详细讨论，请参阅[“由于刷新期间发生先前异常，此会话的事务已被回滚。”（或类似）的常见问题解答条目](../faq/sessions.html#faq-session-rollback)。
 - en: See also
   id: totrans-484
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Auto Begin](#session-autobegin)'
   id: totrans-485
   prefs: []
   type: TYPE_NORMAL
+  zh: '[自动开始](#session-autobegin)'
 - en: '### Closing'
   id: totrans-486
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 结束'
 - en: The [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close "sqlalchemy.orm.Session.close")
     method issues a [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
     "sqlalchemy.orm.Session.expunge_all") which removes all ORM-mapped objects from
@@ -4576,6 +4590,10 @@
   id: totrans-487
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.close()`](session_api.html#sqlalchemy.orm.Session.close "sqlalchemy.orm.Session.close")
+    方法会调用 [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all") 方法，该方法会将会话中的所有 ORM 映射对象移除，并且释放与其绑定的 [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") 对象的所有事务/连接资源。当连接返回到连接池时，事务状态也会回滚。'
 - en: By default, when the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     is closed, it is essentially in the original state as when it was first constructed,
     and **may be used again**. In this sense, the [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
@@ -4587,6 +4605,12 @@
   id: totrans-488
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，当 [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    被关闭时，它实际上处于最初构造时的原始状态，并且**可以再次使用**。从这个意义上讲，[`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") 方法更像是一个“重置”回到干净状态，而不太像一个“数据库关闭”方法。在这种操作模式下，方法
+    [`Session.reset()`](session_api.html#sqlalchemy.orm.Session.reset "sqlalchemy.orm.Session.reset")
+    是 [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close "sqlalchemy.orm.Session.close")
+    的别名，并且以相同的方式运行。
 - en: The default behavior of [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
     "sqlalchemy.orm.Session.close") can be changed by setting the parameter [`Session.close_resets_only`](session_api.html#sqlalchemy.orm.Session.params.close_resets_only
     "sqlalchemy.orm.Session") to `False`, indicating that the [`Session`](session_api.html#sqlalchemy.orm.Session
@@ -4599,10 +4623,19 @@
   id: totrans-489
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.close()`](session_api.html#sqlalchemy.orm.Session.close "sqlalchemy.orm.Session.close")
+    的默认行为可以通过设置参数 [`Session.close_resets_only`](session_api.html#sqlalchemy.orm.Session.params.close_resets_only
+    "sqlalchemy.orm.Session") 为 `False` 来更改，表示在调用方法 [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") 后，[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 不能被重复使用。在这种操作模式下，当 [`Session.close_resets_only`](session_api.html#sqlalchemy.orm.Session.params.close_resets_only
+    "sqlalchemy.orm.Session") 设置为 `True` 时，方法 [`Session.reset()`](session_api.html#sqlalchemy.orm.Session.reset
+    "sqlalchemy.orm.Session.reset") 将允许多次“重置”会话，表现得像 [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close")。'
 - en: New in version 2.0.22.
   id: totrans-490
   prefs: []
   type: TYPE_NORMAL
+  zh: 新功能在版本 2.0.22 中添加。
 - en: 'It’s recommended that the scope of a [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") be limited by a call to [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
     "sqlalchemy.orm.Session.close") at the end, especially if the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
