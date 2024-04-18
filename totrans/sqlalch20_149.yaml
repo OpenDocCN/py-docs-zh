@@ -1,0 +1,3189 @@
+- en: What’s New in SQLAlchemy 0.6?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/changelog/migration_06.html](https://docs.sqlalchemy.org/en/20/changelog/migration_06.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: About this Document
+  prefs: []
+  type: TYPE_NORMAL
+- en: This document describes changes between SQLAlchemy version 0.5, last released
+    January 16, 2010, and SQLAlchemy version 0.6, last released May 5, 2012.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Document date: June 6, 2010'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This guide documents API changes which affect users migrating their applications
+    from the 0.5 series of SQLAlchemy to 0.6\. Note that SQLAlchemy 0.6 removes some
+    behaviors which were deprecated throughout the span of the 0.5 series, and also
+    deprecates more behaviors specific to 0.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Platform Support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: cPython versions 2.4 and upwards throughout the 2.xx series
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Jython 2.5.1 - using the zxJDBC DBAPI included with Jython.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: cPython 3.x - see [source:sqlalchemy/trunk/README.py3k] for information on how
+    to build for python3.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New Dialect System
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Dialect modules are now broken up into distinct subcomponents, within the scope
+    of a single database backend. Dialect implementations are now in the `sqlalchemy.dialects`
+    package. The `sqlalchemy.databases` package still exists as a placeholder to provide
+    some level of backwards compatibility for simple imports.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For each supported database, a sub-package exists within `sqlalchemy.dialects`
+    where several files are contained. Each package contains a module called `base.py`
+    which defines the specific SQL dialect used by that database. It also contains
+    one or more “driver” modules, each one corresponding to a specific DBAPI - these
+    files are named corresponding to the DBAPI itself, such as `pysqlite`, `cx_oracle`,
+    or `pyodbc`. The classes used by SQLAlchemy dialects are first declared in the
+    `base.py` module, defining all behavioral characteristics defined by the database.
+    These include capability mappings, such as “supports sequences”, “supports returning”,
+    etc., type definitions, and SQL compilation rules. Each “driver” module in turn
+    provides subclasses of those classes as needed which override the default behavior
+    to accommodate the additional features, behaviors, and quirks of that DBAPI. For
+    DBAPIs that support multiple backends (pyodbc, zxJDBC, mxODBC), the dialect module
+    will use mixins from the `sqlalchemy.connectors` package, which provide functionality
+    common to that DBAPI across all backends, most typically dealing with connect
+    arguments. This means that connecting using pyodbc, zxJDBC or mxODBC (when implemented)
+    is extremely consistent across supported backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The URL format used by `create_engine()` has been enhanced to handle any number
+    of DBAPIs for a particular backend, using a scheme that is inspired by that of
+    JDBC. The previous format still works, and will select a “default” DBAPI implementation,
+    such as the PostgreSQL URL below that will use psycopg2:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However to specify a specific DBAPI backend such as pg8000, add it to the “protocol”
+    section of the URL using a plus sign “+”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Important Dialect Links:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Documentation on connect arguments: [https://www.sqlalchemy.org/docs/06/dbengine.html#create](https://www.sqlalchemy.org/docs/06/dbengine.html#create)-
+    engine-url-arguments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Reference documentation for individual dialects: [https://ww](https://ww) w.sqlalchemy.org/docs/06/reference/dialects/index.html'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The tips and tricks at DatabaseNotes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Other notes regarding dialects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: the type system has been changed dramatically in SQLAlchemy 0.6\. This has an
+    impact on all dialects regarding naming conventions, behaviors, and implementations.
+    See the section on “Types” below.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the `ResultProxy` object now offers a 2x speed improvement in some cases thanks
+    to some refactorings.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the `RowProxy`, i.e. individual result row object, is now directly pickleable.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the setuptools entrypoint used to locate external dialects is now called `sqlalchemy.dialects`.
+    An external dialect written against 0.4 or 0.5 will need to be modified to work
+    with 0.6 in any case so this change does not add any additional difficulties.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: dialects now receive an initialize() event on initial connection to determine
+    connection properties.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Functions and operators generated by the compiler now use (almost) regular dispatch
+    functions of the form “visit_<opname>” and “visit_<funcname>_fn” to provide customed
+    processing. This replaces the need to copy the “functions” and “operators” dictionaries
+    in compiler subclasses with straightforward visitor methods, and also allows compiler
+    subclasses complete control over rendering, as the full _Function or _BinaryExpression
+    object is passed in.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dialect Imports
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The import structure of dialects has changed. Each dialect now exports its
+    base “dialect” class as well as the full set of SQL types supported on that dialect
+    via `sqlalchemy.dialects.<name>`. For example, to import a set of PG types:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, `INTEGER` is actually the plain `INTEGER` type from `sqlalchemy.types`,
+    but the PG dialect makes it available in the same way as those types which are
+    specific to PG, such as `BYTEA` and `MACADDR`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Expression Language Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: An Important Expression Language Gotcha
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: There’s one quite significant behavioral change to the expression language which
+    may affect some applications. The boolean value of Python boolean expressions,
+    i.e. `==`, `!=`, and similar, now evaluates accurately with regards to the two
+    clause objects being compared.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we know, comparing a `ClauseElement` to any other object returns another
+    `ClauseElement`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This so that Python expressions produce SQL expressions when converted to strings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: But what happens if we say this?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In previous versions of SQLAlchemy, the returned `_BinaryExpression` was a
+    plain Python object which evaluated to `True`. Now it evaluates to whether or
+    not the actual `ClauseElement` should have the same hash value as to that being
+    compared. Meaning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That means code such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Would not evaluate if `expression` was a binary clause. Since the above pattern
+    should never be used, the base `ClauseElement` now raises an exception if called
+    in a boolean context:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Code that wants to check for the presence of a `ClauseElement` expression should
+    instead say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Keep in mind, **this applies to Table and Column objects too**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rationale for the change is twofold:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comparisons of the form `if c1 == c2:  <do something>` can actually be written
+    now
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Support for correct hashing of `ClauseElement` objects now works on alternate
+    platforms, namely Jython. Up until this point SQLAlchemy relied heavily on the
+    specific behavior of cPython in this regard (and still had occasional problems
+    with it).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stricter “executemany” Behavior
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'An “executemany” in SQLAlchemy corresponds to a call to `execute()`, passing
+    along a collection of bind parameter sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the `Connection` object sends off the given `insert()` construct for compilation,
+    it passes to the compiler the keynames present in the first set of binds passed
+    along to determine the construction of the statement’s VALUES clause. Users familiar
+    with this construct will know that additional keys present in the remaining dictionaries
+    don’t have any impact. What’s different now is that all subsequent dictionaries
+    need to include at least *every* key that is present in the first dictionary.
+    This means that a call like this no longer works:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because the third row does not specify the ‘timestamp’ column. Previous versions
+    of SQLAlchemy would simply insert NULL for these missing columns. However, if
+    the `timestamp` column in the above example contained a Python-side default value
+    or function, it would *not* be used. This because the “executemany” operation
+    is optimized for maximum performance across huge numbers of parameter sets, and
+    does not attempt to evaluate Python-side defaults for those missing keys. Because
+    defaults are often implemented either as SQL expressions which are embedded inline
+    with the INSERT statement, or are server side expressions which again are triggered
+    based on the structure of the INSERT string, which by definition cannot fire off
+    conditionally based on each parameter set, it would be inconsistent for Python
+    side defaults to behave differently vs. SQL/server side defaults. (SQL expression
+    based defaults are embedded inline as of the 0.5 series, again to minimize the
+    impact of huge numbers of parameter sets).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy 0.6 therefore establishes predictable consistency by forbidding any
+    subsequent parameter sets from leaving any fields blank. That way, there’s no
+    more silent failure of Python side default values and functions, which additionally
+    are allowed to remain consistent in their behavior versus SQL and server side
+    defaults.
+  prefs: []
+  type: TYPE_NORMAL
+- en: UNION and other “compound” constructs parenthesize consistently
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A rule that was designed to help SQLite has been removed, that of the first
+    compound element within another compound (such as, a `union()` inside of an `except_()`)
+    wouldn’t be parenthesized. This is inconsistent and produces the wrong results
+    on PostgreSQL, which has precedence rules regarding INTERSECTION, and its generally
+    a surprise. When using complex composites with SQLite, you now need to turn the
+    first element into a subquery (which is also compatible on PG). A new example
+    is in the SQL expression tutorial at the end of [[https://www.sqlalchemy.org/docs/06/sqlexpression.html](https://www.sqlalchemy.org/docs/06/sqlexpression.html)
+    #unions-and-other-set-operations]. See [#1665](https://www.sqlalchemy.org/trac/ticket/1665)
+    and r6690 for more background.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: C Extensions for Result Fetching
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `ResultProxy` and related elements, including most common “row processing”
+    functions such as unicode conversion, numerical/boolean conversions and date parsing,
+    have been re-implemented as optional C extensions for the purposes of performance.
+    This represents the beginning of SQLAlchemy’s path to the “dark side” where we
+    hope to continue improving performance by reimplementing critical sections in
+    C. The extensions can be built by specifying `--with-cextensions`, i.e. `python
+    setup.py --with- cextensions install`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The extensions have the most dramatic impact on result fetching using direct
+    `ResultProxy` access, i.e. that which is returned by `engine.execute()`, `connection.execute()`,
+    or `session.execute()`. Within results returned by an ORM `Query` object, result
+    fetching is not as high a percentage of overhead, so ORM performance improves
+    more modestly, and mostly in the realm of fetching large result sets. The performance
+    improvements highly depend on the dbapi in use and on the syntax used to access
+    the columns of each row (eg `row['name']` is much faster than `row.name`). The
+    current extensions have no impact on the speed of inserts/updates/deletes, nor
+    do they improve the latency of SQL execution, that is, an application that spends
+    most of its time executing many statements with very small result sets will not
+    see much improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Performance has been improved in 0.6 versus 0.5 regardless of the extensions.
+    A quick overview of what connecting and fetching 50,000 rows looks like with SQLite,
+    using mostly direct SQLite access, a `ResultProxy`, and a simple mapped ORM object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the ORM fetches the rows 33% faster than 0.5 due to in-python performance
+    enhancements. With the C extensions we get another 20%. However, `ResultProxy`
+    fetches improve by 67% with the C extension versus not. Other tests report as
+    much as a 200% speed improvement for some scenarios, such as those where lots
+    of string conversions are occurring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Schema Capabilities
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `sqlalchemy.schema` package has received some long- needed attention. The
+    most visible change is the newly expanded DDL system. In SQLAlchemy, it was possible
+    since version 0.5 to create custom DDL strings and associate them with tables
+    or metadata objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now the full suite of DDL constructs are available under the same system, including
+    those for CREATE TABLE, ADD CONSTRAINT, etc.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Additionally, all the DDL objects are now regular `ClauseElement` objects just
+    like any other SQLAlchemy expression object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and using the `sqlalchemy.ext.compiler` extension you can make your own:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Deprecated/Removed Schema Elements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The schema package has also been greatly streamlined. Many options and methods
+    which were deprecated throughout 0.5 have been removed. Other little known accessors
+    and methods have also been removed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: the “owner” keyword argument is removed from `Table`. Use “schema” to represent
+    any namespaces to be prepended to the table name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: deprecated `MetaData.connect()` and `ThreadLocalMetaData.connect()` have been
+    removed - send the “bind” attribute to bind a metadata.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: deprecated metadata.table_iterator() method removed (use sorted_tables)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “metadata” argument is removed from `DefaultGenerator` and subclasses, but
+    remains locally present on `Sequence`, which is a standalone construct in DDL.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: deprecated `PassiveDefault` - use `DefaultClause`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Removed public mutability from `Index` and `Constraint` objects:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ForeignKeyConstraint.append_element()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Index.append_column()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`UniqueConstraint.append_column()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`PrimaryKeyConstraint.add()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`PrimaryKeyConstraint.remove()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These should be constructed declaratively (i.e. in one construction).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Other removed things:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Table.key` (no idea what this was for)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Column.bind` (get via column.table.bind)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Column.metadata` (get via column.table.metadata)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Column.sequence` (use column.default)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Other Behavioral Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`UniqueConstraint`, `Index`, `PrimaryKeyConstraint` all accept lists of column
+    names or column objects as arguments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `use_alter` flag on `ForeignKey` is now a shortcut option for operations
+    that can be hand-constructed using the `DDL()` event system. A side effect of
+    this refactor is that `ForeignKeyConstraint` objects with `use_alter=True` will
+    *not* be emitted on SQLite, which does not support ALTER for foreign keys. This
+    has no effect on SQLite’s behavior since SQLite does not actually honor FOREIGN
+    KEY constraints.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Table.primary_key` is not assignable - use `table.append_constraint(PrimaryKeyConstraint(...))`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A `Column` definition with a `ForeignKey` and no type, e.g. `Column(name, ForeignKey(sometable.c.somecol))`
+    used to get the type of the referenced column. Now support for that automatic
+    type inference is partial and may not work in all cases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Logging opened up
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: At the expense of a few extra method calls here and there, you can set log levels
+    for INFO and DEBUG after an engine, pool, or mapper has been created, and logging
+    will commence. The `isEnabledFor(INFO)` method is now called per-`Connection`
+    and `isEnabledFor(DEBUG)` per-`ResultProxy` if already enabled on the parent connection.
+    Pool logging sends to `log.info()` and `log.debug()` with no check - note that
+    pool checkout/checkin is typically once per transaction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reflection/Inspector API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The reflection system, which allows reflection of table columns via `Table('sometable',
+    metadata, autoload=True)` has been opened up into its own fine-grained API, which
+    allows direct inspection of database elements such as tables, columns, constraints,
+    indexes, and more. This API expresses return values as simple lists of strings,
+    dictionaries, and `TypeEngine` objects. The internals of `autoload=True` now build
+    upon this system such that the translation of raw database information into `sqlalchemy.schema`
+    constructs is centralized and the contract of individual dialects greatly simplified,
+    vastly reducing bugs and inconsistencies across different backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To use an inspector:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'the `from_engine()` method will in some cases provide a backend-specific inspector
+    with additional capabilities, such as that of PostgreSQL which provides a `get_table_oid()`
+    method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: RETURNING Support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `insert()`, `update()` and `delete()` constructs now support a `returning()`
+    method, which corresponds to the SQL RETURNING clause as supported by PostgreSQL,
+    Oracle, MS-SQL, and Firebird. It is not supported for any other backend at this
+    time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given a list of column expressions in the same manner as that of a `select()`
+    construct, the values of these columns will be returned as a regular result set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The implementation of RETURNING across the four supported backends varies wildly,
+    in the case of Oracle requiring an intricate usage of OUT parameters which are
+    re-routed into a “mock” result set, and in the case of MS-SQL using an awkward
+    SQL syntax. The usage of RETURNING is subject to limitations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: it does not work for any “executemany()” style of execution. This is a limitation
+    of all supported DBAPIs.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some backends, such as Oracle, only support RETURNING that returns a single
+    row - this includes UPDATE and DELETE statements, meaning the update() or delete()
+    construct must match only a single row, or an error is raised (by Oracle, not
+    SQLAlchemy).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: RETURNING is also used automatically by SQLAlchemy, when available and when
+    not otherwise specified by an explicit `returning()` call, to fetch the value
+    of newly generated primary key values for single-row INSERT statements. This means
+    there’s no more “SELECT nextval(sequence)” pre- execution for insert statements
+    where the primary key value is required. Truth be told, implicit RETURNING feature
+    does incur more method overhead than the old “select nextval()” system, which
+    used a quick and dirty cursor.execute() to get at the sequence value, and in the
+    case of Oracle requires additional binding of out parameters. So if method/protocol
+    overhead is proving to be more expensive than additional database round trips,
+    the feature can be disabled by specifying `implicit_returning=False` to `create_engine()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Type System Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: New Architecture
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The type system has been completely reworked behind the scenes to provide two
+    goals:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Separate the handling of bind parameters and result row values, typically a
+    DBAPI requirement, from the SQL specification of the type itself, which is a database
+    requirement. This is consistent with the overall dialect refactor that separates
+    database SQL behavior from DBAPI.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Establish a clear and consistent contract for generating DDL from a `TypeEngine`
+    object and for constructing `TypeEngine` objects based on column reflection.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Highlights of these changes include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The construction of types within dialects has been totally overhauled. Dialects
+    now define publicly available types as UPPERCASE names exclusively, and internal
+    implementation types using underscore identifiers (i.e. are private). The system
+    by which types are expressed in SQL and DDL has been moved to the compiler system.
+    This has the effect that there are much fewer type objects within most dialects.
+    A detailed document on this architecture for dialect authors is in [source:/lib/sqlalc
+    hemy/dialects/type_migration_guidelines.txt].
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reflection of types now returns the exact UPPERCASE type within types.py, or
+    the UPPERCASE type within the dialect itself if the type is not a standard SQL
+    type. This means reflection now returns more accurate information about reflected
+    types.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: User defined types that subclass `TypeEngine` and wish to provide `get_col_spec()`
+    should now subclass `UserDefinedType`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `result_processor()` method on all type classes now accepts an additional
+    argument `coltype`. This is the DBAPI type object attached to cursor.description,
+    and should be used when applicable to make better decisions on what kind of result-processing
+    callable should be returned. Ideally result processor functions would never need
+    to use `isinstance()`, which is an expensive call at this level.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Native Unicode Mode
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As more DBAPIs support returning Python unicode objects directly, the base
+    dialect now performs a check upon the first connection which establishes whether
+    or not the DBAPI returns a Python unicode object for a basic select of a VARCHAR
+    value. If so, the `String` type and all subclasses (i.e. `Text`, `Unicode`, etc.)
+    will skip the “unicode” check/conversion step when result rows are received. This
+    offers a dramatic performance increase for large result sets. The “unicode mode”
+    currently is known to work with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: sqlite3 / pysqlite
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: psycopg2 - SQLA 0.6 now uses the “UNICODE” type extension by default on each
+    psycopg2 connection object
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: pg8000
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: cx_oracle (we use an output processor - nice feature !)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Other types may choose to disable unicode processing as needed, such as the
+    `NVARCHAR` type when used with MS-SQL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In particular, if porting an application based on a DBAPI that formerly returned
+    non-unicode strings, the “native unicode” mode has a plainly different default
+    behavior - columns that are declared as `String` or `VARCHAR` now return unicode
+    by default whereas they would return strings before. This can break code which
+    expects non-unicode strings. The psycopg2 “native unicode” mode can be disabled
+    by passing `use_native_unicode=False` to `create_engine()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A more general solution for string columns that explicitly do not want a unicode
+    object is to use a `TypeDecorator` that converts unicode back to utf-8, or whatever
+    is desired:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that the `assert_unicode` flag is now deprecated. SQLAlchemy allows the
+    DBAPI and backend database in use to handle Unicode parameters when available,
+    and does not add operational overhead by checking the incoming type; modern systems
+    like sqlite and PostgreSQL will raise an encoding error on their end if invalid
+    data is passed. In those cases where SQLAlchemy does need to coerce a bind parameter
+    from Python Unicode to an encoded string, or when the Unicode type is used explicitly,
+    a warning is raised if the object is a bytestring. This warning can be suppressed
+    or converted to an exception using the Python warnings filter documented at: [https://docs.python.org/library/warnings.html](https://docs.python.org/library/warnings.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generic Enum Type
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We now have an `Enum` in the `types` module. This is a string type that is given
+    a collection of “labels” which constrain the possible values given to those labels.
+    By default, this type generates a `VARCHAR` using the size of the largest label,
+    and applies a CHECK constraint to the table within the CREATE TABLE statement.
+    When using MySQL, the type by default uses MySQL’s ENUM type, and when using PostgreSQL
+    the type will generate a user defined type using `CREATE TYPE <mytype> AS ENUM`.
+    In order to create the type using PostgreSQL, the `name` parameter must be specified
+    to the constructor. The type also accepts a `native_enum=False` option which will
+    issue the VARCHAR/CHECK strategy for all databases. Note that PostgreSQL ENUM
+    types currently don’t work with pg8000 or zxjdbc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reflection Returns Dialect-Specific Types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Reflection now returns the most specific type possible from the database. That
+    is, if you create a table using `String`, then reflect it back, the reflected
+    column will likely be `VARCHAR`. For dialects that support a more specific form
+    of the type, that’s what you’ll get. So a `Text` type would come back as `oracle.CLOB`
+    on Oracle, a `LargeBinary` might be an `mysql.MEDIUMBLOB` etc. The obvious advantage
+    here is that reflection preserves as much information possible from what the database
+    had to say.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some applications that deal heavily in table metadata may wish to compare types
+    across reflected tables and/or non- reflected tables. There’s a semi-private accessor
+    available on `TypeEngine` called `_type_affinity` and an associated comparison
+    helper `_compare_type_affinity`. This accessor returns the “generic” `types` class
+    which the type corresponds to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Miscellaneous API Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The usual “generic” types are still the general system in use, i.e. `String`,
+    `Float`, `DateTime`. There’s a few changes there:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Types no longer make any guesses as to default parameters. In particular, `Numeric`,
+    `Float`, as well as subclasses NUMERIC, FLOAT, DECIMAL don’t generate any length
+    or scale unless specified. This also continues to include the controversial `String`
+    and `VARCHAR` types (although MySQL dialect will pre-emptively raise when asked
+    to render VARCHAR with no length). No defaults are assumed, and if they are used
+    in a CREATE TABLE statement, an error will be raised if the underlying database
+    does not allow non-lengthed versions of these types.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the `Binary` type has been renamed to `LargeBinary`, for BLOB/BYTEA/similar
+    types. For `BINARY` and `VARBINARY`, those are present directly as `types.BINARY`,
+    `types.VARBINARY`, as well as in the MySQL and MS-SQL dialects.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`PickleType` now uses == for comparison of values when mutable=True, unless
+    the “comparator” argument with a comparison function is specified to the type.
+    If you are pickling a custom object you should implement an `__eq__()` method
+    so that value-based comparisons are accurate.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The default “precision” and “scale” arguments of Numeric and Float have been
+    removed and now default to None. NUMERIC and FLOAT will be rendered with no numeric
+    arguments by default unless these values are provided.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: DATE, TIME and DATETIME types on SQLite can now take optional “storage_format”
+    and “regexp” argument. “storage_format” can be used to store those types using
+    a custom string format. “regexp” allows to use a custom regular expression to
+    match string values from the database.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`__legacy_microseconds__` on SQLite `Time` and `DateTime` types is not supported
+    anymore. You should use the new “storage_format” argument instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`DateTime` types on SQLite now use by a default a stricter regular expression
+    to match strings from the database. Use the new “regexp” argument if you are using
+    data stored in a legacy format.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ORM Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Upgrading an ORM application from 0.5 to 0.6 should require little to no changes,
+    as the ORM’s behavior remains almost identical. There are some default argument
+    and name changes, and some loading behaviors have been improved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Unit of Work
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The internals for the unit of work, primarily `topological.py` and `unitofwork.py`,
+    have been completely rewritten and are vastly simplified. This should have no
+    impact on usage, as all existing behavior during flush has been maintained exactly
+    (or at least, as far as it is exercised by our testsuite and the handful of production
+    environments which have tested it heavily). The performance of flush() now uses
+    20-30% fewer method calls and should also use less memory. The intent and flow
+    of the source code should now be reasonably easy to follow, and the architecture
+    of the flush is fairly open-ended at this point, creating room for potential new
+    areas of sophistication. The flush process no longer has any reliance on recursion
+    so flush plans of arbitrary size and complexity can be flushed. Additionally,
+    the mapper’s “save” process, which issues INSERT and UPDATE statements, now caches
+    the “compiled” form of the two statements so that callcounts are further dramatically
+    reduced with very large flushes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Any changes in behavior observed with flush versus earlier versions of 0.6 or
+    0.5 should be reported to us ASAP - we’ll make sure no functionality is lost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Changes to `query.update()` and `query.delete()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: the ‘expire’ option on query.update() has been renamed to ‘fetch’, thus matching
+    that of query.delete()
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.update()` and `query.delete()` both default to ‘evaluate’ for the synchronize
+    strategy.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the ‘synchronize’ strategy for update() and delete() raises an error on failure.
+    There is no implicit fallback onto “fetch”. Failure of evaluation is based on
+    the structure of criteria, so success/failure is deterministic based on code structure.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`relation()` is officially named `relationship()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This to solve the long running issue that “relation” means a “table or derived
+    table” in relational algebra terms. The `relation()` name, which is less typing,
+    will hang around for the foreseeable future so this change should be entirely
+    painless.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subquery eager loading
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A new kind of eager loading is added called “subquery” loading. This is a load
+    that emits a second SQL query immediately after the first which loads full collections
+    for all the parents in the first query, joining upwards to the parent using INNER
+    JOIN. Subquery loading is used similarly to the current joined-eager loading,
+    using the ``subqueryload()[PRE22]subqueryload_all()[PRE23]lazy='subquery'[PRE24]relationship()``.
+    The subquery load is usually much more efficient for loading many larger collections
+    as it uses INNER JOIN unconditionally and also doesn’t re-load parent rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '``eagerload()[PRE25]eagerload_all()[PRE26]joinedload()[PRE27]joinedload_all()``'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To make room for the new subquery load feature, the existing ``eagerload()[PRE28]eagerload_all()[PRE29]joinedload()[PRE30]joinedload_all()[PRE31]relation()``.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '``lazy=False|None|True|''dynamic''[PRE32]lazy=''noload''|''joined''|''subquery''|''select''|''dynamic''``'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Continuing on the theme of loader strategies opened up, the standard keywords
+    for the ``lazy[PRE33]relationship()[PRE34]select[PRE35]joined[PRE36]subquery[PRE37]noload[PRE38]dynamic[PRE39]True[PRE40]False[PRE41]None``
+    arguments are still accepted with the identical behavior as before.
+  prefs: []
+  type: TYPE_NORMAL
+- en: innerjoin=True on relation, joinedload
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Joined-eagerly loaded scalars and collections can now be instructed to use INNER
+    JOIN instead of OUTER JOIN. On PostgreSQL this is observed to provide a 300-600%
+    speedup on some queries. Set this flag for any many-to-one which is on a NOT NULLable
+    foreign key, and similarly for any collection where related items are guaranteed
+    to exist.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At mapper level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At query time level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `innerjoin=True` flag at the `relationship()` level will also take effect
+    for any `joinedload()` option which does not override the value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many-to-one Enhancements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: many-to-one relations now fire off a lazyload in fewer cases, including in most
+    cases will not fetch the “old” value when a new one is replaced.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: many-to-one relation to a joined-table subclass now uses get() for a simple
+    load (known as the “use_get” condition), i.e. `Related`->``Sub(Base)``, without
+    the need to redefine the primaryjoin condition in terms of the base table. [ticket:1186]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: specifying a foreign key with a declarative column, i.e. `ForeignKey(MyRelatedClass.id)`
+    doesn’t break the “use_get” condition from taking place [ticket:1492]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: relationship(), joinedload(), and joinedload_all() now feature an option called
+    “innerjoin”. Specify `True` or `False` to control whether an eager join is constructed
+    as an INNER or OUTER join. Default is `False` as always. The mapper options will
+    override whichever setting is specified on relationship(). Should generally be
+    set for many-to-one, not nullable foreign key relations to allow improved join
+    performance. [ticket:1544]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the behavior of joined eager loading such that the main query is wrapped in
+    a subquery when LIMIT/OFFSET are present now makes an exception for the case when
+    all eager loads are many-to-one joins. In those cases, the eager joins are against
+    the parent table directly along with the limit/offset without the extra overhead
+    of a subquery, since a many-to-one join does not add rows to the result.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, in 0.5 this query:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'would produce SQL like:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: This because the presence of any eager loaders suggests that some or all of
+    them may relate to multi-row collections, which would necessitate wrapping any
+    kind of rowcount-sensitive modifiers like LIMIT inside of a subquery.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'In 0.6, that logic is more sensitive and can detect if all eager loaders represent
+    many-to-ones, in which case the eager joins don’t affect the rowcount:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Mutable Primary Keys with Joined Table Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A joined table inheritance config where the child table has a PK that foreign
+    keys to the parent PK can now be updated on a CASCADE-capable database like PostgreSQL.
+    `mapper()` now has an option `passive_updates=True` which indicates this foreign
+    key is updated automatically. If on a non-cascading database like SQLite or MySQL/MyISAM,
+    set this flag to `False`. A future feature enhancement will try to get this flag
+    to be auto-configuring based on dialect/table style in use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beaker Caching
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A promising new example of Beaker integration is in `examples/beaker_caching`.
+    This is a straightforward recipe which applies a Beaker cache within the result-
+    generation engine of `Query`. Cache parameters are provided via `query.options()`,
+    and allows full control over the contents of the cache. SQLAlchemy 0.6 includes
+    improvements to the `Session.merge()` method to support this and similar recipes,
+    as well as to provide significantly improved performance in most scenarios.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: the “row tuple” object returned by `Query` when multiple column/entities are
+    selected is now picklable as well as higher performing.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.join()` has been reworked to provide more consistent behavior and more
+    flexibility (includes [ticket:1537])'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.select_from()` accepts multiple clauses to produce multiple comma separated
+    entries within the FROM clause. Useful when selecting from multiple-homed join()
+    clauses.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “dont_load=True” flag on `Session.merge()` is deprecated and is now “load=False”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: added “make_transient()” helper function which transforms a persistent/ detached
+    instance into a transient one (i.e. deletes the instance_key and removes from
+    any session.) [ticket:1052]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the allow_null_pks flag on mapper() is deprecated and has been renamed to allow_partial_pks.
+    It is turned “on” by default. This means that a row which has a non-null value
+    for any of its primary key columns will be considered an identity. The need for
+    this scenario typically only occurs when mapping to an outer join. When set to
+    False, a PK that has NULLs in it will not be considered a primary key - in particular
+    this means a result row will come back as None (or not be filled into a collection),
+    and new in 0.6 also indicates that session.merge() won’t issue a round trip to
+    the database for such a PK value. [ticket:1680]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the mechanics of “backref” have been fully merged into the finer grained “back_populates”
+    system, and take place entirely within the `_generate_backref()` method of `RelationProperty`.
+    This makes the initialization procedure of `RelationProperty` simpler and allows
+    easier propagation of settings (such as from subclasses of `RelationProperty`)
+    into the reverse reference. The internal `BackRef()` is gone and `backref()` returns
+    a plain tuple that is understood by `RelationProperty`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the keys attribute of `ResultProxy` is now a method, so references to it (`result.keys`)
+    must be changed to method invocations (`result.keys()`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ResultProxy.last_inserted_ids` is now deprecated, use `ResultProxy.inserted_primary_key`
+    instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deprecated/Removed ORM Elements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Most elements that were deprecated throughout 0.5 and raised deprecation warnings
+    have been removed (with a few exceptions). All elements that were marked “pending
+    deprecation” are now deprecated and will raise a warning upon use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ‘transactional’ flag on sessionmaker() and others is removed. Use ‘autocommit=True’
+    to indicate ‘transactional=False’.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ‘polymorphic_fetch’ argument on mapper() is removed. Loading can be controlled
+    using the ‘with_polymorphic’ option.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ‘select_table’ argument on mapper() is removed. Use ‘with_polymorphic=(“*”,
+    <some selectable>)’ for this functionality.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ‘proxy’ argument on synonym() is removed. This flag did nothing throughout 0.5,
+    as the “proxy generation” behavior is now automatic.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing a single list of elements to joinedload(), joinedload_all(), contains_eager(),
+    lazyload(), defer(), and undefer() instead of multiple positional *args is deprecated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing a single list of elements to query.order_by(), query.group_by(), query.join(),
+    or query.outerjoin() instead of multiple positional *args is deprecated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.iterate_instances()` is removed. Use `query.instances()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Query.query_from_parent()` is removed. Use the sqlalchemy.orm.with_parent()
+    function to produce a “parent” clause, or alternatively `query.with_parent()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query._from_self()` is removed, use `query.from_self()` instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “comparator” argument to composite() is removed. Use “comparator_factory”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`RelationProperty._get_join()` is removed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the ‘echo_uow’ flag on Session is removed. Use logging on the “sqlalchemy.orm.unitofwork”
+    name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`session.clear()` is removed. use `session.expunge_all()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`session.save()`, `session.update()`, `session.save_or_update()` are removed.
+    Use `session.add()` and `session.add_all()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “objects” flag on session.flush() remains deprecated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “dont_load=True” flag on session.merge() is deprecated in favor of “load=False”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ScopedSession.mapper` remains deprecated. See the usage recipe at [https://www.sqlalchemy.org/trac/wiki/Usag](https://www.sqlalchemy.org/trac/wiki/Usag)
+    eRecipes/SessionAwareMapper'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: passing an `InstanceState` (internal SQLAlchemy state object) to `attributes.init_collection()`
+    or `attributes.get_history()` is deprecated. These functions are public API and
+    normally expect a regular mapped object instance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the ‘engine’ parameter to `declarative_base()` is removed. Use the ‘bind’ keyword
+    argument.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extensions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLSoup
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQLSoup has been modernized and updated to reflect common 0.5/0.6 capabilities,
+    including well defined session integration. Please read the new docs at [[https://www.sqlalc](https://www.sqlalc)
+    hemy.org/docs/06/reference/ext/sqlsoup.html].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declarative
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The `DeclarativeMeta` (default metaclass for `declarative_base`) previously
+    allowed subclasses to modify `dict_` to add class attributes (e.g. columns). This
+    no longer works, the `DeclarativeMeta` constructor now ignores `dict_`. Instead,
+    the class attributes should be assigned directly, e.g. `cls.id=Column(...)`, or
+    the [MixIn class](https://www.sqlalchemy.org/docs/reference/ext/declarative.html#mix-in-classes)
+    approach should be used instead of the metaclass approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Platform Support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: cPython versions 2.4 and upwards throughout the 2.xx series
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Jython 2.5.1 - using the zxJDBC DBAPI included with Jython.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: cPython 3.x - see [source:sqlalchemy/trunk/README.py3k] for information on how
+    to build for python3.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New Dialect System
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Dialect modules are now broken up into distinct subcomponents, within the scope
+    of a single database backend. Dialect implementations are now in the `sqlalchemy.dialects`
+    package. The `sqlalchemy.databases` package still exists as a placeholder to provide
+    some level of backwards compatibility for simple imports.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For each supported database, a sub-package exists within `sqlalchemy.dialects`
+    where several files are contained. Each package contains a module called `base.py`
+    which defines the specific SQL dialect used by that database. It also contains
+    one or more “driver” modules, each one corresponding to a specific DBAPI - these
+    files are named corresponding to the DBAPI itself, such as `pysqlite`, `cx_oracle`,
+    or `pyodbc`. The classes used by SQLAlchemy dialects are first declared in the
+    `base.py` module, defining all behavioral characteristics defined by the database.
+    These include capability mappings, such as “supports sequences”, “supports returning”,
+    etc., type definitions, and SQL compilation rules. Each “driver” module in turn
+    provides subclasses of those classes as needed which override the default behavior
+    to accommodate the additional features, behaviors, and quirks of that DBAPI. For
+    DBAPIs that support multiple backends (pyodbc, zxJDBC, mxODBC), the dialect module
+    will use mixins from the `sqlalchemy.connectors` package, which provide functionality
+    common to that DBAPI across all backends, most typically dealing with connect
+    arguments. This means that connecting using pyodbc, zxJDBC or mxODBC (when implemented)
+    is extremely consistent across supported backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The URL format used by `create_engine()` has been enhanced to handle any number
+    of DBAPIs for a particular backend, using a scheme that is inspired by that of
+    JDBC. The previous format still works, and will select a “default” DBAPI implementation,
+    such as the PostgreSQL URL below that will use psycopg2:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However to specify a specific DBAPI backend such as pg8000, add it to the “protocol”
+    section of the URL using a plus sign “+”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Important Dialect Links:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Documentation on connect arguments: [https://www.sqlalchemy.org/docs/06/dbengine.html#create](https://www.sqlalchemy.org/docs/06/dbengine.html#create)-
+    engine-url-arguments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Reference documentation for individual dialects: [https://ww](https://ww) w.sqlalchemy.org/docs/06/reference/dialects/index.html'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The tips and tricks at DatabaseNotes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Other notes regarding dialects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: the type system has been changed dramatically in SQLAlchemy 0.6\. This has an
+    impact on all dialects regarding naming conventions, behaviors, and implementations.
+    See the section on “Types” below.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the `ResultProxy` object now offers a 2x speed improvement in some cases thanks
+    to some refactorings.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the `RowProxy`, i.e. individual result row object, is now directly pickleable.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the setuptools entrypoint used to locate external dialects is now called `sqlalchemy.dialects`.
+    An external dialect written against 0.4 or 0.5 will need to be modified to work
+    with 0.6 in any case so this change does not add any additional difficulties.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: dialects now receive an initialize() event on initial connection to determine
+    connection properties.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Functions and operators generated by the compiler now use (almost) regular dispatch
+    functions of the form “visit_<opname>” and “visit_<funcname>_fn” to provide customed
+    processing. This replaces the need to copy the “functions” and “operators” dictionaries
+    in compiler subclasses with straightforward visitor methods, and also allows compiler
+    subclasses complete control over rendering, as the full _Function or _BinaryExpression
+    object is passed in.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dialect Imports
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The import structure of dialects has changed. Each dialect now exports its
+    base “dialect” class as well as the full set of SQL types supported on that dialect
+    via `sqlalchemy.dialects.<name>`. For example, to import a set of PG types:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, `INTEGER` is actually the plain `INTEGER` type from `sqlalchemy.types`,
+    but the PG dialect makes it available in the same way as those types which are
+    specific to PG, such as `BYTEA` and `MACADDR`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dialect Imports
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The import structure of dialects has changed. Each dialect now exports its
+    base “dialect” class as well as the full set of SQL types supported on that dialect
+    via `sqlalchemy.dialects.<name>`. For example, to import a set of PG types:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, `INTEGER` is actually the plain `INTEGER` type from `sqlalchemy.types`,
+    but the PG dialect makes it available in the same way as those types which are
+    specific to PG, such as `BYTEA` and `MACADDR`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Expression Language Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: An Important Expression Language Gotcha
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: There’s one quite significant behavioral change to the expression language which
+    may affect some applications. The boolean value of Python boolean expressions,
+    i.e. `==`, `!=`, and similar, now evaluates accurately with regards to the two
+    clause objects being compared.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we know, comparing a `ClauseElement` to any other object returns another
+    `ClauseElement`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This so that Python expressions produce SQL expressions when converted to strings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: But what happens if we say this?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In previous versions of SQLAlchemy, the returned `_BinaryExpression` was a
+    plain Python object which evaluated to `True`. Now it evaluates to whether or
+    not the actual `ClauseElement` should have the same hash value as to that being
+    compared. Meaning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That means code such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Would not evaluate if `expression` was a binary clause. Since the above pattern
+    should never be used, the base `ClauseElement` now raises an exception if called
+    in a boolean context:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Code that wants to check for the presence of a `ClauseElement` expression should
+    instead say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: Keep in mind, **this applies to Table and Column objects too**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rationale for the change is twofold:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comparisons of the form `if c1 == c2:  <do something>` can actually be written
+    now
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Support for correct hashing of `ClauseElement` objects now works on alternate
+    platforms, namely Jython. Up until this point SQLAlchemy relied heavily on the
+    specific behavior of cPython in this regard (and still had occasional problems
+    with it).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stricter “executemany” Behavior
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'An “executemany” in SQLAlchemy corresponds to a call to `execute()`, passing
+    along a collection of bind parameter sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the `Connection` object sends off the given `insert()` construct for compilation,
+    it passes to the compiler the keynames present in the first set of binds passed
+    along to determine the construction of the statement’s VALUES clause. Users familiar
+    with this construct will know that additional keys present in the remaining dictionaries
+    don’t have any impact. What’s different now is that all subsequent dictionaries
+    need to include at least *every* key that is present in the first dictionary.
+    This means that a call like this no longer works:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because the third row does not specify the ‘timestamp’ column. Previous versions
+    of SQLAlchemy would simply insert NULL for these missing columns. However, if
+    the `timestamp` column in the above example contained a Python-side default value
+    or function, it would *not* be used. This because the “executemany” operation
+    is optimized for maximum performance across huge numbers of parameter sets, and
+    does not attempt to evaluate Python-side defaults for those missing keys. Because
+    defaults are often implemented either as SQL expressions which are embedded inline
+    with the INSERT statement, or are server side expressions which again are triggered
+    based on the structure of the INSERT string, which by definition cannot fire off
+    conditionally based on each parameter set, it would be inconsistent for Python
+    side defaults to behave differently vs. SQL/server side defaults. (SQL expression
+    based defaults are embedded inline as of the 0.5 series, again to minimize the
+    impact of huge numbers of parameter sets).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy 0.6 therefore establishes predictable consistency by forbidding any
+    subsequent parameter sets from leaving any fields blank. That way, there’s no
+    more silent failure of Python side default values and functions, which additionally
+    are allowed to remain consistent in their behavior versus SQL and server side
+    defaults.
+  prefs: []
+  type: TYPE_NORMAL
+- en: UNION and other “compound” constructs parenthesize consistently
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A rule that was designed to help SQLite has been removed, that of the first
+    compound element within another compound (such as, a `union()` inside of an `except_()`)
+    wouldn’t be parenthesized. This is inconsistent and produces the wrong results
+    on PostgreSQL, which has precedence rules regarding INTERSECTION, and its generally
+    a surprise. When using complex composites with SQLite, you now need to turn the
+    first element into a subquery (which is also compatible on PG). A new example
+    is in the SQL expression tutorial at the end of [[https://www.sqlalchemy.org/docs/06/sqlexpression.html](https://www.sqlalchemy.org/docs/06/sqlexpression.html)
+    #unions-and-other-set-operations]. See [#1665](https://www.sqlalchemy.org/trac/ticket/1665)
+    and r6690 for more background.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An Important Expression Language Gotcha
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: There’s one quite significant behavioral change to the expression language which
+    may affect some applications. The boolean value of Python boolean expressions,
+    i.e. `==`, `!=`, and similar, now evaluates accurately with regards to the two
+    clause objects being compared.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we know, comparing a `ClauseElement` to any other object returns another
+    `ClauseElement`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This so that Python expressions produce SQL expressions when converted to strings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: But what happens if we say this?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In previous versions of SQLAlchemy, the returned `_BinaryExpression` was a
+    plain Python object which evaluated to `True`. Now it evaluates to whether or
+    not the actual `ClauseElement` should have the same hash value as to that being
+    compared. Meaning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That means code such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Would not evaluate if `expression` was a binary clause. Since the above pattern
+    should never be used, the base `ClauseElement` now raises an exception if called
+    in a boolean context:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Code that wants to check for the presence of a `ClauseElement` expression should
+    instead say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: Keep in mind, **this applies to Table and Column objects too**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rationale for the change is twofold:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comparisons of the form `if c1 == c2:  <do something>` can actually be written
+    now
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Support for correct hashing of `ClauseElement` objects now works on alternate
+    platforms, namely Jython. Up until this point SQLAlchemy relied heavily on the
+    specific behavior of cPython in this regard (and still had occasional problems
+    with it).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stricter “executemany” Behavior
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'An “executemany” in SQLAlchemy corresponds to a call to `execute()`, passing
+    along a collection of bind parameter sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the `Connection` object sends off the given `insert()` construct for compilation,
+    it passes to the compiler the keynames present in the first set of binds passed
+    along to determine the construction of the statement’s VALUES clause. Users familiar
+    with this construct will know that additional keys present in the remaining dictionaries
+    don’t have any impact. What’s different now is that all subsequent dictionaries
+    need to include at least *every* key that is present in the first dictionary.
+    This means that a call like this no longer works:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because the third row does not specify the ‘timestamp’ column. Previous versions
+    of SQLAlchemy would simply insert NULL for these missing columns. However, if
+    the `timestamp` column in the above example contained a Python-side default value
+    or function, it would *not* be used. This because the “executemany” operation
+    is optimized for maximum performance across huge numbers of parameter sets, and
+    does not attempt to evaluate Python-side defaults for those missing keys. Because
+    defaults are often implemented either as SQL expressions which are embedded inline
+    with the INSERT statement, or are server side expressions which again are triggered
+    based on the structure of the INSERT string, which by definition cannot fire off
+    conditionally based on each parameter set, it would be inconsistent for Python
+    side defaults to behave differently vs. SQL/server side defaults. (SQL expression
+    based defaults are embedded inline as of the 0.5 series, again to minimize the
+    impact of huge numbers of parameter sets).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy 0.6 therefore establishes predictable consistency by forbidding any
+    subsequent parameter sets from leaving any fields blank. That way, there’s no
+    more silent failure of Python side default values and functions, which additionally
+    are allowed to remain consistent in their behavior versus SQL and server side
+    defaults.
+  prefs: []
+  type: TYPE_NORMAL
+- en: UNION and other “compound” constructs parenthesize consistently
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A rule that was designed to help SQLite has been removed, that of the first
+    compound element within another compound (such as, a `union()` inside of an `except_()`)
+    wouldn’t be parenthesized. This is inconsistent and produces the wrong results
+    on PostgreSQL, which has precedence rules regarding INTERSECTION, and its generally
+    a surprise. When using complex composites with SQLite, you now need to turn the
+    first element into a subquery (which is also compatible on PG). A new example
+    is in the SQL expression tutorial at the end of [[https://www.sqlalchemy.org/docs/06/sqlexpression.html](https://www.sqlalchemy.org/docs/06/sqlexpression.html)
+    #unions-and-other-set-operations]. See [#1665](https://www.sqlalchemy.org/trac/ticket/1665)
+    and r6690 for more background.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: C Extensions for Result Fetching
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `ResultProxy` and related elements, including most common “row processing”
+    functions such as unicode conversion, numerical/boolean conversions and date parsing,
+    have been re-implemented as optional C extensions for the purposes of performance.
+    This represents the beginning of SQLAlchemy’s path to the “dark side” where we
+    hope to continue improving performance by reimplementing critical sections in
+    C. The extensions can be built by specifying `--with-cextensions`, i.e. `python
+    setup.py --with- cextensions install`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The extensions have the most dramatic impact on result fetching using direct
+    `ResultProxy` access, i.e. that which is returned by `engine.execute()`, `connection.execute()`,
+    or `session.execute()`. Within results returned by an ORM `Query` object, result
+    fetching is not as high a percentage of overhead, so ORM performance improves
+    more modestly, and mostly in the realm of fetching large result sets. The performance
+    improvements highly depend on the dbapi in use and on the syntax used to access
+    the columns of each row (eg `row['name']` is much faster than `row.name`). The
+    current extensions have no impact on the speed of inserts/updates/deletes, nor
+    do they improve the latency of SQL execution, that is, an application that spends
+    most of its time executing many statements with very small result sets will not
+    see much improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Performance has been improved in 0.6 versus 0.5 regardless of the extensions.
+    A quick overview of what connecting and fetching 50,000 rows looks like with SQLite,
+    using mostly direct SQLite access, a `ResultProxy`, and a simple mapped ORM object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the ORM fetches the rows 33% faster than 0.5 due to in-python performance
+    enhancements. With the C extensions we get another 20%. However, `ResultProxy`
+    fetches improve by 67% with the C extension versus not. Other tests report as
+    much as a 200% speed improvement for some scenarios, such as those where lots
+    of string conversions are occurring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Schema Capabilities
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `sqlalchemy.schema` package has received some long- needed attention. The
+    most visible change is the newly expanded DDL system. In SQLAlchemy, it was possible
+    since version 0.5 to create custom DDL strings and associate them with tables
+    or metadata objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now the full suite of DDL constructs are available under the same system, including
+    those for CREATE TABLE, ADD CONSTRAINT, etc.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Additionally, all the DDL objects are now regular `ClauseElement` objects just
+    like any other SQLAlchemy expression object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and using the `sqlalchemy.ext.compiler` extension you can make your own:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: Deprecated/Removed Schema Elements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The schema package has also been greatly streamlined. Many options and methods
+    which were deprecated throughout 0.5 have been removed. Other little known accessors
+    and methods have also been removed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: the “owner” keyword argument is removed from `Table`. Use “schema” to represent
+    any namespaces to be prepended to the table name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: deprecated `MetaData.connect()` and `ThreadLocalMetaData.connect()` have been
+    removed - send the “bind” attribute to bind a metadata.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: deprecated metadata.table_iterator() method removed (use sorted_tables)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “metadata” argument is removed from `DefaultGenerator` and subclasses, but
+    remains locally present on `Sequence`, which is a standalone construct in DDL.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: deprecated `PassiveDefault` - use `DefaultClause`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Removed public mutability from `Index` and `Constraint` objects:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ForeignKeyConstraint.append_element()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Index.append_column()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`UniqueConstraint.append_column()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`PrimaryKeyConstraint.add()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`PrimaryKeyConstraint.remove()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These should be constructed declaratively (i.e. in one construction).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Other removed things:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Table.key` (no idea what this was for)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Column.bind` (get via column.table.bind)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Column.metadata` (get via column.table.metadata)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Column.sequence` (use column.default)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Other Behavioral Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`UniqueConstraint`, `Index`, `PrimaryKeyConstraint` all accept lists of column
+    names or column objects as arguments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `use_alter` flag on `ForeignKey` is now a shortcut option for operations
+    that can be hand-constructed using the `DDL()` event system. A side effect of
+    this refactor is that `ForeignKeyConstraint` objects with `use_alter=True` will
+    *not* be emitted on SQLite, which does not support ALTER for foreign keys. This
+    has no effect on SQLite’s behavior since SQLite does not actually honor FOREIGN
+    KEY constraints.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Table.primary_key` is not assignable - use `table.append_constraint(PrimaryKeyConstraint(...))`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A `Column` definition with a `ForeignKey` and no type, e.g. `Column(name, ForeignKey(sometable.c.somecol))`
+    used to get the type of the referenced column. Now support for that automatic
+    type inference is partial and may not work in all cases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deprecated/Removed Schema Elements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The schema package has also been greatly streamlined. Many options and methods
+    which were deprecated throughout 0.5 have been removed. Other little known accessors
+    and methods have also been removed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: the “owner” keyword argument is removed from `Table`. Use “schema” to represent
+    any namespaces to be prepended to the table name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: deprecated `MetaData.connect()` and `ThreadLocalMetaData.connect()` have been
+    removed - send the “bind” attribute to bind a metadata.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: deprecated metadata.table_iterator() method removed (use sorted_tables)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “metadata” argument is removed from `DefaultGenerator` and subclasses, but
+    remains locally present on `Sequence`, which is a standalone construct in DDL.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: deprecated `PassiveDefault` - use `DefaultClause`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Removed public mutability from `Index` and `Constraint` objects:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ForeignKeyConstraint.append_element()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Index.append_column()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`UniqueConstraint.append_column()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`PrimaryKeyConstraint.add()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`PrimaryKeyConstraint.remove()`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These should be constructed declaratively (i.e. in one construction).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Other removed things:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Table.key` (no idea what this was for)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Column.bind` (get via column.table.bind)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Column.metadata` (get via column.table.metadata)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Column.sequence` (use column.default)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Other Behavioral Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`UniqueConstraint`, `Index`, `PrimaryKeyConstraint` all accept lists of column
+    names or column objects as arguments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `use_alter` flag on `ForeignKey` is now a shortcut option for operations
+    that can be hand-constructed using the `DDL()` event system. A side effect of
+    this refactor is that `ForeignKeyConstraint` objects with `use_alter=True` will
+    *not* be emitted on SQLite, which does not support ALTER for foreign keys. This
+    has no effect on SQLite’s behavior since SQLite does not actually honor FOREIGN
+    KEY constraints.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Table.primary_key` is not assignable - use `table.append_constraint(PrimaryKeyConstraint(...))`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A `Column` definition with a `ForeignKey` and no type, e.g. `Column(name, ForeignKey(sometable.c.somecol))`
+    used to get the type of the referenced column. Now support for that automatic
+    type inference is partial and may not work in all cases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Logging opened up
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: At the expense of a few extra method calls here and there, you can set log levels
+    for INFO and DEBUG after an engine, pool, or mapper has been created, and logging
+    will commence. The `isEnabledFor(INFO)` method is now called per-`Connection`
+    and `isEnabledFor(DEBUG)` per-`ResultProxy` if already enabled on the parent connection.
+    Pool logging sends to `log.info()` and `log.debug()` with no check - note that
+    pool checkout/checkin is typically once per transaction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reflection/Inspector API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The reflection system, which allows reflection of table columns via `Table('sometable',
+    metadata, autoload=True)` has been opened up into its own fine-grained API, which
+    allows direct inspection of database elements such as tables, columns, constraints,
+    indexes, and more. This API expresses return values as simple lists of strings,
+    dictionaries, and `TypeEngine` objects. The internals of `autoload=True` now build
+    upon this system such that the translation of raw database information into `sqlalchemy.schema`
+    constructs is centralized and the contract of individual dialects greatly simplified,
+    vastly reducing bugs and inconsistencies across different backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To use an inspector:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'the `from_engine()` method will in some cases provide a backend-specific inspector
+    with additional capabilities, such as that of PostgreSQL which provides a `get_table_oid()`
+    method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: RETURNING Support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `insert()`, `update()` and `delete()` constructs now support a `returning()`
+    method, which corresponds to the SQL RETURNING clause as supported by PostgreSQL,
+    Oracle, MS-SQL, and Firebird. It is not supported for any other backend at this
+    time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given a list of column expressions in the same manner as that of a `select()`
+    construct, the values of these columns will be returned as a regular result set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The implementation of RETURNING across the four supported backends varies wildly,
+    in the case of Oracle requiring an intricate usage of OUT parameters which are
+    re-routed into a “mock” result set, and in the case of MS-SQL using an awkward
+    SQL syntax. The usage of RETURNING is subject to limitations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: it does not work for any “executemany()” style of execution. This is a limitation
+    of all supported DBAPIs.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some backends, such as Oracle, only support RETURNING that returns a single
+    row - this includes UPDATE and DELETE statements, meaning the update() or delete()
+    construct must match only a single row, or an error is raised (by Oracle, not
+    SQLAlchemy).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: RETURNING is also used automatically by SQLAlchemy, when available and when
+    not otherwise specified by an explicit `returning()` call, to fetch the value
+    of newly generated primary key values for single-row INSERT statements. This means
+    there’s no more “SELECT nextval(sequence)” pre- execution for insert statements
+    where the primary key value is required. Truth be told, implicit RETURNING feature
+    does incur more method overhead than the old “select nextval()” system, which
+    used a quick and dirty cursor.execute() to get at the sequence value, and in the
+    case of Oracle requires additional binding of out parameters. So if method/protocol
+    overhead is proving to be more expensive than additional database round trips,
+    the feature can be disabled by specifying `implicit_returning=False` to `create_engine()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Type System Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: New Architecture
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The type system has been completely reworked behind the scenes to provide two
+    goals:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Separate the handling of bind parameters and result row values, typically a
+    DBAPI requirement, from the SQL specification of the type itself, which is a database
+    requirement. This is consistent with the overall dialect refactor that separates
+    database SQL behavior from DBAPI.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Establish a clear and consistent contract for generating DDL from a `TypeEngine`
+    object and for constructing `TypeEngine` objects based on column reflection.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Highlights of these changes include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The construction of types within dialects has been totally overhauled. Dialects
+    now define publicly available types as UPPERCASE names exclusively, and internal
+    implementation types using underscore identifiers (i.e. are private). The system
+    by which types are expressed in SQL and DDL has been moved to the compiler system.
+    This has the effect that there are much fewer type objects within most dialects.
+    A detailed document on this architecture for dialect authors is in [source:/lib/sqlalc
+    hemy/dialects/type_migration_guidelines.txt].
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reflection of types now returns the exact UPPERCASE type within types.py, or
+    the UPPERCASE type within the dialect itself if the type is not a standard SQL
+    type. This means reflection now returns more accurate information about reflected
+    types.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: User defined types that subclass `TypeEngine` and wish to provide `get_col_spec()`
+    should now subclass `UserDefinedType`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `result_processor()` method on all type classes now accepts an additional
+    argument `coltype`. This is the DBAPI type object attached to cursor.description,
+    and should be used when applicable to make better decisions on what kind of result-processing
+    callable should be returned. Ideally result processor functions would never need
+    to use `isinstance()`, which is an expensive call at this level.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Native Unicode Mode
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As more DBAPIs support returning Python unicode objects directly, the base
+    dialect now performs a check upon the first connection which establishes whether
+    or not the DBAPI returns a Python unicode object for a basic select of a VARCHAR
+    value. If so, the `String` type and all subclasses (i.e. `Text`, `Unicode`, etc.)
+    will skip the “unicode” check/conversion step when result rows are received. This
+    offers a dramatic performance increase for large result sets. The “unicode mode”
+    currently is known to work with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: sqlite3 / pysqlite
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: psycopg2 - SQLA 0.6 now uses the “UNICODE” type extension by default on each
+    psycopg2 connection object
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: pg8000
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: cx_oracle (we use an output processor - nice feature !)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Other types may choose to disable unicode processing as needed, such as the
+    `NVARCHAR` type when used with MS-SQL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In particular, if porting an application based on a DBAPI that formerly returned
+    non-unicode strings, the “native unicode” mode has a plainly different default
+    behavior - columns that are declared as `String` or `VARCHAR` now return unicode
+    by default whereas they would return strings before. This can break code which
+    expects non-unicode strings. The psycopg2 “native unicode” mode can be disabled
+    by passing `use_native_unicode=False` to `create_engine()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A more general solution for string columns that explicitly do not want a unicode
+    object is to use a `TypeDecorator` that converts unicode back to utf-8, or whatever
+    is desired:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that the `assert_unicode` flag is now deprecated. SQLAlchemy allows the
+    DBAPI and backend database in use to handle Unicode parameters when available,
+    and does not add operational overhead by checking the incoming type; modern systems
+    like sqlite and PostgreSQL will raise an encoding error on their end if invalid
+    data is passed. In those cases where SQLAlchemy does need to coerce a bind parameter
+    from Python Unicode to an encoded string, or when the Unicode type is used explicitly,
+    a warning is raised if the object is a bytestring. This warning can be suppressed
+    or converted to an exception using the Python warnings filter documented at: [https://docs.python.org/library/warnings.html](https://docs.python.org/library/warnings.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generic Enum Type
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We now have an `Enum` in the `types` module. This is a string type that is given
+    a collection of “labels” which constrain the possible values given to those labels.
+    By default, this type generates a `VARCHAR` using the size of the largest label,
+    and applies a CHECK constraint to the table within the CREATE TABLE statement.
+    When using MySQL, the type by default uses MySQL’s ENUM type, and when using PostgreSQL
+    the type will generate a user defined type using `CREATE TYPE <mytype> AS ENUM`.
+    In order to create the type using PostgreSQL, the `name` parameter must be specified
+    to the constructor. The type also accepts a `native_enum=False` option which will
+    issue the VARCHAR/CHECK strategy for all databases. Note that PostgreSQL ENUM
+    types currently don’t work with pg8000 or zxjdbc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reflection Returns Dialect-Specific Types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Reflection now returns the most specific type possible from the database. That
+    is, if you create a table using `String`, then reflect it back, the reflected
+    column will likely be `VARCHAR`. For dialects that support a more specific form
+    of the type, that’s what you’ll get. So a `Text` type would come back as `oracle.CLOB`
+    on Oracle, a `LargeBinary` might be an `mysql.MEDIUMBLOB` etc. The obvious advantage
+    here is that reflection preserves as much information possible from what the database
+    had to say.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some applications that deal heavily in table metadata may wish to compare types
+    across reflected tables and/or non- reflected tables. There’s a semi-private accessor
+    available on `TypeEngine` called `_type_affinity` and an associated comparison
+    helper `_compare_type_affinity`. This accessor returns the “generic” `types` class
+    which the type corresponds to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: Miscellaneous API Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The usual “generic” types are still the general system in use, i.e. `String`,
+    `Float`, `DateTime`. There’s a few changes there:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Types no longer make any guesses as to default parameters. In particular, `Numeric`,
+    `Float`, as well as subclasses NUMERIC, FLOAT, DECIMAL don’t generate any length
+    or scale unless specified. This also continues to include the controversial `String`
+    and `VARCHAR` types (although MySQL dialect will pre-emptively raise when asked
+    to render VARCHAR with no length). No defaults are assumed, and if they are used
+    in a CREATE TABLE statement, an error will be raised if the underlying database
+    does not allow non-lengthed versions of these types.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the `Binary` type has been renamed to `LargeBinary`, for BLOB/BYTEA/similar
+    types. For `BINARY` and `VARBINARY`, those are present directly as `types.BINARY`,
+    `types.VARBINARY`, as well as in the MySQL and MS-SQL dialects.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`PickleType` now uses == for comparison of values when mutable=True, unless
+    the “comparator” argument with a comparison function is specified to the type.
+    If you are pickling a custom object you should implement an `__eq__()` method
+    so that value-based comparisons are accurate.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The default “precision” and “scale” arguments of Numeric and Float have been
+    removed and now default to None. NUMERIC and FLOAT will be rendered with no numeric
+    arguments by default unless these values are provided.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: DATE, TIME and DATETIME types on SQLite can now take optional “storage_format”
+    and “regexp” argument. “storage_format” can be used to store those types using
+    a custom string format. “regexp” allows to use a custom regular expression to
+    match string values from the database.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`__legacy_microseconds__` on SQLite `Time` and `DateTime` types is not supported
+    anymore. You should use the new “storage_format” argument instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`DateTime` types on SQLite now use by a default a stricter regular expression
+    to match strings from the database. Use the new “regexp” argument if you are using
+    data stored in a legacy format.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New Architecture
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The type system has been completely reworked behind the scenes to provide two
+    goals:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Separate the handling of bind parameters and result row values, typically a
+    DBAPI requirement, from the SQL specification of the type itself, which is a database
+    requirement. This is consistent with the overall dialect refactor that separates
+    database SQL behavior from DBAPI.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Establish a clear and consistent contract for generating DDL from a `TypeEngine`
+    object and for constructing `TypeEngine` objects based on column reflection.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Highlights of these changes include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The construction of types within dialects has been totally overhauled. Dialects
+    now define publicly available types as UPPERCASE names exclusively, and internal
+    implementation types using underscore identifiers (i.e. are private). The system
+    by which types are expressed in SQL and DDL has been moved to the compiler system.
+    This has the effect that there are much fewer type objects within most dialects.
+    A detailed document on this architecture for dialect authors is in [source:/lib/sqlalc
+    hemy/dialects/type_migration_guidelines.txt].
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reflection of types now returns the exact UPPERCASE type within types.py, or
+    the UPPERCASE type within the dialect itself if the type is not a standard SQL
+    type. This means reflection now returns more accurate information about reflected
+    types.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: User defined types that subclass `TypeEngine` and wish to provide `get_col_spec()`
+    should now subclass `UserDefinedType`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `result_processor()` method on all type classes now accepts an additional
+    argument `coltype`. This is the DBAPI type object attached to cursor.description,
+    and should be used when applicable to make better decisions on what kind of result-processing
+    callable should be returned. Ideally result processor functions would never need
+    to use `isinstance()`, which is an expensive call at this level.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Native Unicode Mode
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As more DBAPIs support returning Python unicode objects directly, the base
+    dialect now performs a check upon the first connection which establishes whether
+    or not the DBAPI returns a Python unicode object for a basic select of a VARCHAR
+    value. If so, the `String` type and all subclasses (i.e. `Text`, `Unicode`, etc.)
+    will skip the “unicode” check/conversion step when result rows are received. This
+    offers a dramatic performance increase for large result sets. The “unicode mode”
+    currently is known to work with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: sqlite3 / pysqlite
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: psycopg2 - SQLA 0.6 now uses the “UNICODE” type extension by default on each
+    psycopg2 connection object
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: pg8000
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: cx_oracle (we use an output processor - nice feature !)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Other types may choose to disable unicode processing as needed, such as the
+    `NVARCHAR` type when used with MS-SQL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In particular, if porting an application based on a DBAPI that formerly returned
+    non-unicode strings, the “native unicode” mode has a plainly different default
+    behavior - columns that are declared as `String` or `VARCHAR` now return unicode
+    by default whereas they would return strings before. This can break code which
+    expects non-unicode strings. The psycopg2 “native unicode” mode can be disabled
+    by passing `use_native_unicode=False` to `create_engine()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A more general solution for string columns that explicitly do not want a unicode
+    object is to use a `TypeDecorator` that converts unicode back to utf-8, or whatever
+    is desired:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that the `assert_unicode` flag is now deprecated. SQLAlchemy allows the
+    DBAPI and backend database in use to handle Unicode parameters when available,
+    and does not add operational overhead by checking the incoming type; modern systems
+    like sqlite and PostgreSQL will raise an encoding error on their end if invalid
+    data is passed. In those cases where SQLAlchemy does need to coerce a bind parameter
+    from Python Unicode to an encoded string, or when the Unicode type is used explicitly,
+    a warning is raised if the object is a bytestring. This warning can be suppressed
+    or converted to an exception using the Python warnings filter documented at: [https://docs.python.org/library/warnings.html](https://docs.python.org/library/warnings.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generic Enum Type
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We now have an `Enum` in the `types` module. This is a string type that is given
+    a collection of “labels” which constrain the possible values given to those labels.
+    By default, this type generates a `VARCHAR` using the size of the largest label,
+    and applies a CHECK constraint to the table within the CREATE TABLE statement.
+    When using MySQL, the type by default uses MySQL’s ENUM type, and when using PostgreSQL
+    the type will generate a user defined type using `CREATE TYPE <mytype> AS ENUM`.
+    In order to create the type using PostgreSQL, the `name` parameter must be specified
+    to the constructor. The type also accepts a `native_enum=False` option which will
+    issue the VARCHAR/CHECK strategy for all databases. Note that PostgreSQL ENUM
+    types currently don’t work with pg8000 or zxjdbc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reflection Returns Dialect-Specific Types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Reflection now returns the most specific type possible from the database. That
+    is, if you create a table using `String`, then reflect it back, the reflected
+    column will likely be `VARCHAR`. For dialects that support a more specific form
+    of the type, that’s what you’ll get. So a `Text` type would come back as `oracle.CLOB`
+    on Oracle, a `LargeBinary` might be an `mysql.MEDIUMBLOB` etc. The obvious advantage
+    here is that reflection preserves as much information possible from what the database
+    had to say.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some applications that deal heavily in table metadata may wish to compare types
+    across reflected tables and/or non- reflected tables. There’s a semi-private accessor
+    available on `TypeEngine` called `_type_affinity` and an associated comparison
+    helper `_compare_type_affinity`. This accessor returns the “generic” `types` class
+    which the type corresponds to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: Miscellaneous API Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The usual “generic” types are still the general system in use, i.e. `String`,
+    `Float`, `DateTime`. There’s a few changes there:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Types no longer make any guesses as to default parameters. In particular, `Numeric`,
+    `Float`, as well as subclasses NUMERIC, FLOAT, DECIMAL don’t generate any length
+    or scale unless specified. This also continues to include the controversial `String`
+    and `VARCHAR` types (although MySQL dialect will pre-emptively raise when asked
+    to render VARCHAR with no length). No defaults are assumed, and if they are used
+    in a CREATE TABLE statement, an error will be raised if the underlying database
+    does not allow non-lengthed versions of these types.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the `Binary` type has been renamed to `LargeBinary`, for BLOB/BYTEA/similar
+    types. For `BINARY` and `VARBINARY`, those are present directly as `types.BINARY`,
+    `types.VARBINARY`, as well as in the MySQL and MS-SQL dialects.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`PickleType` now uses == for comparison of values when mutable=True, unless
+    the “comparator” argument with a comparison function is specified to the type.
+    If you are pickling a custom object you should implement an `__eq__()` method
+    so that value-based comparisons are accurate.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The default “precision” and “scale” arguments of Numeric and Float have been
+    removed and now default to None. NUMERIC and FLOAT will be rendered with no numeric
+    arguments by default unless these values are provided.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: DATE, TIME and DATETIME types on SQLite can now take optional “storage_format”
+    and “regexp” argument. “storage_format” can be used to store those types using
+    a custom string format. “regexp” allows to use a custom regular expression to
+    match string values from the database.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`__legacy_microseconds__` on SQLite `Time` and `DateTime` types is not supported
+    anymore. You should use the new “storage_format” argument instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`DateTime` types on SQLite now use by a default a stricter regular expression
+    to match strings from the database. Use the new “regexp” argument if you are using
+    data stored in a legacy format.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ORM Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Upgrading an ORM application from 0.5 to 0.6 should require little to no changes,
+    as the ORM’s behavior remains almost identical. There are some default argument
+    and name changes, and some loading behaviors have been improved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Unit of Work
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The internals for the unit of work, primarily `topological.py` and `unitofwork.py`,
+    have been completely rewritten and are vastly simplified. This should have no
+    impact on usage, as all existing behavior during flush has been maintained exactly
+    (or at least, as far as it is exercised by our testsuite and the handful of production
+    environments which have tested it heavily). The performance of flush() now uses
+    20-30% fewer method calls and should also use less memory. The intent and flow
+    of the source code should now be reasonably easy to follow, and the architecture
+    of the flush is fairly open-ended at this point, creating room for potential new
+    areas of sophistication. The flush process no longer has any reliance on recursion
+    so flush plans of arbitrary size and complexity can be flushed. Additionally,
+    the mapper’s “save” process, which issues INSERT and UPDATE statements, now caches
+    the “compiled” form of the two statements so that callcounts are further dramatically
+    reduced with very large flushes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Any changes in behavior observed with flush versus earlier versions of 0.6 or
+    0.5 should be reported to us ASAP - we’ll make sure no functionality is lost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Changes to `query.update()` and `query.delete()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: the ‘expire’ option on query.update() has been renamed to ‘fetch’, thus matching
+    that of query.delete()
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.update()` and `query.delete()` both default to ‘evaluate’ for the synchronize
+    strategy.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the ‘synchronize’ strategy for update() and delete() raises an error on failure.
+    There is no implicit fallback onto “fetch”. Failure of evaluation is based on
+    the structure of criteria, so success/failure is deterministic based on code structure.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`relation()` is officially named `relationship()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This to solve the long running issue that “relation” means a “table or derived
+    table” in relational algebra terms. The `relation()` name, which is less typing,
+    will hang around for the foreseeable future so this change should be entirely
+    painless.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subquery eager loading
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A new kind of eager loading is added called “subquery” loading. This is a load
+    that emits a second SQL query immediately after the first which loads full collections
+    for all the parents in the first query, joining upwards to the parent using INNER
+    JOIN. Subquery loading is used similarly to the current joined-eager loading,
+    using the ``subqueryload()[PRE81]subqueryload_all()[PRE82]lazy='subquery'[PRE83]relationship()``.
+    The subquery load is usually much more efficient for loading many larger collections
+    as it uses INNER JOIN unconditionally and also doesn’t re-load parent rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '``eagerload()[PRE84]eagerload_all()[PRE85]joinedload()[PRE86]joinedload_all()``'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To make room for the new subquery load feature, the existing ``eagerload()[PRE87]eagerload_all()[PRE88]joinedload()[PRE89]joinedload_all()[PRE90]relation()``.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '``lazy=False|None|True|''dynamic''[PRE91]lazy=''noload''|''joined''|''subquery''|''select''|''dynamic''``'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Continuing on the theme of loader strategies opened up, the standard keywords
+    for the ``lazy[PRE92]relationship()[PRE93]select[PRE94]joined[PRE95]subquery[PRE96]noload[PRE97]dynamic[PRE98]True[PRE99]False[PRE100]None``
+    arguments are still accepted with the identical behavior as before.
+  prefs: []
+  type: TYPE_NORMAL
+- en: innerjoin=True on relation, joinedload
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Joined-eagerly loaded scalars and collections can now be instructed to use INNER
+    JOIN instead of OUTER JOIN. On PostgreSQL this is observed to provide a 300-600%
+    speedup on some queries. Set this flag for any many-to-one which is on a NOT NULLable
+    foreign key, and similarly for any collection where related items are guaranteed
+    to exist.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At mapper level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At query time level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `innerjoin=True` flag at the `relationship()` level will also take effect
+    for any `joinedload()` option which does not override the value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many-to-one Enhancements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: many-to-one relations now fire off a lazyload in fewer cases, including in most
+    cases will not fetch the “old” value when a new one is replaced.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: many-to-one relation to a joined-table subclass now uses get() for a simple
+    load (known as the “use_get” condition), i.e. `Related`->``Sub(Base)``, without
+    the need to redefine the primaryjoin condition in terms of the base table. [ticket:1186]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: specifying a foreign key with a declarative column, i.e. `ForeignKey(MyRelatedClass.id)`
+    doesn’t break the “use_get” condition from taking place [ticket:1492]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: relationship(), joinedload(), and joinedload_all() now feature an option called
+    “innerjoin”. Specify `True` or `False` to control whether an eager join is constructed
+    as an INNER or OUTER join. Default is `False` as always. The mapper options will
+    override whichever setting is specified on relationship(). Should generally be
+    set for many-to-one, not nullable foreign key relations to allow improved join
+    performance. [ticket:1544]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the behavior of joined eager loading such that the main query is wrapped in
+    a subquery when LIMIT/OFFSET are present now makes an exception for the case when
+    all eager loads are many-to-one joins. In those cases, the eager joins are against
+    the parent table directly along with the limit/offset without the extra overhead
+    of a subquery, since a many-to-one join does not add rows to the result.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, in 0.5 this query:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'would produce SQL like:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: This because the presence of any eager loaders suggests that some or all of
+    them may relate to multi-row collections, which would necessitate wrapping any
+    kind of rowcount-sensitive modifiers like LIMIT inside of a subquery.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'In 0.6, that logic is more sensitive and can detect if all eager loaders represent
+    many-to-ones, in which case the eager joins don’t affect the rowcount:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Mutable Primary Keys with Joined Table Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A joined table inheritance config where the child table has a PK that foreign
+    keys to the parent PK can now be updated on a CASCADE-capable database like PostgreSQL.
+    `mapper()` now has an option `passive_updates=True` which indicates this foreign
+    key is updated automatically. If on a non-cascading database like SQLite or MySQL/MyISAM,
+    set this flag to `False`. A future feature enhancement will try to get this flag
+    to be auto-configuring based on dialect/table style in use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beaker Caching
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A promising new example of Beaker integration is in `examples/beaker_caching`.
+    This is a straightforward recipe which applies a Beaker cache within the result-
+    generation engine of `Query`. Cache parameters are provided via `query.options()`,
+    and allows full control over the contents of the cache. SQLAlchemy 0.6 includes
+    improvements to the `Session.merge()` method to support this and similar recipes,
+    as well as to provide significantly improved performance in most scenarios.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: the “row tuple” object returned by `Query` when multiple column/entities are
+    selected is now picklable as well as higher performing.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.join()` has been reworked to provide more consistent behavior and more
+    flexibility (includes [ticket:1537])'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.select_from()` accepts multiple clauses to produce multiple comma separated
+    entries within the FROM clause. Useful when selecting from multiple-homed join()
+    clauses.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “dont_load=True” flag on `Session.merge()` is deprecated and is now “load=False”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: added “make_transient()” helper function which transforms a persistent/ detached
+    instance into a transient one (i.e. deletes the instance_key and removes from
+    any session.) [ticket:1052]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the allow_null_pks flag on mapper() is deprecated and has been renamed to allow_partial_pks.
+    It is turned “on” by default. This means that a row which has a non-null value
+    for any of its primary key columns will be considered an identity. The need for
+    this scenario typically only occurs when mapping to an outer join. When set to
+    False, a PK that has NULLs in it will not be considered a primary key - in particular
+    this means a result row will come back as None (or not be filled into a collection),
+    and new in 0.6 also indicates that session.merge() won’t issue a round trip to
+    the database for such a PK value. [ticket:1680]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the mechanics of “backref” have been fully merged into the finer grained “back_populates”
+    system, and take place entirely within the `_generate_backref()` method of `RelationProperty`.
+    This makes the initialization procedure of `RelationProperty` simpler and allows
+    easier propagation of settings (such as from subclasses of `RelationProperty`)
+    into the reverse reference. The internal `BackRef()` is gone and `backref()` returns
+    a plain tuple that is understood by `RelationProperty`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the keys attribute of `ResultProxy` is now a method, so references to it (`result.keys`)
+    must be changed to method invocations (`result.keys()`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ResultProxy.last_inserted_ids` is now deprecated, use `ResultProxy.inserted_primary_key`
+    instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deprecated/Removed ORM Elements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Most elements that were deprecated throughout 0.5 and raised deprecation warnings
+    have been removed (with a few exceptions). All elements that were marked “pending
+    deprecation” are now deprecated and will raise a warning upon use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ‘transactional’ flag on sessionmaker() and others is removed. Use ‘autocommit=True’
+    to indicate ‘transactional=False’.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ‘polymorphic_fetch’ argument on mapper() is removed. Loading can be controlled
+    using the ‘with_polymorphic’ option.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ‘select_table’ argument on mapper() is removed. Use ‘with_polymorphic=(“*”,
+    <some selectable>)’ for this functionality.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ‘proxy’ argument on synonym() is removed. This flag did nothing throughout 0.5,
+    as the “proxy generation” behavior is now automatic.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing a single list of elements to joinedload(), joinedload_all(), contains_eager(),
+    lazyload(), defer(), and undefer() instead of multiple positional *args is deprecated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing a single list of elements to query.order_by(), query.group_by(), query.join(),
+    or query.outerjoin() instead of multiple positional *args is deprecated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.iterate_instances()` is removed. Use `query.instances()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Query.query_from_parent()` is removed. Use the sqlalchemy.orm.with_parent()
+    function to produce a “parent” clause, or alternatively `query.with_parent()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query._from_self()` is removed, use `query.from_self()` instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “comparator” argument to composite() is removed. Use “comparator_factory”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`RelationProperty._get_join()` is removed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the ‘echo_uow’ flag on Session is removed. Use logging on the “sqlalchemy.orm.unitofwork”
+    name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`session.clear()` is removed. use `session.expunge_all()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`session.save()`, `session.update()`, `session.save_or_update()` are removed.
+    Use `session.add()` and `session.add_all()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “objects” flag on session.flush() remains deprecated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “dont_load=True” flag on session.merge() is deprecated in favor of “load=False”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ScopedSession.mapper` remains deprecated. See the usage recipe at [https://www.sqlalchemy.org/trac/wiki/Usag](https://www.sqlalchemy.org/trac/wiki/Usag)
+    eRecipes/SessionAwareMapper'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: passing an `InstanceState` (internal SQLAlchemy state object) to `attributes.init_collection()`
+    or `attributes.get_history()` is deprecated. These functions are public API and
+    normally expect a regular mapped object instance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the ‘engine’ parameter to `declarative_base()` is removed. Use the ‘bind’ keyword
+    argument.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New Unit of Work
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The internals for the unit of work, primarily `topological.py` and `unitofwork.py`,
+    have been completely rewritten and are vastly simplified. This should have no
+    impact on usage, as all existing behavior during flush has been maintained exactly
+    (or at least, as far as it is exercised by our testsuite and the handful of production
+    environments which have tested it heavily). The performance of flush() now uses
+    20-30% fewer method calls and should also use less memory. The intent and flow
+    of the source code should now be reasonably easy to follow, and the architecture
+    of the flush is fairly open-ended at this point, creating room for potential new
+    areas of sophistication. The flush process no longer has any reliance on recursion
+    so flush plans of arbitrary size and complexity can be flushed. Additionally,
+    the mapper’s “save” process, which issues INSERT and UPDATE statements, now caches
+    the “compiled” form of the two statements so that callcounts are further dramatically
+    reduced with very large flushes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Any changes in behavior observed with flush versus earlier versions of 0.6 or
+    0.5 should be reported to us ASAP - we’ll make sure no functionality is lost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Changes to `query.update()` and `query.delete()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: the ‘expire’ option on query.update() has been renamed to ‘fetch’, thus matching
+    that of query.delete()
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.update()` and `query.delete()` both default to ‘evaluate’ for the synchronize
+    strategy.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the ‘synchronize’ strategy for update() and delete() raises an error on failure.
+    There is no implicit fallback onto “fetch”. Failure of evaluation is based on
+    the structure of criteria, so success/failure is deterministic based on code structure.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`relation()` is officially named `relationship()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This to solve the long running issue that “relation” means a “table or derived
+    table” in relational algebra terms. The `relation()` name, which is less typing,
+    will hang around for the foreseeable future so this change should be entirely
+    painless.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subquery eager loading
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A new kind of eager loading is added called “subquery” loading. This is a load
+    that emits a second SQL query immediately after the first which loads full collections
+    for all the parents in the first query, joining upwards to the parent using INNER
+    JOIN. Subquery loading is used similarly to the current joined-eager loading,
+    using the ``subqueryload()[PRE106]subqueryload_all()[PRE107]lazy='subquery'[PRE108]relationship()``.
+    The subquery load is usually much more efficient for loading many larger collections
+    as it uses INNER JOIN unconditionally and also doesn’t re-load parent rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '``eagerload()[PRE109]eagerload_all()[PRE110]joinedload()[PRE111]joinedload_all()``'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To make room for the new subquery load feature, the existing ``eagerload()[PRE112]eagerload_all()[PRE113]joinedload()[PRE114]joinedload_all()[PRE115]relation()``.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '``lazy=False|None|True|''dynamic''[PRE116]lazy=''noload''|''joined''|''subquery''|''select''|''dynamic''``'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Continuing on the theme of loader strategies opened up, the standard keywords
+    for the ``lazy[PRE117]relationship()[PRE118]select[PRE119]joined[PRE120]subquery[PRE121]noload[PRE122]dynamic[PRE123]True[PRE124]False[PRE125]None``
+    arguments are still accepted with the identical behavior as before.
+  prefs: []
+  type: TYPE_NORMAL
+- en: innerjoin=True on relation, joinedload
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Joined-eagerly loaded scalars and collections can now be instructed to use INNER
+    JOIN instead of OUTER JOIN. On PostgreSQL this is observed to provide a 300-600%
+    speedup on some queries. Set this flag for any many-to-one which is on a NOT NULLable
+    foreign key, and similarly for any collection where related items are guaranteed
+    to exist.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At mapper level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At query time level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `innerjoin=True` flag at the `relationship()` level will also take effect
+    for any `joinedload()` option which does not override the value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many-to-one Enhancements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: many-to-one relations now fire off a lazyload in fewer cases, including in most
+    cases will not fetch the “old” value when a new one is replaced.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: many-to-one relation to a joined-table subclass now uses get() for a simple
+    load (known as the “use_get” condition), i.e. `Related`->``Sub(Base)``, without
+    the need to redefine the primaryjoin condition in terms of the base table. [ticket:1186]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: specifying a foreign key with a declarative column, i.e. `ForeignKey(MyRelatedClass.id)`
+    doesn’t break the “use_get” condition from taking place [ticket:1492]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: relationship(), joinedload(), and joinedload_all() now feature an option called
+    “innerjoin”. Specify `True` or `False` to control whether an eager join is constructed
+    as an INNER or OUTER join. Default is `False` as always. The mapper options will
+    override whichever setting is specified on relationship(). Should generally be
+    set for many-to-one, not nullable foreign key relations to allow improved join
+    performance. [ticket:1544]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the behavior of joined eager loading such that the main query is wrapped in
+    a subquery when LIMIT/OFFSET are present now makes an exception for the case when
+    all eager loads are many-to-one joins. In those cases, the eager joins are against
+    the parent table directly along with the limit/offset without the extra overhead
+    of a subquery, since a many-to-one join does not add rows to the result.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, in 0.5 this query:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE128]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'would produce SQL like:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE129]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: This because the presence of any eager loaders suggests that some or all of
+    them may relate to multi-row collections, which would necessitate wrapping any
+    kind of rowcount-sensitive modifiers like LIMIT inside of a subquery.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'In 0.6, that logic is more sensitive and can detect if all eager loaders represent
+    many-to-ones, in which case the eager joins don’t affect the rowcount:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE130]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Mutable Primary Keys with Joined Table Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A joined table inheritance config where the child table has a PK that foreign
+    keys to the parent PK can now be updated on a CASCADE-capable database like PostgreSQL.
+    `mapper()` now has an option `passive_updates=True` which indicates this foreign
+    key is updated automatically. If on a non-cascading database like SQLite or MySQL/MyISAM,
+    set this flag to `False`. A future feature enhancement will try to get this flag
+    to be auto-configuring based on dialect/table style in use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beaker Caching
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A promising new example of Beaker integration is in `examples/beaker_caching`.
+    This is a straightforward recipe which applies a Beaker cache within the result-
+    generation engine of `Query`. Cache parameters are provided via `query.options()`,
+    and allows full control over the contents of the cache. SQLAlchemy 0.6 includes
+    improvements to the `Session.merge()` method to support this and similar recipes,
+    as well as to provide significantly improved performance in most scenarios.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: the “row tuple” object returned by `Query` when multiple column/entities are
+    selected is now picklable as well as higher performing.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.join()` has been reworked to provide more consistent behavior and more
+    flexibility (includes [ticket:1537])'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.select_from()` accepts multiple clauses to produce multiple comma separated
+    entries within the FROM clause. Useful when selecting from multiple-homed join()
+    clauses.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “dont_load=True” flag on `Session.merge()` is deprecated and is now “load=False”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: added “make_transient()” helper function which transforms a persistent/ detached
+    instance into a transient one (i.e. deletes the instance_key and removes from
+    any session.) [ticket:1052]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the allow_null_pks flag on mapper() is deprecated and has been renamed to allow_partial_pks.
+    It is turned “on” by default. This means that a row which has a non-null value
+    for any of its primary key columns will be considered an identity. The need for
+    this scenario typically only occurs when mapping to an outer join. When set to
+    False, a PK that has NULLs in it will not be considered a primary key - in particular
+    this means a result row will come back as None (or not be filled into a collection),
+    and new in 0.6 also indicates that session.merge() won’t issue a round trip to
+    the database for such a PK value. [ticket:1680]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the mechanics of “backref” have been fully merged into the finer grained “back_populates”
+    system, and take place entirely within the `_generate_backref()` method of `RelationProperty`.
+    This makes the initialization procedure of `RelationProperty` simpler and allows
+    easier propagation of settings (such as from subclasses of `RelationProperty`)
+    into the reverse reference. The internal `BackRef()` is gone and `backref()` returns
+    a plain tuple that is understood by `RelationProperty`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the keys attribute of `ResultProxy` is now a method, so references to it (`result.keys`)
+    must be changed to method invocations (`result.keys()`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ResultProxy.last_inserted_ids` is now deprecated, use `ResultProxy.inserted_primary_key`
+    instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deprecated/Removed ORM Elements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Most elements that were deprecated throughout 0.5 and raised deprecation warnings
+    have been removed (with a few exceptions). All elements that were marked “pending
+    deprecation” are now deprecated and will raise a warning upon use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ‘transactional’ flag on sessionmaker() and others is removed. Use ‘autocommit=True’
+    to indicate ‘transactional=False’.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ‘polymorphic_fetch’ argument on mapper() is removed. Loading can be controlled
+    using the ‘with_polymorphic’ option.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ‘select_table’ argument on mapper() is removed. Use ‘with_polymorphic=(“*”,
+    <some selectable>)’ for this functionality.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ‘proxy’ argument on synonym() is removed. This flag did nothing throughout 0.5,
+    as the “proxy generation” behavior is now automatic.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing a single list of elements to joinedload(), joinedload_all(), contains_eager(),
+    lazyload(), defer(), and undefer() instead of multiple positional *args is deprecated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing a single list of elements to query.order_by(), query.group_by(), query.join(),
+    or query.outerjoin() instead of multiple positional *args is deprecated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query.iterate_instances()` is removed. Use `query.instances()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Query.query_from_parent()` is removed. Use the sqlalchemy.orm.with_parent()
+    function to produce a “parent” clause, or alternatively `query.with_parent()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query._from_self()` is removed, use `query.from_self()` instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “comparator” argument to composite() is removed. Use “comparator_factory”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`RelationProperty._get_join()` is removed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the ‘echo_uow’ flag on Session is removed. Use logging on the “sqlalchemy.orm.unitofwork”
+    name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`session.clear()` is removed. use `session.expunge_all()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`session.save()`, `session.update()`, `session.save_or_update()` are removed.
+    Use `session.add()` and `session.add_all()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “objects” flag on session.flush() remains deprecated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “dont_load=True” flag on session.merge() is deprecated in favor of “load=False”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ScopedSession.mapper` remains deprecated. See the usage recipe at [https://www.sqlalchemy.org/trac/wiki/Usag](https://www.sqlalchemy.org/trac/wiki/Usag)
+    eRecipes/SessionAwareMapper'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: passing an `InstanceState` (internal SQLAlchemy state object) to `attributes.init_collection()`
+    or `attributes.get_history()` is deprecated. These functions are public API and
+    normally expect a regular mapped object instance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the ‘engine’ parameter to `declarative_base()` is removed. Use the ‘bind’ keyword
+    argument.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extensions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLSoup
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQLSoup has been modernized and updated to reflect common 0.5/0.6 capabilities,
+    including well defined session integration. Please read the new docs at [[https://www.sqlalc](https://www.sqlalc)
+    hemy.org/docs/06/reference/ext/sqlsoup.html].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declarative
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The `DeclarativeMeta` (default metaclass for `declarative_base`) previously
+    allowed subclasses to modify `dict_` to add class attributes (e.g. columns). This
+    no longer works, the `DeclarativeMeta` constructor now ignores `dict_`. Instead,
+    the class attributes should be assigned directly, e.g. `cls.id=Column(...)`, or
+    the [MixIn class](https://www.sqlalchemy.org/docs/reference/ext/declarative.html#mix-in-classes)
+    approach should be used instead of the metaclass approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLSoup
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQLSoup has been modernized and updated to reflect common 0.5/0.6 capabilities,
+    including well defined session integration. Please read the new docs at [[https://www.sqlalc](https://www.sqlalc)
+    hemy.org/docs/06/reference/ext/sqlsoup.html].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declarative
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The `DeclarativeMeta` (default metaclass for `declarative_base`) previously
+    allowed subclasses to modify `dict_` to add class attributes (e.g. columns). This
+    no longer works, the `DeclarativeMeta` constructor now ignores `dict_`. Instead,
+    the class attributes should be assigned directly, e.g. `cls.id=Column(...)`, or
+    the [MixIn class](https://www.sqlalchemy.org/docs/reference/ext/declarative.html#mix-in-classes)
+    approach should be used instead of the metaclass approach.
+  prefs: []
+  type: TYPE_NORMAL

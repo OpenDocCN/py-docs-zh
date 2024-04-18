@@ -1,0 +1,1383 @@
+- en: Data Manipulation with the ORM
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/tutorial/orm_data_manipulation.html](https://docs.sqlalchemy.org/en/20/tutorial/orm_data_manipulation.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The previous section [Working with Data](data.html#tutorial-working-with-data)
+    remained focused on the SQL Expression Language from a Core perspective, in order
+    to provide continuity across the major SQL statement constructs. This section
+    will then build out the lifecycle of the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") and how it interacts with these constructs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Prerequisite Sections** - the ORM focused part of the tutorial builds upon
+    two previous ORM-centric sections in this document:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Executing with an ORM Session](dbapi_transactions.html#tutorial-executing-orm-session)
+    - introduces how to make an ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Using ORM Declarative Forms to Define Table Metadata](metadata.html#tutorial-orm-table-metadata)
+    - where we set up our ORM mappings of the `User` and `Address` entities'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Selecting ORM Entities and Columns](data_select.html#tutorial-selecting-orm-entities)
+    - a few examples on how to run SELECT statements for entities like `User`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## Inserting Rows using the ORM Unit of Work pattern'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the ORM, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object is responsible for constructing [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") constructs and emitting them as INSERT statements
+    within the ongoing transaction. The way we instruct the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") to do so is by **adding** object entries to it; the
+    [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    then makes sure these new entries will be emitted to the database when they are
+    needed, using a process known as a **flush**. The overall process used by the
+    [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to persist objects is known as the [unit of work](../glossary.html#term-unit-of-work)
+    pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instances of Classes represent Rows
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Whereas in the previous example we emitted an INSERT using Python dictionaries
+    to indicate the data we wanted to add, with the ORM we make direct use of the
+    custom Python classes we defined, back at [Using ORM Declarative Forms to Define
+    Table Metadata](metadata.html#tutorial-orm-table-metadata). At the class level,
+    the `User` and `Address` classes served as a place to define what the corresponding
+    database tables should look like. These classes also serve as extensible data
+    objects that we use to create and manipulate rows within a transaction as well.
+    Below we will create two `User` objects each representing a potential database
+    row to be INSERTed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: We are able to construct these objects using the names of the mapped columns
+    as keyword arguments in the constructor. This is possible as the `User` class
+    includes an automatically generated `__init__()` constructor that was provided
+    by the ORM mapping so that we could create each object using column names as keys
+    in the constructor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In a similar manner as in our Core examples of [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert"), we did not include a primary key (i.e. an
+    entry for the `id` column), since we would like to make use of the auto-incrementing
+    primary key feature of the database, SQLite in this case, which the ORM also integrates
+    with. The value of the `id` attribute on the above objects, if we were to view
+    it, displays itself as `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `None` value is provided by SQLAlchemy to indicate that the attribute has
+    no value as of yet. SQLAlchemy-mapped attributes always return a value in Python
+    and don’t raise `AttributeError` if they’re missing, when dealing with a new object
+    that has not had a value assigned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the moment, our two objects above are said to be in a state called [transient](../glossary.html#term-transient)
+    - they are not associated with any database state and are yet to be associated
+    with a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object that can generate INSERT statements for them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding objects to a Session
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To illustrate the addition process step by step, we will create a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") without using a context manager (and hence we must make
+    sure we close it later!):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The objects are then added to the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using the [`Session.add()`](../orm/session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") method. When this is called, the objects are in
+    a state known as [pending](../glossary.html#term-pending) and have not been inserted
+    yet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we have pending objects, we can see this state by looking at a collection
+    on the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    called [`Session.new`](../orm/session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above view is using a collection called `IdentitySet` that is essentially
+    a Python set that hashes on object identity in all cases (i.e., using Python built-in
+    `id()` function, rather than the Python `hash()` function).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Flushing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    makes use of a pattern known as [unit of work](../glossary.html#term-unit-of-work).
+    This generally means it accumulates changes one at a time, but does not actually
+    communicate them to the database until needed. This allows it to make better decisions
+    about how SQL DML should be emitted in the transaction based on a given set of
+    pending changes. When it does emit SQL to the database to push out the current
+    set of changes, the process is known as a **flush**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can illustrate the flush process manually by calling the [`Session.flush()`](../orm/session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above we observe the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") was first called upon to emit SQL, so it created a new
+    transaction and emitted the appropriate INSERT statements for the two objects.
+    The transaction now **remains open** until we call any of the [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), [`Session.rollback()`](../orm/session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback"), or [`Session.close()`](../orm/session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") methods of [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs: []
+  type: TYPE_NORMAL
+- en: While [`Session.flush()`](../orm/session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") may be used to manually push out pending changes
+    to the current transaction, it is usually unnecessary as the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") features a behavior known as **autoflush**, which we
+    will illustrate later. It also flushes out changes whenever [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") is called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Autogenerated primary key attributes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Once the rows are inserted, the two Python objects we’ve created are in a state
+    known as [persistent](../glossary.html#term-persistent), where they are associated
+    with the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object in which they were added or loaded, and feature lots of other behaviors
+    that will be covered later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another effect of the INSERT that occurred was that the ORM has retrieved the
+    new primary key identifiers for each new object; internally it normally uses the
+    same [`CursorResult.inserted_primary_key`](../core/connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") accessor we introduced
+    previously. The `squidward` and `krabs` objects now have these new primary key
+    identifiers associated with them and we can view them by accessing the `id` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why did the ORM emit two separate INSERT statements when it could have used
+    [executemany](dbapi_transactions.html#tutorial-multiple-parameters)? As we’ll
+    see in the next section, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") when flushing objects always needs to know the primary
+    key of newly inserted objects. If a feature such as SQLite’s autoincrement is
+    used (other examples include PostgreSQL IDENTITY or SERIAL, using sequences, etc.),
+    the [`CursorResult.inserted_primary_key`](../core/connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") feature usually requires
+    that each INSERT is emitted one row at a time. If we had provided values for the
+    primary keys ahead of time, the ORM would have been able to optimize the operation
+    better. Some database backends such as [psycopg2](../dialects/postgresql.html#postgresql-psycopg2)
+    can also INSERT many rows at once while still being able to retrieve the primary
+    key values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting Objects by Primary Key from the Identity Map
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The primary key identity of the objects are significant to the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), as the objects are now linked to this identity in memory
+    using a feature known as the [identity map](../glossary.html#term-identity-map).
+    The identity map is an in-memory store that links all objects currently loaded
+    in memory to their primary key identity. We can observe this by retrieving one
+    of the above objects using the [`Session.get()`](../orm/session_api.html#sqlalchemy.orm.Session.get
+    "sqlalchemy.orm.Session.get") method, which will return an entry from the identity
+    map if locally present, otherwise emitting a SELECT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The important thing to note about the identity map is that it maintains a **unique
+    instance** of a particular Python object per a particular database identity, within
+    the scope of a particular [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object. We may observe that the `some_squidward` refers
+    to the **same object** as that of `squidward` previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The identity map is a critical feature that allows complex sets of objects to
+    be manipulated within a transaction without things getting out of sync.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Committing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'There’s much more to say about how the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") works which will be discussed further. For now we will
+    commit the transaction so that we can build up knowledge on how to SELECT rows
+    before examining more ORM behaviors and features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above operation will commit the transaction that was in progress. The objects
+    which we’ve dealt with are still [attached](../glossary.html#term-attached) to
+    the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    which is a state they stay in until the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is closed (which is introduced at [Closing a Session](#tutorial-orm-closing)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An important thing to note is that attributes on the objects that we just worked
+    with have been [expired](../glossary.html#term-expired), meaning, when we next
+    access any attributes on them, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will start a new transaction and re-load their state.
+    This option is sometimes problematic for both performance reasons, or if one wishes
+    to use the objects after closing the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") (which is known as the [detached](../glossary.html#term-detached)
+    state), as they will not have any state and will have no [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") with which to load that state, leading to “detached
+    instance” errors. The behavior is controllable using a parameter called [`Session.expire_on_commit`](../orm/session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session"). More on this is at [Closing a Session](#tutorial-orm-closing).  ##
+    Updating ORM Objects using the Unit of Work pattern'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding section [Using UPDATE and DELETE Statements](data_update.html#tutorial-core-update-delete),
+    we introduced the [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update") construct that represents a SQL UPDATE statement.
+    When using the ORM, there are two ways in which this construct is used. The primary
+    way is that it is emitted automatically as part of the [unit of work](../glossary.html#term-unit-of-work)
+    process used by the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), where an UPDATE statement is emitted on a per-primary
+    key basis corresponding to individual objects that have changes on them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Supposing we loaded the `User` object for the username `sandy` into a transaction
+    (also showing off the [`Select.filter_by()`](../core/selectable.html#sqlalchemy.sql.expression.Select.filter_by
+    "sqlalchemy.sql.expression.Select.filter_by") method as well as the [`Result.scalar_one()`](../core/connections.html#sqlalchemy.engine.Result.scalar_one
+    "sqlalchemy.engine.Result.scalar_one") method):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The Python object `sandy` as mentioned before acts as a **proxy** for the row
+    in the database, more specifically the database row **in terms of the current
+    transaction**, that has the primary key identity of `2`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we alter the attributes of this object, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") tracks this change:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The object appears in a collection called [`Session.dirty`](../orm/session_api.html#sqlalchemy.orm.Session.dirty
+    "sqlalchemy.orm.Session.dirty"), indicating the object is “dirty”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    next emits a flush, an UPDATE will be emitted that updates this value in the database.
+    As mentioned previously, a flush occurs automatically before we emit any SELECT,
+    using a behavior known as **autoflush**. We can query directly for the `User.fullname`
+    column from this row and we will get our updated value back:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can see above that we requested that the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") execute a single [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") statement. However the SQL emitted shows that
+    an UPDATE were emitted as well, which was the flush process pushing out pending
+    changes. The `sandy` Python object is now no longer considered dirty:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: However note we are **still in a transaction** and our changes have not been
+    pushed to the database’s permanent storage. Since Sandy’s last name is in fact
+    “Cheeks” not “Squirrel”, we will repair this mistake later when we roll back the
+    transaction. But first we’ll make some more data changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Flushing](../orm/session_basics.html#session-flushing)- details the flush
+    process as well as information about the [`Session.autoflush`](../orm/session_api.html#sqlalchemy.orm.Session.params.autoflush
+    "sqlalchemy.orm.Session") setting.  ## Deleting ORM Objects using the Unit of
+    Work pattern'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To round out the basic persistence operations, an individual ORM object may
+    be marked for deletion within the [unit of work](../glossary.html#term-unit-of-work)
+    process by using the [`Session.delete()`](../orm/session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method. Let’s load up `patrick` from the database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we mark `patrick` for deletion, as is the case with other operations, nothing
+    actually happens yet until a flush proceeds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Current ORM behavior is that `patrick` stays in the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") until the flush proceeds, which as mentioned before
+    occurs if we emit a query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the SELECT we asked to emit was preceded by a DELETE, which indicated
+    the pending deletion for `patrick` proceeded. There was also a `SELECT` against
+    the `address` table, which was prompted by the ORM looking for rows in this table
+    which may be related to the target row; this behavior is part of a behavior known
+    as [cascade](../glossary.html#term-cascade), and can be tailored to work more
+    efficiently by allowing the database to handle related rows in `address` automatically;
+    the section [delete](../orm/cascades.html#cascade-delete) has all the detail on
+    this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete](../orm/cascades.html#cascade-delete) - describes how to tune the behavior
+    of [`Session.delete()`](../orm/session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") in terms of how related rows in other tables
+    should be handled.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Beyond that, the `patrick` object instance now being deleted is no longer considered
+    to be persistent within the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), as is shown by the containment check:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However just like the UPDATEs we made to the `sandy` object, every change we’ve
+    made here is local to an ongoing transaction, which won’t become permanent if
+    we don’t commit it. As rolling the transaction back is actually more interesting
+    at the moment, we will do that in the next section.  ## Bulk / Multi Row INSERT,
+    upsert, UPDATE and DELETE'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [unit of work](../glossary.html#term-unit-of-work) techniques discussed
+    in this section are intended to integrate [dml](../glossary.html#term-DML), or
+    INSERT/UPDATE/DELETE statements, with Python object mechanics, often involving
+    complex graphs of inter-related objects. Once objects are added to a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using [`Session.add()`](../orm/session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add"), the unit of work process transparently emits INSERT/UPDATE/DELETE
+    on our behalf as attributes on our objects are created and modified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, the ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") also has the ability to process commands that allow
+    it to emit INSERT, UPDATE and DELETE statements directly without being passed
+    any ORM-persisted objects, instead being passed lists of values to be INSERTed,
+    UPDATEd, or upserted, or WHERE criteria so that an UPDATE or DELETE statement
+    that matches many rows at once can be invoked. This mode of use is of particular
+    importance when large numbers of rows must be affected without the need to construct
+    and manipulate mapped objects, which may be cumbersome and unnecessary for simplistic,
+    performance-intensive tasks such as large bulk inserts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Bulk / Multi row features of the ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") make use of the [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
+    "sqlalchemy.sql.expression.insert"), [`update()`](../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update") and [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete
+    "sqlalchemy.sql.expression.delete") constructs directly, and their usage resembles
+    how they are used with SQLAlchemy Core (first introduced in this tutorial at [Using
+    INSERT Statements](data_insert.html#tutorial-core-insert) and [Using UPDATE and
+    DELETE Statements](data_update.html#tutorial-core-update-delete)). When using
+    these constructs with the ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") instead of a plain [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), their construction, execution and result handling
+    is fully integrated with the ORM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For background and examples on using these features, see the section [ORM-Enabled
+    INSERT, UPDATE, and DELETE statements](../orm/queryguide/dml.html#orm-expression-update-delete)
+    in the [ORM Querying Guide](../orm/queryguide/index.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM-Enabled INSERT, UPDATE, and DELETE statements](../orm/queryguide/dml.html#orm-expression-update-delete)
+    - in the [ORM Querying Guide](../orm/queryguide/index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rolling Back
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    has a [`Session.rollback()`](../orm/session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method that as expected emits a ROLLBACK on
+    the SQL connection in progress. However, it also has an effect on the objects
+    that are currently associated with the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), in our previous example the Python object `sandy`.
+    While we changed the `.fullname` of the `sandy` object to read `"Sandy Squirrel"`,
+    we want to roll back this change. Calling [`Session.rollback()`](../orm/session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") will not only roll back the transaction but
+    also **expire** all objects currently associated with this [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), which will have the effect that they will refresh themselves
+    when next accessed using a process known as [lazy loading](../glossary.html#term-lazy-loading):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To view the “expiration” process more closely, we may observe that the Python
+    object `sandy` has no state left within its Python `__dict__`, with the exception
+    of a special SQLAlchemy internal state object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is the “[expired](../glossary.html#term-expired)” state; accessing the
+    attribute again will autobegin a new transaction and refresh `sandy` with the
+    current database row:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We may now observe that the full database row was also populated into the `__dict__`
+    of the `sandy` object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For deleted objects, when we earlier noted that `patrick` was no longer in
+    the session, that object’s identity is also restored:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and of course the database data is present again as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Closing a Session'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Within the above sections we used a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object outside of a Python context manager, that is,
+    we didn’t use the `with` statement. That’s fine, however if we are doing things
+    this way, it’s best that we explicitly close out the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") when we are done with it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Closing the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    which is what happens when we use it in a context manager as well, accomplishes
+    the following things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It [releases](../glossary.html#term-releases) all connection resources to the
+    connection pool, cancelling out (e.g. rolling back) any transactions that were
+    in progress.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This means that when we make use of a session to perform some read-only tasks
+    and then close it, we don’t need to explicitly call upon [`Session.rollback()`](../orm/session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") to make sure the transaction is rolled back;
+    the connection pool handles this.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: It **expunges** all objects from the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'This means that all the Python objects we had loaded for this [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), like `sandy`, `patrick` and `squidward`, are now in
+    a state known as [detached](../glossary.html#term-detached). In particular, we
+    will note that objects that were still in an [expired](../glossary.html#term-expired)
+    state, for example due to the call to [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), are now non-functional, as they don’t contain
+    the state of a current row and are no longer associated with any database transaction
+    in which to be refreshed:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The detached objects can be re-associated with the same, or a new [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using the [`Session.add()`](../orm/session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") method, which will re-establish their relationship
+    with their particular database row:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Tip
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Try to avoid using objects in their detached state, if possible. When the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is closed, clean up references to all the previously
+    attached objects as well. For cases where detached objects are necessary, typically
+    the immediate display of just-committed objects for a web application where the
+    [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    is closed before the view is rendered, set the [`Session.expire_on_commit`](../orm/session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session") flag to `False`.  ## Inserting Rows using the ORM Unit
+    of Work pattern'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: When using the ORM, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object is responsible for constructing [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") constructs and emitting them as INSERT statements
+    within the ongoing transaction. The way we instruct the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") to do so is by **adding** object entries to it; the
+    [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    then makes sure these new entries will be emitted to the database when they are
+    needed, using a process known as a **flush**. The overall process used by the
+    [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to persist objects is known as the [unit of work](../glossary.html#term-unit-of-work)
+    pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instances of Classes represent Rows
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Whereas in the previous example we emitted an INSERT using Python dictionaries
+    to indicate the data we wanted to add, with the ORM we make direct use of the
+    custom Python classes we defined, back at [Using ORM Declarative Forms to Define
+    Table Metadata](metadata.html#tutorial-orm-table-metadata). At the class level,
+    the `User` and `Address` classes served as a place to define what the corresponding
+    database tables should look like. These classes also serve as extensible data
+    objects that we use to create and manipulate rows within a transaction as well.
+    Below we will create two `User` objects each representing a potential database
+    row to be INSERTed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: We are able to construct these objects using the names of the mapped columns
+    as keyword arguments in the constructor. This is possible as the `User` class
+    includes an automatically generated `__init__()` constructor that was provided
+    by the ORM mapping so that we could create each object using column names as keys
+    in the constructor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In a similar manner as in our Core examples of [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert"), we did not include a primary key (i.e. an
+    entry for the `id` column), since we would like to make use of the auto-incrementing
+    primary key feature of the database, SQLite in this case, which the ORM also integrates
+    with. The value of the `id` attribute on the above objects, if we were to view
+    it, displays itself as `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `None` value is provided by SQLAlchemy to indicate that the attribute has
+    no value as of yet. SQLAlchemy-mapped attributes always return a value in Python
+    and don’t raise `AttributeError` if they’re missing, when dealing with a new object
+    that has not had a value assigned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the moment, our two objects above are said to be in a state called [transient](../glossary.html#term-transient)
+    - they are not associated with any database state and are yet to be associated
+    with a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object that can generate INSERT statements for them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding objects to a Session
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To illustrate the addition process step by step, we will create a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") without using a context manager (and hence we must make
+    sure we close it later!):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The objects are then added to the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using the [`Session.add()`](../orm/session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") method. When this is called, the objects are in
+    a state known as [pending](../glossary.html#term-pending) and have not been inserted
+    yet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we have pending objects, we can see this state by looking at a collection
+    on the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    called [`Session.new`](../orm/session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above view is using a collection called `IdentitySet` that is essentially
+    a Python set that hashes on object identity in all cases (i.e., using Python built-in
+    `id()` function, rather than the Python `hash()` function).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Flushing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    makes use of a pattern known as [unit of work](../glossary.html#term-unit-of-work).
+    This generally means it accumulates changes one at a time, but does not actually
+    communicate them to the database until needed. This allows it to make better decisions
+    about how SQL DML should be emitted in the transaction based on a given set of
+    pending changes. When it does emit SQL to the database to push out the current
+    set of changes, the process is known as a **flush**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can illustrate the flush process manually by calling the [`Session.flush()`](../orm/session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above we observe the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") was first called upon to emit SQL, so it created a new
+    transaction and emitted the appropriate INSERT statements for the two objects.
+    The transaction now **remains open** until we call any of the [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), [`Session.rollback()`](../orm/session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback"), or [`Session.close()`](../orm/session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") methods of [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs: []
+  type: TYPE_NORMAL
+- en: While [`Session.flush()`](../orm/session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") may be used to manually push out pending changes
+    to the current transaction, it is usually unnecessary as the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") features a behavior known as **autoflush**, which we
+    will illustrate later. It also flushes out changes whenever [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") is called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Autogenerated primary key attributes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Once the rows are inserted, the two Python objects we’ve created are in a state
+    known as [persistent](../glossary.html#term-persistent), where they are associated
+    with the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object in which they were added or loaded, and feature lots of other behaviors
+    that will be covered later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another effect of the INSERT that occurred was that the ORM has retrieved the
+    new primary key identifiers for each new object; internally it normally uses the
+    same [`CursorResult.inserted_primary_key`](../core/connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") accessor we introduced
+    previously. The `squidward` and `krabs` objects now have these new primary key
+    identifiers associated with them and we can view them by accessing the `id` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why did the ORM emit two separate INSERT statements when it could have used
+    [executemany](dbapi_transactions.html#tutorial-multiple-parameters)? As we’ll
+    see in the next section, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") when flushing objects always needs to know the primary
+    key of newly inserted objects. If a feature such as SQLite’s autoincrement is
+    used (other examples include PostgreSQL IDENTITY or SERIAL, using sequences, etc.),
+    the [`CursorResult.inserted_primary_key`](../core/connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") feature usually requires
+    that each INSERT is emitted one row at a time. If we had provided values for the
+    primary keys ahead of time, the ORM would have been able to optimize the operation
+    better. Some database backends such as [psycopg2](../dialects/postgresql.html#postgresql-psycopg2)
+    can also INSERT many rows at once while still being able to retrieve the primary
+    key values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting Objects by Primary Key from the Identity Map
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The primary key identity of the objects are significant to the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), as the objects are now linked to this identity in memory
+    using a feature known as the [identity map](../glossary.html#term-identity-map).
+    The identity map is an in-memory store that links all objects currently loaded
+    in memory to their primary key identity. We can observe this by retrieving one
+    of the above objects using the [`Session.get()`](../orm/session_api.html#sqlalchemy.orm.Session.get
+    "sqlalchemy.orm.Session.get") method, which will return an entry from the identity
+    map if locally present, otherwise emitting a SELECT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The important thing to note about the identity map is that it maintains a **unique
+    instance** of a particular Python object per a particular database identity, within
+    the scope of a particular [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object. We may observe that the `some_squidward` refers
+    to the **same object** as that of `squidward` previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: The identity map is a critical feature that allows complex sets of objects to
+    be manipulated within a transaction without things getting out of sync.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Committing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'There’s much more to say about how the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") works which will be discussed further. For now we will
+    commit the transaction so that we can build up knowledge on how to SELECT rows
+    before examining more ORM behaviors and features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above operation will commit the transaction that was in progress. The objects
+    which we’ve dealt with are still [attached](../glossary.html#term-attached) to
+    the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    which is a state they stay in until the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is closed (which is introduced at [Closing a Session](#tutorial-orm-closing)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: An important thing to note is that attributes on the objects that we just worked
+    with have been [expired](../glossary.html#term-expired), meaning, when we next
+    access any attributes on them, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will start a new transaction and re-load their state.
+    This option is sometimes problematic for both performance reasons, or if one wishes
+    to use the objects after closing the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") (which is known as the [detached](../glossary.html#term-detached)
+    state), as they will not have any state and will have no [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") with which to load that state, leading to “detached
+    instance” errors. The behavior is controllable using a parameter called [`Session.expire_on_commit`](../orm/session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session"). More on this is at [Closing a Session](#tutorial-orm-closing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instances of Classes represent Rows
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Whereas in the previous example we emitted an INSERT using Python dictionaries
+    to indicate the data we wanted to add, with the ORM we make direct use of the
+    custom Python classes we defined, back at [Using ORM Declarative Forms to Define
+    Table Metadata](metadata.html#tutorial-orm-table-metadata). At the class level,
+    the `User` and `Address` classes served as a place to define what the corresponding
+    database tables should look like. These classes also serve as extensible data
+    objects that we use to create and manipulate rows within a transaction as well.
+    Below we will create two `User` objects each representing a potential database
+    row to be INSERTed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: We are able to construct these objects using the names of the mapped columns
+    as keyword arguments in the constructor. This is possible as the `User` class
+    includes an automatically generated `__init__()` constructor that was provided
+    by the ORM mapping so that we could create each object using column names as keys
+    in the constructor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In a similar manner as in our Core examples of [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert"), we did not include a primary key (i.e. an
+    entry for the `id` column), since we would like to make use of the auto-incrementing
+    primary key feature of the database, SQLite in this case, which the ORM also integrates
+    with. The value of the `id` attribute on the above objects, if we were to view
+    it, displays itself as `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `None` value is provided by SQLAlchemy to indicate that the attribute has
+    no value as of yet. SQLAlchemy-mapped attributes always return a value in Python
+    and don’t raise `AttributeError` if they’re missing, when dealing with a new object
+    that has not had a value assigned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the moment, our two objects above are said to be in a state called [transient](../glossary.html#term-transient)
+    - they are not associated with any database state and are yet to be associated
+    with a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object that can generate INSERT statements for them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding objects to a Session
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To illustrate the addition process step by step, we will create a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") without using a context manager (and hence we must make
+    sure we close it later!):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The objects are then added to the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using the [`Session.add()`](../orm/session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") method. When this is called, the objects are in
+    a state known as [pending](../glossary.html#term-pending) and have not been inserted
+    yet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we have pending objects, we can see this state by looking at a collection
+    on the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    called [`Session.new`](../orm/session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above view is using a collection called `IdentitySet` that is essentially
+    a Python set that hashes on object identity in all cases (i.e., using Python built-in
+    `id()` function, rather than the Python `hash()` function).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Flushing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    makes use of a pattern known as [unit of work](../glossary.html#term-unit-of-work).
+    This generally means it accumulates changes one at a time, but does not actually
+    communicate them to the database until needed. This allows it to make better decisions
+    about how SQL DML should be emitted in the transaction based on a given set of
+    pending changes. When it does emit SQL to the database to push out the current
+    set of changes, the process is known as a **flush**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can illustrate the flush process manually by calling the [`Session.flush()`](../orm/session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above we observe the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") was first called upon to emit SQL, so it created a new
+    transaction and emitted the appropriate INSERT statements for the two objects.
+    The transaction now **remains open** until we call any of the [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), [`Session.rollback()`](../orm/session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback"), or [`Session.close()`](../orm/session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") methods of [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs: []
+  type: TYPE_NORMAL
+- en: While [`Session.flush()`](../orm/session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") may be used to manually push out pending changes
+    to the current transaction, it is usually unnecessary as the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") features a behavior known as **autoflush**, which we
+    will illustrate later. It also flushes out changes whenever [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") is called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Autogenerated primary key attributes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Once the rows are inserted, the two Python objects we’ve created are in a state
+    known as [persistent](../glossary.html#term-persistent), where they are associated
+    with the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object in which they were added or loaded, and feature lots of other behaviors
+    that will be covered later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another effect of the INSERT that occurred was that the ORM has retrieved the
+    new primary key identifiers for each new object; internally it normally uses the
+    same [`CursorResult.inserted_primary_key`](../core/connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") accessor we introduced
+    previously. The `squidward` and `krabs` objects now have these new primary key
+    identifiers associated with them and we can view them by accessing the `id` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why did the ORM emit two separate INSERT statements when it could have used
+    [executemany](dbapi_transactions.html#tutorial-multiple-parameters)? As we’ll
+    see in the next section, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") when flushing objects always needs to know the primary
+    key of newly inserted objects. If a feature such as SQLite’s autoincrement is
+    used (other examples include PostgreSQL IDENTITY or SERIAL, using sequences, etc.),
+    the [`CursorResult.inserted_primary_key`](../core/connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") feature usually requires
+    that each INSERT is emitted one row at a time. If we had provided values for the
+    primary keys ahead of time, the ORM would have been able to optimize the operation
+    better. Some database backends such as [psycopg2](../dialects/postgresql.html#postgresql-psycopg2)
+    can also INSERT many rows at once while still being able to retrieve the primary
+    key values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting Objects by Primary Key from the Identity Map
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The primary key identity of the objects are significant to the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), as the objects are now linked to this identity in memory
+    using a feature known as the [identity map](../glossary.html#term-identity-map).
+    The identity map is an in-memory store that links all objects currently loaded
+    in memory to their primary key identity. We can observe this by retrieving one
+    of the above objects using the [`Session.get()`](../orm/session_api.html#sqlalchemy.orm.Session.get
+    "sqlalchemy.orm.Session.get") method, which will return an entry from the identity
+    map if locally present, otherwise emitting a SELECT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The important thing to note about the identity map is that it maintains a **unique
+    instance** of a particular Python object per a particular database identity, within
+    the scope of a particular [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object. We may observe that the `some_squidward` refers
+    to the **same object** as that of `squidward` previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: The identity map is a critical feature that allows complex sets of objects to
+    be manipulated within a transaction without things getting out of sync.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Committing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'There’s much more to say about how the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") works which will be discussed further. For now we will
+    commit the transaction so that we can build up knowledge on how to SELECT rows
+    before examining more ORM behaviors and features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above operation will commit the transaction that was in progress. The objects
+    which we’ve dealt with are still [attached](../glossary.html#term-attached) to
+    the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    which is a state they stay in until the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is closed (which is introduced at [Closing a Session](#tutorial-orm-closing)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: An important thing to note is that attributes on the objects that we just worked
+    with have been [expired](../glossary.html#term-expired), meaning, when we next
+    access any attributes on them, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will start a new transaction and re-load their state.
+    This option is sometimes problematic for both performance reasons, or if one wishes
+    to use the objects after closing the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") (which is known as the [detached](../glossary.html#term-detached)
+    state), as they will not have any state and will have no [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") with which to load that state, leading to “detached
+    instance” errors. The behavior is controllable using a parameter called [`Session.expire_on_commit`](../orm/session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session"). More on this is at [Closing a Session](#tutorial-orm-closing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Updating ORM Objects using the Unit of Work pattern'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding section [Using UPDATE and DELETE Statements](data_update.html#tutorial-core-update-delete),
+    we introduced the [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update") construct that represents a SQL UPDATE statement.
+    When using the ORM, there are two ways in which this construct is used. The primary
+    way is that it is emitted automatically as part of the [unit of work](../glossary.html#term-unit-of-work)
+    process used by the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), where an UPDATE statement is emitted on a per-primary
+    key basis corresponding to individual objects that have changes on them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Supposing we loaded the `User` object for the username `sandy` into a transaction
+    (also showing off the [`Select.filter_by()`](../core/selectable.html#sqlalchemy.sql.expression.Select.filter_by
+    "sqlalchemy.sql.expression.Select.filter_by") method as well as the [`Result.scalar_one()`](../core/connections.html#sqlalchemy.engine.Result.scalar_one
+    "sqlalchemy.engine.Result.scalar_one") method):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The Python object `sandy` as mentioned before acts as a **proxy** for the row
+    in the database, more specifically the database row **in terms of the current
+    transaction**, that has the primary key identity of `2`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we alter the attributes of this object, the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") tracks this change:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The object appears in a collection called [`Session.dirty`](../orm/session_api.html#sqlalchemy.orm.Session.dirty
+    "sqlalchemy.orm.Session.dirty"), indicating the object is “dirty”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    next emits a flush, an UPDATE will be emitted that updates this value in the database.
+    As mentioned previously, a flush occurs automatically before we emit any SELECT,
+    using a behavior known as **autoflush**. We can query directly for the `User.fullname`
+    column from this row and we will get our updated value back:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can see above that we requested that the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") execute a single [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") statement. However the SQL emitted shows that
+    an UPDATE were emitted as well, which was the flush process pushing out pending
+    changes. The `sandy` Python object is now no longer considered dirty:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: However note we are **still in a transaction** and our changes have not been
+    pushed to the database’s permanent storage. Since Sandy’s last name is in fact
+    “Cheeks” not “Squirrel”, we will repair this mistake later when we roll back the
+    transaction. But first we’ll make some more data changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Flushing](../orm/session_basics.html#session-flushing)- details the flush
+    process as well as information about the [`Session.autoflush`](../orm/session_api.html#sqlalchemy.orm.Session.params.autoflush
+    "sqlalchemy.orm.Session") setting.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Deleting ORM Objects using the Unit of Work pattern'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To round out the basic persistence operations, an individual ORM object may
+    be marked for deletion within the [unit of work](../glossary.html#term-unit-of-work)
+    process by using the [`Session.delete()`](../orm/session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method. Let’s load up `patrick` from the database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we mark `patrick` for deletion, as is the case with other operations, nothing
+    actually happens yet until a flush proceeds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Current ORM behavior is that `patrick` stays in the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") until the flush proceeds, which as mentioned before
+    occurs if we emit a query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the SELECT we asked to emit was preceded by a DELETE, which indicated
+    the pending deletion for `patrick` proceeded. There was also a `SELECT` against
+    the `address` table, which was prompted by the ORM looking for rows in this table
+    which may be related to the target row; this behavior is part of a behavior known
+    as [cascade](../glossary.html#term-cascade), and can be tailored to work more
+    efficiently by allowing the database to handle related rows in `address` automatically;
+    the section [delete](../orm/cascades.html#cascade-delete) has all the detail on
+    this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete](../orm/cascades.html#cascade-delete) - describes how to tune the behavior
+    of [`Session.delete()`](../orm/session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") in terms of how related rows in other tables
+    should be handled.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Beyond that, the `patrick` object instance now being deleted is no longer considered
+    to be persistent within the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), as is shown by the containment check:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: However just like the UPDATEs we made to the `sandy` object, every change we’ve
+    made here is local to an ongoing transaction, which won’t become permanent if
+    we don’t commit it. As rolling the transaction back is actually more interesting
+    at the moment, we will do that in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Bulk / Multi Row INSERT, upsert, UPDATE and DELETE'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [unit of work](../glossary.html#term-unit-of-work) techniques discussed
+    in this section are intended to integrate [dml](../glossary.html#term-DML), or
+    INSERT/UPDATE/DELETE statements, with Python object mechanics, often involving
+    complex graphs of inter-related objects. Once objects are added to a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using [`Session.add()`](../orm/session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add"), the unit of work process transparently emits INSERT/UPDATE/DELETE
+    on our behalf as attributes on our objects are created and modified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, the ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") also has the ability to process commands that allow
+    it to emit INSERT, UPDATE and DELETE statements directly without being passed
+    any ORM-persisted objects, instead being passed lists of values to be INSERTed,
+    UPDATEd, or upserted, or WHERE criteria so that an UPDATE or DELETE statement
+    that matches many rows at once can be invoked. This mode of use is of particular
+    importance when large numbers of rows must be affected without the need to construct
+    and manipulate mapped objects, which may be cumbersome and unnecessary for simplistic,
+    performance-intensive tasks such as large bulk inserts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Bulk / Multi row features of the ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") make use of the [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
+    "sqlalchemy.sql.expression.insert"), [`update()`](../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update") and [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete
+    "sqlalchemy.sql.expression.delete") constructs directly, and their usage resembles
+    how they are used with SQLAlchemy Core (first introduced in this tutorial at [Using
+    INSERT Statements](data_insert.html#tutorial-core-insert) and [Using UPDATE and
+    DELETE Statements](data_update.html#tutorial-core-update-delete)). When using
+    these constructs with the ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") instead of a plain [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), their construction, execution and result handling
+    is fully integrated with the ORM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For background and examples on using these features, see the section [ORM-Enabled
+    INSERT, UPDATE, and DELETE statements](../orm/queryguide/dml.html#orm-expression-update-delete)
+    in the [ORM Querying Guide](../orm/queryguide/index.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM-Enabled INSERT, UPDATE, and DELETE statements](../orm/queryguide/dml.html#orm-expression-update-delete)
+    - in the [ORM Querying Guide](../orm/queryguide/index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rolling Back
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    has a [`Session.rollback()`](../orm/session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method that as expected emits a ROLLBACK on
+    the SQL connection in progress. However, it also has an effect on the objects
+    that are currently associated with the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), in our previous example the Python object `sandy`.
+    While we changed the `.fullname` of the `sandy` object to read `"Sandy Squirrel"`,
+    we want to roll back this change. Calling [`Session.rollback()`](../orm/session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") will not only roll back the transaction but
+    also **expire** all objects currently associated with this [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), which will have the effect that they will refresh themselves
+    when next accessed using a process known as [lazy loading](../glossary.html#term-lazy-loading):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To view the “expiration” process more closely, we may observe that the Python
+    object `sandy` has no state left within its Python `__dict__`, with the exception
+    of a special SQLAlchemy internal state object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is the “[expired](../glossary.html#term-expired)” state; accessing the
+    attribute again will autobegin a new transaction and refresh `sandy` with the
+    current database row:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We may now observe that the full database row was also populated into the `__dict__`
+    of the `sandy` object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For deleted objects, when we earlier noted that `patrick` was no longer in
+    the session, that object’s identity is also restored:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and of course the database data is present again as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Closing a Session'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Within the above sections we used a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object outside of a Python context manager, that is,
+    we didn’t use the `with` statement. That’s fine, however if we are doing things
+    this way, it’s best that we explicitly close out the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") when we are done with it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Closing the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    which is what happens when we use it in a context manager as well, accomplishes
+    the following things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It [releases](../glossary.html#term-releases) all connection resources to the
+    connection pool, cancelling out (e.g. rolling back) any transactions that were
+    in progress.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This means that when we make use of a session to perform some read-only tasks
+    and then close it, we don’t need to explicitly call upon [`Session.rollback()`](../orm/session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") to make sure the transaction is rolled back;
+    the connection pool handles this.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: It **expunges** all objects from the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'This means that all the Python objects we had loaded for this [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), like `sandy`, `patrick` and `squidward`, are now in
+    a state known as [detached](../glossary.html#term-detached). In particular, we
+    will note that objects that were still in an [expired](../glossary.html#term-expired)
+    state, for example due to the call to [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), are now non-functional, as they don’t contain
+    the state of a current row and are no longer associated with any database transaction
+    in which to be refreshed:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The detached objects can be re-associated with the same, or a new [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using the [`Session.add()`](../orm/session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") method, which will re-establish their relationship
+    with their particular database row:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Tip
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Try to avoid using objects in their detached state, if possible. When the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is closed, clean up references to all the previously
+    attached objects as well. For cases where detached objects are necessary, typically
+    the immediate display of just-committed objects for a web application where the
+    [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    is closed before the view is rendered, set the [`Session.expire_on_commit`](../orm/session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session") flag to `False`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL

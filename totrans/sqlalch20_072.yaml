@@ -1,0 +1,1853 @@
+- en: Hybrid Attributes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/extensions/hybrid.html](https://docs.sqlalchemy.org/en/20/orm/extensions/hybrid.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Define attributes on ORM-mapped classes that have “hybrid” behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: “hybrid” means the attribute has distinct behaviors defined at the class level
+    and at the instance level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`hybrid`](#module-sqlalchemy.ext.hybrid "sqlalchemy.ext.hybrid") extension
+    provides a special form of method decorator and has minimal dependencies on the
+    rest of SQLAlchemy. Its basic theory of operation can work with any descriptor-based
+    expression system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider a mapping `Interval`, representing integer `start` and `end` values.
+    We can define higher level functions on mapped classes that produce SQL expressions
+    at the class level, and Python expression evaluation at the instance level. Below,
+    each function decorated with [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method
+    "sqlalchemy.ext.hybrid.hybrid_method") or [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") may receive `self` as an instance of
+    the class, or may receive the class directly, depending on context:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the `length` property returns the difference between the `end` and `start`
+    attributes. With an instance of `Interval`, this subtraction occurs in Python,
+    using normal Python descriptor mechanics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When dealing with the `Interval` class itself, the [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") descriptor evaluates the function body
+    given the `Interval` class as the argument, which when evaluated with SQLAlchemy
+    expression mechanics returns a new SQL expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Filtering methods such as [`Select.filter_by()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.filter_by
+    "sqlalchemy.sql.expression.Select.filter_by") are supported with hybrid attributes
+    as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `Interval` class example also illustrates two methods, `contains()` and
+    `intersects()`, decorated with [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method
+    "sqlalchemy.ext.hybrid.hybrid_method"). This decorator applies the same idea to
+    methods that [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property "sqlalchemy.ext.hybrid.hybrid_property")
+    applies to attributes. The methods return boolean values, and take advantage of
+    the Python `|` and `&` bitwise operators to produce equivalent instance-level
+    and SQL expression-level boolean behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Defining Expression Behavior Distinct from Attribute Behavior'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the previous section, our usage of the `&` and `|` bitwise operators within
+    the `Interval.contains` and `Interval.intersects` methods was fortunate, considering
+    our functions operated on two boolean values to return a new one. In many cases,
+    the construction of an in-Python function and a SQLAlchemy SQL expression have
+    enough differences that two separate Python expressions should be defined. The
+    [`hybrid`](#module-sqlalchemy.ext.hybrid "sqlalchemy.ext.hybrid") decorator defines
+    a **modifier** [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") for this purpose. As an example
+    we’ll define the radius of the interval, which requires the usage of the absolute
+    value function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") first assigned to the name `Interval.radius`
+    is amended by a subsequent method called `Interval._radius_expression`, using
+    the decorator `@radius.inplace.expression`, which chains together two modifiers
+    [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace "sqlalchemy.ext.hybrid.hybrid_property.inplace")
+    and [`hybrid_property.expression`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression"). The use of [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace
+    "sqlalchemy.ext.hybrid.hybrid_property.inplace") indicates that the [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") modifier should mutate the
+    existing hybrid object at `Interval.radius` in place, without creating a new object.
+    Notes on this modifier and its rationale are discussed in the next section [Using
+    inplace to create pep-484 compliant hybrid properties](#hybrid-pep484-naming).
+    The use of `@classmethod` is optional, and is strictly to give typing tools a
+    hint that `cls` in this case is expected to be the `Interval` class, and not an
+    instance of `Interval`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace
+    "sqlalchemy.ext.hybrid.hybrid_property.inplace") as well as the use of `@classmethod`
+    for proper typing support are available as of SQLAlchemy 2.0.4, and will not work
+    in earlier versions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With `Interval.radius` now including an expression element, the SQL function
+    `ABS()` is returned when accessing `Interval.radius` at the class level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]  ## Using `inplace` to create pep-484 compliant hybrid properties'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the previous section, a [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") decorator is illustrated which includes
+    two separate method-level functions being decorated, both to produce a single
+    object attribute referenced as `Interval.radius`. There are actually several different
+    modifiers we can use for [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") including [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression"), [`hybrid_property.setter()`](#sqlalchemy.ext.hybrid.hybrid_property.setter
+    "sqlalchemy.ext.hybrid.hybrid_property.setter") and [`hybrid_property.update_expression()`](#sqlalchemy.ext.hybrid.hybrid_property.update_expression
+    "sqlalchemy.ext.hybrid.hybrid_property.update_expression").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy’s [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property "sqlalchemy.ext.hybrid.hybrid_property")
+    decorator intends that adding on these methods may be done in the identical manner
+    as Python’s built-in `@property` decorator, where idiomatic use is to continue
+    to redefine the attribute repeatedly, using the **same attribute name** each time,
+    as in the example below that illustrates the use of [`hybrid_property.setter()`](#sqlalchemy.ext.hybrid.hybrid_property.setter
+    "sqlalchemy.ext.hybrid.hybrid_property.setter") and [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") for the `Interval.radius`
+    descriptor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, there are three `Interval.radius` methods, but as each are decorated,
+    first by the [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property "sqlalchemy.ext.hybrid.hybrid_property")
+    decorator and then by the `@radius` name itself, the end effect is that `Interval.radius`
+    is a single attribute with three different functions contained within it. This
+    style of use is taken from [Python’s documented use of @property](https://docs.python.org/3/library/functions.html#property).
+    It is important to note that the way both `@property` as well as [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") work, a **copy of the descriptor is made
+    each time**. That is, each call to `@radius.expression`, `@radius.setter` etc.
+    make a new object entirely. This allows the attribute to be re-defined in subclasses
+    without issue (see [Reusing Hybrid Properties across Subclasses](#hybrid-reuse-subclass)
+    later in this section for how this is used).
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, the above approach is not compatible with typing tools such as mypy
+    and pyright. Python’s own `@property` decorator does not have this limitation
+    only because [these tools hardcode the behavior of @property](https://github.com/python/typing/discussions/1102),
+    meaning this syntax is not available to SQLAlchemy under [**PEP 484**](https://peps.python.org/pep-0484/)
+    compliance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In order to produce a reasonable syntax while remaining typing compliant, the
+    [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace "sqlalchemy.ext.hybrid.hybrid_property.inplace")
+    decorator allows the same decorator to be re-used with different method names,
+    while still producing a single decorator under one name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace
+    "sqlalchemy.ext.hybrid.hybrid_property.inplace") further qualifies the use of
+    the decorator that a new copy should not be made, thereby maintaining the `Interval.radius`
+    name while allowing additional methods `Interval._radius_setter` and `Interval._radius_expression`
+    to be differently named.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0.4: Added [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace
+    "sqlalchemy.ext.hybrid.hybrid_property.inplace") to allow less verbose construction
+    of composite [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property "sqlalchemy.ext.hybrid.hybrid_property")
+    objects while not having to use repeated method names. Additionally allowed the
+    use of `@classmethod` within [`hybrid_property.expression`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression"), [`hybrid_property.update_expression`](#sqlalchemy.ext.hybrid.hybrid_property.update_expression
+    "sqlalchemy.ext.hybrid.hybrid_property.update_expression"), and [`hybrid_property.comparator`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") to allow typing tools to identify
+    `cls` as a class and not an instance in the method signature.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining Setters
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`hybrid_property.setter()`](#sqlalchemy.ext.hybrid.hybrid_property.setter
+    "sqlalchemy.ext.hybrid.hybrid_property.setter") modifier allows the construction
+    of a custom setter method, that can modify values on the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `length(self, value)` method is now called upon set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Allowing Bulk ORM Update'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A hybrid can define a custom “UPDATE” handler for when using ORM-enabled updates,
+    allowing the hybrid to be used in the SET clause of the update.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Normally, when using a hybrid with [`update()`](../../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update"), the SQL expression is used as the column
+    that’s the target of the SET. If our `Interval` class had a hybrid `start_point`
+    that linked to `Interval.start`, this could be substituted directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, when using a composite hybrid like `Interval.length`, this hybrid
+    represents more than one column. We can set up a handler that will accommodate
+    a value passed in the VALUES expression which can affect this, using the [`hybrid_property.update_expression()`](#sqlalchemy.ext.hybrid.hybrid_property.update_expression
+    "sqlalchemy.ext.hybrid.hybrid_property.update_expression") decorator. A handler
+    that works similarly to our setter would be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if we use `Interval.length` in an UPDATE expression, we get a hybrid
+    SET expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: This SET expression is accommodated by the ORM automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM-Enabled INSERT, UPDATE, and DELETE statements](../queryguide/dml.html#orm-expression-update-delete)
+    - includes background on ORM-enabled UPDATE statements'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Working with Relationships
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There’s no essential difference when creating hybrids that work with related
+    objects as opposed to column-based data. The need for distinct expressions tends
+    to be greater. The two variants we’ll illustrate are the “join-dependent” hybrid,
+    and the “correlated subquery” hybrid.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Join-Dependent Relationship Hybrid
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Consider the following declarative mapping which relates a `User` to a `SavingsAccount`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above hybrid property `balance` works with the first `SavingsAccount` entry
+    in the list of accounts for this user. The in-Python getter/setter methods can
+    treat `accounts` as a Python list available on `self`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `User.balance` getter in the above example accesses the `self.acccounts`
+    collection, which will normally be loaded via the [`selectinload()`](../queryguide/relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") loader strategy configured on the `User.balance`
+    [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship").
+    The default loader strategy when not otherwise stated on [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload"), which emits SQL on demand. When using asyncio, on-demand
+    loaders such as [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") are not supported, so care should be taken to ensure
+    the `self.accounts` collection is accessible to this hybrid accessor when using
+    asyncio.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the expression level, it’s expected that the `User` class will be used in
+    an appropriate context such that an appropriate join to `SavingsAccount` will
+    be present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note however, that while the instance level accessors need to worry about whether
+    `self.accounts` is even present, this issue expresses itself differently at the
+    SQL expression level, where we basically would use an outer join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Correlated Subquery Relationship Hybrid
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We can, of course, forego being dependent on the enclosing query’s usage of
+    joins in favor of the correlated subquery, which can portably be packed into a
+    single column expression. A correlated subquery is more portable, but often performs
+    more poorly at the SQL level. Using the same technique illustrated at [Using column_property](../mapped_sql_expr.html#mapper-column-property-sql-expressions),
+    we can adjust our `SavingsAccount` example to aggregate the balances for *all*
+    accounts, and use a correlated subquery for the column expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above recipe will give us the `balance` column which renders a correlated
+    SELECT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Building Custom Comparators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The hybrid property also includes a helper that allows construction of custom
+    comparators. A comparator object allows one to customize the behavior of each
+    SQLAlchemy expression operator individually. They are useful when creating custom
+    types that have some highly idiosyncratic behavior on the SQL side.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`hybrid_property.comparator()`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") decorator introduced in this
+    section **replaces** the use of the [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") decorator. They cannot be
+    used together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The example class below allows case-insensitive comparisons on the attribute
+    named `word_insensitive`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, SQL expressions against `word_insensitive` will apply the `LOWER()`
+    SQL function to both sides:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `CaseInsensitiveComparator` above implements part of the [`ColumnOperators`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators
+    "sqlalchemy.sql.expression.ColumnOperators") interface. A “coercion” operation
+    like lowercasing can be applied to all comparison operations (i.e. `eq`, `lt`,
+    `gt`, etc.) using [`Operators.operate()`](../../core/sqlelement.html#sqlalchemy.sql.expression.Operators.operate
+    "sqlalchemy.sql.expression.Operators.operate"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]  ## Reusing Hybrid Properties across Subclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A hybrid can be referred to from a superclass, to allow modifying methods like
+    [`hybrid_property.getter()`](#sqlalchemy.ext.hybrid.hybrid_property.getter "sqlalchemy.ext.hybrid.hybrid_property.getter"),
+    [`hybrid_property.setter()`](#sqlalchemy.ext.hybrid.hybrid_property.setter "sqlalchemy.ext.hybrid.hybrid_property.setter")
+    to be used to redefine those methods on a subclass. This is similar to how the
+    standard Python `@property` object works:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the `FirstNameLastName` class refers to the hybrid from `FirstNameOnly.name`
+    to repurpose its getter and setter for the subclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When overriding [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") and [`hybrid_property.comparator()`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") alone as the first reference
+    to the superclass, these names conflict with the same-named accessors on the class-
+    level [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") object returned at the class level. To override
+    these methods when referring directly to the parent class descriptor, add the
+    special qualifier [`hybrid_property.overrides`](#sqlalchemy.ext.hybrid.hybrid_property.overrides
+    "sqlalchemy.ext.hybrid.hybrid_property.overrides"), which will de- reference the
+    instrumented attribute back to the hybrid object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hybrid Value Objects
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Note in our previous example, if we were to compare the `word_insensitive` attribute
+    of a `SearchWord` instance to a plain Python string, the plain Python string would
+    not be coerced to lower case - the `CaseInsensitiveComparator` we built, being
+    returned by `@word_insensitive.comparator`, only applies to the SQL side.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A more comprehensive form of the custom comparator is to construct a *Hybrid
+    Value Object*. This technique applies the target value or expression to a value
+    object which is then returned by the accessor in all cases. The value object allows
+    control of all operations upon the value as well as how compared values are treated,
+    both on the SQL expression side as well as the Python value side. Replacing the
+    previous `CaseInsensitiveComparator` class with a new `CaseInsensitiveWord` class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the `CaseInsensitiveWord` object represents `self.word`, which may be
+    a SQL function, or may be a Python native. By overriding `operate()` and `__clause_element__()`
+    to work in terms of `self.word`, all comparison operations will work against the
+    “converted” form of `word`, whether it be SQL side or Python side. Our `SearchWord`
+    class can now deliver the `CaseInsensitiveWord` object unconditionally from a
+    single hybrid call:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `word_insensitive` attribute now has case-insensitive comparison behavior
+    universally, including SQL expression vs. Python expression (note the Python value
+    is converted to lower case on the Python side here):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'SQL expression versus SQL expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Python only expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Hybrid Value pattern is very useful for any kind of value that may have
+    multiple representations, such as timestamps, time deltas, units of measurement,
+    currencies and encrypted passwords.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Hybrids and Value Agnostic Types](https://techspot.zzzeek.org/2011/10/21/hybrids-and-value-agnostic-types/)
+    - on the techspot.zzzeek.org blog'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Value Agnostic Types, Part II](https://techspot.zzzeek.org/2011/10/29/value-agnostic-types-part-ii/)
+    - on the techspot.zzzeek.org blog'
+  prefs: []
+  type: TYPE_NORMAL
+- en: API Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Comparator](#sqlalchemy.ext.hybrid.Comparator) | A helper class that allows
+    easy construction of custom [`PropComparator`](../internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.interfaces.PropComparator") classes for usage with hybrids. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [hybrid_method](#sqlalchemy.ext.hybrid.hybrid_method) | A decorator which
+    allows definition of a Python object method with both instance-level and class-level
+    behavior. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [hybrid_property](#sqlalchemy.ext.hybrid.hybrid_property) | A decorator which
+    allows definition of a Python descriptor with both instance-level and class-level
+    behavior. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [HybridExtensionType](#sqlalchemy.ext.hybrid.HybridExtensionType) | An enumeration.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: A decorator which allows definition of a Python object method with both instance-level
+    and class-level behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.hybrid.hybrid_method.__init__), [expression()](#sqlalchemy.ext.hybrid.hybrid_method.expression),
+    [extension_type](#sqlalchemy.ext.hybrid.hybrid_method.extension_type), [inplace](#sqlalchemy.ext.hybrid.hybrid_method.inplace),
+    [is_attribute](#sqlalchemy.ext.hybrid.hybrid_method.is_attribute)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.hybrid.hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method
+    "sqlalchemy.ext.hybrid.hybrid_method") ([`sqlalchemy.orm.base.InspectionAttrInfo`](../internals.html#sqlalchemy.orm.InspectionAttrInfo
+    "sqlalchemy.orm.base.InspectionAttrInfo"), `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method "sqlalchemy.ext.hybrid.hybrid_method").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Usage is typically via decorator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a SQL-expression producing method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: The extension type, if any. Defaults to `NotExtension.NOT_EXTENSION`
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`HybridExtensionType`](#sqlalchemy.ext.hybrid.HybridExtensionType "sqlalchemy.ext.hybrid.HybridExtensionType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AssociationProxyExtensionType`](associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxyExtensionType
+    "sqlalchemy.ext.associationproxy.AssociationProxyExtensionType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the inplace mutator for this [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method
+    "sqlalchemy.ext.hybrid.hybrid_method").
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method "sqlalchemy.ext.hybrid.hybrid_method")
+    class already performs “in place” mutation when the [`hybrid_method.expression()`](#sqlalchemy.ext.hybrid.hybrid_method.expression
+    "sqlalchemy.ext.hybrid.hybrid_method.expression") decorator is called, so this
+    attribute returns Self.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using inplace to create pep-484 compliant hybrid properties](#hybrid-pep484-naming)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: True if this object is a Python [descriptor](../../glossary.html#term-descriptor).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This can refer to one of many types. Usually a [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") which handles attributes events on behalf
+    of a [`MapperProperty`](../internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty").
+    But can also be an extension type such as [`AssociationProxy`](associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxy
+    "sqlalchemy.ext.associationproxy.AssociationProxy") or [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property"). The [`InspectionAttr.extension_type`](../internals.html#sqlalchemy.orm.InspectionAttr.extension_type
+    "sqlalchemy.orm.InspectionAttr.extension_type") will refer to a constant identifying
+    the specific subtype.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper.all_orm_descriptors`](../mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: A decorator which allows definition of a Python descriptor with both instance-level
+    and class-level behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.hybrid.hybrid_property.__init__), [comparator()](#sqlalchemy.ext.hybrid.hybrid_property.comparator),
+    [deleter()](#sqlalchemy.ext.hybrid.hybrid_property.deleter), [expression()](#sqlalchemy.ext.hybrid.hybrid_property.expression),
+    [extension_type](#sqlalchemy.ext.hybrid.hybrid_property.extension_type), [getter()](#sqlalchemy.ext.hybrid.hybrid_property.getter),
+    [inplace](#sqlalchemy.ext.hybrid.hybrid_property.inplace), [is_attribute](#sqlalchemy.ext.hybrid.hybrid_property.is_attribute),
+    [overrides](#sqlalchemy.ext.hybrid.hybrid_property.overrides), [setter()](#sqlalchemy.ext.hybrid.hybrid_property.setter),
+    [update_expression()](#sqlalchemy.ext.hybrid.hybrid_property.update_expression)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.hybrid.hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") ([`sqlalchemy.orm.base.InspectionAttrInfo`](../internals.html#sqlalchemy.orm.InspectionAttrInfo
+    "sqlalchemy.orm.base.InspectionAttrInfo"), `sqlalchemy.orm.base.ORMDescriptor`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property "sqlalchemy.ext.hybrid.hybrid_property").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Usage is typically via decorator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a custom comparator producing method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The return value of the decorated method should be an instance of [`Comparator`](#sqlalchemy.ext.hybrid.Comparator
+    "sqlalchemy.ext.hybrid.Comparator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`hybrid_property.comparator()`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") decorator **replaces** the
+    use of the [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") decorator. They cannot be
+    used together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a hybrid is invoked at the class level, the [`Comparator`](#sqlalchemy.ext.hybrid.Comparator
+    "sqlalchemy.ext.hybrid.Comparator") object given here is wrapped inside of a specialized
+    [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute "sqlalchemy.orm.QueryableAttribute"),
+    which is the same kind of object used by the ORM to represent other mapped attributes.
+    The reason for this is so that other class-level attributes such as docstrings
+    and a reference to the hybrid itself may be maintained within the structure that’s
+    returned, without any modifications to the original comparator object passed in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When referring to a hybrid property from an owning class (e.g. `SomeClass.some_hybrid`),
+    an instance of [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") is returned, representing the expression
+    or comparator object as this hybrid object. However, that object itself has accessors
+    called `expression` and `comparator`; so when attempting to override these decorators
+    on a subclass, it may be necessary to qualify it using the [`hybrid_property.overrides`](#sqlalchemy.ext.hybrid.hybrid_property.overrides
+    "sqlalchemy.ext.hybrid.hybrid_property.overrides") modifier first. See that modifier
+    for details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a deletion method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a SQL-expression producing method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a hybrid is invoked at the class level, the SQL expression given here is
+    wrapped inside of a specialized [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute"), which is the same kind of object used by
+    the ORM to represent other mapped attributes. The reason for this is so that other
+    class-level attributes such as docstrings and a reference to the hybrid itself
+    may be maintained within the structure that’s returned, without any modifications
+    to the original SQL expression passed in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When referring to a hybrid property from an owning class (e.g. `SomeClass.some_hybrid`),
+    an instance of [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") is returned, representing the expression
+    or comparator object as well as this hybrid object. However, that object itself
+    has accessors called `expression` and `comparator`; so when attempting to override
+    these decorators on a subclass, it may be necessary to qualify it using the [`hybrid_property.overrides`](#sqlalchemy.ext.hybrid.hybrid_property.overrides
+    "sqlalchemy.ext.hybrid.hybrid_property.overrides") modifier first. See that modifier
+    for details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Defining Expression Behavior Distinct from Attribute Behavior](#hybrid-distinct-expression)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: The extension type, if any. Defaults to `NotExtension.NOT_EXTENSION`
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`HybridExtensionType`](#sqlalchemy.ext.hybrid.HybridExtensionType "sqlalchemy.ext.hybrid.HybridExtensionType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AssociationProxyExtensionType`](associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxyExtensionType
+    "sqlalchemy.ext.associationproxy.AssociationProxyExtensionType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a getter method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the inplace mutator for this [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is to allow in-place mutation of the hybrid, allowing the first hybrid
+    method of a certain name to be re-used in order to add more methods without having
+    to name those methods the same, e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 2.0.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using inplace to create pep-484 compliant hybrid properties](#hybrid-pep484-naming)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: True if this object is a Python [descriptor](../../glossary.html#term-descriptor).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This can refer to one of many types. Usually a [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") which handles attributes events on behalf
+    of a [`MapperProperty`](../internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty").
+    But can also be an extension type such as [`AssociationProxy`](associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxy
+    "sqlalchemy.ext.associationproxy.AssociationProxy") or [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property"). The [`InspectionAttr.extension_type`](../internals.html#sqlalchemy.orm.InspectionAttr.extension_type
+    "sqlalchemy.orm.InspectionAttr.extension_type") will refer to a constant identifying
+    the specific subtype.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper.all_orm_descriptors`](../mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: Prefix for a method that is overriding an existing attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`hybrid_property.overrides`](#sqlalchemy.ext.hybrid.hybrid_property.overrides
+    "sqlalchemy.ext.hybrid.hybrid_property.overrides") accessor just returns this
+    hybrid object, which when called at the class level from a parent class, will
+    de-reference the “instrumented attribute” normally returned at this level, and
+    allow modifying decorators like [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") and [`hybrid_property.comparator()`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") to be used without conflicting
+    with the same-named attributes normally present on the [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Reusing Hybrid Properties across Subclasses](#hybrid-reuse-subclass)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a setter method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines an UPDATE tuple producing method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The method accepts a single value, which is the value to be rendered into the
+    SET clause of an UPDATE statement. The method should then process this value into
+    individual column expressions that fit into the ultimate SET clause, and return
+    them as a sequence of 2-tuples. Each tuple contains a column expression as the
+    key and a value to be rendered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: A helper class that allows easy construction of custom [`PropComparator`](../internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.interfaces.PropComparator") classes for usage with hybrids.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.hybrid.Comparator`](#sqlalchemy.ext.hybrid.Comparator
+    "sqlalchemy.ext.hybrid.Comparator") ([`sqlalchemy.orm.PropComparator`](../internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.PropComparator"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: An enumeration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[HYBRID_METHOD](#sqlalchemy.ext.hybrid.HybridExtensionType.HYBRID_METHOD),
+    [HYBRID_PROPERTY](#sqlalchemy.ext.hybrid.HybridExtensionType.HYBRID_PROPERTY)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.hybrid.HybridExtensionType`](#sqlalchemy.ext.hybrid.HybridExtensionType
+    "sqlalchemy.ext.hybrid.HybridExtensionType") ([`sqlalchemy.orm.base.InspectionAttrExtensionType`](../internals.html#sqlalchemy.orm.InspectionAttrExtensionType
+    "sqlalchemy.orm.base.InspectionAttrExtensionType"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: Symbol indicating an `InspectionAttr` that’s of type [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method
+    "sqlalchemy.ext.hybrid.hybrid_method").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Is assigned to the [`InspectionAttr.extension_type`](../internals.html#sqlalchemy.orm.InspectionAttr.extension_type
+    "sqlalchemy.orm.InspectionAttr.extension_type") attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Mapper.all_orm_attributes`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Symbol indicating an `InspectionAttr` that’s
+  prefs: []
+  type: TYPE_NORMAL
+- en: of type [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method "sqlalchemy.ext.hybrid.hybrid_method").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Is assigned to the [`InspectionAttr.extension_type`](../internals.html#sqlalchemy.orm.InspectionAttr.extension_type
+    "sqlalchemy.orm.InspectionAttr.extension_type") attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Mapper.all_orm_attributes`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Defining Expression Behavior Distinct from Attribute Behavior'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the previous section, our usage of the `&` and `|` bitwise operators within
+    the `Interval.contains` and `Interval.intersects` methods was fortunate, considering
+    our functions operated on two boolean values to return a new one. In many cases,
+    the construction of an in-Python function and a SQLAlchemy SQL expression have
+    enough differences that two separate Python expressions should be defined. The
+    [`hybrid`](#module-sqlalchemy.ext.hybrid "sqlalchemy.ext.hybrid") decorator defines
+    a **modifier** [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") for this purpose. As an example
+    we’ll define the radius of the interval, which requires the usage of the absolute
+    value function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") first assigned to the name `Interval.radius`
+    is amended by a subsequent method called `Interval._radius_expression`, using
+    the decorator `@radius.inplace.expression`, which chains together two modifiers
+    [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace "sqlalchemy.ext.hybrid.hybrid_property.inplace")
+    and [`hybrid_property.expression`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression"). The use of [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace
+    "sqlalchemy.ext.hybrid.hybrid_property.inplace") indicates that the [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") modifier should mutate the
+    existing hybrid object at `Interval.radius` in place, without creating a new object.
+    Notes on this modifier and its rationale are discussed in the next section [Using
+    inplace to create pep-484 compliant hybrid properties](#hybrid-pep484-naming).
+    The use of `@classmethod` is optional, and is strictly to give typing tools a
+    hint that `cls` in this case is expected to be the `Interval` class, and not an
+    instance of `Interval`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace
+    "sqlalchemy.ext.hybrid.hybrid_property.inplace") as well as the use of `@classmethod`
+    for proper typing support are available as of SQLAlchemy 2.0.4, and will not work
+    in earlier versions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With `Interval.radius` now including an expression element, the SQL function
+    `ABS()` is returned when accessing `Interval.radius` at the class level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Using `inplace` to create pep-484 compliant hybrid properties'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the previous section, a [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") decorator is illustrated which includes
+    two separate method-level functions being decorated, both to produce a single
+    object attribute referenced as `Interval.radius`. There are actually several different
+    modifiers we can use for [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") including [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression"), [`hybrid_property.setter()`](#sqlalchemy.ext.hybrid.hybrid_property.setter
+    "sqlalchemy.ext.hybrid.hybrid_property.setter") and [`hybrid_property.update_expression()`](#sqlalchemy.ext.hybrid.hybrid_property.update_expression
+    "sqlalchemy.ext.hybrid.hybrid_property.update_expression").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy’s [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property "sqlalchemy.ext.hybrid.hybrid_property")
+    decorator intends that adding on these methods may be done in the identical manner
+    as Python’s built-in `@property` decorator, where idiomatic use is to continue
+    to redefine the attribute repeatedly, using the **same attribute name** each time,
+    as in the example below that illustrates the use of [`hybrid_property.setter()`](#sqlalchemy.ext.hybrid.hybrid_property.setter
+    "sqlalchemy.ext.hybrid.hybrid_property.setter") and [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") for the `Interval.radius`
+    descriptor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, there are three `Interval.radius` methods, but as each are decorated,
+    first by the [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property "sqlalchemy.ext.hybrid.hybrid_property")
+    decorator and then by the `@radius` name itself, the end effect is that `Interval.radius`
+    is a single attribute with three different functions contained within it. This
+    style of use is taken from [Python’s documented use of @property](https://docs.python.org/3/library/functions.html#property).
+    It is important to note that the way both `@property` as well as [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") work, a **copy of the descriptor is made
+    each time**. That is, each call to `@radius.expression`, `@radius.setter` etc.
+    make a new object entirely. This allows the attribute to be re-defined in subclasses
+    without issue (see [Reusing Hybrid Properties across Subclasses](#hybrid-reuse-subclass)
+    later in this section for how this is used).
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, the above approach is not compatible with typing tools such as mypy
+    and pyright. Python’s own `@property` decorator does not have this limitation
+    only because [these tools hardcode the behavior of @property](https://github.com/python/typing/discussions/1102),
+    meaning this syntax is not available to SQLAlchemy under [**PEP 484**](https://peps.python.org/pep-0484/)
+    compliance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In order to produce a reasonable syntax while remaining typing compliant, the
+    [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace "sqlalchemy.ext.hybrid.hybrid_property.inplace")
+    decorator allows the same decorator to be re-used with different method names,
+    while still producing a single decorator under one name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace
+    "sqlalchemy.ext.hybrid.hybrid_property.inplace") further qualifies the use of
+    the decorator that a new copy should not be made, thereby maintaining the `Interval.radius`
+    name while allowing additional methods `Interval._radius_setter` and `Interval._radius_expression`
+    to be differently named.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0.4: Added [`hybrid_property.inplace`](#sqlalchemy.ext.hybrid.hybrid_property.inplace
+    "sqlalchemy.ext.hybrid.hybrid_property.inplace") to allow less verbose construction
+    of composite [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property "sqlalchemy.ext.hybrid.hybrid_property")
+    objects while not having to use repeated method names. Additionally allowed the
+    use of `@classmethod` within [`hybrid_property.expression`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression"), [`hybrid_property.update_expression`](#sqlalchemy.ext.hybrid.hybrid_property.update_expression
+    "sqlalchemy.ext.hybrid.hybrid_property.update_expression"), and [`hybrid_property.comparator`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") to allow typing tools to identify
+    `cls` as a class and not an instance in the method signature.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining Setters
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`hybrid_property.setter()`](#sqlalchemy.ext.hybrid.hybrid_property.setter
+    "sqlalchemy.ext.hybrid.hybrid_property.setter") modifier allows the construction
+    of a custom setter method, that can modify values on the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `length(self, value)` method is now called upon set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Allowing Bulk ORM Update'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A hybrid can define a custom “UPDATE” handler for when using ORM-enabled updates,
+    allowing the hybrid to be used in the SET clause of the update.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Normally, when using a hybrid with [`update()`](../../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update"), the SQL expression is used as the column
+    that’s the target of the SET. If our `Interval` class had a hybrid `start_point`
+    that linked to `Interval.start`, this could be substituted directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, when using a composite hybrid like `Interval.length`, this hybrid
+    represents more than one column. We can set up a handler that will accommodate
+    a value passed in the VALUES expression which can affect this, using the [`hybrid_property.update_expression()`](#sqlalchemy.ext.hybrid.hybrid_property.update_expression
+    "sqlalchemy.ext.hybrid.hybrid_property.update_expression") decorator. A handler
+    that works similarly to our setter would be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if we use `Interval.length` in an UPDATE expression, we get a hybrid
+    SET expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: This SET expression is accommodated by the ORM automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM-Enabled INSERT, UPDATE, and DELETE statements](../queryguide/dml.html#orm-expression-update-delete)
+    - includes background on ORM-enabled UPDATE statements'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Working with Relationships
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There’s no essential difference when creating hybrids that work with related
+    objects as opposed to column-based data. The need for distinct expressions tends
+    to be greater. The two variants we’ll illustrate are the “join-dependent” hybrid,
+    and the “correlated subquery” hybrid.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Join-Dependent Relationship Hybrid
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Consider the following declarative mapping which relates a `User` to a `SavingsAccount`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above hybrid property `balance` works with the first `SavingsAccount` entry
+    in the list of accounts for this user. The in-Python getter/setter methods can
+    treat `accounts` as a Python list available on `self`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `User.balance` getter in the above example accesses the `self.acccounts`
+    collection, which will normally be loaded via the [`selectinload()`](../queryguide/relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") loader strategy configured on the `User.balance`
+    [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship").
+    The default loader strategy when not otherwise stated on [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload"), which emits SQL on demand. When using asyncio, on-demand
+    loaders such as [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") are not supported, so care should be taken to ensure
+    the `self.accounts` collection is accessible to this hybrid accessor when using
+    asyncio.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the expression level, it’s expected that the `User` class will be used in
+    an appropriate context such that an appropriate join to `SavingsAccount` will
+    be present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note however, that while the instance level accessors need to worry about whether
+    `self.accounts` is even present, this issue expresses itself differently at the
+    SQL expression level, where we basically would use an outer join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: Correlated Subquery Relationship Hybrid
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We can, of course, forego being dependent on the enclosing query’s usage of
+    joins in favor of the correlated subquery, which can portably be packed into a
+    single column expression. A correlated subquery is more portable, but often performs
+    more poorly at the SQL level. Using the same technique illustrated at [Using column_property](../mapped_sql_expr.html#mapper-column-property-sql-expressions),
+    we can adjust our `SavingsAccount` example to aggregate the balances for *all*
+    accounts, and use a correlated subquery for the column expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above recipe will give us the `balance` column which renders a correlated
+    SELECT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: Join-Dependent Relationship Hybrid
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Consider the following declarative mapping which relates a `User` to a `SavingsAccount`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above hybrid property `balance` works with the first `SavingsAccount` entry
+    in the list of accounts for this user. The in-Python getter/setter methods can
+    treat `accounts` as a Python list available on `self`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `User.balance` getter in the above example accesses the `self.acccounts`
+    collection, which will normally be loaded via the [`selectinload()`](../queryguide/relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") loader strategy configured on the `User.balance`
+    [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship").
+    The default loader strategy when not otherwise stated on [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload"), which emits SQL on demand. When using asyncio, on-demand
+    loaders such as [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") are not supported, so care should be taken to ensure
+    the `self.accounts` collection is accessible to this hybrid accessor when using
+    asyncio.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the expression level, it’s expected that the `User` class will be used in
+    an appropriate context such that an appropriate join to `SavingsAccount` will
+    be present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note however, that while the instance level accessors need to worry about whether
+    `self.accounts` is even present, this issue expresses itself differently at the
+    SQL expression level, where we basically would use an outer join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: Correlated Subquery Relationship Hybrid
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We can, of course, forego being dependent on the enclosing query’s usage of
+    joins in favor of the correlated subquery, which can portably be packed into a
+    single column expression. A correlated subquery is more portable, but often performs
+    more poorly at the SQL level. Using the same technique illustrated at [Using column_property](../mapped_sql_expr.html#mapper-column-property-sql-expressions),
+    we can adjust our `SavingsAccount` example to aggregate the balances for *all*
+    accounts, and use a correlated subquery for the column expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above recipe will give us the `balance` column which renders a correlated
+    SELECT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Building Custom Comparators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The hybrid property also includes a helper that allows construction of custom
+    comparators. A comparator object allows one to customize the behavior of each
+    SQLAlchemy expression operator individually. They are useful when creating custom
+    types that have some highly idiosyncratic behavior on the SQL side.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`hybrid_property.comparator()`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") decorator introduced in this
+    section **replaces** the use of the [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") decorator. They cannot be
+    used together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The example class below allows case-insensitive comparisons on the attribute
+    named `word_insensitive`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, SQL expressions against `word_insensitive` will apply the `LOWER()`
+    SQL function to both sides:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `CaseInsensitiveComparator` above implements part of the [`ColumnOperators`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators
+    "sqlalchemy.sql.expression.ColumnOperators") interface. A “coercion” operation
+    like lowercasing can be applied to all comparison operations (i.e. `eq`, `lt`,
+    `gt`, etc.) using [`Operators.operate()`](../../core/sqlelement.html#sqlalchemy.sql.expression.Operators.operate
+    "sqlalchemy.sql.expression.Operators.operate"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Reusing Hybrid Properties across Subclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A hybrid can be referred to from a superclass, to allow modifying methods like
+    [`hybrid_property.getter()`](#sqlalchemy.ext.hybrid.hybrid_property.getter "sqlalchemy.ext.hybrid.hybrid_property.getter"),
+    [`hybrid_property.setter()`](#sqlalchemy.ext.hybrid.hybrid_property.setter "sqlalchemy.ext.hybrid.hybrid_property.setter")
+    to be used to redefine those methods on a subclass. This is similar to how the
+    standard Python `@property` object works:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the `FirstNameLastName` class refers to the hybrid from `FirstNameOnly.name`
+    to repurpose its getter and setter for the subclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When overriding [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") and [`hybrid_property.comparator()`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") alone as the first reference
+    to the superclass, these names conflict with the same-named accessors on the class-
+    level [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") object returned at the class level. To override
+    these methods when referring directly to the parent class descriptor, add the
+    special qualifier [`hybrid_property.overrides`](#sqlalchemy.ext.hybrid.hybrid_property.overrides
+    "sqlalchemy.ext.hybrid.hybrid_property.overrides"), which will de- reference the
+    instrumented attribute back to the hybrid object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hybrid Value Objects
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Note in our previous example, if we were to compare the `word_insensitive` attribute
+    of a `SearchWord` instance to a plain Python string, the plain Python string would
+    not be coerced to lower case - the `CaseInsensitiveComparator` we built, being
+    returned by `@word_insensitive.comparator`, only applies to the SQL side.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A more comprehensive form of the custom comparator is to construct a *Hybrid
+    Value Object*. This technique applies the target value or expression to a value
+    object which is then returned by the accessor in all cases. The value object allows
+    control of all operations upon the value as well as how compared values are treated,
+    both on the SQL expression side as well as the Python value side. Replacing the
+    previous `CaseInsensitiveComparator` class with a new `CaseInsensitiveWord` class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the `CaseInsensitiveWord` object represents `self.word`, which may be
+    a SQL function, or may be a Python native. By overriding `operate()` and `__clause_element__()`
+    to work in terms of `self.word`, all comparison operations will work against the
+    “converted” form of `word`, whether it be SQL side or Python side. Our `SearchWord`
+    class can now deliver the `CaseInsensitiveWord` object unconditionally from a
+    single hybrid call:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `word_insensitive` attribute now has case-insensitive comparison behavior
+    universally, including SQL expression vs. Python expression (note the Python value
+    is converted to lower case on the Python side here):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'SQL expression versus SQL expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Python only expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Hybrid Value pattern is very useful for any kind of value that may have
+    multiple representations, such as timestamps, time deltas, units of measurement,
+    currencies and encrypted passwords.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Hybrids and Value Agnostic Types](https://techspot.zzzeek.org/2011/10/21/hybrids-and-value-agnostic-types/)
+    - on the techspot.zzzeek.org blog'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Value Agnostic Types, Part II](https://techspot.zzzeek.org/2011/10/29/value-agnostic-types-part-ii/)
+    - on the techspot.zzzeek.org blog'
+  prefs: []
+  type: TYPE_NORMAL
+- en: API Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Comparator](#sqlalchemy.ext.hybrid.Comparator) | A helper class that allows
+    easy construction of custom [`PropComparator`](../internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.interfaces.PropComparator") classes for usage with hybrids. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [hybrid_method](#sqlalchemy.ext.hybrid.hybrid_method) | A decorator which
+    allows definition of a Python object method with both instance-level and class-level
+    behavior. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [hybrid_property](#sqlalchemy.ext.hybrid.hybrid_property) | A decorator which
+    allows definition of a Python descriptor with both instance-level and class-level
+    behavior. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [HybridExtensionType](#sqlalchemy.ext.hybrid.HybridExtensionType) | An enumeration.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: A decorator which allows definition of a Python object method with both instance-level
+    and class-level behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.hybrid.hybrid_method.__init__), [expression()](#sqlalchemy.ext.hybrid.hybrid_method.expression),
+    [extension_type](#sqlalchemy.ext.hybrid.hybrid_method.extension_type), [inplace](#sqlalchemy.ext.hybrid.hybrid_method.inplace),
+    [is_attribute](#sqlalchemy.ext.hybrid.hybrid_method.is_attribute)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.hybrid.hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method
+    "sqlalchemy.ext.hybrid.hybrid_method") ([`sqlalchemy.orm.base.InspectionAttrInfo`](../internals.html#sqlalchemy.orm.InspectionAttrInfo
+    "sqlalchemy.orm.base.InspectionAttrInfo"), `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method "sqlalchemy.ext.hybrid.hybrid_method").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Usage is typically via decorator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a SQL-expression producing method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: The extension type, if any. Defaults to `NotExtension.NOT_EXTENSION`
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`HybridExtensionType`](#sqlalchemy.ext.hybrid.HybridExtensionType "sqlalchemy.ext.hybrid.HybridExtensionType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AssociationProxyExtensionType`](associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxyExtensionType
+    "sqlalchemy.ext.associationproxy.AssociationProxyExtensionType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the inplace mutator for this [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method
+    "sqlalchemy.ext.hybrid.hybrid_method").
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method "sqlalchemy.ext.hybrid.hybrid_method")
+    class already performs “in place” mutation when the [`hybrid_method.expression()`](#sqlalchemy.ext.hybrid.hybrid_method.expression
+    "sqlalchemy.ext.hybrid.hybrid_method.expression") decorator is called, so this
+    attribute returns Self.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using inplace to create pep-484 compliant hybrid properties](#hybrid-pep484-naming)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: True if this object is a Python [descriptor](../../glossary.html#term-descriptor).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This can refer to one of many types. Usually a [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") which handles attributes events on behalf
+    of a [`MapperProperty`](../internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty").
+    But can also be an extension type such as [`AssociationProxy`](associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxy
+    "sqlalchemy.ext.associationproxy.AssociationProxy") or [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property"). The [`InspectionAttr.extension_type`](../internals.html#sqlalchemy.orm.InspectionAttr.extension_type
+    "sqlalchemy.orm.InspectionAttr.extension_type") will refer to a constant identifying
+    the specific subtype.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper.all_orm_descriptors`](../mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: A decorator which allows definition of a Python descriptor with both instance-level
+    and class-level behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.hybrid.hybrid_property.__init__), [comparator()](#sqlalchemy.ext.hybrid.hybrid_property.comparator),
+    [deleter()](#sqlalchemy.ext.hybrid.hybrid_property.deleter), [expression()](#sqlalchemy.ext.hybrid.hybrid_property.expression),
+    [extension_type](#sqlalchemy.ext.hybrid.hybrid_property.extension_type), [getter()](#sqlalchemy.ext.hybrid.hybrid_property.getter),
+    [inplace](#sqlalchemy.ext.hybrid.hybrid_property.inplace), [is_attribute](#sqlalchemy.ext.hybrid.hybrid_property.is_attribute),
+    [overrides](#sqlalchemy.ext.hybrid.hybrid_property.overrides), [setter()](#sqlalchemy.ext.hybrid.hybrid_property.setter),
+    [update_expression()](#sqlalchemy.ext.hybrid.hybrid_property.update_expression)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.hybrid.hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") ([`sqlalchemy.orm.base.InspectionAttrInfo`](../internals.html#sqlalchemy.orm.InspectionAttrInfo
+    "sqlalchemy.orm.base.InspectionAttrInfo"), `sqlalchemy.orm.base.ORMDescriptor`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property "sqlalchemy.ext.hybrid.hybrid_property").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Usage is typically via decorator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a custom comparator producing method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The return value of the decorated method should be an instance of [`Comparator`](#sqlalchemy.ext.hybrid.Comparator
+    "sqlalchemy.ext.hybrid.Comparator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`hybrid_property.comparator()`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") decorator **replaces** the
+    use of the [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") decorator. They cannot be
+    used together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a hybrid is invoked at the class level, the [`Comparator`](#sqlalchemy.ext.hybrid.Comparator
+    "sqlalchemy.ext.hybrid.Comparator") object given here is wrapped inside of a specialized
+    [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute "sqlalchemy.orm.QueryableAttribute"),
+    which is the same kind of object used by the ORM to represent other mapped attributes.
+    The reason for this is so that other class-level attributes such as docstrings
+    and a reference to the hybrid itself may be maintained within the structure that’s
+    returned, without any modifications to the original comparator object passed in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When referring to a hybrid property from an owning class (e.g. `SomeClass.some_hybrid`),
+    an instance of [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") is returned, representing the expression
+    or comparator object as this hybrid object. However, that object itself has accessors
+    called `expression` and `comparator`; so when attempting to override these decorators
+    on a subclass, it may be necessary to qualify it using the [`hybrid_property.overrides`](#sqlalchemy.ext.hybrid.hybrid_property.overrides
+    "sqlalchemy.ext.hybrid.hybrid_property.overrides") modifier first. See that modifier
+    for details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a deletion method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a SQL-expression producing method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a hybrid is invoked at the class level, the SQL expression given here is
+    wrapped inside of a specialized [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute"), which is the same kind of object used by
+    the ORM to represent other mapped attributes. The reason for this is so that other
+    class-level attributes such as docstrings and a reference to the hybrid itself
+    may be maintained within the structure that’s returned, without any modifications
+    to the original SQL expression passed in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When referring to a hybrid property from an owning class (e.g. `SomeClass.some_hybrid`),
+    an instance of [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") is returned, representing the expression
+    or comparator object as well as this hybrid object. However, that object itself
+    has accessors called `expression` and `comparator`; so when attempting to override
+    these decorators on a subclass, it may be necessary to qualify it using the [`hybrid_property.overrides`](#sqlalchemy.ext.hybrid.hybrid_property.overrides
+    "sqlalchemy.ext.hybrid.hybrid_property.overrides") modifier first. See that modifier
+    for details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Defining Expression Behavior Distinct from Attribute Behavior](#hybrid-distinct-expression)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: The extension type, if any. Defaults to `NotExtension.NOT_EXTENSION`
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`HybridExtensionType`](#sqlalchemy.ext.hybrid.HybridExtensionType "sqlalchemy.ext.hybrid.HybridExtensionType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AssociationProxyExtensionType`](associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxyExtensionType
+    "sqlalchemy.ext.associationproxy.AssociationProxyExtensionType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a getter method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the inplace mutator for this [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is to allow in-place mutation of the hybrid, allowing the first hybrid
+    method of a certain name to be re-used in order to add more methods without having
+    to name those methods the same, e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 2.0.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using inplace to create pep-484 compliant hybrid properties](#hybrid-pep484-naming)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: True if this object is a Python [descriptor](../../glossary.html#term-descriptor).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This can refer to one of many types. Usually a [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute") which handles attributes events on behalf
+    of a [`MapperProperty`](../internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty").
+    But can also be an extension type such as [`AssociationProxy`](associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxy
+    "sqlalchemy.ext.associationproxy.AssociationProxy") or [`hybrid_property`](#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property"). The [`InspectionAttr.extension_type`](../internals.html#sqlalchemy.orm.InspectionAttr.extension_type
+    "sqlalchemy.orm.InspectionAttr.extension_type") will refer to a constant identifying
+    the specific subtype.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper.all_orm_descriptors`](../mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: Prefix for a method that is overriding an existing attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`hybrid_property.overrides`](#sqlalchemy.ext.hybrid.hybrid_property.overrides
+    "sqlalchemy.ext.hybrid.hybrid_property.overrides") accessor just returns this
+    hybrid object, which when called at the class level from a parent class, will
+    de-reference the “instrumented attribute” normally returned at this level, and
+    allow modifying decorators like [`hybrid_property.expression()`](#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") and [`hybrid_property.comparator()`](#sqlalchemy.ext.hybrid.hybrid_property.comparator
+    "sqlalchemy.ext.hybrid.hybrid_property.comparator") to be used without conflicting
+    with the same-named attributes normally present on the [`QueryableAttribute`](../internals.html#sqlalchemy.orm.QueryableAttribute
+    "sqlalchemy.orm.QueryableAttribute"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Reusing Hybrid Properties across Subclasses](#hybrid-reuse-subclass)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines a setter method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a modifying decorator that defines an UPDATE tuple producing method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The method accepts a single value, which is the value to be rendered into the
+    SET clause of an UPDATE statement. The method should then process this value into
+    individual column expressions that fit into the ultimate SET clause, and return
+    them as a sequence of 2-tuples. Each tuple contains a column expression as the
+    key and a value to be rendered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: A helper class that allows easy construction of custom [`PropComparator`](../internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.interfaces.PropComparator") classes for usage with hybrids.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.hybrid.Comparator`](#sqlalchemy.ext.hybrid.Comparator
+    "sqlalchemy.ext.hybrid.Comparator") ([`sqlalchemy.orm.PropComparator`](../internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.PropComparator"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: An enumeration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[HYBRID_METHOD](#sqlalchemy.ext.hybrid.HybridExtensionType.HYBRID_METHOD),
+    [HYBRID_PROPERTY](#sqlalchemy.ext.hybrid.HybridExtensionType.HYBRID_PROPERTY)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.hybrid.HybridExtensionType`](#sqlalchemy.ext.hybrid.HybridExtensionType
+    "sqlalchemy.ext.hybrid.HybridExtensionType") ([`sqlalchemy.orm.base.InspectionAttrExtensionType`](../internals.html#sqlalchemy.orm.InspectionAttrExtensionType
+    "sqlalchemy.orm.base.InspectionAttrExtensionType"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: Symbol indicating an `InspectionAttr` that’s of type [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method
+    "sqlalchemy.ext.hybrid.hybrid_method").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Is assigned to the [`InspectionAttr.extension_type`](../internals.html#sqlalchemy.orm.InspectionAttr.extension_type
+    "sqlalchemy.orm.InspectionAttr.extension_type") attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Mapper.all_orm_attributes`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: Symbol indicating an `InspectionAttr` that’s
+  prefs: []
+  type: TYPE_NORMAL
+- en: of type [`hybrid_method`](#sqlalchemy.ext.hybrid.hybrid_method "sqlalchemy.ext.hybrid.hybrid_method").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Is assigned to the [`InspectionAttr.extension_type`](../internals.html#sqlalchemy.orm.InspectionAttr.extension_type
+    "sqlalchemy.orm.InspectionAttr.extension_type") attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Mapper.all_orm_attributes`'
+  prefs: []
+  type: TYPE_NORMAL

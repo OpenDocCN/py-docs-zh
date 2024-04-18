@@ -1,0 +1,206 @@
+- en: Adjacency List Relationships
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/self_referential.html](https://docs.sqlalchemy.org/en/20/orm/self_referential.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The **adjacency list** pattern is a common relational pattern whereby a table
+    contains a foreign key reference to itself, in other words is a **self referential
+    relationship**. This is the most common way to represent hierarchical data in
+    flat tables. Other methods include **nested sets**, sometimes called “modified
+    preorder”, as well as **materialized path**. Despite the appeal that modified
+    preorder has when evaluated for its fluency within SQL queries, the adjacency
+    list model is probably the most appropriate pattern for the large majority of
+    hierarchical storage needs, for reasons of concurrency, reduced complexity, and
+    that modified preorder has little advantage over an application which can fully
+    load subtrees into the application space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section details the single-table version of a self-referential relationship.
+    For a self-referential relationship that uses a second table as an association
+    table, see the section [Self-Referential Many-to-Many Relationship](join_conditions.html#self-referential-many-to-many).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this example, we’ll work with a single mapped class called `Node`, representing
+    a tree structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With this structure, a graph such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Would be represented with data such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    configuration here works in the same way as a “normal” one-to-many relationship,
+    with the exception that the “direction”, i.e. whether the relationship is one-to-many
+    or many-to-one, is assumed by default to be one-to-many. To establish the relationship
+    as many-to-one, an extra directive is added known as [`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship"), which is a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") or collection of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects that indicate those which should be considered
+    to be “remote”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, the `id` column is applied as the [`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship") of the `parent` [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), thus establishing `parent_id` as the “local” side,
+    and the relationship then behaves as a many-to-one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As always, both directions can be combined into a bidirectional relationship
+    using two [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs linked by [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Adjacency List](examples.html#examples-adjacencylist) - working example, updated
+    for SQLAlchemy 2.0'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Composite Adjacency Lists
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A sub-category of the adjacency list relationship is the rare case where a
+    particular column is present on both the “local” and “remote” side of the join
+    condition. An example is the `Folder` class below; using a composite primary key,
+    the `account_id` column refers to itself, to indicate sub folders which are within
+    the same account as that of the parent; while `folder_id` refers to a specific
+    folder within that account:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we pass `account_id` into the [`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship") list. [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") recognizes that the `account_id` column here is
+    on both sides, and aligns the “remote” column along with the `folder_id` column,
+    which it recognizes as uniquely present on the “remote” side.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Self-Referential Query Strategies'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Querying of self-referential structures works like any other query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: However extra care is needed when attempting to join along the foreign key from
+    one level of the tree to the next. In SQL, a join from a table to itself requires
+    that at least one side of the expression be “aliased” so that it can be unambiguously
+    referred to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recall from [Selecting ORM Aliases](queryguide/select.html#orm-queryguide-orm-aliases)
+    in the ORM tutorial that the [`aliased()`](queryguide/api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct is normally used to provide an “alias” of
+    an ORM entity. Joining from `Node` to itself using this technique looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]  ## Configuring Self-Referential Eager Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Eager loading of relationships occurs using joins or outerjoins from parent
+    to child table during a normal query operation, such that the parent and its immediate
+    child collection or reference can be populated from a single SQL statement, or
+    a second statement for all immediate child collections. SQLAlchemy’s joined and
+    subquery eager loading use aliased tables in all cases when joining to related
+    items, so are compatible with self-referential joining. However, to use eager
+    loading with a self-referential relationship, SQLAlchemy needs to be told how
+    many levels deep it should join and/or query; otherwise the eager load will not
+    take place at all. This depth setting is configured via `relationships.join_depth`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Composite Adjacency Lists
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A sub-category of the adjacency list relationship is the rare case where a
+    particular column is present on both the “local” and “remote” side of the join
+    condition. An example is the `Folder` class below; using a composite primary key,
+    the `account_id` column refers to itself, to indicate sub folders which are within
+    the same account as that of the parent; while `folder_id` refers to a specific
+    folder within that account:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we pass `account_id` into the [`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship") list. [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") recognizes that the `account_id` column here is
+    on both sides, and aligns the “remote” column along with the `folder_id` column,
+    which it recognizes as uniquely present on the “remote” side.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Self-Referential Query Strategies'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Querying of self-referential structures works like any other query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: However extra care is needed when attempting to join along the foreign key from
+    one level of the tree to the next. In SQL, a join from a table to itself requires
+    that at least one side of the expression be “aliased” so that it can be unambiguously
+    referred to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recall from [Selecting ORM Aliases](queryguide/select.html#orm-queryguide-orm-aliases)
+    in the ORM tutorial that the [`aliased()`](queryguide/api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct is normally used to provide an “alias” of
+    an ORM entity. Joining from `Node` to itself using this technique looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Configuring Self-Referential Eager Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Eager loading of relationships occurs using joins or outerjoins from parent
+    to child table during a normal query operation, such that the parent and its immediate
+    child collection or reference can be populated from a single SQL statement, or
+    a second statement for all immediate child collections. SQLAlchemy’s joined and
+    subquery eager loading use aliased tables in all cases when joining to related
+    items, so are compatible with self-referential joining. However, to use eager
+    loading with a self-referential relationship, SQLAlchemy needs to be told how
+    many levels deep it should join and/or query; otherwise the eager load will not
+    take place at all. This depth setting is configured via `relationships.join_depth`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE

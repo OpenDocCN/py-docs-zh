@@ -1,0 +1,706 @@
+- en: Horizontal Sharding
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/extensions/horizontal_shard.html](https://docs.sqlalchemy.org/en/20/orm/extensions/horizontal_shard.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Horizontal sharding support.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defines a rudimental ‘horizontal sharding’ system which allows a Session to
+    distribute queries and persistence operations across multiple databases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a usage example, see the [Horizontal Sharding](../examples.html#examples-sharding)
+    example included in the source distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep Alchemy
+  prefs: []
+  type: TYPE_NORMAL
+- en: The horizontal sharding extension is an advanced feature, involving a complex
+    statement -> database interaction as well as use of semi-public APIs for non-trivial
+    cases. Simpler approaches to refering to multiple database “shards”, most commonly
+    using a distinct [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    per “shard”, should always be considered first before using this more complex
+    and less-production-tested system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: API Documentation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [set_shard_id](#sqlalchemy.ext.horizontal_shard.set_shard_id) | a loader
+    option for statements to apply a specific shard id to the primary query as well
+    as for additional relationship and column loaders. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ShardedQuery](#sqlalchemy.ext.horizontal_shard.ShardedQuery) | Query class
+    used with [`ShardedSession`](#sqlalchemy.ext.horizontal_shard.ShardedSession "sqlalchemy.ext.horizontal_shard.ShardedSession").
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ShardedSession](#sqlalchemy.ext.horizontal_shard.ShardedSession) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.horizontal_shard.ShardedSession.__init__), [connection_callable()](#sqlalchemy.ext.horizontal_shard.ShardedSession.connection_callable),
+    [get_bind()](#sqlalchemy.ext.horizontal_shard.ShardedSession.get_bind)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.horizontal_shard.ShardedSession`](#sqlalchemy.ext.horizontal_shard.ShardedSession
+    "sqlalchemy.ext.horizontal_shard.ShardedSession") ([`sqlalchemy.orm.session.Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a ShardedSession.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`shard_chooser` – A callable which, passed a Mapper, a mapped instance, and
+    possibly a SQL clause, returns a shard ID. This id may be based off of the attributes
+    present within the object, or on some round-robin scheme. If the scheme is based
+    on a selection, it should set whatever state on the instance to mark it in the
+    future as participating in that shard.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`identity_chooser` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A callable, passed a Mapper and primary key argument, which should return a
+    list of shard ids where this primary key might reside.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The `identity_chooser` parameter supersedes the `id_chooser`
+    parameter.'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`execute_chooser` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For a given [`ORMExecuteState`](../session_api.html#sqlalchemy.orm.ORMExecuteState
+    "sqlalchemy.orm.ORMExecuteState"), returns the list of shard_ids where the query
+    should be issued. Results from all shards returned will be combined together into
+    a single listing.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: The `execute_chooser` parameter supersedes the `query_chooser`
+    parameter.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`shards` – A dictionary of string shard names to [`Engine`](../../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") objects.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") to use in the unit of work flush process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a “bind” to which this [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is bound.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “bind” is usually an instance of [`Engine`](../../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"), except in the case where the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") has been explicitly bound directly to a [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection").
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a multiply-bound or unbound [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), the `mapper` or `clause` arguments are used to determine
+    the appropriate bind to return.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the “mapper” argument is usually present when [`Session.get_bind()`](../session_api.html#sqlalchemy.orm.Session.get_bind
+    "sqlalchemy.orm.Session.get_bind") is called via an ORM operation such as a [`Session.query()`](../session_api.html#sqlalchemy.orm.Session.query
+    "sqlalchemy.orm.Session.query"), each individual INSERT/UPDATE/DELETE operation
+    within a [`Session.flush()`](../session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush"), call, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The order of resolution is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: if mapper given and [`Session.binds`](../session_api.html#sqlalchemy.orm.Session.params.binds
+    "sqlalchemy.orm.Session") is present, locate a bind based first on the mapper
+    in use, then on the mapped class in use, then on any base classes that are present
+    in the `__mro__` of the mapped class, from more specific superclasses to more
+    general.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: if clause given and `Session.binds` is present, locate a bind based on [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects found in the given clause present in `Session.binds`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: if `Session.binds` is present, return that.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: if clause given, attempt to return a bind linked to the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") ultimately associated with the clause.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: if mapper given, attempt to return a bind linked to the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") ultimately associated with the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") or other selectable to which the mapper is mapped.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: No bind can be found, [`UnboundExecutionError`](../../core/exceptions.html#sqlalchemy.exc.UnboundExecutionError
+    "sqlalchemy.exc.UnboundExecutionError") is raised.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note that the [`Session.get_bind()`](../session_api.html#sqlalchemy.orm.Session.get_bind
+    "sqlalchemy.orm.Session.get_bind") method can be overridden on a user-defined
+    subclass of [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to provide any kind of bind resolution scheme. See the example at [Custom Vertical
+    Partitioning](../persistence_techniques.html#session-custom-partitioning).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mapper` – Optional mapped class or corresponding [`Mapper`](../mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") instance. The bind can be derived from a [`Mapper`](../mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") first by consulting the “binds” map associated with this
+    [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    and secondly by consulting the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") associated with the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to which the [`Mapper`](../mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") is mapped for a bind.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`clause` – A [`ClauseElement`](../../core/foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement") (i.e. [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"), [`text()`](../../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text"), etc.). If the `mapper` argument is not present
+    or could not produce a bind, the given expression construct will be searched for
+    a bound element, typically a [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") associated with bound [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Partitioning Strategies (e.g. multiple database backends per Session)](../persistence_techniques.html#session-partitioning)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.binds`](../session_api.html#sqlalchemy.orm.Session.params.binds "sqlalchemy.orm.Session")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.bind_mapper()`](../session_api.html#sqlalchemy.orm.Session.bind_mapper
+    "sqlalchemy.orm.Session.bind_mapper")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.bind_table()`](../session_api.html#sqlalchemy.orm.Session.bind_table
+    "sqlalchemy.orm.Session.bind_table")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: a loader option for statements to apply a specific shard id to the primary query
+    as well as for additional relationship and column loaders.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`set_shard_id`](#sqlalchemy.ext.horizontal_shard.set_shard_id "sqlalchemy.ext.horizontal_shard.set_shard_id")
+    option may be applied using the [`Executable.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Executable.options
+    "sqlalchemy.sql.expression.Executable.options") method of any executable statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the statement when invoked will limit to the “shard1” shard identifier
+    for the primary query as well as for all relationship and column loading strategies,
+    including eager loaders such as [`selectinload()`](../queryguide/relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload"), deferred column loaders like [`defer()`](../queryguide/columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer"), and the lazy relationship loader [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload").
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this way, the [`set_shard_id`](#sqlalchemy.ext.horizontal_shard.set_shard_id
+    "sqlalchemy.ext.horizontal_shard.set_shard_id") option has much wider scope than
+    using the “shard_id” argument within the [`Session.execute.bind_arguments`](../session_api.html#sqlalchemy.orm.Session.execute.params.bind_arguments
+    "sqlalchemy.orm.Session.execute") dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.horizontal_shard.set_shard_id.__init__), [propagate_to_loaders](#sqlalchemy.ext.horizontal_shard.set_shard_id.propagate_to_loaders)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.horizontal_shard.set_shard_id`](#sqlalchemy.ext.horizontal_shard.set_shard_id
+    "sqlalchemy.ext.horizontal_shard.set_shard_id") (`sqlalchemy.orm.ORMOption`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a [`set_shard_id`](#sqlalchemy.ext.horizontal_shard.set_shard_id "sqlalchemy.ext.horizontal_shard.set_shard_id")
+    option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`shard_id` – shard identifier'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`propagate_to_loaders` – if left at its default of `True`, the shard option
+    will take place for lazy loaders such as [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") and [`defer()`](../queryguide/columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer"); if False, the option will not be propagated to loaded
+    objects. Note that [`defer()`](../queryguide/columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer") always limits to the shard_id of the parent row in any
+    case, so the parameter only has a net effect on the behavior of the [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") strategy.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: if True, indicate this option should be carried along to “secondary” SELECT
+    statements that occur for relationship lazy loaders as well as attribute load
+    / refresh operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Query class used with [`ShardedSession`](#sqlalchemy.ext.horizontal_shard.ShardedSession
+    "sqlalchemy.ext.horizontal_shard.ShardedSession").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Legacy Feature
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ShardedQuery`](#sqlalchemy.ext.horizontal_shard.ShardedQuery "sqlalchemy.ext.horizontal_shard.ShardedQuery")
+    is a subclass of the legacy [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") class. The [`ShardedSession`](#sqlalchemy.ext.horizontal_shard.ShardedSession
+    "sqlalchemy.ext.horizontal_shard.ShardedSession") now supports 2.0 style execution
+    via the `ShardedSession.execute()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[set_shard()](#sqlalchemy.ext.horizontal_shard.ShardedQuery.set_shard)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.horizontal_shard.ShardedQuery`](#sqlalchemy.ext.horizontal_shard.ShardedQuery
+    "sqlalchemy.ext.horizontal_shard.ShardedQuery") ([`sqlalchemy.orm.Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a new query, limited to a single shard ID.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All subsequent operations with the returned query will be against the single
+    shard regardless of other state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The shard_id can be passed for a 2.0 style execution to the bind_arguments
+    dictionary of [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: API Documentation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [set_shard_id](#sqlalchemy.ext.horizontal_shard.set_shard_id) | a loader
+    option for statements to apply a specific shard id to the primary query as well
+    as for additional relationship and column loaders. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ShardedQuery](#sqlalchemy.ext.horizontal_shard.ShardedQuery) | Query class
+    used with [`ShardedSession`](#sqlalchemy.ext.horizontal_shard.ShardedSession "sqlalchemy.ext.horizontal_shard.ShardedSession").
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ShardedSession](#sqlalchemy.ext.horizontal_shard.ShardedSession) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.horizontal_shard.ShardedSession.__init__), [connection_callable()](#sqlalchemy.ext.horizontal_shard.ShardedSession.connection_callable),
+    [get_bind()](#sqlalchemy.ext.horizontal_shard.ShardedSession.get_bind)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.horizontal_shard.ShardedSession`](#sqlalchemy.ext.horizontal_shard.ShardedSession
+    "sqlalchemy.ext.horizontal_shard.ShardedSession") ([`sqlalchemy.orm.session.Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a ShardedSession.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`shard_chooser` – A callable which, passed a Mapper, a mapped instance, and
+    possibly a SQL clause, returns a shard ID. This id may be based off of the attributes
+    present within the object, or on some round-robin scheme. If the scheme is based
+    on a selection, it should set whatever state on the instance to mark it in the
+    future as participating in that shard.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`identity_chooser` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A callable, passed a Mapper and primary key argument, which should return a
+    list of shard ids where this primary key might reside.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The `identity_chooser` parameter supersedes the `id_chooser`
+    parameter.'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`execute_chooser` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For a given [`ORMExecuteState`](../session_api.html#sqlalchemy.orm.ORMExecuteState
+    "sqlalchemy.orm.ORMExecuteState"), returns the list of shard_ids where the query
+    should be issued. Results from all shards returned will be combined together into
+    a single listing.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: The `execute_chooser` parameter supersedes the `query_chooser`
+    parameter.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`shards` – A dictionary of string shard names to [`Engine`](../../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") objects.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") to use in the unit of work flush process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a “bind” to which this [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is bound.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “bind” is usually an instance of [`Engine`](../../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"), except in the case where the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") has been explicitly bound directly to a [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection").
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a multiply-bound or unbound [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), the `mapper` or `clause` arguments are used to determine
+    the appropriate bind to return.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the “mapper” argument is usually present when [`Session.get_bind()`](../session_api.html#sqlalchemy.orm.Session.get_bind
+    "sqlalchemy.orm.Session.get_bind") is called via an ORM operation such as a [`Session.query()`](../session_api.html#sqlalchemy.orm.Session.query
+    "sqlalchemy.orm.Session.query"), each individual INSERT/UPDATE/DELETE operation
+    within a [`Session.flush()`](../session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush"), call, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The order of resolution is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: if mapper given and [`Session.binds`](../session_api.html#sqlalchemy.orm.Session.params.binds
+    "sqlalchemy.orm.Session") is present, locate a bind based first on the mapper
+    in use, then on the mapped class in use, then on any base classes that are present
+    in the `__mro__` of the mapped class, from more specific superclasses to more
+    general.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: if clause given and `Session.binds` is present, locate a bind based on [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects found in the given clause present in `Session.binds`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: if `Session.binds` is present, return that.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: if clause given, attempt to return a bind linked to the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") ultimately associated with the clause.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: if mapper given, attempt to return a bind linked to the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") ultimately associated with the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") or other selectable to which the mapper is mapped.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: No bind can be found, [`UnboundExecutionError`](../../core/exceptions.html#sqlalchemy.exc.UnboundExecutionError
+    "sqlalchemy.exc.UnboundExecutionError") is raised.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note that the [`Session.get_bind()`](../session_api.html#sqlalchemy.orm.Session.get_bind
+    "sqlalchemy.orm.Session.get_bind") method can be overridden on a user-defined
+    subclass of [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to provide any kind of bind resolution scheme. See the example at [Custom Vertical
+    Partitioning](../persistence_techniques.html#session-custom-partitioning).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mapper` – Optional mapped class or corresponding [`Mapper`](../mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") instance. The bind can be derived from a [`Mapper`](../mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") first by consulting the “binds” map associated with this
+    [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    and secondly by consulting the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") associated with the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to which the [`Mapper`](../mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") is mapped for a bind.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`clause` – A [`ClauseElement`](../../core/foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement") (i.e. [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"), [`text()`](../../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text"), etc.). If the `mapper` argument is not present
+    or could not produce a bind, the given expression construct will be searched for
+    a bound element, typically a [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") associated with bound [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Partitioning Strategies (e.g. multiple database backends per Session)](../persistence_techniques.html#session-partitioning)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.binds`](../session_api.html#sqlalchemy.orm.Session.params.binds "sqlalchemy.orm.Session")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.bind_mapper()`](../session_api.html#sqlalchemy.orm.Session.bind_mapper
+    "sqlalchemy.orm.Session.bind_mapper")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.bind_table()`](../session_api.html#sqlalchemy.orm.Session.bind_table
+    "sqlalchemy.orm.Session.bind_table")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: a loader option for statements to apply a specific shard id to the primary query
+    as well as for additional relationship and column loaders.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`set_shard_id`](#sqlalchemy.ext.horizontal_shard.set_shard_id "sqlalchemy.ext.horizontal_shard.set_shard_id")
+    option may be applied using the [`Executable.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Executable.options
+    "sqlalchemy.sql.expression.Executable.options") method of any executable statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the statement when invoked will limit to the “shard1” shard identifier
+    for the primary query as well as for all relationship and column loading strategies,
+    including eager loaders such as [`selectinload()`](../queryguide/relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload"), deferred column loaders like [`defer()`](../queryguide/columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer"), and the lazy relationship loader [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload").
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this way, the [`set_shard_id`](#sqlalchemy.ext.horizontal_shard.set_shard_id
+    "sqlalchemy.ext.horizontal_shard.set_shard_id") option has much wider scope than
+    using the “shard_id” argument within the [`Session.execute.bind_arguments`](../session_api.html#sqlalchemy.orm.Session.execute.params.bind_arguments
+    "sqlalchemy.orm.Session.execute") dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.horizontal_shard.set_shard_id.__init__), [propagate_to_loaders](#sqlalchemy.ext.horizontal_shard.set_shard_id.propagate_to_loaders)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.horizontal_shard.set_shard_id`](#sqlalchemy.ext.horizontal_shard.set_shard_id
+    "sqlalchemy.ext.horizontal_shard.set_shard_id") (`sqlalchemy.orm.ORMOption`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a [`set_shard_id`](#sqlalchemy.ext.horizontal_shard.set_shard_id "sqlalchemy.ext.horizontal_shard.set_shard_id")
+    option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`shard_id` – shard identifier'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`propagate_to_loaders` – if left at its default of `True`, the shard option
+    will take place for lazy loaders such as [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") and [`defer()`](../queryguide/columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer"); if False, the option will not be propagated to loaded
+    objects. Note that [`defer()`](../queryguide/columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer") always limits to the shard_id of the parent row in any
+    case, so the parameter only has a net effect on the behavior of the [`lazyload()`](../queryguide/relationships.html#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") strategy.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: if True, indicate this option should be carried along to “secondary” SELECT
+    statements that occur for relationship lazy loaders as well as attribute load
+    / refresh operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Query class used with [`ShardedSession`](#sqlalchemy.ext.horizontal_shard.ShardedSession
+    "sqlalchemy.ext.horizontal_shard.ShardedSession").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Legacy Feature
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ShardedQuery`](#sqlalchemy.ext.horizontal_shard.ShardedQuery "sqlalchemy.ext.horizontal_shard.ShardedQuery")
+    is a subclass of the legacy [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") class. The [`ShardedSession`](#sqlalchemy.ext.horizontal_shard.ShardedSession
+    "sqlalchemy.ext.horizontal_shard.ShardedSession") now supports 2.0 style execution
+    via the `ShardedSession.execute()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[set_shard()](#sqlalchemy.ext.horizontal_shard.ShardedQuery.set_shard)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.horizontal_shard.ShardedQuery`](#sqlalchemy.ext.horizontal_shard.ShardedQuery
+    "sqlalchemy.ext.horizontal_shard.ShardedQuery") ([`sqlalchemy.orm.Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a new query, limited to a single shard ID.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All subsequent operations with the returned query will be against the single
+    shard regardless of other state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The shard_id can be passed for a 2.0 style execution to the bind_arguments
+    dictionary of [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE

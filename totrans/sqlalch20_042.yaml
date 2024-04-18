@@ -1,0 +1,2408 @@
+- en: Writing SELECT statements for ORM Mapped Classes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/queryguide/select.html](https://docs.sqlalchemy.org/en/20/orm/queryguide/select.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: About this Document
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section makes use of ORM mappings first illustrated in the [SQLAlchemy
+    Unified Tutorial](../../tutorial/index.html#unified-tutorial), shown in the section
+    [Declaring Mapped Classes](../../tutorial/metadata.html#tutorial-declaring-mapped-classes).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[View the ORM setup for this page](_plain_setup.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SELECT statements are produced by the [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") function which returns a [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object. The entities and/or SQL expressions
+    to return (i.e. the “columns” clause) are passed positionally to the function.
+    From there, additional methods are used to generate the complete statement, such
+    as the [`Select.where()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.where
+    "sqlalchemy.sql.expression.Select.where") method illustrated below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Given a completed [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object, in order to execute it within the
+    ORM to get rows back, the object is passed to [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute"), where a [`Result`](../../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object is then returned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Selecting ORM Entities and Attributes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct accepts ORM entities, including
+    mapped classes as well as class-level attributes representing mapped columns,
+    which are converted into [ORM-annotated](../../glossary.html#term-ORM-annotated)
+    [`FromClause`](../../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") and [`ColumnElement`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnElement
+    "sqlalchemy.sql.expression.ColumnElement") elements at construction time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    object that contains ORM-annotated entities is normally executed using a [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object, and not a [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object, so that ORM-related features may take
+    effect, including that instances of ORM-mapped objects may be returned. When using
+    the [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    directly, result rows will only contain column-level data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Selecting ORM Entities'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below we select from the `User` entity, producing a [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") that selects from the mapped [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to which `User` is mapped:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When selecting from ORM entities, the entity itself is returned in the result
+    as a row with a single element, as opposed to a series of individual columns;
+    for example above, the [`Result`](../../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") returns [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects that have just a single element per row, that
+    element holding onto a `User` object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When selecting a list of single-element rows containing ORM entities, it is
+    typical to skip the generation of [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects and instead receive ORM entities directly. This
+    is most easily achieved by using the [`Session.scalars()`](../session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") method to execute, rather than the [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method, so that a [`ScalarResult`](../../core/connections.html#sqlalchemy.engine.ScalarResult
+    "sqlalchemy.engine.ScalarResult") object which yields single elements rather than
+    rows is returned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Calling the [`Session.scalars()`](../session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") method is the equivalent to calling upon [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") to receive a [`Result`](../../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object, then calling upon [`Result.scalars()`](../../core/connections.html#sqlalchemy.engine.Result.scalars
+    "sqlalchemy.engine.Result.scalars") to receive a [`ScalarResult`](../../core/connections.html#sqlalchemy.engine.ScalarResult
+    "sqlalchemy.engine.ScalarResult") object.  ### Selecting Multiple ORM Entities
+    Simultaneously'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") function accepts any number of ORM classes
+    and/or column expressions at once, including that multiple ORM classes may be
+    requested. When SELECTing from multiple ORM classes, they are named in each result
+    row based on their class name. In the example below, the result rows for a SELECT
+    against `User` and `Address` will refer to them under the names `User` and `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we wanted to assign different names to these entities in the rows, we would
+    use the [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct using the [`aliased.name`](api.html#sqlalchemy.orm.aliased.params.name
+    "sqlalchemy.orm.aliased") parameter to alias them with an explicit name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The aliased form above is discussed further at [Using Relationship to join between
+    aliased targets](#orm-queryguide-joining-relationships-aliased).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An existing [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct may also have ORM classes and/or
+    column expressions added to its columns clause using the [`Select.add_columns()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.add_columns
+    "sqlalchemy.sql.expression.Select.add_columns") method. We can produce the same
+    statement as above using this form as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Selecting Individual Attributes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The attributes on a mapped class, such as `User.name` and `Address.email_address`,
+    can be used just like [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") or other SQL expression objects when passed to [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"). Creating a [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") that is against specific columns will return
+    [`Row`](../../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    objects, and **not** entities like `User` or `Address` objects. Each [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") will have each column represented individually:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above statement returns [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects with `name` and `email_address` columns, as illustrated
+    in the runtime demonstration below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Grouping Selected Attributes with Bundles'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Bundle`](api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle") construct
+    is an extensible ORM-only construct that allows sets of column expressions to
+    be grouped in result rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Bundle`](api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle") is potentially
+    useful for creating lightweight views and custom column groupings. [`Bundle`](api.html#sqlalchemy.orm.Bundle
+    "sqlalchemy.orm.Bundle") may also be subclassed in order to return alternate data
+    structures; see [`Bundle.create_row_processor()`](api.html#sqlalchemy.orm.Bundle.create_row_processor
+    "sqlalchemy.orm.Bundle.create_row_processor") for an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Bundle`](api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Bundle.create_row_processor()`](api.html#sqlalchemy.orm.Bundle.create_row_processor
+    "sqlalchemy.orm.Bundle.create_row_processor")  ### Selecting ORM Aliases'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As discussed in the tutorial at [Using Aliases](../../tutorial/data_select.html#tutorial-using-aliases),
+    to create a SQL alias of an ORM entity is achieved using the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct against a mapped class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case when using [`Table.alias()`](../../core/metadata.html#sqlalchemy.schema.Table.alias
+    "sqlalchemy.schema.Table.alias"), the SQL alias is anonymously named. For the
+    case of selecting the entity from a row with an explicit name, the [`aliased.name`](api.html#sqlalchemy.orm.aliased.params.name
+    "sqlalchemy.orm.aliased") parameter may be passed as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`aliased`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") construct
+    is central for several use cases, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: making use of subqueries with the ORM; the sections [Selecting Entities from
+    Subqueries](#orm-queryguide-subqueries) and [Joining to Subqueries](#orm-queryguide-join-subqueries)
+    discuss this further.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Controlling the name of an entity in a result set; see [Selecting Multiple ORM
+    Entities Simultaneously](#orm-queryguide-select-multiple-entities) for an example
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Joining to the same ORM entity multiple times; see [Using Relationship to join
+    between aliased targets](#orm-queryguide-joining-relationships-aliased) for an
+    example.  ### Getting ORM Results from Textual Statements'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The ORM supports loading of entities from SELECT statements that come from other
+    sources. The typical use case is that of a textual SELECT statement, which in
+    SQLAlchemy is represented using the [`text()`](../../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct. A [`text()`](../../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct can be augmented with information
+    about the ORM-mapped columns that the statement would load; this can then be associated
+    with the ORM entity itself so that ORM objects can be loaded based on this statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given a textual SQL statement we’d like to load from:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can add column information to the statement by using the [`TextClause.columns()`](../../core/sqlelement.html#sqlalchemy.sql.expression.TextClause.columns
+    "sqlalchemy.sql.expression.TextClause.columns") method; when this method is invoked,
+    the [`TextClause`](../../core/sqlelement.html#sqlalchemy.sql.expression.TextClause
+    "sqlalchemy.sql.expression.TextClause") object is converted into a [`TextualSelect`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect
+    "sqlalchemy.sql.expression.TextualSelect") object, which takes on a role that
+    is comparable to the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct. The [`TextClause.columns()`](../../core/sqlelement.html#sqlalchemy.sql.expression.TextClause.columns
+    "sqlalchemy.sql.expression.TextClause.columns") method is typically passed [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects or equivalent, and in this case we can make
+    use of the ORM-mapped attributes on the `User` class directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We now have an ORM-configured SQL construct that as given, can load the “id”,
+    “name” and “fullname” columns separately. To use this SELECT statement as a source
+    of complete `User` entities instead, we can link these columns to a regular ORM-enabled
+    [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    construct using the [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same [`TextualSelect`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect
+    "sqlalchemy.sql.expression.TextualSelect") object can also be converted into a
+    subquery using the [`TextualSelect.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect.subquery
+    "sqlalchemy.sql.expression.TextualSelect.subquery") method, and linked to the
+    `User` entity to it using the [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct, in a similar manner as discussed below in [Selecting Entities from
+    Subqueries](#orm-queryguide-subqueries):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The difference between using the [`TextualSelect`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect
+    "sqlalchemy.sql.expression.TextualSelect") directly with [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") versus making use of `aliased()`
+    is that in the former case, no subquery is produced in the resulting SQL. This
+    can in some scenarios be advantageous from a performance or complexity perspective.  ###
+    Selecting Entities from Subqueries'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct discussed in the previous section can be used with any `Subuqery` construct
+    that comes from a method such as [`Select.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.subquery
+    "sqlalchemy.sql.expression.Select.subquery") to link ORM entities to the columns
+    returned by that subquery; there must be a **column correspondence** relationship
+    between the columns delivered by the subquery and the columns to which the entity
+    is mapped, meaning, the subquery needs to be ultimately derived from those entities,
+    such as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Entity Subqueries/CTEs](../../tutorial/data_select.html#tutorial-subqueries-orm-aliased)
+    - in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Joining to Subqueries](#orm-queryguide-join-subqueries)  ### Selecting Entities
+    from UNIONs and other set operations'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`union()`](../../core/selectable.html#sqlalchemy.sql.expression.union
+    "sqlalchemy.sql.expression.union") and [`union_all()`](../../core/selectable.html#sqlalchemy.sql.expression.union_all
+    "sqlalchemy.sql.expression.union_all") functions are the most common set operations,
+    which along with other set operations such as [`except_()`](../../core/selectable.html#sqlalchemy.sql.expression.except_
+    "sqlalchemy.sql.expression.except_"), [`intersect()`](../../core/selectable.html#sqlalchemy.sql.expression.intersect
+    "sqlalchemy.sql.expression.intersect") and others deliver an object known as a
+    [`CompoundSelect`](../../core/selectable.html#sqlalchemy.sql.expression.CompoundSelect
+    "sqlalchemy.sql.expression.CompoundSelect"), which is composed of multiple [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") constructs joined by a set-operation keyword.
+    ORM entities may be selected from simple compound selects using the [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") method illustrated previously
+    at [Getting ORM Results from Textual Statements](#orm-queryguide-selecting-text).
+    In this method, the UNION statement is the complete statement that will be rendered,
+    no additional criteria can be added after [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A [`CompoundSelect`](../../core/selectable.html#sqlalchemy.sql.expression.CompoundSelect
+    "sqlalchemy.sql.expression.CompoundSelect") construct can be more flexibly used
+    within a query that can be further modified by organizing it into a subquery and
+    linking it to an ORM entity using [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased"), as illustrated previously at [Selecting Entities from
+    Subqueries](#orm-queryguide-subqueries). In the example below, we first use [`CompoundSelect.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.CompoundSelect.subquery
+    "sqlalchemy.sql.expression.CompoundSelect.subquery") to create a subquery of the
+    UNION ALL statement, we then package that into the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct where it can be used like any other mapped
+    entity in a [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct, including that we can add filtering
+    and order by criteria based on its exported columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Selecting ORM Entities from Unions](../../tutorial/data_select.html#tutorial-orm-union)
+    - in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial)  ##
+    Joins'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") and [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") methods are used to construct SQL
+    JOINs against a SELECT statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section will detail ORM use cases for these methods. For a general overview
+    of their use from a Core perspective, see [Explicit FROM clauses and JOINs](../../tutorial/data_select.html#tutorial-select-join)
+    in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The usage of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") in an ORM context for [2.0 style](../../glossary.html#term-2.0-style)
+    queries is mostly equivalent, minus legacy use cases, to the usage of the [`Query.join()`](query.html#sqlalchemy.orm.Query.join
+    "sqlalchemy.orm.Query.join") method in [1.x style](../../glossary.html#term-1.x-style)
+    queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Simple Relationship Joins'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider a mapping between two classes `User` and `Address`, with a relationship
+    `User.addresses` representing a collection of `Address` objects associated with
+    each `User`. The most common usage of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is to create a JOIN along this relationship,
+    using the `User.addresses` attribute as an indicator for how this should occur:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the call to [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") along `User.addresses` will result in
+    SQL approximately equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example we refer to `User.addresses` as passed to [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") as the “on clause”, that is, it indicates
+    how the “ON” portion of the JOIN should be constructed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that using [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") to JOIN from one entity to another affects
+    the FROM clause of the SELECT statement, but not the columns clause; the SELECT
+    statement in this example will continue to return rows from only the `User` entity.
+    To SELECT columns / entities from both `User` and `Address` at the same time,
+    the `Address` entity must also be named in the [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") function, or added to the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct afterwards using the [`Select.add_columns()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.add_columns
+    "sqlalchemy.sql.expression.Select.add_columns") method. See the section [Selecting
+    Multiple ORM Entities Simultaneously](#orm-queryguide-select-multiple-entities)
+    for examples of both of these forms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Chaining Multiple Joins
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To construct a chain of joins, multiple [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") calls may be used. The relationship-bound
+    attribute implies both the left and right side of the join at once. Consider additional
+    entities `Order` and `Item`, where the `User.orders` relationship refers to the
+    `Order` entity, and the `Order.items` relationship refers to the `Item` entity,
+    via an association table `order_items`. Two [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") calls will result in a JOIN first from
+    `User` to `Order`, and a second from `Order` to `Item`. However, since `Order.items`
+    is a [many to many](../basic_relationships.html#relationships-many-to-many) relationship,
+    it results in two separate JOIN elements, for a total of three JOIN elements in
+    the resulting SQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: The order in which each call to the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method is significant only to the degree
+    that the “left” side of what we would like to join from needs to be present in
+    the list of FROMs before we indicate a new target. [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") would not, for example, know how to join
+    correctly if we were to specify `select(User).join(Order.items).join(User.orders)`,
+    and would raise an error. In correct practice, the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method is invoked in such a way that
+    lines up with how we would want the JOIN clauses in SQL to be rendered, and each
+    call should represent a clear link from what precedes it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All of the elements that we target in the FROM clause remain available as potential
+    points to continue joining FROM. We can continue to add other elements to join
+    FROM the `User` entity above, for example adding on the `User.addresses` relationship
+    to our chain of joins:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Joins to a Target Entity
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A second form of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") allows any mapped entity or core selectable
+    construct as a target. In this usage, [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") will attempt to **infer** the ON clause
+    for the JOIN, using the natural foreign key relationship between two entities:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above calling form, [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is called upon to infer the “on clause”
+    automatically. This calling form will ultimately raise an error if either there
+    are no [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") setup between the two mapped [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") constructs, or if there are multiple [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") linkages between them such that the
+    appropriate constraint to use is ambiguous.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When making use of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") or [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") without indicating an ON clause,
+    ORM configured [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs are **not taken into account**. Only
+    the configured [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") relationships between the entities at
+    the level of the mapped [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects are consulted when an attempt is made to infer
+    an ON clause for the JOIN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Joins to a Target with an ON Clause'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The third calling form allows both the target entity as well as the ON clause
+    to be passed explicitly. A example that includes a SQL expression as the ON clause
+    is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The expression-based ON clause may also be a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute, in the same way it’s used in [Simple
+    Relationship Joins](#orm-queryguide-simple-relationship-join):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above example seems redundant in that it indicates the target of `Address`
+    in two different ways; however, the utility of this form becomes apparent when
+    joining to aliased entities; see the section [Using Relationship to join between
+    aliased targets](#orm-queryguide-joining-relationships-aliased) for an example.  ###
+    Combining Relationship with Custom ON Criteria'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The ON clause generated by the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct may be augmented with additional criteria.
+    This is useful both for quick ways to limit the scope of a particular join over
+    a relationship path, as well as for cases like configuring loader strategies such
+    as [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload").
+    The [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_") method accepts a series of SQL expressions
+    positionally that will be joined to the ON clause of the JOIN via AND. For example
+    if we wanted to JOIN from `User` to `Address` but also limit the ON criteria to
+    only certain email addresses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_") method also works with loader strategies
+    such as [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload").
+    See the section [Adding Criteria to loader options](relationships.html#loader-option-criteria).  ###
+    Using Relationship to join between aliased targets'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When constructing joins using [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attributes to indicate the ON clause, the
+    two-argument syntax illustrated in [Joins to a Target with an ON Clause](#queryguide-join-onclause)
+    can be expanded to work with the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct, to indicate a SQL alias as the target of
+    a join while still making use of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute to indicate the ON clause, as in
+    the example below, where the `User` entity is joined twice to two different [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") constructs against the `Address` entity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same pattern may be expressed more succinctly using the modifier [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type"), which may be applied to the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute, passing along the target entity
+    in order to indicate the target in one step. The example below uses [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") to produce the same SQL statement as
+    the one just illustrated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To make use of a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to construct a join **from** an aliased entity,
+    the attribute is available from the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]  ### Joining to Subqueries'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The target of a join may be any “selectable” entity which includes subuqeries.
+    When using the ORM, it is typical that these targets are stated in terms of an
+    [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") construct,
+    but this is not strictly required, particularly if the joined entity is not being
+    returned in the results. For example, to join from the `User` entity to the `Address`
+    entity, where the `Address` entity is represented as a row limited subquery, we
+    first construct a [`Subquery`](../../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") object using [`Select.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.subquery
+    "sqlalchemy.sql.expression.Select.subquery"), which may then be used as the target
+    of the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above SELECT statement when invoked via [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") will return rows that contain `User` entities,
+    but not `Address` entities. In order to include `Address` entities to the set
+    of entities that would be returned in result sets, we construct an [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") object against the `Address` entity and [`Subquery`](../../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") object. We also may wish to apply a name
+    to the [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct, such as `"address"` used below, so that we can refer to it by name
+    in the result row:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Joining to Subqueries along Relationship paths
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The subquery form illustrated in the previous section may be expressed with
+    more specificity using a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute using one of the forms indicated
+    at [Using Relationship to join between aliased targets](#orm-queryguide-joining-relationships-aliased).
+    For example, to create the same join while ensuring the join is along that of
+    a particular [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), we may use the [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") method, passing the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct containing the [`Subquery`](../../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") object that’s the target of the join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Subqueries that Refer to Multiple Entities
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A subquery that contains columns spanning more than one ORM entity may be applied
+    to more than one [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct at once, and used in the same [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct in terms of each entity separately.
+    The rendered SQL will continue to treat all such [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") constructs as the same subquery, however from the ORM
+    / Python perspective the different return values and object attributes can be
+    referenced by using the appropriate [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given for example a subquery that refers to both `User` and `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can create [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    constructs against both `User` and `Address` that each refer to the same object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    construct selecting from both entities will render the subquery once, but in a
+    result-row context can return objects of both `User` and `Address` classes at
+    the same time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Setting the leftmost FROM clause in a join'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In cases where the left side of the current state of [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") is not in line with what we want to join from,
+    the [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") method may be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") method accepts two or three arguments,
+    either in the form `(<join from>, <onclause>)`, or `(<join from>, <join to>, [<onclause>])`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To set up the initial FROM clause for a SELECT such that [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") can be used subsequent, the [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") method may also be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") method does not actually have
+    the final say on the order of tables in the FROM clause. If the statement also
+    refers to a [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") construct that refers to existing tables in
+    a different order, the [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") construct takes precedence. When we use methods
+    like [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") and [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from"), these methods are ultimately creating
+    such a [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join "sqlalchemy.sql.expression.Join")
+    object. Therefore we can see the contents of [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") being overridden in a case like
+    this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, we see that the FROM clause is `address JOIN user_account`, even
+    though we stated `select_from(User)` first. Because of the `.join(Address.user)`
+    method call, the statement is ultimately equivalent to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join "sqlalchemy.sql.expression.Join")
+    construct above is added as another entry in the [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") list which supersedes the previous
+    entry.  ## Relationship WHERE Operators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides the use of [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs within the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") and [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") methods, [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") also plays a role in helping to construct SQL expressions
+    that are typically for use in the WHERE clause, using the [`Select.where()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.where
+    "sqlalchemy.sql.expression.Select.where") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### EXISTS forms: has() / any()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Exists`](../../core/selectable.html#sqlalchemy.sql.expression.Exists "sqlalchemy.sql.expression.Exists")
+    construct was first introduced in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial)
+    in the section [EXISTS subqueries](../../tutorial/data_select.html#tutorial-exists).
+    This object is used to render the SQL EXISTS keyword in conjunction with a scalar
+    subquery. The [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct provides for some helper methods that
+    may be used to generate some common EXISTS styles of queries in terms of the relationship.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a one-to-many relationship such as `User.addresses`, an EXISTS against
+    the `address` table that correlates back to the `user_account` table can be produced
+    using [`PropComparator.any()`](../internals.html#sqlalchemy.orm.PropComparator.any
+    "sqlalchemy.orm.PropComparator.any"). This method accepts an optional WHERE criteria
+    to limit the rows matched by the subquery:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As EXISTS tends to be more efficient for negative lookups, a common query is
+    to locate entities where there are no related entities present. This is succinct
+    using a phrase such as `~User.addresses.any()`, to select for `User` entities
+    that have no related `Address` rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`PropComparator.has()`](../internals.html#sqlalchemy.orm.PropComparator.has
+    "sqlalchemy.orm.PropComparator.has") method works in mostly the same way as [`PropComparator.any()`](../internals.html#sqlalchemy.orm.PropComparator.any
+    "sqlalchemy.orm.PropComparator.any"), except that it’s used for many-to-one relationships,
+    such as if we wanted to locate all `Address` objects which belonged to “sandy”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]  ### Relationship Instance Comparison Operators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute also offers a few SQL construction
+    implementations that are geared towards filtering a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute in terms of a specific instance
+    of a related object, which can unpack the appropriate attribute values from a
+    given [persistent](../../glossary.html#term-persistent) (or less commonly a [detached](../../glossary.html#term-detached))
+    object instance and construct WHERE criteria in terms of the target [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**many to one equals comparison** - a specific object instance can be compared
+    to many-to-one relationship, to select rows where the foreign key of the target
+    entity matches the primary key value of the object given:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**many to one not equals comparison** - the not equals operator may also be
+    used:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**object is contained in a one-to-many collection** - this is essentially the
+    one-to-many version of the “equals” comparison, select rows where the primary
+    key equals the value of the foreign key in a related object:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**An object has a particular parent from a one-to-many perspective** - the
+    [`with_parent()`](api.html#sqlalchemy.orm.with_parent "sqlalchemy.orm.with_parent")
+    function produces a comparison that returns rows which are referenced by a given
+    parent, this is essentially the same as using the `==` operator with the many-to-one
+    side:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE48]  ## Selecting ORM Entities and Attributes'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct accepts ORM entities, including
+    mapped classes as well as class-level attributes representing mapped columns,
+    which are converted into [ORM-annotated](../../glossary.html#term-ORM-annotated)
+    [`FromClause`](../../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") and [`ColumnElement`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnElement
+    "sqlalchemy.sql.expression.ColumnElement") elements at construction time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    object that contains ORM-annotated entities is normally executed using a [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object, and not a [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object, so that ORM-related features may take
+    effect, including that instances of ORM-mapped objects may be returned. When using
+    the [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    directly, result rows will only contain column-level data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Selecting ORM Entities'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below we select from the `User` entity, producing a [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") that selects from the mapped [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to which `User` is mapped:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When selecting from ORM entities, the entity itself is returned in the result
+    as a row with a single element, as opposed to a series of individual columns;
+    for example above, the [`Result`](../../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") returns [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects that have just a single element per row, that
+    element holding onto a `User` object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When selecting a list of single-element rows containing ORM entities, it is
+    typical to skip the generation of [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects and instead receive ORM entities directly. This
+    is most easily achieved by using the [`Session.scalars()`](../session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") method to execute, rather than the [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method, so that a [`ScalarResult`](../../core/connections.html#sqlalchemy.engine.ScalarResult
+    "sqlalchemy.engine.ScalarResult") object which yields single elements rather than
+    rows is returned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Calling the [`Session.scalars()`](../session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") method is the equivalent to calling upon [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") to receive a [`Result`](../../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object, then calling upon [`Result.scalars()`](../../core/connections.html#sqlalchemy.engine.Result.scalars
+    "sqlalchemy.engine.Result.scalars") to receive a [`ScalarResult`](../../core/connections.html#sqlalchemy.engine.ScalarResult
+    "sqlalchemy.engine.ScalarResult") object.  ### Selecting Multiple ORM Entities
+    Simultaneously'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") function accepts any number of ORM classes
+    and/or column expressions at once, including that multiple ORM classes may be
+    requested. When SELECTing from multiple ORM classes, they are named in each result
+    row based on their class name. In the example below, the result rows for a SELECT
+    against `User` and `Address` will refer to them under the names `User` and `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we wanted to assign different names to these entities in the rows, we would
+    use the [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct using the [`aliased.name`](api.html#sqlalchemy.orm.aliased.params.name
+    "sqlalchemy.orm.aliased") parameter to alias them with an explicit name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: The aliased form above is discussed further at [Using Relationship to join between
+    aliased targets](#orm-queryguide-joining-relationships-aliased).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An existing [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct may also have ORM classes and/or
+    column expressions added to its columns clause using the [`Select.add_columns()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.add_columns
+    "sqlalchemy.sql.expression.Select.add_columns") method. We can produce the same
+    statement as above using this form as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: Selecting Individual Attributes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The attributes on a mapped class, such as `User.name` and `Address.email_address`,
+    can be used just like [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") or other SQL expression objects when passed to [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"). Creating a [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") that is against specific columns will return
+    [`Row`](../../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    objects, and **not** entities like `User` or `Address` objects. Each [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") will have each column represented individually:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above statement returns [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects with `name` and `email_address` columns, as illustrated
+    in the runtime demonstration below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Grouping Selected Attributes with Bundles'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Bundle`](api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle") construct
+    is an extensible ORM-only construct that allows sets of column expressions to
+    be grouped in result rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Bundle`](api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle") is potentially
+    useful for creating lightweight views and custom column groupings. [`Bundle`](api.html#sqlalchemy.orm.Bundle
+    "sqlalchemy.orm.Bundle") may also be subclassed in order to return alternate data
+    structures; see [`Bundle.create_row_processor()`](api.html#sqlalchemy.orm.Bundle.create_row_processor
+    "sqlalchemy.orm.Bundle.create_row_processor") for an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Bundle`](api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Bundle.create_row_processor()`](api.html#sqlalchemy.orm.Bundle.create_row_processor
+    "sqlalchemy.orm.Bundle.create_row_processor")  ### Selecting ORM Aliases'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As discussed in the tutorial at [Using Aliases](../../tutorial/data_select.html#tutorial-using-aliases),
+    to create a SQL alias of an ORM entity is achieved using the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct against a mapped class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case when using [`Table.alias()`](../../core/metadata.html#sqlalchemy.schema.Table.alias
+    "sqlalchemy.schema.Table.alias"), the SQL alias is anonymously named. For the
+    case of selecting the entity from a row with an explicit name, the [`aliased.name`](api.html#sqlalchemy.orm.aliased.params.name
+    "sqlalchemy.orm.aliased") parameter may be passed as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`aliased`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") construct
+    is central for several use cases, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: making use of subqueries with the ORM; the sections [Selecting Entities from
+    Subqueries](#orm-queryguide-subqueries) and [Joining to Subqueries](#orm-queryguide-join-subqueries)
+    discuss this further.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Controlling the name of an entity in a result set; see [Selecting Multiple ORM
+    Entities Simultaneously](#orm-queryguide-select-multiple-entities) for an example
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Joining to the same ORM entity multiple times; see [Using Relationship to join
+    between aliased targets](#orm-queryguide-joining-relationships-aliased) for an
+    example.  ### Getting ORM Results from Textual Statements'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The ORM supports loading of entities from SELECT statements that come from other
+    sources. The typical use case is that of a textual SELECT statement, which in
+    SQLAlchemy is represented using the [`text()`](../../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct. A [`text()`](../../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct can be augmented with information
+    about the ORM-mapped columns that the statement would load; this can then be associated
+    with the ORM entity itself so that ORM objects can be loaded based on this statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given a textual SQL statement we’d like to load from:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can add column information to the statement by using the [`TextClause.columns()`](../../core/sqlelement.html#sqlalchemy.sql.expression.TextClause.columns
+    "sqlalchemy.sql.expression.TextClause.columns") method; when this method is invoked,
+    the [`TextClause`](../../core/sqlelement.html#sqlalchemy.sql.expression.TextClause
+    "sqlalchemy.sql.expression.TextClause") object is converted into a [`TextualSelect`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect
+    "sqlalchemy.sql.expression.TextualSelect") object, which takes on a role that
+    is comparable to the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct. The [`TextClause.columns()`](../../core/sqlelement.html#sqlalchemy.sql.expression.TextClause.columns
+    "sqlalchemy.sql.expression.TextClause.columns") method is typically passed [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects or equivalent, and in this case we can make
+    use of the ORM-mapped attributes on the `User` class directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We now have an ORM-configured SQL construct that as given, can load the “id”,
+    “name” and “fullname” columns separately. To use this SELECT statement as a source
+    of complete `User` entities instead, we can link these columns to a regular ORM-enabled
+    [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    construct using the [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same [`TextualSelect`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect
+    "sqlalchemy.sql.expression.TextualSelect") object can also be converted into a
+    subquery using the [`TextualSelect.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect.subquery
+    "sqlalchemy.sql.expression.TextualSelect.subquery") method, and linked to the
+    `User` entity to it using the [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct, in a similar manner as discussed below in [Selecting Entities from
+    Subqueries](#orm-queryguide-subqueries):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The difference between using the [`TextualSelect`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect
+    "sqlalchemy.sql.expression.TextualSelect") directly with [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") versus making use of `aliased()`
+    is that in the former case, no subquery is produced in the resulting SQL. This
+    can in some scenarios be advantageous from a performance or complexity perspective.  ###
+    Selecting Entities from Subqueries'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct discussed in the previous section can be used with any `Subuqery` construct
+    that comes from a method such as [`Select.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.subquery
+    "sqlalchemy.sql.expression.Select.subquery") to link ORM entities to the columns
+    returned by that subquery; there must be a **column correspondence** relationship
+    between the columns delivered by the subquery and the columns to which the entity
+    is mapped, meaning, the subquery needs to be ultimately derived from those entities,
+    such as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Entity Subqueries/CTEs](../../tutorial/data_select.html#tutorial-subqueries-orm-aliased)
+    - in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Joining to Subqueries](#orm-queryguide-join-subqueries)  ### Selecting Entities
+    from UNIONs and other set operations'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`union()`](../../core/selectable.html#sqlalchemy.sql.expression.union
+    "sqlalchemy.sql.expression.union") and [`union_all()`](../../core/selectable.html#sqlalchemy.sql.expression.union_all
+    "sqlalchemy.sql.expression.union_all") functions are the most common set operations,
+    which along with other set operations such as [`except_()`](../../core/selectable.html#sqlalchemy.sql.expression.except_
+    "sqlalchemy.sql.expression.except_"), [`intersect()`](../../core/selectable.html#sqlalchemy.sql.expression.intersect
+    "sqlalchemy.sql.expression.intersect") and others deliver an object known as a
+    [`CompoundSelect`](../../core/selectable.html#sqlalchemy.sql.expression.CompoundSelect
+    "sqlalchemy.sql.expression.CompoundSelect"), which is composed of multiple [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") constructs joined by a set-operation keyword.
+    ORM entities may be selected from simple compound selects using the [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") method illustrated previously
+    at [Getting ORM Results from Textual Statements](#orm-queryguide-selecting-text).
+    In this method, the UNION statement is the complete statement that will be rendered,
+    no additional criteria can be added after [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A [`CompoundSelect`](../../core/selectable.html#sqlalchemy.sql.expression.CompoundSelect
+    "sqlalchemy.sql.expression.CompoundSelect") construct can be more flexibly used
+    within a query that can be further modified by organizing it into a subquery and
+    linking it to an ORM entity using [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased"), as illustrated previously at [Selecting Entities from
+    Subqueries](#orm-queryguide-subqueries). In the example below, we first use [`CompoundSelect.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.CompoundSelect.subquery
+    "sqlalchemy.sql.expression.CompoundSelect.subquery") to create a subquery of the
+    UNION ALL statement, we then package that into the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct where it can be used like any other mapped
+    entity in a [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct, including that we can add filtering
+    and order by criteria based on its exported columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Selecting ORM Entities from Unions](../../tutorial/data_select.html#tutorial-orm-union)
+    - in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial)  ###
+    Selecting ORM Entities'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below we select from the `User` entity, producing a [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") that selects from the mapped [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to which `User` is mapped:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When selecting from ORM entities, the entity itself is returned in the result
+    as a row with a single element, as opposed to a series of individual columns;
+    for example above, the [`Result`](../../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") returns [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects that have just a single element per row, that
+    element holding onto a `User` object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When selecting a list of single-element rows containing ORM entities, it is
+    typical to skip the generation of [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects and instead receive ORM entities directly. This
+    is most easily achieved by using the [`Session.scalars()`](../session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") method to execute, rather than the [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method, so that a [`ScalarResult`](../../core/connections.html#sqlalchemy.engine.ScalarResult
+    "sqlalchemy.engine.ScalarResult") object which yields single elements rather than
+    rows is returned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: Calling the [`Session.scalars()`](../session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") method is the equivalent to calling upon [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") to receive a [`Result`](../../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object, then calling upon [`Result.scalars()`](../../core/connections.html#sqlalchemy.engine.Result.scalars
+    "sqlalchemy.engine.Result.scalars") to receive a [`ScalarResult`](../../core/connections.html#sqlalchemy.engine.ScalarResult
+    "sqlalchemy.engine.ScalarResult") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Selecting Multiple ORM Entities Simultaneously'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") function accepts any number of ORM classes
+    and/or column expressions at once, including that multiple ORM classes may be
+    requested. When SELECTing from multiple ORM classes, they are named in each result
+    row based on their class name. In the example below, the result rows for a SELECT
+    against `User` and `Address` will refer to them under the names `User` and `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we wanted to assign different names to these entities in the rows, we would
+    use the [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct using the [`aliased.name`](api.html#sqlalchemy.orm.aliased.params.name
+    "sqlalchemy.orm.aliased") parameter to alias them with an explicit name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: The aliased form above is discussed further at [Using Relationship to join between
+    aliased targets](#orm-queryguide-joining-relationships-aliased).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An existing [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct may also have ORM classes and/or
+    column expressions added to its columns clause using the [`Select.add_columns()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.add_columns
+    "sqlalchemy.sql.expression.Select.add_columns") method. We can produce the same
+    statement as above using this form as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: Selecting Individual Attributes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The attributes on a mapped class, such as `User.name` and `Address.email_address`,
+    can be used just like [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") or other SQL expression objects when passed to [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"). Creating a [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") that is against specific columns will return
+    [`Row`](../../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    objects, and **not** entities like `User` or `Address` objects. Each [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") will have each column represented individually:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above statement returns [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects with `name` and `email_address` columns, as illustrated
+    in the runtime demonstration below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Grouping Selected Attributes with Bundles'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Bundle`](api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle") construct
+    is an extensible ORM-only construct that allows sets of column expressions to
+    be grouped in result rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Bundle`](api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle") is potentially
+    useful for creating lightweight views and custom column groupings. [`Bundle`](api.html#sqlalchemy.orm.Bundle
+    "sqlalchemy.orm.Bundle") may also be subclassed in order to return alternate data
+    structures; see [`Bundle.create_row_processor()`](api.html#sqlalchemy.orm.Bundle.create_row_processor
+    "sqlalchemy.orm.Bundle.create_row_processor") for an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Bundle`](api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Bundle.create_row_processor()`](api.html#sqlalchemy.orm.Bundle.create_row_processor
+    "sqlalchemy.orm.Bundle.create_row_processor")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Selecting ORM Aliases'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As discussed in the tutorial at [Using Aliases](../../tutorial/data_select.html#tutorial-using-aliases),
+    to create a SQL alias of an ORM entity is achieved using the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct against a mapped class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case when using [`Table.alias()`](../../core/metadata.html#sqlalchemy.schema.Table.alias
+    "sqlalchemy.schema.Table.alias"), the SQL alias is anonymously named. For the
+    case of selecting the entity from a row with an explicit name, the [`aliased.name`](api.html#sqlalchemy.orm.aliased.params.name
+    "sqlalchemy.orm.aliased") parameter may be passed as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`aliased`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") construct
+    is central for several use cases, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: making use of subqueries with the ORM; the sections [Selecting Entities from
+    Subqueries](#orm-queryguide-subqueries) and [Joining to Subqueries](#orm-queryguide-join-subqueries)
+    discuss this further.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Controlling the name of an entity in a result set; see [Selecting Multiple ORM
+    Entities Simultaneously](#orm-queryguide-select-multiple-entities) for an example
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Joining to the same ORM entity multiple times; see [Using Relationship to join
+    between aliased targets](#orm-queryguide-joining-relationships-aliased) for an
+    example.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '### Getting ORM Results from Textual Statements'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ORM supports loading of entities from SELECT statements that come from other
+    sources. The typical use case is that of a textual SELECT statement, which in
+    SQLAlchemy is represented using the [`text()`](../../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct. A [`text()`](../../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct can be augmented with information
+    about the ORM-mapped columns that the statement would load; this can then be associated
+    with the ORM entity itself so that ORM objects can be loaded based on this statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given a textual SQL statement we’d like to load from:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can add column information to the statement by using the [`TextClause.columns()`](../../core/sqlelement.html#sqlalchemy.sql.expression.TextClause.columns
+    "sqlalchemy.sql.expression.TextClause.columns") method; when this method is invoked,
+    the [`TextClause`](../../core/sqlelement.html#sqlalchemy.sql.expression.TextClause
+    "sqlalchemy.sql.expression.TextClause") object is converted into a [`TextualSelect`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect
+    "sqlalchemy.sql.expression.TextualSelect") object, which takes on a role that
+    is comparable to the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct. The [`TextClause.columns()`](../../core/sqlelement.html#sqlalchemy.sql.expression.TextClause.columns
+    "sqlalchemy.sql.expression.TextClause.columns") method is typically passed [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects or equivalent, and in this case we can make
+    use of the ORM-mapped attributes on the `User` class directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We now have an ORM-configured SQL construct that as given, can load the “id”,
+    “name” and “fullname” columns separately. To use this SELECT statement as a source
+    of complete `User` entities instead, we can link these columns to a regular ORM-enabled
+    [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    construct using the [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same [`TextualSelect`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect
+    "sqlalchemy.sql.expression.TextualSelect") object can also be converted into a
+    subquery using the [`TextualSelect.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect.subquery
+    "sqlalchemy.sql.expression.TextualSelect.subquery") method, and linked to the
+    `User` entity to it using the [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct, in a similar manner as discussed below in [Selecting Entities from
+    Subqueries](#orm-queryguide-subqueries):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: The difference between using the [`TextualSelect`](../../core/selectable.html#sqlalchemy.sql.expression.TextualSelect
+    "sqlalchemy.sql.expression.TextualSelect") directly with [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") versus making use of `aliased()`
+    is that in the former case, no subquery is produced in the resulting SQL. This
+    can in some scenarios be advantageous from a performance or complexity perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Selecting Entities from Subqueries'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct discussed in the previous section can be used with any `Subuqery` construct
+    that comes from a method such as [`Select.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.subquery
+    "sqlalchemy.sql.expression.Select.subquery") to link ORM entities to the columns
+    returned by that subquery; there must be a **column correspondence** relationship
+    between the columns delivered by the subquery and the columns to which the entity
+    is mapped, meaning, the subquery needs to be ultimately derived from those entities,
+    such as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Entity Subqueries/CTEs](../../tutorial/data_select.html#tutorial-subqueries-orm-aliased)
+    - in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Joining to Subqueries](#orm-queryguide-join-subqueries)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Selecting Entities from UNIONs and other set operations'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`union()`](../../core/selectable.html#sqlalchemy.sql.expression.union
+    "sqlalchemy.sql.expression.union") and [`union_all()`](../../core/selectable.html#sqlalchemy.sql.expression.union_all
+    "sqlalchemy.sql.expression.union_all") functions are the most common set operations,
+    which along with other set operations such as [`except_()`](../../core/selectable.html#sqlalchemy.sql.expression.except_
+    "sqlalchemy.sql.expression.except_"), [`intersect()`](../../core/selectable.html#sqlalchemy.sql.expression.intersect
+    "sqlalchemy.sql.expression.intersect") and others deliver an object known as a
+    [`CompoundSelect`](../../core/selectable.html#sqlalchemy.sql.expression.CompoundSelect
+    "sqlalchemy.sql.expression.CompoundSelect"), which is composed of multiple [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") constructs joined by a set-operation keyword.
+    ORM entities may be selected from simple compound selects using the [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") method illustrated previously
+    at [Getting ORM Results from Textual Statements](#orm-queryguide-selecting-text).
+    In this method, the UNION statement is the complete statement that will be rendered,
+    no additional criteria can be added after [`Select.from_statement()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.from_statement
+    "sqlalchemy.sql.expression.Select.from_statement") is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A [`CompoundSelect`](../../core/selectable.html#sqlalchemy.sql.expression.CompoundSelect
+    "sqlalchemy.sql.expression.CompoundSelect") construct can be more flexibly used
+    within a query that can be further modified by organizing it into a subquery and
+    linking it to an ORM entity using [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased"), as illustrated previously at [Selecting Entities from
+    Subqueries](#orm-queryguide-subqueries). In the example below, we first use [`CompoundSelect.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.CompoundSelect.subquery
+    "sqlalchemy.sql.expression.CompoundSelect.subquery") to create a subquery of the
+    UNION ALL statement, we then package that into the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct where it can be used like any other mapped
+    entity in a [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct, including that we can add filtering
+    and order by criteria based on its exported columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Selecting ORM Entities from Unions](../../tutorial/data_select.html#tutorial-orm-union)
+    - in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Joins'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") and [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") methods are used to construct SQL
+    JOINs against a SELECT statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section will detail ORM use cases for these methods. For a general overview
+    of their use from a Core perspective, see [Explicit FROM clauses and JOINs](../../tutorial/data_select.html#tutorial-select-join)
+    in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The usage of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") in an ORM context for [2.0 style](../../glossary.html#term-2.0-style)
+    queries is mostly equivalent, minus legacy use cases, to the usage of the [`Query.join()`](query.html#sqlalchemy.orm.Query.join
+    "sqlalchemy.orm.Query.join") method in [1.x style](../../glossary.html#term-1.x-style)
+    queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Simple Relationship Joins'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider a mapping between two classes `User` and `Address`, with a relationship
+    `User.addresses` representing a collection of `Address` objects associated with
+    each `User`. The most common usage of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is to create a JOIN along this relationship,
+    using the `User.addresses` attribute as an indicator for how this should occur:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the call to [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") along `User.addresses` will result in
+    SQL approximately equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example we refer to `User.addresses` as passed to [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") as the “on clause”, that is, it indicates
+    how the “ON” portion of the JOIN should be constructed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that using [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") to JOIN from one entity to another affects
+    the FROM clause of the SELECT statement, but not the columns clause; the SELECT
+    statement in this example will continue to return rows from only the `User` entity.
+    To SELECT columns / entities from both `User` and `Address` at the same time,
+    the `Address` entity must also be named in the [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") function, or added to the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct afterwards using the [`Select.add_columns()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.add_columns
+    "sqlalchemy.sql.expression.Select.add_columns") method. See the section [Selecting
+    Multiple ORM Entities Simultaneously](#orm-queryguide-select-multiple-entities)
+    for examples of both of these forms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Chaining Multiple Joins
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To construct a chain of joins, multiple [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") calls may be used. The relationship-bound
+    attribute implies both the left and right side of the join at once. Consider additional
+    entities `Order` and `Item`, where the `User.orders` relationship refers to the
+    `Order` entity, and the `Order.items` relationship refers to the `Item` entity,
+    via an association table `order_items`. Two [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") calls will result in a JOIN first from
+    `User` to `Order`, and a second from `Order` to `Item`. However, since `Order.items`
+    is a [many to many](../basic_relationships.html#relationships-many-to-many) relationship,
+    it results in two separate JOIN elements, for a total of three JOIN elements in
+    the resulting SQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: The order in which each call to the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method is significant only to the degree
+    that the “left” side of what we would like to join from needs to be present in
+    the list of FROMs before we indicate a new target. [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") would not, for example, know how to join
+    correctly if we were to specify `select(User).join(Order.items).join(User.orders)`,
+    and would raise an error. In correct practice, the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method is invoked in such a way that
+    lines up with how we would want the JOIN clauses in SQL to be rendered, and each
+    call should represent a clear link from what precedes it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All of the elements that we target in the FROM clause remain available as potential
+    points to continue joining FROM. We can continue to add other elements to join
+    FROM the `User` entity above, for example adding on the `User.addresses` relationship
+    to our chain of joins:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: Joins to a Target Entity
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A second form of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") allows any mapped entity or core selectable
+    construct as a target. In this usage, [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") will attempt to **infer** the ON clause
+    for the JOIN, using the natural foreign key relationship between two entities:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above calling form, [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is called upon to infer the “on clause”
+    automatically. This calling form will ultimately raise an error if either there
+    are no [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") setup between the two mapped [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") constructs, or if there are multiple [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") linkages between them such that the
+    appropriate constraint to use is ambiguous.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When making use of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") or [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") without indicating an ON clause,
+    ORM configured [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs are **not taken into account**. Only
+    the configured [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") relationships between the entities at
+    the level of the mapped [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects are consulted when an attempt is made to infer
+    an ON clause for the JOIN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Joins to a Target with an ON Clause'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The third calling form allows both the target entity as well as the ON clause
+    to be passed explicitly. A example that includes a SQL expression as the ON clause
+    is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The expression-based ON clause may also be a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute, in the same way it’s used in [Simple
+    Relationship Joins](#orm-queryguide-simple-relationship-join):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above example seems redundant in that it indicates the target of `Address`
+    in two different ways; however, the utility of this form becomes apparent when
+    joining to aliased entities; see the section [Using Relationship to join between
+    aliased targets](#orm-queryguide-joining-relationships-aliased) for an example.  ###
+    Combining Relationship with Custom ON Criteria'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The ON clause generated by the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct may be augmented with additional criteria.
+    This is useful both for quick ways to limit the scope of a particular join over
+    a relationship path, as well as for cases like configuring loader strategies such
+    as [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload").
+    The [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_") method accepts a series of SQL expressions
+    positionally that will be joined to the ON clause of the JOIN via AND. For example
+    if we wanted to JOIN from `User` to `Address` but also limit the ON criteria to
+    only certain email addresses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_") method also works with loader strategies
+    such as [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload").
+    See the section [Adding Criteria to loader options](relationships.html#loader-option-criteria).  ###
+    Using Relationship to join between aliased targets'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When constructing joins using [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attributes to indicate the ON clause, the
+    two-argument syntax illustrated in [Joins to a Target with an ON Clause](#queryguide-join-onclause)
+    can be expanded to work with the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct, to indicate a SQL alias as the target of
+    a join while still making use of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute to indicate the ON clause, as in
+    the example below, where the `User` entity is joined twice to two different [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") constructs against the `Address` entity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same pattern may be expressed more succinctly using the modifier [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type"), which may be applied to the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute, passing along the target entity
+    in order to indicate the target in one step. The example below uses [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") to produce the same SQL statement as
+    the one just illustrated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To make use of a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to construct a join **from** an aliased entity,
+    the attribute is available from the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]  ### Joining to Subqueries'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The target of a join may be any “selectable” entity which includes subuqeries.
+    When using the ORM, it is typical that these targets are stated in terms of an
+    [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") construct,
+    but this is not strictly required, particularly if the joined entity is not being
+    returned in the results. For example, to join from the `User` entity to the `Address`
+    entity, where the `Address` entity is represented as a row limited subquery, we
+    first construct a [`Subquery`](../../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") object using [`Select.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.subquery
+    "sqlalchemy.sql.expression.Select.subquery"), which may then be used as the target
+    of the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above SELECT statement when invoked via [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") will return rows that contain `User` entities,
+    but not `Address` entities. In order to include `Address` entities to the set
+    of entities that would be returned in result sets, we construct an [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") object against the `Address` entity and [`Subquery`](../../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") object. We also may wish to apply a name
+    to the [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct, such as `"address"` used below, so that we can refer to it by name
+    in the result row:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: Joining to Subqueries along Relationship paths
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The subquery form illustrated in the previous section may be expressed with
+    more specificity using a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute using one of the forms indicated
+    at [Using Relationship to join between aliased targets](#orm-queryguide-joining-relationships-aliased).
+    For example, to create the same join while ensuring the join is along that of
+    a particular [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), we may use the [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") method, passing the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct containing the [`Subquery`](../../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") object that’s the target of the join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: Subqueries that Refer to Multiple Entities
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A subquery that contains columns spanning more than one ORM entity may be applied
+    to more than one [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct at once, and used in the same [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct in terms of each entity separately.
+    The rendered SQL will continue to treat all such [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") constructs as the same subquery, however from the ORM
+    / Python perspective the different return values and object attributes can be
+    referenced by using the appropriate [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given for example a subquery that refers to both `User` and `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can create [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    constructs against both `User` and `Address` that each refer to the same object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    construct selecting from both entities will render the subquery once, but in a
+    result-row context can return objects of both `User` and `Address` classes at
+    the same time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Setting the leftmost FROM clause in a join'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In cases where the left side of the current state of [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") is not in line with what we want to join from,
+    the [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") method may be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") method accepts two or three arguments,
+    either in the form `(<join from>, <onclause>)`, or `(<join from>, <join to>, [<onclause>])`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To set up the initial FROM clause for a SELECT such that [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") can be used subsequent, the [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") method may also be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") method does not actually have
+    the final say on the order of tables in the FROM clause. If the statement also
+    refers to a [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") construct that refers to existing tables in
+    a different order, the [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") construct takes precedence. When we use methods
+    like [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") and [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from"), these methods are ultimately creating
+    such a [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join "sqlalchemy.sql.expression.Join")
+    object. Therefore we can see the contents of [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") being overridden in a case like
+    this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, we see that the FROM clause is `address JOIN user_account`, even
+    though we stated `select_from(User)` first. Because of the `.join(Address.user)`
+    method call, the statement is ultimately equivalent to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join "sqlalchemy.sql.expression.Join")
+    construct above is added as another entry in the [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") list which supersedes the previous
+    entry.  ### Simple Relationship Joins'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider a mapping between two classes `User` and `Address`, with a relationship
+    `User.addresses` representing a collection of `Address` objects associated with
+    each `User`. The most common usage of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is to create a JOIN along this relationship,
+    using the `User.addresses` attribute as an indicator for how this should occur:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the call to [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") along `User.addresses` will result in
+    SQL approximately equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example we refer to `User.addresses` as passed to [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") as the “on clause”, that is, it indicates
+    how the “ON” portion of the JOIN should be constructed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that using [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") to JOIN from one entity to another affects
+    the FROM clause of the SELECT statement, but not the columns clause; the SELECT
+    statement in this example will continue to return rows from only the `User` entity.
+    To SELECT columns / entities from both `User` and `Address` at the same time,
+    the `Address` entity must also be named in the [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") function, or added to the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct afterwards using the [`Select.add_columns()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.add_columns
+    "sqlalchemy.sql.expression.Select.add_columns") method. See the section [Selecting
+    Multiple ORM Entities Simultaneously](#orm-queryguide-select-multiple-entities)
+    for examples of both of these forms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Chaining Multiple Joins
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To construct a chain of joins, multiple [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") calls may be used. The relationship-bound
+    attribute implies both the left and right side of the join at once. Consider additional
+    entities `Order` and `Item`, where the `User.orders` relationship refers to the
+    `Order` entity, and the `Order.items` relationship refers to the `Item` entity,
+    via an association table `order_items`. Two [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") calls will result in a JOIN first from
+    `User` to `Order`, and a second from `Order` to `Item`. However, since `Order.items`
+    is a [many to many](../basic_relationships.html#relationships-many-to-many) relationship,
+    it results in two separate JOIN elements, for a total of three JOIN elements in
+    the resulting SQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: The order in which each call to the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method is significant only to the degree
+    that the “left” side of what we would like to join from needs to be present in
+    the list of FROMs before we indicate a new target. [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") would not, for example, know how to join
+    correctly if we were to specify `select(User).join(Order.items).join(User.orders)`,
+    and would raise an error. In correct practice, the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method is invoked in such a way that
+    lines up with how we would want the JOIN clauses in SQL to be rendered, and each
+    call should represent a clear link from what precedes it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All of the elements that we target in the FROM clause remain available as potential
+    points to continue joining FROM. We can continue to add other elements to join
+    FROM the `User` entity above, for example adding on the `User.addresses` relationship
+    to our chain of joins:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: Joins to a Target Entity
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A second form of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") allows any mapped entity or core selectable
+    construct as a target. In this usage, [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") will attempt to **infer** the ON clause
+    for the JOIN, using the natural foreign key relationship between two entities:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above calling form, [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is called upon to infer the “on clause”
+    automatically. This calling form will ultimately raise an error if either there
+    are no [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") setup between the two mapped [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") constructs, or if there are multiple [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") linkages between them such that the
+    appropriate constraint to use is ambiguous.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When making use of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") or [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") without indicating an ON clause,
+    ORM configured [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs are **not taken into account**. Only
+    the configured [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") relationships between the entities at
+    the level of the mapped [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects are consulted when an attempt is made to infer
+    an ON clause for the JOIN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Joins to a Target with an ON Clause'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The third calling form allows both the target entity as well as the ON clause
+    to be passed explicitly. A example that includes a SQL expression as the ON clause
+    is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The expression-based ON clause may also be a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute, in the same way it’s used in [Simple
+    Relationship Joins](#orm-queryguide-simple-relationship-join):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example seems redundant in that it indicates the target of `Address`
+    in two different ways; however, the utility of this form becomes apparent when
+    joining to aliased entities; see the section [Using Relationship to join between
+    aliased targets](#orm-queryguide-joining-relationships-aliased) for an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Combining Relationship with Custom ON Criteria'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The ON clause generated by the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct may be augmented with additional criteria.
+    This is useful both for quick ways to limit the scope of a particular join over
+    a relationship path, as well as for cases like configuring loader strategies such
+    as [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload").
+    The [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_") method accepts a series of SQL expressions
+    positionally that will be joined to the ON clause of the JOIN via AND. For example
+    if we wanted to JOIN from `User` to `Address` but also limit the ON criteria to
+    only certain email addresses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_") method also works with loader strategies
+    such as [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload").
+    See the section [Adding Criteria to loader options](relationships.html#loader-option-criteria).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using Relationship to join between aliased targets'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When constructing joins using [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attributes to indicate the ON clause, the
+    two-argument syntax illustrated in [Joins to a Target with an ON Clause](#queryguide-join-onclause)
+    can be expanded to work with the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct, to indicate a SQL alias as the target of
+    a join while still making use of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute to indicate the ON clause, as in
+    the example below, where the `User` entity is joined twice to two different [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") constructs against the `Address` entity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same pattern may be expressed more succinctly using the modifier [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type"), which may be applied to the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute, passing along the target entity
+    in order to indicate the target in one step. The example below uses [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") to produce the same SQL statement as
+    the one just illustrated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To make use of a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to construct a join **from** an aliased entity,
+    the attribute is available from the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Joining to Subqueries'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The target of a join may be any “selectable” entity which includes subuqeries.
+    When using the ORM, it is typical that these targets are stated in terms of an
+    [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") construct,
+    but this is not strictly required, particularly if the joined entity is not being
+    returned in the results. For example, to join from the `User` entity to the `Address`
+    entity, where the `Address` entity is represented as a row limited subquery, we
+    first construct a [`Subquery`](../../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") object using [`Select.subquery()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.subquery
+    "sqlalchemy.sql.expression.Select.subquery"), which may then be used as the target
+    of the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above SELECT statement when invoked via [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") will return rows that contain `User` entities,
+    but not `Address` entities. In order to include `Address` entities to the set
+    of entities that would be returned in result sets, we construct an [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") object against the `Address` entity and [`Subquery`](../../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") object. We also may wish to apply a name
+    to the [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct, such as `"address"` used below, so that we can refer to it by name
+    in the result row:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: Joining to Subqueries along Relationship paths
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The subquery form illustrated in the previous section may be expressed with
+    more specificity using a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute using one of the forms indicated
+    at [Using Relationship to join between aliased targets](#orm-queryguide-joining-relationships-aliased).
+    For example, to create the same join while ensuring the join is along that of
+    a particular [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), we may use the [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") method, passing the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct containing the [`Subquery`](../../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") object that’s the target of the join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: Subqueries that Refer to Multiple Entities
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A subquery that contains columns spanning more than one ORM entity may be applied
+    to more than one [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    construct at once, and used in the same [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct in terms of each entity separately.
+    The rendered SQL will continue to treat all such [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") constructs as the same subquery, however from the ORM
+    / Python perspective the different return values and object attributes can be
+    referenced by using the appropriate [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given for example a subquery that refers to both `User` and `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can create [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    constructs against both `User` and `Address` that each refer to the same object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    construct selecting from both entities will render the subquery once, but in a
+    result-row context can return objects of both `User` and `Address` classes at
+    the same time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Setting the leftmost FROM clause in a join'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In cases where the left side of the current state of [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") is not in line with what we want to join from,
+    the [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") method may be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") method accepts two or three arguments,
+    either in the form `(<join from>, <onclause>)`, or `(<join from>, <join to>, [<onclause>])`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To set up the initial FROM clause for a SELECT such that [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") can be used subsequent, the [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") method may also be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") method does not actually have
+    the final say on the order of tables in the FROM clause. If the statement also
+    refers to a [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") construct that refers to existing tables in
+    a different order, the [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") construct takes precedence. When we use methods
+    like [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") and [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from"), these methods are ultimately creating
+    such a [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join "sqlalchemy.sql.expression.Join")
+    object. Therefore we can see the contents of [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") being overridden in a case like
+    this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, we see that the FROM clause is `address JOIN user_account`, even
+    though we stated `select_from(User)` first. Because of the `.join(Address.user)`
+    method call, the statement is ultimately equivalent to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join "sqlalchemy.sql.expression.Join")
+    construct above is added as another entry in the [`Select.select_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.select_from
+    "sqlalchemy.sql.expression.Select.select_from") list which supersedes the previous
+    entry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Relationship WHERE Operators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides the use of [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs within the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") and [`Select.join_from()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join_from
+    "sqlalchemy.sql.expression.Select.join_from") methods, [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") also plays a role in helping to construct SQL expressions
+    that are typically for use in the WHERE clause, using the [`Select.where()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.where
+    "sqlalchemy.sql.expression.Select.where") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### EXISTS forms: has() / any()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Exists`](../../core/selectable.html#sqlalchemy.sql.expression.Exists "sqlalchemy.sql.expression.Exists")
+    construct was first introduced in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial)
+    in the section [EXISTS subqueries](../../tutorial/data_select.html#tutorial-exists).
+    This object is used to render the SQL EXISTS keyword in conjunction with a scalar
+    subquery. The [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct provides for some helper methods that
+    may be used to generate some common EXISTS styles of queries in terms of the relationship.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a one-to-many relationship such as `User.addresses`, an EXISTS against
+    the `address` table that correlates back to the `user_account` table can be produced
+    using [`PropComparator.any()`](../internals.html#sqlalchemy.orm.PropComparator.any
+    "sqlalchemy.orm.PropComparator.any"). This method accepts an optional WHERE criteria
+    to limit the rows matched by the subquery:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE129]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As EXISTS tends to be more efficient for negative lookups, a common query is
+    to locate entities where there are no related entities present. This is succinct
+    using a phrase such as `~User.addresses.any()`, to select for `User` entities
+    that have no related `Address` rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE130]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`PropComparator.has()`](../internals.html#sqlalchemy.orm.PropComparator.has
+    "sqlalchemy.orm.PropComparator.has") method works in mostly the same way as [`PropComparator.any()`](../internals.html#sqlalchemy.orm.PropComparator.any
+    "sqlalchemy.orm.PropComparator.any"), except that it’s used for many-to-one relationships,
+    such as if we wanted to locate all `Address` objects which belonged to “sandy”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE131]  ### Relationship Instance Comparison Operators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute also offers a few SQL construction
+    implementations that are geared towards filtering a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute in terms of a specific instance
+    of a related object, which can unpack the appropriate attribute values from a
+    given [persistent](../../glossary.html#term-persistent) (or less commonly a [detached](../../glossary.html#term-detached))
+    object instance and construct WHERE criteria in terms of the target [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**many to one equals comparison** - a specific object instance can be compared
+    to many-to-one relationship, to select rows where the foreign key of the target
+    entity matches the primary key value of the object given:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE132]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**many to one not equals comparison** - the not equals operator may also be
+    used:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE133]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**object is contained in a one-to-many collection** - this is essentially the
+    one-to-many version of the “equals” comparison, select rows where the primary
+    key equals the value of the foreign key in a related object:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE134]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**An object has a particular parent from a one-to-many perspective** - the
+    [`with_parent()`](api.html#sqlalchemy.orm.with_parent "sqlalchemy.orm.with_parent")
+    function produces a comparison that returns rows which are referenced by a given
+    parent, this is essentially the same as using the `==` operator with the many-to-one
+    side:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE135]  ### EXISTS forms: has() / any()'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`Exists`](../../core/selectable.html#sqlalchemy.sql.expression.Exists "sqlalchemy.sql.expression.Exists")
+    construct was first introduced in the [SQLAlchemy Unified Tutorial](../../tutorial/index.html#unified-tutorial)
+    in the section [EXISTS subqueries](../../tutorial/data_select.html#tutorial-exists).
+    This object is used to render the SQL EXISTS keyword in conjunction with a scalar
+    subquery. The [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct provides for some helper methods that
+    may be used to generate some common EXISTS styles of queries in terms of the relationship.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a one-to-many relationship such as `User.addresses`, an EXISTS against
+    the `address` table that correlates back to the `user_account` table can be produced
+    using [`PropComparator.any()`](../internals.html#sqlalchemy.orm.PropComparator.any
+    "sqlalchemy.orm.PropComparator.any"). This method accepts an optional WHERE criteria
+    to limit the rows matched by the subquery:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE136]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As EXISTS tends to be more efficient for negative lookups, a common query is
+    to locate entities where there are no related entities present. This is succinct
+    using a phrase such as `~User.addresses.any()`, to select for `User` entities
+    that have no related `Address` rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE137]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`PropComparator.has()`](../internals.html#sqlalchemy.orm.PropComparator.has
+    "sqlalchemy.orm.PropComparator.has") method works in mostly the same way as [`PropComparator.any()`](../internals.html#sqlalchemy.orm.PropComparator.any
+    "sqlalchemy.orm.PropComparator.any"), except that it’s used for many-to-one relationships,
+    such as if we wanted to locate all `Address` objects which belonged to “sandy”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE138]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Relationship Instance Comparison Operators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute also offers a few SQL construction
+    implementations that are geared towards filtering a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-bound attribute in terms of a specific instance
+    of a related object, which can unpack the appropriate attribute values from a
+    given [persistent](../../glossary.html#term-persistent) (or less commonly a [detached](../../glossary.html#term-detached))
+    object instance and construct WHERE criteria in terms of the target [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**many to one equals comparison** - a specific object instance can be compared
+    to many-to-one relationship, to select rows where the foreign key of the target
+    entity matches the primary key value of the object given:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE139]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**many to one not equals comparison** - the not equals operator may also be
+    used:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE140]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**object is contained in a one-to-many collection** - this is essentially the
+    one-to-many version of the “equals” comparison, select rows where the primary
+    key equals the value of the foreign key in a related object:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE141]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**An object has a particular parent from a one-to-many perspective** - the
+    [`with_parent()`](api.html#sqlalchemy.orm.with_parent "sqlalchemy.orm.with_parent")
+    function produces a comparison that returns rows which are referenced by a given
+    parent, this is essentially the same as using the `==` operator with the many-to-one
+    side:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE142]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE

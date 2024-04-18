@@ -1,0 +1,4005 @@
+- en: Relationship Loading Techniques
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html](https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: About this Document
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section presents an in-depth view of how to load related objects. Readers
+    should be familiar with [Relationship Configuration](../relationships.html) and
+    basic use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most examples here assume the “User/Address” mapping setup similar to the one
+    illustrated at [setup for selects](_plain_setup.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A big part of SQLAlchemy is providing a wide range of control over how related
+    objects get loaded when querying. By “related objects” we refer to collections
+    or scalar associations configured on a mapper using [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). This behavior can be configured at mapper construction
+    time using the [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") parameter to the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") function, as well as by using **ORM loader options**
+    with the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The loading of relationships falls into three categories; **lazy** loading,
+    **eager** loading, and **no** loading. Lazy loading refers to objects that are
+    returned from a query without the related objects loaded at first. When the given
+    collection or reference is first accessed on a particular object, an additional
+    SELECT statement is emitted such that the requested collection is loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Eager loading refers to objects returned from a query with the related collection
+    or scalar reference already loaded up front. The ORM achieves this either by augmenting
+    the SELECT statement it would normally emit with a JOIN to load in related rows
+    simultaneously, or by emitting additional SELECT statements after the primary
+    one to load collections or scalar references at once.
+  prefs: []
+  type: TYPE_NORMAL
+- en: “No” loading refers to the disabling of loading on a given relationship, either
+    that the attribute is empty and is just never loaded, or that it raises an error
+    when it is accessed, in order to guard against unwanted lazy loads.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary of Relationship Loading Styles
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The primary forms of relationship loading are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**lazy loading** - available via `lazy=''select''` or the [`lazyload()`](#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") option, this is the form of loading that emits a SELECT
+    statement at attribute access time to lazily load a related reference on a single
+    object at a time. Lazy loading is the **default loading style** for all [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs that don’t otherwise indicate the [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") option. Lazy loading is detailed at [Lazy Loading](#lazy-loading).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**select IN loading** - available via `lazy=''selectin''` or the [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") option, this form of loading emits a second (or
+    more) SELECT statement which assembles the primary key identifiers of the parent
+    objects into an IN clause, so that all members of related collections / scalar
+    references are loaded at once by primary key. Select IN loading is detailed at
+    [Select IN loading](#selectin-eager-loading).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**joined loading** - available via `lazy=''joined''` or the [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") option, this form of loading applies a JOIN to the
+    given SELECT statement so that related rows are loaded in the same result set.
+    Joined eager loading is detailed at [Joined Eager Loading](#joined-eager-loading).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**raise loading** - available via `lazy=''raise''`, `lazy=''raise_on_sql''`,
+    or the [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") option,
+    this form of loading is triggered at the same time a lazy load would normally
+    occur, except it raises an ORM exception in order to guard against the application
+    making unwanted lazy loads. An introduction to raise loading is at [Preventing
+    unwanted lazy loads using raiseload](#prevent-lazy-with-raiseload).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**subquery loading** - available via `lazy=''subquery''` or the [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") option, this form of loading emits a second SELECT
+    statement which re-states the original query embedded inside of a subquery, then
+    JOINs that subquery to the related table to be loaded to load all members of related
+    collections / scalar references at once. Subquery eager loading is detailed at
+    [Subquery Eager Loading](#subquery-eager-loading).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**write only loading** - available via `lazy=''write_only''`, or by annotating
+    the left side of the [`Relationship`](../internals.html#sqlalchemy.orm.Relationship
+    "sqlalchemy.orm.Relationship") object using the [`WriteOnlyMapped`](../large_collections.html#sqlalchemy.orm.WriteOnlyMapped
+    "sqlalchemy.orm.WriteOnlyMapped") annotation. This collection-only loader style
+    produces an alternative attribute instrumentation that never implicitly loads
+    records from the database, instead only allowing [`WriteOnlyCollection.add()`](../large_collections.html#sqlalchemy.orm.WriteOnlyCollection.add
+    "sqlalchemy.orm.WriteOnlyCollection.add"), [`WriteOnlyCollection.add_all()`](../large_collections.html#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all") and [`WriteOnlyCollection.remove()`](../large_collections.html#sqlalchemy.orm.WriteOnlyCollection.remove
+    "sqlalchemy.orm.WriteOnlyCollection.remove") methods. Querying the collection
+    is performed by invoking a SELECT statement which is constructed using the [`WriteOnlyCollection.select()`](../large_collections.html#sqlalchemy.orm.WriteOnlyCollection.select
+    "sqlalchemy.orm.WriteOnlyCollection.select") method. Write only loading is discussed
+    at [Write Only Relationships](../large_collections.html#write-only-relationship).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**dynamic loading** - available via `lazy=''dynamic''`, or by annotating the
+    left side of the [`Relationship`](../internals.html#sqlalchemy.orm.Relationship
+    "sqlalchemy.orm.Relationship") object using the [`DynamicMapped`](../large_collections.html#sqlalchemy.orm.DynamicMapped
+    "sqlalchemy.orm.DynamicMapped") annotation. This is a legacy collection-only loader
+    style which produces a [`Query`](query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    object when the collection is accessed, allowing custom SQL to be emitted against
+    the collection’s contents. However, dynamic loaders will implicitly iterate the
+    underlying collection in various circumstances which makes them less useful for
+    managing truly large collections. Dynamic loaders are superseded by [“write only”](../large_collections.html#write-only-relationship)
+    collections, which will prevent the underlying collection from being implicitly
+    loaded under any circumstances. Dynamic loaders are discussed at [Dynamic Relationship
+    Loaders](../large_collections.html#dynamic-relationship).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## Configuring Loader Strategies at Mapping Time'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The loader strategy for a particular relationship can be configured at mapping
+    time to take place in all cases where an object of the mapped type is loaded,
+    in the absence of any query-level options that modify it. This is configured using
+    the [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") parameter to [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"); common values for this parameter include `select`,
+    `selectin` and `joined`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The example below illustrates the relationship example at [One To Many](../basic_relationships.html#relationship-patterns-o2m),
+    configuring the `Parent.children` relationship to use [Select IN loading](#selectin-eager-loading)
+    when a SELECT statement for `Parent` objects is emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, whenever a collection of `Parent` objects are loaded, each `Parent` will
+    also have its `children` collection populated, using the `"selectin"` loader strategy
+    that emits a second query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default value of the [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") argument is `"select"`, which indicates [Lazy Loading](#lazy-loading).  ##
+    Relationship Loading with Loader Options'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The other, and possibly more common way to configure loading strategies is
+    to set them up on a per-query basis against specific attributes using the [`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
+    "sqlalchemy.sql.expression.Select.options") method. Very detailed control over
+    relationship loading is available using loader options; the most common are [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload"), [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") and [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload").
+    The option accepts a class-bound attribute referring to the specific class/attribute
+    that should be targeted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The loader options can also be “chained” using **method chaining** to specify
+    how loading should occur further levels deep:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Chained loader options can be applied against a “lazy” loaded collection. This
+    means that when a collection or association is lazily loaded upon access, the
+    specified option will then take effect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the query will return `Parent` objects without the `children` collections
+    loaded. When the `children` collection on a particular `Parent` object is first
+    accessed, it will lazy load the related objects, but additionally apply eager
+    loading to the `subelements` collection on each member of `children`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Adding Criteria to loader options'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The relationship attributes used to indicate loader options include the ability
+    to add additional filtering criteria to the ON clause of the join that’s created,
+    or to the WHERE criteria involved, depending on the loader strategy. This can
+    be achieved using the [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_") method which will pass through an option
+    such that loaded results are limited to the given filter criteria:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using limiting criteria, if a particular collection is already loaded
+    it won’t be refreshed; to ensure the new criteria takes place, apply the [Populate
+    Existing](api.html#orm-queryguide-populate-existing) execution option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: In order to add filtering criteria to all occurrences of an entity throughout
+    a query, regardless of loader strategy or where it occurs in the loading process,
+    see the [`with_loader_criteria()`](api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4.  ### Specifying Sub-Options with Load.options()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using method chaining, the loader style of each link in the path is explicitly
+    stated. To navigate along a path without changing the existing loader style of
+    a particular attribute, the [`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    method/function may be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A similar approach can be used to specify multiple sub-options at once, using
+    the [`Load.options()`](#sqlalchemy.orm.Load.options "sqlalchemy.orm.Load.options")
+    method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using load_only() on related objects and collections](columns.html#orm-queryguide-load-only-related)
+    - illustrates examples of combining relationship and column-oriented loader options.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The loader options applied to an object’s lazy-loaded collections are **“sticky”**
+    to specific object instances, meaning they will persist upon collections loaded
+    by that specific object for as long as it exists in memory. For example, given
+    the previous example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'if the `children` collection on a particular `Parent` object loaded by the
+    above query is expired (such as when a [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object’s transaction is committed or rolled back, or
+    [`Session.expire_all()`](../session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") is used), when the `Parent.children` collection
+    is next accessed in order to re-load it, the `Child.subelements` collection will
+    again be loaded using subquery eager loading. This stays the case even if the
+    above `Parent` object is accessed from a subsequent query that specifies a different
+    set of options. To change the options on an existing object without expunging
+    it and re-loading, they must be set explicitly in conjunction using the [Populate
+    Existing](api.html#orm-queryguide-populate-existing) execution option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the objects loaded above are fully cleared from the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), such as due to garbage collection or that [`Session.expunge_all()`](../session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all") were used, the “sticky” options will also
+    be gone and the newly created objects will make use of new options if loaded again.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A future SQLAlchemy release may add more alternatives to manipulating the loader
+    options on already-loaded objects.  ## Lazy Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By default, all inter-object relationships are **lazy loading**. The scalar
+    or collection attribute associated with a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") contains a trigger which fires the first time the
+    attribute is accessed. This trigger typically issues a SQL call at the point of
+    access in order to load the related object or objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The one case where SQL is not emitted is for a simple many-to-one relationship,
+    when the related object can be identified by its primary key alone and that object
+    is already present in the current [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). For this reason, while lazy loading can be expensive
+    for related collections, in the case that one is loading lots of objects with
+    simple many-to-ones against a relatively small set of possible target objects,
+    lazy loading may be able to refer to these objects locally without emitting as
+    many SELECT statements as there are parent objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This default behavior of “load upon attribute access” is known as “lazy” or
+    “select” loading - the name “select” because a “SELECT” statement is typically
+    emitted when the attribute is first accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lazy loading can be enabled for a given attribute that is normally configured
+    in some other way using the [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload")
+    loader option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Preventing unwanted lazy loads using raiseload'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload") strategy
+    produces an effect that is one of the most common issues referred to in object
+    relational mapping; the [N plus one problem](../../glossary.html#term-N-plus-one-problem),
+    which states that for any N objects loaded, accessing their lazy-loaded attributes
+    means there will be N+1 SELECT statements emitted. In SQLAlchemy, the usual mitigation
+    for the N+1 problem is to make use of its very capable eager load system. However,
+    eager loading requires that the attributes which are to be loaded be specified
+    with the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") up front. The problem of code that may access
+    other attributes that were not eagerly loaded, where lazy loading is not desired,
+    may be addressed using the [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload")
+    strategy; this loader strategy replaces the behavior of lazy loading with an informative
+    error being raised:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, a `User` object loaded from the above query will not have the `.addresses`
+    collection loaded; if some code later on attempts to access this attribute, an
+    ORM exception is raised.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") may be
+    used with a so-called “wildcard” specifier to indicate that all relationships
+    should use this strategy. For example, to set up only one attribute as eager loading,
+    and all the rest as raise:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above wildcard will apply to **all** relationships not just on `Order`
+    besides `items`, but all those on the `Item` objects as well. To set up [`raiseload()`](#sqlalchemy.orm.raiseload
+    "sqlalchemy.orm.raiseload") for only the `Order` objects, specify a full path
+    with [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Conversely, to set up the raise for just the `Item` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") option
+    applies only to relationship attributes. For column-oriented attributes, the [`defer()`](columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer") option supports the [`defer.raiseload`](columns.html#sqlalchemy.orm.defer.params.raiseload
+    "sqlalchemy.orm.defer") option which works in the same way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “raiseload” strategies **do not apply** within the [unit of work](../../glossary.html#term-unit-of-work)
+    flush process. That means if the [`Session.flush()`](../session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") process needs to load a collection in order to
+    finish its work, it will do so while bypassing any [`raiseload()`](#sqlalchemy.orm.raiseload
+    "sqlalchemy.orm.raiseload") directives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Wildcard Loading Strategies](#wildcard-loader-strategies)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using raiseload to prevent deferred column loads](columns.html#orm-queryguide-deferred-raiseload)  ##
+    Joined Eager Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Joined eager loading is the oldest style of eager loading included with the
+    SQLAlchemy ORM. It works by connecting a JOIN (by default a LEFT OUTER join) to
+    the SELECT statement emitted, and populates the target scalar/collection from
+    the same result set as that of the parent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the mapping level, this looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Joined eager loading is usually applied as an option to a query, rather than
+    as a default loading option on the mapping, in particular when used for collections
+    rather than many-to-one-references. This is achieved using the [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") loader option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: When including [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    in reference to a one-to-many or many-to-many collection, the [`Result.unique()`](../../core/connections.html#sqlalchemy.engine.Result.unique
+    "sqlalchemy.engine.Result.unique") method must be applied to the returned result,
+    which will uniquify the incoming rows by primary key that otherwise are multiplied
+    out by the join. The ORM will raise an error if this is not present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is not automatic in modern SQLAlchemy, as it changes the behavior of the
+    result set to return fewer ORM objects than the statement would normally return
+    in terms of number of rows. Therefore SQLAlchemy keeps the use of [`Result.unique()`](../../core/connections.html#sqlalchemy.engine.Result.unique
+    "sqlalchemy.engine.Result.unique") explicit, so there’s no ambiguity that the
+    returned objects are being uniqified on primary key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The JOIN emitted by default is a LEFT OUTER JOIN, to allow for a lead object
+    that does not refer to a related row. For an attribute that is guaranteed to have
+    an element, such as a many-to-one reference to a related object where the referencing
+    foreign key is NOT NULL, the query can be made more efficient by using an inner
+    join; this is available at the mapping level via the [`relationship.innerjoin`](../relationship_api.html#sqlalchemy.orm.relationship.params.innerjoin
+    "sqlalchemy.orm.relationship") flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the query option level, via the [`joinedload.innerjoin`](#sqlalchemy.orm.joinedload.params.innerjoin
+    "sqlalchemy.orm.joinedload") flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The JOIN will right-nest itself when applied in a chain that includes an OUTER
+    JOIN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: If using database row locking techniques when emitting the SELECT, meaning the
+    [`Select.with_for_update()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.with_for_update
+    "sqlalchemy.sql.expression.Select.with_for_update") method is being used to emit
+    SELECT..FOR UPDATE, the joined table may be locked as well, depending on the behavior
+    of the backend in use. It’s not recommended to use joined eager loading at the
+    same time as SELECT..FOR UPDATE for this reason.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### The Zen of Joined Eager Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since joined eager loading seems to have many resemblances to the use of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join"), it often produces confusion as to when
+    and how it should be used. It is critical to understand the distinction that while
+    [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is used to alter the results of a query,
+    [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload") goes
+    through great lengths to **not** alter the results of the query, and instead hide
+    the effects of the rendered join to only allow for related objects to be present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The philosophy behind loader strategies is that any set of loading schemes can
+    be applied to a particular query, and *the results don’t change* - only the number
+    of SQL statements required to fully load related objects and collections changes.
+    A particular query might start out using all lazy loads. After using it in context,
+    it might be revealed that particular attributes or collections are always accessed,
+    and that it would be more efficient to change the loader strategy for these. The
+    strategy can be changed with no other modifications to the query, the results
+    will remain identical, but fewer SQL statements would be emitted. In theory (and
+    pretty much in practice), nothing you can do to the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") would make it load a different set of primary
+    or related objects based on a change in loader strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    in particular achieves this result of not impacting entity rows returned in any
+    way is that it creates an anonymous alias of the joins it adds to your query,
+    so that they can’t be referenced by other parts of the query. For example, the
+    query below uses [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    to create a LEFT OUTER JOIN from `users` to `addresses`, however the `ORDER BY`
+    added against `Address.email_address` is not valid - the `Address` entity is not
+    named in the query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, `ORDER BY addresses.email_address` is not valid since `addresses` is
+    not in the FROM list. The correct way to load the `User` records and order by
+    email address is to use [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The statement above is of course not the same as the previous one, in that
+    the columns from `addresses` are not included in the result at all. We can add
+    [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload") back
+    in, so that there are two joins - one is that which we are ordering on, the other
+    is used anonymously to load the contents of the `User.addresses` collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'What we see above is that our usage of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is to supply JOIN clauses we’d like to
+    use in subsequent query criterion, whereas our usage of [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") only concerns itself with the loading of the `User.addresses`
+    collection, for each `User` in the result. In this case, the two joins most probably
+    appear redundant - which they are. If we wanted to use just one JOIN for collection
+    loading as well as ordering, we use the [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") option, described in [Routing Explicit Joins/Statements
+    into Eagerly Loaded Collections](#contains-eager) below. But to see why [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") does what it does, consider if we were **filtering**
+    on a particular `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we can see that the two JOINs have very different roles. One will match
+    exactly one row, that of the join of `User` and `Address` where `Address.email_address=='someaddress@foo.com'`.
+    The other LEFT OUTER JOIN will match *all* `Address` rows related to `User`, and
+    is only used to populate the `User.addresses` collection, for those `User` objects
+    that are returned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By changing the usage of [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    to another style of loading, we can change how the collection is loaded completely
+    independently of SQL used to retrieve the actual `User` rows we want. Below we
+    change [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    into [`selectinload()`](#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using joined eager loading, if the query contains a modifier that impacts
+    the rows returned externally to the joins, such as when using DISTINCT, LIMIT,
+    OFFSET or equivalent, the completed statement is first wrapped inside a subquery,
+    and the joins used specifically for joined eager loading are applied to the subquery.
+    SQLAlchemy’s joined eager loading goes the extra mile, and then ten miles further,
+    to absolutely ensure that it does not affect the end result of the query, only
+    the way collections and related objects are loaded, no matter what the format
+    of the query is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Routing Explicit Joins/Statements into Eagerly Loaded Collections](#contains-eager)
+    - using [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager")  ##
+    Select IN loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In most cases, selectin loading is the most simple and efficient way to eagerly
+    load collections of objects. The only scenario in which selectin eager loading
+    is not feasible is when the model is using composite primary keys, and the backend
+    database does not support tuples with IN, which currently includes SQL Server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '“Select IN” eager loading is provided using the `"selectin"` argument to [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") or by using the [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") loader option. This style of loading emits a SELECT
+    that refers to the primary key values of the parent object, or in the case of
+    a many-to-one relationship to the those of the child objects, inside of an IN
+    clause, in order to load related associations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the second SELECT refers to `addresses.user_id IN (5, 7)`, where the
+    “5” and “7” are the primary key values for the previous two `User` objects loaded;
+    after a batch of objects are completely loaded, their primary key values are injected
+    into the `IN` clause for the second SELECT. Because the relationship between `User`
+    and `Address` has a simple primary join condition and provides that the primary
+    key values for `User` can be derived from `Address.user_id`, the statement has
+    no joins or subqueries at all.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For simple many-to-one loads, a JOIN is also not needed as the foreign key
+    value from the parent object is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: by “simple” we mean that the [`relationship.primaryjoin`](../relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") condition expresses an equality comparison between
+    the primary key of the “one” side and a straight foreign key of the “many” side,
+    without any additional criteria.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Select IN loading also supports many-to-many relationships, where it currently
+    will JOIN across all three tables to match rows from one side to the other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Things to know about this kind of loading include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The strategy emits a SELECT for up to 500 parent primary key values at a time,
+    as the primary keys are rendered into a large IN expression in the SQL statement.
+    Some databases like Oracle have a hard limit on how large an IN expression can
+    be, and overall the size of the SQL string shouldn’t be arbitrarily large.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'As “selectin” loading relies upon IN, for a mapping with composite primary
+    keys, it must use the “tuple” form of IN, which looks like `WHERE (table.column_a,
+    table.column_b) IN ((?, ?), (?, ?), (?, ?))`. This syntax is not currently supported
+    on SQL Server and for SQLite requires at least version 3.15\. There is no special
+    logic in SQLAlchemy to check ahead of time which platforms support this syntax
+    or not; if run against a non-supporting platform, the database will return an
+    error immediately. An advantage to SQLAlchemy just running the SQL out for it
+    to fail is that if a particular database does start supporting this syntax, it
+    will work without any changes to SQLAlchemy (as was the case with SQLite).  ##
+    Subquery Eager Loading'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Legacy Feature
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload")
+    eager loader is mostly legacy at this point, superseded by the [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") strategy which is of much simpler design, more
+    flexible with features such as [Yield Per](api.html#orm-queryguide-yield-per),
+    and emits more efficient SQL statements in most cases. As [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") relies upon re-interpreting the original SELECT
+    statement, it may fail to work efficiently when given very complex source queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload")
+    may continue to be useful for the specific case of an eager loaded collection
+    for objects that use composite primary keys, on the Microsoft SQL Server backend
+    that continues to not have support for the “tuple IN” syntax.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subquery loading is similar in operation to selectin eager loading, however
+    the SELECT statement which is emitted is derived from the original statement,
+    and has a more complex query structure as that of selectin eager loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subquery eager loading is provided using the `"subquery"` argument to [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") or by using the [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") loader option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The operation of subquery eager loading is to emit a second SELECT statement
+    for each relationship to be loaded, across all result objects at once. This SELECT
+    statement refers to the original SELECT statement, wrapped inside of a subquery,
+    so that we retrieve the same list of primary keys for the primary object being
+    returned, then link that to the sum of all the collection members to load them
+    at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Things to know about this kind of loading include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SELECT statement emitted by the “subquery” loader strategy, unlike that
+    of “selectin”, requires a subquery, and will inherit whatever performance limitations
+    are present in the original query. The subquery itself may also incur performance
+    penalties based on the specifics of the database in use.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '“subquery” loading imposes some special ordering requirements in order to work
+    correctly. A query which makes use of [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") in conjunction with a limiting modifier such as
+    [`Select.limit()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.limit
+    "sqlalchemy.sql.expression.Select.limit"), or [`Select.offset()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.offset
+    "sqlalchemy.sql.expression.Select.offset") should **always** include [`Select.order_by()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.order_by
+    "sqlalchemy.sql.expression.Select.order_by") against unique column(s) such as
+    the primary key, so that the additional queries emitted by [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") include the same ordering as used by the parent
+    query. Without it, there is a chance that the inner query could return the wrong
+    rows:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Why is ORDER BY recommended with LIMIT (especially with subqueryload())?](../../faq/ormconfiguration.html#faq-subqueryload-limit-sort)
+    - detailed example'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: “subquery” loading also incurs additional performance / complexity issues when
+    used on a many-levels-deep eager load, as subqueries will be nested repeatedly.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: “subquery” loading is not compatible with the “batched” loading supplied by
+    [Yield Per](api.html#orm-queryguide-yield-per), both for collection and scalar
+    relationships.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For the above reasons, the “selectin” strategy should be preferred over “subquery”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Select IN loading](#selectin-eager-loading)  ## What Kind of Loading to Use
+    ?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Which type of loading to use typically comes down to optimizing the tradeoff
+    between number of SQL executions, complexity of SQL emitted, and amount of data
+    fetched.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**One to Many / Many to Many Collection** - The [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") is generally the best loading strategy to use.
+    It emits an additional SELECT that uses as few tables as possible, leaving the
+    original statement unaffected, and is most flexible for any kind of originating
+    query. Its only major limitation is when using a table with composite primary
+    keys on a backend that does not support “tuple IN”, which currently includes SQL
+    Server and very old SQLite versions; all other included backends support it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Many to One** - The [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    strategy is the most general purpose strategy. In special cases, the [`immediateload()`](#sqlalchemy.orm.immediateload
+    "sqlalchemy.orm.immediateload") strategy may also be useful, if there are a very
+    small number of potential related values, as this strategy will fetch the object
+    from the local [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    without emitting any SQL if the related object is already present.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Polymorphic Eager Loading
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Specification of polymorphic options on a per-eager-load basis is supported.
+    See the section [Eager Loading of Polymorphic Subtypes](inheritance.html#eagerloading-polymorphic-subtypes)
+    for examples of the [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") method in conjunction with the [`with_polymorphic()`](inheritance.html#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Wildcard Loading Strategies'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Each of [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload"),
+    [`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload"),
+    [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload"), [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload"), [`noload()`](#sqlalchemy.orm.noload "sqlalchemy.orm.noload"),
+    and [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") can
+    be used to set the default style of [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") loading for a particular query, affecting all [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") -mapped attributes not otherwise specified in the
+    statement. This feature is available by passing the string `''*''` as the argument
+    to any of these options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the `lazyload('*')` option will supersede the `lazy` setting of all [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs in use for that query, with the exception
+    of those that use `lazy='write_only'` or `lazy='dynamic'`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If some relationships specify `lazy='joined'` or `lazy='selectin'`, for example,
+    using `lazyload('*')` will unilaterally cause all those relationships to use `'select'`
+    loading, e.g. emit a SELECT statement when each attribute is accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The option does not supersede loader options stated in the query, such as [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload"), [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload"), etc. The query below will still use joined loading
+    for the `widget` relationship:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: While the instruction for [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    above will take place regardless of whether it appears before or after the [`lazyload()`](#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") option, if multiple options that each included `"*"`
+    were passed, the last one will take effect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Per-Entity Wildcard Loading Strategies'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A variant of the wildcard loader strategy is the ability to set the strategy
+    on a per-entity basis. For example, if querying for `User` and `Address`, we can
+    instruct all relationships on `Address` to use lazy loading, while leaving the
+    loader strategies for `User` unaffected, by first applying the [`Load`](#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") object, then specifying the `*` as a chained option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, all relationships on `Address` will be set to a lazy load.  ## Routing
+    Explicit Joins/Statements into Eagerly Loaded Collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The behavior of [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    is such that joins are created automatically, using anonymous aliases as targets,
+    the results of which are routed into collections and scalar references on loaded
+    objects. It is often the case that a query already includes the necessary joins
+    which represent a particular collection or scalar reference, and the joins added
+    by the joinedload feature are redundant - yet you’d still like the collections/references
+    to be populated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this SQLAlchemy supplies the [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") option. This option is used in the same manner
+    as the [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    option except it is assumed that the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object will explicitly include the appropriate
+    joins, typically using methods like [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join"). Below, we specify a join between `User`
+    and `Address` and additionally establish this as the basis for eager loading of
+    `User.addresses`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If the “eager” portion of the statement is “aliased”, the path should be specified
+    using [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type"), which allows the specific [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct to be passed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The path given as the argument to [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") needs to be a full path from the starting entity.
+    For example if we were loading `Users->orders->Order->items->Item`, the option
+    would be used as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using contains_eager() to load a custom-filtered collection result
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When we use [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager"),
+    *we* are constructing ourselves the SQL that will be used to populate collections.
+    From this, it naturally follows that we can opt to **modify** what values the
+    collection is intended to store, by writing our SQL to load a subset of elements
+    for collections or scalar attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy now has a **much simpler way to do this**, by allowing WHERE criteria
+    to be added directly to loader options such as [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") and [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") using [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_"). See the section [Adding Criteria to loader
+    options](#loader-option-criteria) for examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The techniques described here still apply if the related collection is to be
+    queried using SQL criteria or modifiers more complex than a simple WHERE clause.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example, we can load a `User` object and eagerly load only particular
+    addresses into its `.addresses` collection by filtering the joined data, routing
+    it using [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager"),
+    also using [Populate Existing](api.html#orm-queryguide-populate-existing) to ensure
+    any already-loaded collections are overwritten:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query will load only `User` objects which contain at least `Address`
+    object that contains the substring `'aol.com'` in its `email` field; the `User.addresses`
+    collection will contain **only** these `Address` entries, and *not* any other
+    `Address` entries that are in fact associated with the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: In all cases, the SQLAlchemy ORM does **not overwrite already loaded attributes
+    and collections** unless told to do so. As there is an [identity map](../../glossary.html#term-identity-map)
+    in use, it is often the case that an ORM query is returning objects that were
+    in fact already present and loaded in memory. Therefore, when using [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") to populate a collection in an alternate way,
+    it is usually a good idea to use [Populate Existing](api.html#orm-queryguide-populate-existing)
+    as illustrated above so that an already-loaded collection is refreshed with the
+    new data. The `populate_existing` option will reset **all** attributes that were
+    already present, including pending changes, so make sure all data is flushed before
+    using it. Using the [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    with its default behavior of [autoflush](../session_basics.html#session-flushing)
+    is sufficient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The customized collection we load using [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") is not “sticky”; that is, the next time this
+    collection is loaded, it will be loaded with its usual default contents. The collection
+    is subject to being reloaded if the object is expired, which occurs whenever the
+    [`Session.commit()`](../session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit"),
+    [`Session.rollback()`](../session_api.html#sqlalchemy.orm.Session.rollback "sqlalchemy.orm.Session.rollback")
+    methods are used assuming default session settings, or the [`Session.expire_all()`](../session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") or [`Session.expire()`](../session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") methods are used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Adding Criteria to loader options](#loader-option-criteria) - modern API allowing
+    WHERE criteria directly within any relationship loader option'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Relationship Loader API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [contains_eager](#sqlalchemy.orm.contains_eager)(*keys, **kw) | Indicate
+    that the given attribute should be eagerly loaded from columns stated manually
+    in the query. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [defaultload](#sqlalchemy.orm.defaultload)(*keys) | Indicate an attribute
+    should load using its predefined loader style. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [immediateload](#sqlalchemy.orm.immediateload)(*keys, [recursion_depth])
+    | Indicate that the given attribute should be loaded using an immediate load with
+    a per-attribute SELECT statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [joinedload](#sqlalchemy.orm.joinedload)(*keys, **kw) | Indicate that the
+    given attribute should be loaded using joined eager loading. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [lazyload](#sqlalchemy.orm.lazyload)(*keys) | Indicate that the given attribute
+    should be loaded using “lazy” loading. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Load](#sqlalchemy.orm.Load) | Represents loader options which modify the
+    state of a ORM-enabled [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") or a legacy [`Query`](query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") in order to affect how various mapped attributes are loaded.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [noload](#sqlalchemy.orm.noload)(*keys) | Indicate that the given relationship
+    attribute should remain unloaded. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [raiseload](#sqlalchemy.orm.raiseload)(*keys, **kw) | Indicate that the given
+    attribute should raise an error if accessed. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [selectinload](#sqlalchemy.orm.selectinload)(*keys, [recursion_depth]) |
+    Indicate that the given attribute should be loaded using SELECT IN eager loading.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [subqueryload](#sqlalchemy.orm.subqueryload)(*keys) | Indicate that the given
+    attribute should be loaded using subquery eager loading. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be eagerly loaded from columns stated
+    manually in the query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The option is used in conjunction with an explicit join that loads the desired
+    rows, i.e.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query would join from the `Order` entity to its related `User` entity,
+    and the returned `Order` objects would have the `Order.user` attribute pre-populated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It may also be used for customizing the entries in an eagerly loaded collection;
+    queries will normally want to use the [Populate Existing](api.html#orm-queryguide-populate-existing)
+    execution option assuming the primary collection of parent objects may already
+    have been loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: See the section [Routing Explicit Joins/Statements into Eagerly Loaded Collections](#contains-eager)
+    for complete usage details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Routing Explicit Joins/Statements into Eagerly Loaded Collections](#contains-eager)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate an attribute should load using its predefined loader style.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The behavior of this loading option is to not change the current loading style
+    of the attribute, meaning that the previously configured one is used or, if no
+    previous style was selected, the default loading will be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This method is used to link to other loader options further into a chain of
+    attributes without altering the loader style of the links along the chain. For
+    example, to set joined eager loading for an element of an element:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    is also useful for setting column-level options on a related class, namely that
+    of [`defer()`](columns.html#sqlalchemy.orm.defer "sqlalchemy.orm.defer") and [`undefer()`](columns.html#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Specifying Sub-Options with Load.options()](#orm-queryguide-relationship-sub-options)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Load.options()`](#sqlalchemy.orm.Load.options "sqlalchemy.orm.Load.options")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using an immediate load with
+    a per-attribute SELECT statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The load is achieved using the “lazyloader” strategy and does not fire off any
+    additional eager loaders.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`immediateload()`](#sqlalchemy.orm.immediateload "sqlalchemy.orm.immediateload")
+    option is superseded in general by the [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") option, which performs the same task more efficiently
+    by emitting a SELECT for all loaded objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**recursion_depth** –'
+  prefs: []
+  type: TYPE_NORMAL
+- en: optional int; when set to a positive integer in conjunction with a self-referential
+    relationship, indicates “selectin” loading will continue that many levels deep
+    automatically until no items are found.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`immediateload.recursion_depth`](#sqlalchemy.orm.immediateload.params.recursion_depth
+    "sqlalchemy.orm.immediateload") option currently supports only self-referential
+    relationships. There is not yet an option to automatically traverse recursive
+    structures with more than one relationship involved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: This parameter is new and experimental and should be treated as “alpha” status
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: added [`immediateload.recursion_depth`](#sqlalchemy.orm.immediateload.params.recursion_depth
+    "sqlalchemy.orm.immediateload")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Select IN loading](#selectin-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using joined eager loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**innerjoin** –'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'if `True`, indicates that the joined eager load should use an inner join instead
+    of the default of left outer join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to chain multiple eager joins together where some may be OUTER and
+    others INNER, right-nested joins are used to link them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query, linking A.bs via “outer” join and B.cs via “inner” join would
+    render the joins as “a LEFT OUTER JOIN (b JOIN c)”. When using older versions
+    of SQLite (< 3.7.16), this form of JOIN is translated to use full subqueries as
+    this syntax is otherwise not directly supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `innerjoin` flag can also be stated with the term `"unnested"`. This indicates
+    that an INNER JOIN should be used, *unless* the join is linked to a LEFT OUTER
+    JOIN to the left, in which case it will render as LEFT OUTER JOIN. For example,
+    supposing `A.bs` is an outerjoin:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above join will render as “a LEFT OUTER JOIN b LEFT OUTER JOIN c”, rather
+    than as “a LEFT OUTER JOIN (b JOIN c)”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “unnested” flag does **not** affect the JOIN rendered from a many-to-many
+    association table, e.g. a table configured as [`relationship.secondary`](../relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship"), to the target table; for correctness of results,
+    these joins are always INNER and are therefore right-nested if linked to an OUTER
+    join.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The joins produced by [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    are **anonymously aliased**. The criteria by which the join proceeds cannot be
+    modified, nor can the ORM-enabled [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") or legacy [`Query`](query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") refer to these joins in any way, including ordering. See
+    [The Zen of Joined Eager Loading](#zen-of-eager-loading) for further detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To produce a specific SQL JOIN which is explicitly available, use [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") and [`Query.join()`](query.html#sqlalchemy.orm.Query.join
+    "sqlalchemy.orm.Query.join"). To combine explicit JOINs with eager loading of
+    collections, use [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager");
+    see [Routing Explicit Joins/Statements into Eagerly Loaded Collections](#contains-eager).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Joined Eager Loading](#joined-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using “lazy” loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Lazy Loading](#lazy-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represents loader options which modify the state of a ORM-enabled [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") or a legacy [`Query`](query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") in order to affect how various mapped attributes are loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object is in most cases
+    used implicitly behind the scenes when one makes use of a query option like [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload"), [`defer()`](columns.html#sqlalchemy.orm.defer "sqlalchemy.orm.defer"),
+    or similar. It typically is not instantiated directly except for in some very
+    specific cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Per-Entity Wildcard Loading Strategies](#orm-queryguide-relationship-per-entity-wildcard)
+    - illustrates an example where direct use of [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    may be useful'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[contains_eager()](#sqlalchemy.orm.Load.contains_eager), [defaultload()](#sqlalchemy.orm.Load.defaultload),
+    [defer()](#sqlalchemy.orm.Load.defer), [get_children()](#sqlalchemy.orm.Load.get_children),
+    [immediateload()](#sqlalchemy.orm.Load.immediateload), [inherit_cache](#sqlalchemy.orm.Load.inherit_cache),
+    [joinedload()](#sqlalchemy.orm.Load.joinedload), [lazyload()](#sqlalchemy.orm.Load.lazyload),
+    [load_only()](#sqlalchemy.orm.Load.load_only), [noload()](#sqlalchemy.orm.Load.noload),
+    [options()](#sqlalchemy.orm.Load.options), [process_compile_state()](#sqlalchemy.orm.Load.process_compile_state),
+    [process_compile_state_replaced_entities()](#sqlalchemy.orm.Load.process_compile_state_replaced_entities),
+    [propagate_to_loaders](#sqlalchemy.orm.Load.propagate_to_loaders), [raiseload()](#sqlalchemy.orm.Load.raiseload),
+    [selectin_polymorphic()](#sqlalchemy.orm.Load.selectin_polymorphic), [selectinload()](#sqlalchemy.orm.Load.selectinload),
+    [subqueryload()](#sqlalchemy.orm.Load.subqueryload), [undefer()](#sqlalchemy.orm.Load.undefer),
+    [undefer_group()](#sqlalchemy.orm.Load.undefer_group), [with_expression()](#sqlalchemy.orm.Load.with_expression)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") (`sqlalchemy.orm.strategy_options._AbstractLoad`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.contains_eager`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.defaultload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.defer`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`defer()`](columns.html#sqlalchemy.orm.defer "sqlalchemy.orm.defer") option
+    applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`defer()`](columns.html#sqlalchemy.orm.defer "sqlalchemy.orm.defer") for
+    usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `HasTraverseInternals.get_children()` *method of* `HasTraverseInternals`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Return immediate child `HasTraverseInternals` elements of this `HasTraverseInternals`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is used for visit traversal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**kw may contain flags that change the collection that is returned, for example
+    to return a subset of items in order to cut down on larger traversals, or to return
+    child items from a different context (such as schema-level collections instead
+    of clause-level).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.immediateload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`immediateload()`](#sqlalchemy.orm.immediateload "sqlalchemy.orm.immediateload")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`immediateload()`](#sqlalchemy.orm.immediateload "sqlalchemy.orm.immediateload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `HasCacheKey.inherit_cache` *attribute of* [`HasCacheKey`](../../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey
+    "sqlalchemy.sql.cache_key.HasCacheKey")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Indicate if this [`HasCacheKey`](../../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey
+    "sqlalchemy.sql.traversals.HasCacheKey") instance should make use of the cache
+    key generation scheme used by its immediate superclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The attribute defaults to `None`, which indicates that a construct has not yet
+    taken into account whether or not its appropriate for it to participate in caching;
+    this is functionally equivalent to setting the value to `False`, except that a
+    warning is also emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This flag can be set to `True` on a particular class, if the SQL that corresponds
+    to the object does not change based on attributes which are local to this class,
+    and not its superclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Enabling Caching Support for Custom Constructs](../../core/compiler.html#compilerext-caching)
+    - General guideslines for setting the [`HasCacheKey.inherit_cache`](../../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute for third-party
+    or user defined SQL constructs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.joinedload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload") option
+    applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.lazyload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload") option
+    applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload") for usage
+    examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.load_only`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`load_only()`](columns.html#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`load_only()`](columns.html#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.noload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`noload()`](#sqlalchemy.orm.noload "sqlalchemy.orm.noload") option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`noload()`](#sqlalchemy.orm.noload "sqlalchemy.orm.noload") for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: Apply a series of options as sub-options to this [`Load`](#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '***opts** – A series of loader option objects (ultimately [`Load`](#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") objects) which should be applied to the path specified
+    by this [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Specifying Sub-Options with Load.options()](#orm-queryguide-relationship-sub-options)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.process_compile_state`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Apply a modification to a given `ORMCompileState`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is part of the implementation of a particular `CompileStateOption`
+    and is only invoked internally when an ORM query is compiled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.process_compile_state_replaced_entities`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Apply a modification to a given `ORMCompileState`, given entities that were
+    replaced by with_only_columns() or with_entities().
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is part of the implementation of a particular `CompileStateOption`
+    and is only invoked internally when an ORM query is compiled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.19.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.propagate_to_loaders`
+    *attribute of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: if True, indicate this option should be carried along to “secondary” SELECT
+    statements that occur for relationship lazy loaders as well as attribute load
+    / refresh operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.raiseload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") option
+    applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") for
+    usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.selectin_polymorphic`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`selectin_polymorphic()`](inheritance.html#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`selectin_polymorphic()`](inheritance.html#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.selectinload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`selectinload()`](#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`selectinload()`](#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.subqueryload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.undefer`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`undefer()`](columns.html#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`undefer()`](columns.html#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.undefer_group`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`undefer_group()`](columns.html#sqlalchemy.orm.undefer_group "sqlalchemy.orm.undefer_group")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`undefer_group()`](columns.html#sqlalchemy.orm.undefer_group "sqlalchemy.orm.undefer_group")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.with_expression`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`with_expression()`](columns.html#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`with_expression()`](columns.html#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given relationship attribute should remain unloaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The relationship attribute will return `None` when accessed without producing
+    any loading effect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`noload()`](#sqlalchemy.orm.noload "sqlalchemy.orm.noload") applies to [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") attributes only.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting this loading strategy as the default strategy for a relationship using
+    the [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") parameter may cause issues with flushes, such if
+    a delete operation needs to load related objects and instead `None` was returned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should raise an error if accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A relationship attribute configured with [`raiseload()`](#sqlalchemy.orm.raiseload
+    "sqlalchemy.orm.raiseload") will raise an [`InvalidRequestError`](../../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
+    "sqlalchemy.exc.InvalidRequestError") upon access. The typical way this is useful
+    is when an application is attempting to ensure that all relationship attributes
+    that are accessed in a particular context would have been already loaded via eager
+    loading. Instead of having to read through SQL logs to ensure lazy loads aren’t
+    occurring, this strategy will cause them to raise immediately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") applies
+    to [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    attributes only. In order to apply raise-on-SQL behavior to a column-based attribute,
+    use the [`defer.raiseload`](columns.html#sqlalchemy.orm.defer.params.raiseload
+    "sqlalchemy.orm.defer") parameter on the [`defer()`](columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer") loader option.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**sql_only** – if True, raise only if the lazy load would emit SQL, but not
+    if it is only checking the identity map, or determining that the related value
+    should just be None due to missing keys. When False, the strategy will raise for
+    all varieties of relationship loading.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Preventing unwanted lazy loads using raiseload](#prevent-lazy-with-raiseload)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using raiseload to prevent deferred column loads](columns.html#orm-queryguide-deferred-raiseload)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using SELECT IN eager loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**recursion_depth** –'
+  prefs: []
+  type: TYPE_NORMAL
+- en: optional int; when set to a positive integer in conjunction with a self-referential
+    relationship, indicates “selectin” loading will continue that many levels deep
+    automatically until no items are found.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`selectinload.recursion_depth`](#sqlalchemy.orm.selectinload.params.recursion_depth
+    "sqlalchemy.orm.selectinload") option currently supports only self-referential
+    relationships. There is not yet an option to automatically traverse recursive
+    structures with more than one relationship involved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additionally, the [`selectinload.recursion_depth`](#sqlalchemy.orm.selectinload.params.recursion_depth
+    "sqlalchemy.orm.selectinload") parameter is new and experimental and should be
+    treated as “alpha” status for the 2.0 series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: added [`selectinload.recursion_depth`](#sqlalchemy.orm.selectinload.params.recursion_depth
+    "sqlalchemy.orm.selectinload")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Select IN loading](#selectin-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using subquery eager loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Subquery Eager Loading](#subquery-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary of Relationship Loading Styles
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The primary forms of relationship loading are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**lazy loading** - available via `lazy=''select''` or the [`lazyload()`](#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") option, this is the form of loading that emits a SELECT
+    statement at attribute access time to lazily load a related reference on a single
+    object at a time. Lazy loading is the **default loading style** for all [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs that don’t otherwise indicate the [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") option. Lazy loading is detailed at [Lazy Loading](#lazy-loading).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**select IN loading** - available via `lazy=''selectin''` or the [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") option, this form of loading emits a second (or
+    more) SELECT statement which assembles the primary key identifiers of the parent
+    objects into an IN clause, so that all members of related collections / scalar
+    references are loaded at once by primary key. Select IN loading is detailed at
+    [Select IN loading](#selectin-eager-loading).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**joined loading** - available via `lazy=''joined''` or the [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") option, this form of loading applies a JOIN to the
+    given SELECT statement so that related rows are loaded in the same result set.
+    Joined eager loading is detailed at [Joined Eager Loading](#joined-eager-loading).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**raise loading** - available via `lazy=''raise''`, `lazy=''raise_on_sql''`,
+    or the [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") option,
+    this form of loading is triggered at the same time a lazy load would normally
+    occur, except it raises an ORM exception in order to guard against the application
+    making unwanted lazy loads. An introduction to raise loading is at [Preventing
+    unwanted lazy loads using raiseload](#prevent-lazy-with-raiseload).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**subquery loading** - available via `lazy=''subquery''` or the [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") option, this form of loading emits a second SELECT
+    statement which re-states the original query embedded inside of a subquery, then
+    JOINs that subquery to the related table to be loaded to load all members of related
+    collections / scalar references at once. Subquery eager loading is detailed at
+    [Subquery Eager Loading](#subquery-eager-loading).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**write only loading** - available via `lazy=''write_only''`, or by annotating
+    the left side of the [`Relationship`](../internals.html#sqlalchemy.orm.Relationship
+    "sqlalchemy.orm.Relationship") object using the [`WriteOnlyMapped`](../large_collections.html#sqlalchemy.orm.WriteOnlyMapped
+    "sqlalchemy.orm.WriteOnlyMapped") annotation. This collection-only loader style
+    produces an alternative attribute instrumentation that never implicitly loads
+    records from the database, instead only allowing [`WriteOnlyCollection.add()`](../large_collections.html#sqlalchemy.orm.WriteOnlyCollection.add
+    "sqlalchemy.orm.WriteOnlyCollection.add"), [`WriteOnlyCollection.add_all()`](../large_collections.html#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all") and [`WriteOnlyCollection.remove()`](../large_collections.html#sqlalchemy.orm.WriteOnlyCollection.remove
+    "sqlalchemy.orm.WriteOnlyCollection.remove") methods. Querying the collection
+    is performed by invoking a SELECT statement which is constructed using the [`WriteOnlyCollection.select()`](../large_collections.html#sqlalchemy.orm.WriteOnlyCollection.select
+    "sqlalchemy.orm.WriteOnlyCollection.select") method. Write only loading is discussed
+    at [Write Only Relationships](../large_collections.html#write-only-relationship).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**dynamic loading** - available via `lazy=''dynamic''`, or by annotating the
+    left side of the [`Relationship`](../internals.html#sqlalchemy.orm.Relationship
+    "sqlalchemy.orm.Relationship") object using the [`DynamicMapped`](../large_collections.html#sqlalchemy.orm.DynamicMapped
+    "sqlalchemy.orm.DynamicMapped") annotation. This is a legacy collection-only loader
+    style which produces a [`Query`](query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    object when the collection is accessed, allowing custom SQL to be emitted against
+    the collection’s contents. However, dynamic loaders will implicitly iterate the
+    underlying collection in various circumstances which makes them less useful for
+    managing truly large collections. Dynamic loaders are superseded by [“write only”](../large_collections.html#write-only-relationship)
+    collections, which will prevent the underlying collection from being implicitly
+    loaded under any circumstances. Dynamic loaders are discussed at [Dynamic Relationship
+    Loaders](../large_collections.html#dynamic-relationship).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## Configuring Loader Strategies at Mapping Time'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The loader strategy for a particular relationship can be configured at mapping
+    time to take place in all cases where an object of the mapped type is loaded,
+    in the absence of any query-level options that modify it. This is configured using
+    the [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") parameter to [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"); common values for this parameter include `select`,
+    `selectin` and `joined`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The example below illustrates the relationship example at [One To Many](../basic_relationships.html#relationship-patterns-o2m),
+    configuring the `Parent.children` relationship to use [Select IN loading](#selectin-eager-loading)
+    when a SELECT statement for `Parent` objects is emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, whenever a collection of `Parent` objects are loaded, each `Parent` will
+    also have its `children` collection populated, using the `"selectin"` loader strategy
+    that emits a second query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The default value of the [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") argument is `"select"`, which indicates [Lazy Loading](#lazy-loading).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Relationship Loading with Loader Options'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The other, and possibly more common way to configure loading strategies is
+    to set them up on a per-query basis against specific attributes using the [`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
+    "sqlalchemy.sql.expression.Select.options") method. Very detailed control over
+    relationship loading is available using loader options; the most common are [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload"), [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") and [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload").
+    The option accepts a class-bound attribute referring to the specific class/attribute
+    that should be targeted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The loader options can also be “chained” using **method chaining** to specify
+    how loading should occur further levels deep:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Chained loader options can be applied against a “lazy” loaded collection. This
+    means that when a collection or association is lazily loaded upon access, the
+    specified option will then take effect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the query will return `Parent` objects without the `children` collections
+    loaded. When the `children` collection on a particular `Parent` object is first
+    accessed, it will lazy load the related objects, but additionally apply eager
+    loading to the `subelements` collection on each member of `children`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Adding Criteria to loader options'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The relationship attributes used to indicate loader options include the ability
+    to add additional filtering criteria to the ON clause of the join that’s created,
+    or to the WHERE criteria involved, depending on the loader strategy. This can
+    be achieved using the [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_") method which will pass through an option
+    such that loaded results are limited to the given filter criteria:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using limiting criteria, if a particular collection is already loaded
+    it won’t be refreshed; to ensure the new criteria takes place, apply the [Populate
+    Existing](api.html#orm-queryguide-populate-existing) execution option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: In order to add filtering criteria to all occurrences of an entity throughout
+    a query, regardless of loader strategy or where it occurs in the loading process,
+    see the [`with_loader_criteria()`](api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4.  ### Specifying Sub-Options with Load.options()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using method chaining, the loader style of each link in the path is explicitly
+    stated. To navigate along a path without changing the existing loader style of
+    a particular attribute, the [`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    method/function may be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A similar approach can be used to specify multiple sub-options at once, using
+    the [`Load.options()`](#sqlalchemy.orm.Load.options "sqlalchemy.orm.Load.options")
+    method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using load_only() on related objects and collections](columns.html#orm-queryguide-load-only-related)
+    - illustrates examples of combining relationship and column-oriented loader options.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The loader options applied to an object’s lazy-loaded collections are **“sticky”**
+    to specific object instances, meaning they will persist upon collections loaded
+    by that specific object for as long as it exists in memory. For example, given
+    the previous example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'if the `children` collection on a particular `Parent` object loaded by the
+    above query is expired (such as when a [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object’s transaction is committed or rolled back, or
+    [`Session.expire_all()`](../session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") is used), when the `Parent.children` collection
+    is next accessed in order to re-load it, the `Child.subelements` collection will
+    again be loaded using subquery eager loading. This stays the case even if the
+    above `Parent` object is accessed from a subsequent query that specifies a different
+    set of options. To change the options on an existing object without expunging
+    it and re-loading, they must be set explicitly in conjunction using the [Populate
+    Existing](api.html#orm-queryguide-populate-existing) execution option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the objects loaded above are fully cleared from the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), such as due to garbage collection or that [`Session.expunge_all()`](../session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all") were used, the “sticky” options will also
+    be gone and the newly created objects will make use of new options if loaded again.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A future SQLAlchemy release may add more alternatives to manipulating the loader
+    options on already-loaded objects.  ### Adding Criteria to loader options'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The relationship attributes used to indicate loader options include the ability
+    to add additional filtering criteria to the ON clause of the join that’s created,
+    or to the WHERE criteria involved, depending on the loader strategy. This can
+    be achieved using the [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_") method which will pass through an option
+    such that loaded results are limited to the given filter criteria:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using limiting criteria, if a particular collection is already loaded
+    it won’t be refreshed; to ensure the new criteria takes place, apply the [Populate
+    Existing](api.html#orm-queryguide-populate-existing) execution option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: In order to add filtering criteria to all occurrences of an entity throughout
+    a query, regardless of loader strategy or where it occurs in the loading process,
+    see the [`with_loader_criteria()`](api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Specifying Sub-Options with Load.options()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using method chaining, the loader style of each link in the path is explicitly
+    stated. To navigate along a path without changing the existing loader style of
+    a particular attribute, the [`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    method/function may be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A similar approach can be used to specify multiple sub-options at once, using
+    the [`Load.options()`](#sqlalchemy.orm.Load.options "sqlalchemy.orm.Load.options")
+    method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using load_only() on related objects and collections](columns.html#orm-queryguide-load-only-related)
+    - illustrates examples of combining relationship and column-oriented loader options.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The loader options applied to an object’s lazy-loaded collections are **“sticky”**
+    to specific object instances, meaning they will persist upon collections loaded
+    by that specific object for as long as it exists in memory. For example, given
+    the previous example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'if the `children` collection on a particular `Parent` object loaded by the
+    above query is expired (such as when a [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object’s transaction is committed or rolled back, or
+    [`Session.expire_all()`](../session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") is used), when the `Parent.children` collection
+    is next accessed in order to re-load it, the `Child.subelements` collection will
+    again be loaded using subquery eager loading. This stays the case even if the
+    above `Parent` object is accessed from a subsequent query that specifies a different
+    set of options. To change the options on an existing object without expunging
+    it and re-loading, they must be set explicitly in conjunction using the [Populate
+    Existing](api.html#orm-queryguide-populate-existing) execution option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the objects loaded above are fully cleared from the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), such as due to garbage collection or that [`Session.expunge_all()`](../session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all") were used, the “sticky” options will also
+    be gone and the newly created objects will make use of new options if loaded again.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A future SQLAlchemy release may add more alternatives to manipulating the loader
+    options on already-loaded objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Lazy Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By default, all inter-object relationships are **lazy loading**. The scalar
+    or collection attribute associated with a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") contains a trigger which fires the first time the
+    attribute is accessed. This trigger typically issues a SQL call at the point of
+    access in order to load the related object or objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: The one case where SQL is not emitted is for a simple many-to-one relationship,
+    when the related object can be identified by its primary key alone and that object
+    is already present in the current [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). For this reason, while lazy loading can be expensive
+    for related collections, in the case that one is loading lots of objects with
+    simple many-to-ones against a relatively small set of possible target objects,
+    lazy loading may be able to refer to these objects locally without emitting as
+    many SELECT statements as there are parent objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This default behavior of “load upon attribute access” is known as “lazy” or
+    “select” loading - the name “select” because a “SELECT” statement is typically
+    emitted when the attribute is first accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lazy loading can be enabled for a given attribute that is normally configured
+    in some other way using the [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload")
+    loader option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Preventing unwanted lazy loads using raiseload'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload") strategy
+    produces an effect that is one of the most common issues referred to in object
+    relational mapping; the [N plus one problem](../../glossary.html#term-N-plus-one-problem),
+    which states that for any N objects loaded, accessing their lazy-loaded attributes
+    means there will be N+1 SELECT statements emitted. In SQLAlchemy, the usual mitigation
+    for the N+1 problem is to make use of its very capable eager load system. However,
+    eager loading requires that the attributes which are to be loaded be specified
+    with the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") up front. The problem of code that may access
+    other attributes that were not eagerly loaded, where lazy loading is not desired,
+    may be addressed using the [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload")
+    strategy; this loader strategy replaces the behavior of lazy loading with an informative
+    error being raised:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, a `User` object loaded from the above query will not have the `.addresses`
+    collection loaded; if some code later on attempts to access this attribute, an
+    ORM exception is raised.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") may be
+    used with a so-called “wildcard” specifier to indicate that all relationships
+    should use this strategy. For example, to set up only one attribute as eager loading,
+    and all the rest as raise:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above wildcard will apply to **all** relationships not just on `Order`
+    besides `items`, but all those on the `Item` objects as well. To set up [`raiseload()`](#sqlalchemy.orm.raiseload
+    "sqlalchemy.orm.raiseload") for only the `Order` objects, specify a full path
+    with [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Conversely, to set up the raise for just the `Item` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") option
+    applies only to relationship attributes. For column-oriented attributes, the [`defer()`](columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer") option supports the [`defer.raiseload`](columns.html#sqlalchemy.orm.defer.params.raiseload
+    "sqlalchemy.orm.defer") option which works in the same way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “raiseload” strategies **do not apply** within the [unit of work](../../glossary.html#term-unit-of-work)
+    flush process. That means if the [`Session.flush()`](../session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") process needs to load a collection in order to
+    finish its work, it will do so while bypassing any [`raiseload()`](#sqlalchemy.orm.raiseload
+    "sqlalchemy.orm.raiseload") directives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Wildcard Loading Strategies](#wildcard-loader-strategies)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using raiseload to prevent deferred column loads](columns.html#orm-queryguide-deferred-raiseload)  ###
+    Preventing unwanted lazy loads using raiseload'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload") strategy
+    produces an effect that is one of the most common issues referred to in object
+    relational mapping; the [N plus one problem](../../glossary.html#term-N-plus-one-problem),
+    which states that for any N objects loaded, accessing their lazy-loaded attributes
+    means there will be N+1 SELECT statements emitted. In SQLAlchemy, the usual mitigation
+    for the N+1 problem is to make use of its very capable eager load system. However,
+    eager loading requires that the attributes which are to be loaded be specified
+    with the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") up front. The problem of code that may access
+    other attributes that were not eagerly loaded, where lazy loading is not desired,
+    may be addressed using the [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload")
+    strategy; this loader strategy replaces the behavior of lazy loading with an informative
+    error being raised:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, a `User` object loaded from the above query will not have the `.addresses`
+    collection loaded; if some code later on attempts to access this attribute, an
+    ORM exception is raised.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") may be
+    used with a so-called “wildcard” specifier to indicate that all relationships
+    should use this strategy. For example, to set up only one attribute as eager loading,
+    and all the rest as raise:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above wildcard will apply to **all** relationships not just on `Order`
+    besides `items`, but all those on the `Item` objects as well. To set up [`raiseload()`](#sqlalchemy.orm.raiseload
+    "sqlalchemy.orm.raiseload") for only the `Order` objects, specify a full path
+    with [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Conversely, to set up the raise for just the `Item` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") option
+    applies only to relationship attributes. For column-oriented attributes, the [`defer()`](columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer") option supports the [`defer.raiseload`](columns.html#sqlalchemy.orm.defer.params.raiseload
+    "sqlalchemy.orm.defer") option which works in the same way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “raiseload” strategies **do not apply** within the [unit of work](../../glossary.html#term-unit-of-work)
+    flush process. That means if the [`Session.flush()`](../session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") process needs to load a collection in order to
+    finish its work, it will do so while bypassing any [`raiseload()`](#sqlalchemy.orm.raiseload
+    "sqlalchemy.orm.raiseload") directives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Wildcard Loading Strategies](#wildcard-loader-strategies)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using raiseload to prevent deferred column loads](columns.html#orm-queryguide-deferred-raiseload)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Joined Eager Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Joined eager loading is the oldest style of eager loading included with the
+    SQLAlchemy ORM. It works by connecting a JOIN (by default a LEFT OUTER join) to
+    the SELECT statement emitted, and populates the target scalar/collection from
+    the same result set as that of the parent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the mapping level, this looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Joined eager loading is usually applied as an option to a query, rather than
+    as a default loading option on the mapping, in particular when used for collections
+    rather than many-to-one-references. This is achieved using the [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") loader option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: When including [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    in reference to a one-to-many or many-to-many collection, the [`Result.unique()`](../../core/connections.html#sqlalchemy.engine.Result.unique
+    "sqlalchemy.engine.Result.unique") method must be applied to the returned result,
+    which will uniquify the incoming rows by primary key that otherwise are multiplied
+    out by the join. The ORM will raise an error if this is not present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is not automatic in modern SQLAlchemy, as it changes the behavior of the
+    result set to return fewer ORM objects than the statement would normally return
+    in terms of number of rows. Therefore SQLAlchemy keeps the use of [`Result.unique()`](../../core/connections.html#sqlalchemy.engine.Result.unique
+    "sqlalchemy.engine.Result.unique") explicit, so there’s no ambiguity that the
+    returned objects are being uniqified on primary key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The JOIN emitted by default is a LEFT OUTER JOIN, to allow for a lead object
+    that does not refer to a related row. For an attribute that is guaranteed to have
+    an element, such as a many-to-one reference to a related object where the referencing
+    foreign key is NOT NULL, the query can be made more efficient by using an inner
+    join; this is available at the mapping level via the [`relationship.innerjoin`](../relationship_api.html#sqlalchemy.orm.relationship.params.innerjoin
+    "sqlalchemy.orm.relationship") flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the query option level, via the [`joinedload.innerjoin`](#sqlalchemy.orm.joinedload.params.innerjoin
+    "sqlalchemy.orm.joinedload") flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The JOIN will right-nest itself when applied in a chain that includes an OUTER
+    JOIN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: If using database row locking techniques when emitting the SELECT, meaning the
+    [`Select.with_for_update()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.with_for_update
+    "sqlalchemy.sql.expression.Select.with_for_update") method is being used to emit
+    SELECT..FOR UPDATE, the joined table may be locked as well, depending on the behavior
+    of the backend in use. It’s not recommended to use joined eager loading at the
+    same time as SELECT..FOR UPDATE for this reason.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### The Zen of Joined Eager Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since joined eager loading seems to have many resemblances to the use of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join"), it often produces confusion as to when
+    and how it should be used. It is critical to understand the distinction that while
+    [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is used to alter the results of a query,
+    [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload") goes
+    through great lengths to **not** alter the results of the query, and instead hide
+    the effects of the rendered join to only allow for related objects to be present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The philosophy behind loader strategies is that any set of loading schemes can
+    be applied to a particular query, and *the results don’t change* - only the number
+    of SQL statements required to fully load related objects and collections changes.
+    A particular query might start out using all lazy loads. After using it in context,
+    it might be revealed that particular attributes or collections are always accessed,
+    and that it would be more efficient to change the loader strategy for these. The
+    strategy can be changed with no other modifications to the query, the results
+    will remain identical, but fewer SQL statements would be emitted. In theory (and
+    pretty much in practice), nothing you can do to the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") would make it load a different set of primary
+    or related objects based on a change in loader strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    in particular achieves this result of not impacting entity rows returned in any
+    way is that it creates an anonymous alias of the joins it adds to your query,
+    so that they can’t be referenced by other parts of the query. For example, the
+    query below uses [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    to create a LEFT OUTER JOIN from `users` to `addresses`, however the `ORDER BY`
+    added against `Address.email_address` is not valid - the `Address` entity is not
+    named in the query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, `ORDER BY addresses.email_address` is not valid since `addresses` is
+    not in the FROM list. The correct way to load the `User` records and order by
+    email address is to use [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The statement above is of course not the same as the previous one, in that
+    the columns from `addresses` are not included in the result at all. We can add
+    [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload") back
+    in, so that there are two joins - one is that which we are ordering on, the other
+    is used anonymously to load the contents of the `User.addresses` collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'What we see above is that our usage of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is to supply JOIN clauses we’d like to
+    use in subsequent query criterion, whereas our usage of [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") only concerns itself with the loading of the `User.addresses`
+    collection, for each `User` in the result. In this case, the two joins most probably
+    appear redundant - which they are. If we wanted to use just one JOIN for collection
+    loading as well as ordering, we use the [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") option, described in [Routing Explicit Joins/Statements
+    into Eagerly Loaded Collections](#contains-eager) below. But to see why [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") does what it does, consider if we were **filtering**
+    on a particular `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we can see that the two JOINs have very different roles. One will match
+    exactly one row, that of the join of `User` and `Address` where `Address.email_address=='someaddress@foo.com'`.
+    The other LEFT OUTER JOIN will match *all* `Address` rows related to `User`, and
+    is only used to populate the `User.addresses` collection, for those `User` objects
+    that are returned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By changing the usage of [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    to another style of loading, we can change how the collection is loaded completely
+    independently of SQL used to retrieve the actual `User` rows we want. Below we
+    change [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    into [`selectinload()`](#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using joined eager loading, if the query contains a modifier that impacts
+    the rows returned externally to the joins, such as when using DISTINCT, LIMIT,
+    OFFSET or equivalent, the completed statement is first wrapped inside a subquery,
+    and the joins used specifically for joined eager loading are applied to the subquery.
+    SQLAlchemy’s joined eager loading goes the extra mile, and then ten miles further,
+    to absolutely ensure that it does not affect the end result of the query, only
+    the way collections and related objects are loaded, no matter what the format
+    of the query is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Routing Explicit Joins/Statements into Eagerly Loaded Collections](#contains-eager)
+    - using [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager")  ###
+    The Zen of Joined Eager Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since joined eager loading seems to have many resemblances to the use of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join"), it often produces confusion as to when
+    and how it should be used. It is critical to understand the distinction that while
+    [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is used to alter the results of a query,
+    [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload") goes
+    through great lengths to **not** alter the results of the query, and instead hide
+    the effects of the rendered join to only allow for related objects to be present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The philosophy behind loader strategies is that any set of loading schemes can
+    be applied to a particular query, and *the results don’t change* - only the number
+    of SQL statements required to fully load related objects and collections changes.
+    A particular query might start out using all lazy loads. After using it in context,
+    it might be revealed that particular attributes or collections are always accessed,
+    and that it would be more efficient to change the loader strategy for these. The
+    strategy can be changed with no other modifications to the query, the results
+    will remain identical, but fewer SQL statements would be emitted. In theory (and
+    pretty much in practice), nothing you can do to the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") would make it load a different set of primary
+    or related objects based on a change in loader strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    in particular achieves this result of not impacting entity rows returned in any
+    way is that it creates an anonymous alias of the joins it adds to your query,
+    so that they can’t be referenced by other parts of the query. For example, the
+    query below uses [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    to create a LEFT OUTER JOIN from `users` to `addresses`, however the `ORDER BY`
+    added against `Address.email_address` is not valid - the `Address` entity is not
+    named in the query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, `ORDER BY addresses.email_address` is not valid since `addresses` is
+    not in the FROM list. The correct way to load the `User` records and order by
+    email address is to use [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The statement above is of course not the same as the previous one, in that
+    the columns from `addresses` are not included in the result at all. We can add
+    [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload") back
+    in, so that there are two joins - one is that which we are ordering on, the other
+    is used anonymously to load the contents of the `User.addresses` collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'What we see above is that our usage of [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") is to supply JOIN clauses we’d like to
+    use in subsequent query criterion, whereas our usage of [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") only concerns itself with the loading of the `User.addresses`
+    collection, for each `User` in the result. In this case, the two joins most probably
+    appear redundant - which they are. If we wanted to use just one JOIN for collection
+    loading as well as ordering, we use the [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") option, described in [Routing Explicit Joins/Statements
+    into Eagerly Loaded Collections](#contains-eager) below. But to see why [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") does what it does, consider if we were **filtering**
+    on a particular `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we can see that the two JOINs have very different roles. One will match
+    exactly one row, that of the join of `User` and `Address` where `Address.email_address=='someaddress@foo.com'`.
+    The other LEFT OUTER JOIN will match *all* `Address` rows related to `User`, and
+    is only used to populate the `User.addresses` collection, for those `User` objects
+    that are returned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By changing the usage of [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    to another style of loading, we can change how the collection is loaded completely
+    independently of SQL used to retrieve the actual `User` rows we want. Below we
+    change [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    into [`selectinload()`](#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using joined eager loading, if the query contains a modifier that impacts
+    the rows returned externally to the joins, such as when using DISTINCT, LIMIT,
+    OFFSET or equivalent, the completed statement is first wrapped inside a subquery,
+    and the joins used specifically for joined eager loading are applied to the subquery.
+    SQLAlchemy’s joined eager loading goes the extra mile, and then ten miles further,
+    to absolutely ensure that it does not affect the end result of the query, only
+    the way collections and related objects are loaded, no matter what the format
+    of the query is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Routing Explicit Joins/Statements into Eagerly Loaded Collections](#contains-eager)
+    - using [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Select IN loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In most cases, selectin loading is the most simple and efficient way to eagerly
+    load collections of objects. The only scenario in which selectin eager loading
+    is not feasible is when the model is using composite primary keys, and the backend
+    database does not support tuples with IN, which currently includes SQL Server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '“Select IN” eager loading is provided using the `"selectin"` argument to [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") or by using the [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") loader option. This style of loading emits a SELECT
+    that refers to the primary key values of the parent object, or in the case of
+    a many-to-one relationship to the those of the child objects, inside of an IN
+    clause, in order to load related associations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the second SELECT refers to `addresses.user_id IN (5, 7)`, where the
+    “5” and “7” are the primary key values for the previous two `User` objects loaded;
+    after a batch of objects are completely loaded, their primary key values are injected
+    into the `IN` clause for the second SELECT. Because the relationship between `User`
+    and `Address` has a simple primary join condition and provides that the primary
+    key values for `User` can be derived from `Address.user_id`, the statement has
+    no joins or subqueries at all.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For simple many-to-one loads, a JOIN is also not needed as the foreign key
+    value from the parent object is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: by “simple” we mean that the [`relationship.primaryjoin`](../relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") condition expresses an equality comparison between
+    the primary key of the “one” side and a straight foreign key of the “many” side,
+    without any additional criteria.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Select IN loading also supports many-to-many relationships, where it currently
+    will JOIN across all three tables to match rows from one side to the other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Things to know about this kind of loading include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The strategy emits a SELECT for up to 500 parent primary key values at a time,
+    as the primary keys are rendered into a large IN expression in the SQL statement.
+    Some databases like Oracle have a hard limit on how large an IN expression can
+    be, and overall the size of the SQL string shouldn’t be arbitrarily large.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As “selectin” loading relies upon IN, for a mapping with composite primary keys,
+    it must use the “tuple” form of IN, which looks like `WHERE (table.column_a, table.column_b)
+    IN ((?, ?), (?, ?), (?, ?))`. This syntax is not currently supported on SQL Server
+    and for SQLite requires at least version 3.15\. There is no special logic in SQLAlchemy
+    to check ahead of time which platforms support this syntax or not; if run against
+    a non-supporting platform, the database will return an error immediately. An advantage
+    to SQLAlchemy just running the SQL out for it to fail is that if a particular
+    database does start supporting this syntax, it will work without any changes to
+    SQLAlchemy (as was the case with SQLite).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## Subquery Eager Loading'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Legacy Feature
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload")
+    eager loader is mostly legacy at this point, superseded by the [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") strategy which is of much simpler design, more
+    flexible with features such as [Yield Per](api.html#orm-queryguide-yield-per),
+    and emits more efficient SQL statements in most cases. As [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") relies upon re-interpreting the original SELECT
+    statement, it may fail to work efficiently when given very complex source queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload")
+    may continue to be useful for the specific case of an eager loaded collection
+    for objects that use composite primary keys, on the Microsoft SQL Server backend
+    that continues to not have support for the “tuple IN” syntax.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subquery loading is similar in operation to selectin eager loading, however
+    the SELECT statement which is emitted is derived from the original statement,
+    and has a more complex query structure as that of selectin eager loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subquery eager loading is provided using the `"subquery"` argument to [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") or by using the [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") loader option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The operation of subquery eager loading is to emit a second SELECT statement
+    for each relationship to be loaded, across all result objects at once. This SELECT
+    statement refers to the original SELECT statement, wrapped inside of a subquery,
+    so that we retrieve the same list of primary keys for the primary object being
+    returned, then link that to the sum of all the collection members to load them
+    at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Things to know about this kind of loading include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SELECT statement emitted by the “subquery” loader strategy, unlike that
+    of “selectin”, requires a subquery, and will inherit whatever performance limitations
+    are present in the original query. The subquery itself may also incur performance
+    penalties based on the specifics of the database in use.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '“subquery” loading imposes some special ordering requirements in order to work
+    correctly. A query which makes use of [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") in conjunction with a limiting modifier such as
+    [`Select.limit()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.limit
+    "sqlalchemy.sql.expression.Select.limit"), or [`Select.offset()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.offset
+    "sqlalchemy.sql.expression.Select.offset") should **always** include [`Select.order_by()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.order_by
+    "sqlalchemy.sql.expression.Select.order_by") against unique column(s) such as
+    the primary key, so that the additional queries emitted by [`subqueryload()`](#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") include the same ordering as used by the parent
+    query. Without it, there is a chance that the inner query could return the wrong
+    rows:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Why is ORDER BY recommended with LIMIT (especially with subqueryload())?](../../faq/ormconfiguration.html#faq-subqueryload-limit-sort)
+    - detailed example'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: “subquery” loading also incurs additional performance / complexity issues when
+    used on a many-levels-deep eager load, as subqueries will be nested repeatedly.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: “subquery” loading is not compatible with the “batched” loading supplied by
+    [Yield Per](api.html#orm-queryguide-yield-per), both for collection and scalar
+    relationships.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For the above reasons, the “selectin” strategy should be preferred over “subquery”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Select IN loading](#selectin-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## What Kind of Loading to Use ?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Which type of loading to use typically comes down to optimizing the tradeoff
+    between number of SQL executions, complexity of SQL emitted, and amount of data
+    fetched.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**One to Many / Many to Many Collection** - The [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") is generally the best loading strategy to use.
+    It emits an additional SELECT that uses as few tables as possible, leaving the
+    original statement unaffected, and is most flexible for any kind of originating
+    query. Its only major limitation is when using a table with composite primary
+    keys on a backend that does not support “tuple IN”, which currently includes SQL
+    Server and very old SQLite versions; all other included backends support it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Many to One** - The [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    strategy is the most general purpose strategy. In special cases, the [`immediateload()`](#sqlalchemy.orm.immediateload
+    "sqlalchemy.orm.immediateload") strategy may also be useful, if there are a very
+    small number of potential related values, as this strategy will fetch the object
+    from the local [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    without emitting any SQL if the related object is already present.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Polymorphic Eager Loading
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Specification of polymorphic options on a per-eager-load basis is supported.
+    See the section [Eager Loading of Polymorphic Subtypes](inheritance.html#eagerloading-polymorphic-subtypes)
+    for examples of the [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") method in conjunction with the [`with_polymorphic()`](inheritance.html#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Wildcard Loading Strategies'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Each of [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload"),
+    [`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload"),
+    [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload"), [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload"), [`noload()`](#sqlalchemy.orm.noload "sqlalchemy.orm.noload"),
+    and [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") can
+    be used to set the default style of [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") loading for a particular query, affecting all [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") -mapped attributes not otherwise specified in the
+    statement. This feature is available by passing the string `''*''` as the argument
+    to any of these options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the `lazyload('*')` option will supersede the `lazy` setting of all [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs in use for that query, with the exception
+    of those that use `lazy='write_only'` or `lazy='dynamic'`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If some relationships specify `lazy='joined'` or `lazy='selectin'`, for example,
+    using `lazyload('*')` will unilaterally cause all those relationships to use `'select'`
+    loading, e.g. emit a SELECT statement when each attribute is accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The option does not supersede loader options stated in the query, such as [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload"), [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload"), etc. The query below will still use joined loading
+    for the `widget` relationship:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: While the instruction for [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    above will take place regardless of whether it appears before or after the [`lazyload()`](#sqlalchemy.orm.lazyload
+    "sqlalchemy.orm.lazyload") option, if multiple options that each included `"*"`
+    were passed, the last one will take effect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Per-Entity Wildcard Loading Strategies'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A variant of the wildcard loader strategy is the ability to set the strategy
+    on a per-entity basis. For example, if querying for `User` and `Address`, we can
+    instruct all relationships on `Address` to use lazy loading, while leaving the
+    loader strategies for `User` unaffected, by first applying the [`Load`](#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") object, then specifying the `*` as a chained option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, all relationships on `Address` will be set to a lazy load.  ### Per-Entity
+    Wildcard Loading Strategies'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A variant of the wildcard loader strategy is the ability to set the strategy
+    on a per-entity basis. For example, if querying for `User` and `Address`, we can
+    instruct all relationships on `Address` to use lazy loading, while leaving the
+    loader strategies for `User` unaffected, by first applying the [`Load`](#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") object, then specifying the `*` as a chained option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, all relationships on `Address` will be set to a lazy load.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Routing Explicit Joins/Statements into Eagerly Loaded Collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The behavior of [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    is such that joins are created automatically, using anonymous aliases as targets,
+    the results of which are routed into collections and scalar references on loaded
+    objects. It is often the case that a query already includes the necessary joins
+    which represent a particular collection or scalar reference, and the joins added
+    by the joinedload feature are redundant - yet you’d still like the collections/references
+    to be populated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this SQLAlchemy supplies the [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") option. This option is used in the same manner
+    as the [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    option except it is assumed that the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object will explicitly include the appropriate
+    joins, typically using methods like [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join"). Below, we specify a join between `User`
+    and `Address` and additionally establish this as the basis for eager loading of
+    `User.addresses`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If the “eager” portion of the statement is “aliased”, the path should be specified
+    using [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type"), which allows the specific [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct to be passed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE129]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The path given as the argument to [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") needs to be a full path from the starting entity.
+    For example if we were loading `Users->orders->Order->items->Item`, the option
+    would be used as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE130]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using contains_eager() to load a custom-filtered collection result
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When we use [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager"),
+    *we* are constructing ourselves the SQL that will be used to populate collections.
+    From this, it naturally follows that we can opt to **modify** what values the
+    collection is intended to store, by writing our SQL to load a subset of elements
+    for collections or scalar attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy now has a **much simpler way to do this**, by allowing WHERE criteria
+    to be added directly to loader options such as [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") and [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") using [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_"). See the section [Adding Criteria to loader
+    options](#loader-option-criteria) for examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The techniques described here still apply if the related collection is to be
+    queried using SQL criteria or modifiers more complex than a simple WHERE clause.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example, we can load a `User` object and eagerly load only particular
+    addresses into its `.addresses` collection by filtering the joined data, routing
+    it using [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager"),
+    also using [Populate Existing](api.html#orm-queryguide-populate-existing) to ensure
+    any already-loaded collections are overwritten:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE131]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query will load only `User` objects which contain at least `Address`
+    object that contains the substring `'aol.com'` in its `email` field; the `User.addresses`
+    collection will contain **only** these `Address` entries, and *not* any other
+    `Address` entries that are in fact associated with the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: In all cases, the SQLAlchemy ORM does **not overwrite already loaded attributes
+    and collections** unless told to do so. As there is an [identity map](../../glossary.html#term-identity-map)
+    in use, it is often the case that an ORM query is returning objects that were
+    in fact already present and loaded in memory. Therefore, when using [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") to populate a collection in an alternate way,
+    it is usually a good idea to use [Populate Existing](api.html#orm-queryguide-populate-existing)
+    as illustrated above so that an already-loaded collection is refreshed with the
+    new data. The `populate_existing` option will reset **all** attributes that were
+    already present, including pending changes, so make sure all data is flushed before
+    using it. Using the [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    with its default behavior of [autoflush](../session_basics.html#session-flushing)
+    is sufficient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The customized collection we load using [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") is not “sticky”; that is, the next time this
+    collection is loaded, it will be loaded with its usual default contents. The collection
+    is subject to being reloaded if the object is expired, which occurs whenever the
+    [`Session.commit()`](../session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit"),
+    [`Session.rollback()`](../session_api.html#sqlalchemy.orm.Session.rollback "sqlalchemy.orm.Session.rollback")
+    methods are used assuming default session settings, or the [`Session.expire_all()`](../session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") or [`Session.expire()`](../session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") methods are used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Adding Criteria to loader options](#loader-option-criteria) - modern API allowing
+    WHERE criteria directly within any relationship loader option'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using contains_eager() to load a custom-filtered collection result
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When we use [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager"),
+    *we* are constructing ourselves the SQL that will be used to populate collections.
+    From this, it naturally follows that we can opt to **modify** what values the
+    collection is intended to store, by writing our SQL to load a subset of elements
+    for collections or scalar attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy now has a **much simpler way to do this**, by allowing WHERE criteria
+    to be added directly to loader options such as [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") and [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") using [`PropComparator.and_()`](../internals.html#sqlalchemy.orm.PropComparator.and_
+    "sqlalchemy.orm.PropComparator.and_"). See the section [Adding Criteria to loader
+    options](#loader-option-criteria) for examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The techniques described here still apply if the related collection is to be
+    queried using SQL criteria or modifiers more complex than a simple WHERE clause.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example, we can load a `User` object and eagerly load only particular
+    addresses into its `.addresses` collection by filtering the joined data, routing
+    it using [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager"),
+    also using [Populate Existing](api.html#orm-queryguide-populate-existing) to ensure
+    any already-loaded collections are overwritten:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE132]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query will load only `User` objects which contain at least `Address`
+    object that contains the substring `'aol.com'` in its `email` field; the `User.addresses`
+    collection will contain **only** these `Address` entries, and *not* any other
+    `Address` entries that are in fact associated with the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: In all cases, the SQLAlchemy ORM does **not overwrite already loaded attributes
+    and collections** unless told to do so. As there is an [identity map](../../glossary.html#term-identity-map)
+    in use, it is often the case that an ORM query is returning objects that were
+    in fact already present and loaded in memory. Therefore, when using [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") to populate a collection in an alternate way,
+    it is usually a good idea to use [Populate Existing](api.html#orm-queryguide-populate-existing)
+    as illustrated above so that an already-loaded collection is refreshed with the
+    new data. The `populate_existing` option will reset **all** attributes that were
+    already present, including pending changes, so make sure all data is flushed before
+    using it. Using the [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    with its default behavior of [autoflush](../session_basics.html#session-flushing)
+    is sufficient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The customized collection we load using [`contains_eager()`](#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager") is not “sticky”; that is, the next time this
+    collection is loaded, it will be loaded with its usual default contents. The collection
+    is subject to being reloaded if the object is expired, which occurs whenever the
+    [`Session.commit()`](../session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit"),
+    [`Session.rollback()`](../session_api.html#sqlalchemy.orm.Session.rollback "sqlalchemy.orm.Session.rollback")
+    methods are used assuming default session settings, or the [`Session.expire_all()`](../session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") or [`Session.expire()`](../session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") methods are used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Adding Criteria to loader options](#loader-option-criteria) - modern API allowing
+    WHERE criteria directly within any relationship loader option'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Relationship Loader API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [contains_eager](#sqlalchemy.orm.contains_eager)(*keys, **kw) | Indicate
+    that the given attribute should be eagerly loaded from columns stated manually
+    in the query. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [defaultload](#sqlalchemy.orm.defaultload)(*keys) | Indicate an attribute
+    should load using its predefined loader style. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [immediateload](#sqlalchemy.orm.immediateload)(*keys, [recursion_depth])
+    | Indicate that the given attribute should be loaded using an immediate load with
+    a per-attribute SELECT statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [joinedload](#sqlalchemy.orm.joinedload)(*keys, **kw) | Indicate that the
+    given attribute should be loaded using joined eager loading. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [lazyload](#sqlalchemy.orm.lazyload)(*keys) | Indicate that the given attribute
+    should be loaded using “lazy” loading. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Load](#sqlalchemy.orm.Load) | Represents loader options which modify the
+    state of a ORM-enabled [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") or a legacy [`Query`](query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") in order to affect how various mapped attributes are loaded.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [noload](#sqlalchemy.orm.noload)(*keys) | Indicate that the given relationship
+    attribute should remain unloaded. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [raiseload](#sqlalchemy.orm.raiseload)(*keys, **kw) | Indicate that the given
+    attribute should raise an error if accessed. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [selectinload](#sqlalchemy.orm.selectinload)(*keys, [recursion_depth]) |
+    Indicate that the given attribute should be loaded using SELECT IN eager loading.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [subqueryload](#sqlalchemy.orm.subqueryload)(*keys) | Indicate that the given
+    attribute should be loaded using subquery eager loading. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE133]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be eagerly loaded from columns stated
+    manually in the query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The option is used in conjunction with an explicit join that loads the desired
+    rows, i.e.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE134]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query would join from the `Order` entity to its related `User` entity,
+    and the returned `Order` objects would have the `Order.user` attribute pre-populated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It may also be used for customizing the entries in an eagerly loaded collection;
+    queries will normally want to use the [Populate Existing](api.html#orm-queryguide-populate-existing)
+    execution option assuming the primary collection of parent objects may already
+    have been loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE135]'
+  prefs: []
+  type: TYPE_PRE
+- en: See the section [Routing Explicit Joins/Statements into Eagerly Loaded Collections](#contains-eager)
+    for complete usage details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Routing Explicit Joins/Statements into Eagerly Loaded Collections](#contains-eager)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE136]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate an attribute should load using its predefined loader style.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The behavior of this loading option is to not change the current loading style
+    of the attribute, meaning that the previously configured one is used or, if no
+    previous style was selected, the default loading will be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This method is used to link to other loader options further into a chain of
+    attributes without altering the loader style of the links along the chain. For
+    example, to set joined eager loading for an element of an element:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE137]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    is also useful for setting column-level options on a related class, namely that
+    of [`defer()`](columns.html#sqlalchemy.orm.defer "sqlalchemy.orm.defer") and [`undefer()`](columns.html#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE138]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Specifying Sub-Options with Load.options()](#orm-queryguide-relationship-sub-options)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Load.options()`](#sqlalchemy.orm.Load.options "sqlalchemy.orm.Load.options")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE139]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using an immediate load with
+    a per-attribute SELECT statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The load is achieved using the “lazyloader” strategy and does not fire off any
+    additional eager loaders.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`immediateload()`](#sqlalchemy.orm.immediateload "sqlalchemy.orm.immediateload")
+    option is superseded in general by the [`selectinload()`](#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") option, which performs the same task more efficiently
+    by emitting a SELECT for all loaded objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**recursion_depth** –'
+  prefs: []
+  type: TYPE_NORMAL
+- en: optional int; when set to a positive integer in conjunction with a self-referential
+    relationship, indicates “selectin” loading will continue that many levels deep
+    automatically until no items are found.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`immediateload.recursion_depth`](#sqlalchemy.orm.immediateload.params.recursion_depth
+    "sqlalchemy.orm.immediateload") option currently supports only self-referential
+    relationships. There is not yet an option to automatically traverse recursive
+    structures with more than one relationship involved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: This parameter is new and experimental and should be treated as “alpha” status
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: added [`immediateload.recursion_depth`](#sqlalchemy.orm.immediateload.params.recursion_depth
+    "sqlalchemy.orm.immediateload")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Select IN loading](#selectin-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE140]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using joined eager loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE141]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**innerjoin** –'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'if `True`, indicates that the joined eager load should use an inner join instead
+    of the default of left outer join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE142]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to chain multiple eager joins together where some may be OUTER and
+    others INNER, right-nested joins are used to link them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE143]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query, linking A.bs via “outer” join and B.cs via “inner” join would
+    render the joins as “a LEFT OUTER JOIN (b JOIN c)”. When using older versions
+    of SQLite (< 3.7.16), this form of JOIN is translated to use full subqueries as
+    this syntax is otherwise not directly supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `innerjoin` flag can also be stated with the term `"unnested"`. This indicates
+    that an INNER JOIN should be used, *unless* the join is linked to a LEFT OUTER
+    JOIN to the left, in which case it will render as LEFT OUTER JOIN. For example,
+    supposing `A.bs` is an outerjoin:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE144]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above join will render as “a LEFT OUTER JOIN b LEFT OUTER JOIN c”, rather
+    than as “a LEFT OUTER JOIN (b JOIN c)”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “unnested” flag does **not** affect the JOIN rendered from a many-to-many
+    association table, e.g. a table configured as [`relationship.secondary`](../relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship"), to the target table; for correctness of results,
+    these joins are always INNER and are therefore right-nested if linked to an OUTER
+    join.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The joins produced by [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    are **anonymously aliased**. The criteria by which the join proceeds cannot be
+    modified, nor can the ORM-enabled [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") or legacy [`Query`](query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") refer to these joins in any way, including ordering. See
+    [The Zen of Joined Eager Loading](#zen-of-eager-loading) for further detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To produce a specific SQL JOIN which is explicitly available, use [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") and [`Query.join()`](query.html#sqlalchemy.orm.Query.join
+    "sqlalchemy.orm.Query.join"). To combine explicit JOINs with eager loading of
+    collections, use [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager");
+    see [Routing Explicit Joins/Statements into Eagerly Loaded Collections](#contains-eager).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Joined Eager Loading](#joined-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE145]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using “lazy” loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Lazy Loading](#lazy-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE146]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represents loader options which modify the state of a ORM-enabled [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") or a legacy [`Query`](query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") in order to affect how various mapped attributes are loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object is in most cases
+    used implicitly behind the scenes when one makes use of a query option like [`joinedload()`](#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload"), [`defer()`](columns.html#sqlalchemy.orm.defer "sqlalchemy.orm.defer"),
+    or similar. It typically is not instantiated directly except for in some very
+    specific cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Per-Entity Wildcard Loading Strategies](#orm-queryguide-relationship-per-entity-wildcard)
+    - illustrates an example where direct use of [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    may be useful'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[contains_eager()](#sqlalchemy.orm.Load.contains_eager), [defaultload()](#sqlalchemy.orm.Load.defaultload),
+    [defer()](#sqlalchemy.orm.Load.defer), [get_children()](#sqlalchemy.orm.Load.get_children),
+    [immediateload()](#sqlalchemy.orm.Load.immediateload), [inherit_cache](#sqlalchemy.orm.Load.inherit_cache),
+    [joinedload()](#sqlalchemy.orm.Load.joinedload), [lazyload()](#sqlalchemy.orm.Load.lazyload),
+    [load_only()](#sqlalchemy.orm.Load.load_only), [noload()](#sqlalchemy.orm.Load.noload),
+    [options()](#sqlalchemy.orm.Load.options), [process_compile_state()](#sqlalchemy.orm.Load.process_compile_state),
+    [process_compile_state_replaced_entities()](#sqlalchemy.orm.Load.process_compile_state_replaced_entities),
+    [propagate_to_loaders](#sqlalchemy.orm.Load.propagate_to_loaders), [raiseload()](#sqlalchemy.orm.Load.raiseload),
+    [selectin_polymorphic()](#sqlalchemy.orm.Load.selectin_polymorphic), [selectinload()](#sqlalchemy.orm.Load.selectinload),
+    [subqueryload()](#sqlalchemy.orm.Load.subqueryload), [undefer()](#sqlalchemy.orm.Load.undefer),
+    [undefer_group()](#sqlalchemy.orm.Load.undefer_group), [with_expression()](#sqlalchemy.orm.Load.with_expression)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") (`sqlalchemy.orm.strategy_options._AbstractLoad`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE147]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.contains_eager`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`contains_eager()`](#sqlalchemy.orm.contains_eager "sqlalchemy.orm.contains_eager")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE148]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.defaultload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE149]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.defer`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`defer()`](columns.html#sqlalchemy.orm.defer "sqlalchemy.orm.defer") option
+    applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`defer()`](columns.html#sqlalchemy.orm.defer "sqlalchemy.orm.defer") for
+    usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE150]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `HasTraverseInternals.get_children()` *method of* `HasTraverseInternals`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Return immediate child `HasTraverseInternals` elements of this `HasTraverseInternals`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is used for visit traversal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**kw may contain flags that change the collection that is returned, for example
+    to return a subset of items in order to cut down on larger traversals, or to return
+    child items from a different context (such as schema-level collections instead
+    of clause-level).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE151]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.immediateload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`immediateload()`](#sqlalchemy.orm.immediateload "sqlalchemy.orm.immediateload")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`immediateload()`](#sqlalchemy.orm.immediateload "sqlalchemy.orm.immediateload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE152]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `HasCacheKey.inherit_cache` *attribute of* [`HasCacheKey`](../../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey
+    "sqlalchemy.sql.cache_key.HasCacheKey")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Indicate if this [`HasCacheKey`](../../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey
+    "sqlalchemy.sql.traversals.HasCacheKey") instance should make use of the cache
+    key generation scheme used by its immediate superclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The attribute defaults to `None`, which indicates that a construct has not yet
+    taken into account whether or not its appropriate for it to participate in caching;
+    this is functionally equivalent to setting the value to `False`, except that a
+    warning is also emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This flag can be set to `True` on a particular class, if the SQL that corresponds
+    to the object does not change based on attributes which are local to this class,
+    and not its superclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Enabling Caching Support for Custom Constructs](../../core/compiler.html#compilerext-caching)
+    - General guideslines for setting the [`HasCacheKey.inherit_cache`](../../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute for third-party
+    or user defined SQL constructs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE153]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.joinedload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload") option
+    applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`joinedload()`](#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE154]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.lazyload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload") option
+    applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`lazyload()`](#sqlalchemy.orm.lazyload "sqlalchemy.orm.lazyload") for usage
+    examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE155]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.load_only`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`load_only()`](columns.html#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`load_only()`](columns.html#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE156]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.noload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`noload()`](#sqlalchemy.orm.noload "sqlalchemy.orm.noload") option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`noload()`](#sqlalchemy.orm.noload "sqlalchemy.orm.noload") for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE157]'
+  prefs: []
+  type: TYPE_PRE
+- en: Apply a series of options as sub-options to this [`Load`](#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE158]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '***opts** – A series of loader option objects (ultimately [`Load`](#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") objects) which should be applied to the path specified
+    by this [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`defaultload()`](#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Specifying Sub-Options with Load.options()](#orm-queryguide-relationship-sub-options)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE159]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.process_compile_state`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Apply a modification to a given `ORMCompileState`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is part of the implementation of a particular `CompileStateOption`
+    and is only invoked internally when an ORM query is compiled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE160]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.process_compile_state_replaced_entities`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Apply a modification to a given `ORMCompileState`, given entities that were
+    replaced by with_only_columns() or with_entities().
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is part of the implementation of a particular `CompileStateOption`
+    and is only invoked internally when an ORM query is compiled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.19.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE161]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.propagate_to_loaders`
+    *attribute of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: if True, indicate this option should be carried along to “secondary” SELECT
+    statements that occur for relationship lazy loaders as well as attribute load
+    / refresh operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE162]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.raiseload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") option
+    applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") for
+    usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE163]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.selectin_polymorphic`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`selectin_polymorphic()`](inheritance.html#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`selectin_polymorphic()`](inheritance.html#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE164]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.selectinload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`selectinload()`](#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`selectinload()`](#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE165]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.subqueryload`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`subqueryload()`](#sqlalchemy.orm.subqueryload "sqlalchemy.orm.subqueryload")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE166]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.undefer`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`undefer()`](columns.html#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`undefer()`](columns.html#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE167]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.undefer_group`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`undefer_group()`](columns.html#sqlalchemy.orm.undefer_group "sqlalchemy.orm.undefer_group")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`undefer_group()`](columns.html#sqlalchemy.orm.undefer_group "sqlalchemy.orm.undefer_group")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE168]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.orm.strategy_options._AbstractLoad.with_expression`
+    *method of* `sqlalchemy.orm.strategy_options._AbstractLoad`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Produce a new [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load") object with
+    the [`with_expression()`](columns.html#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    option applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`with_expression()`](columns.html#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    for usage examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE169]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given relationship attribute should remain unloaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The relationship attribute will return `None` when accessed without producing
+    any loading effect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`noload()`](#sqlalchemy.orm.noload "sqlalchemy.orm.noload") applies to [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") attributes only.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting this loading strategy as the default strategy for a relationship using
+    the [`relationship.lazy`](../relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") parameter may cause issues with flushes, such if
+    a delete operation needs to load related objects and instead `None` was returned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE170]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should raise an error if accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A relationship attribute configured with [`raiseload()`](#sqlalchemy.orm.raiseload
+    "sqlalchemy.orm.raiseload") will raise an [`InvalidRequestError`](../../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
+    "sqlalchemy.exc.InvalidRequestError") upon access. The typical way this is useful
+    is when an application is attempting to ensure that all relationship attributes
+    that are accessed in a particular context would have been already loaded via eager
+    loading. Instead of having to read through SQL logs to ensure lazy loads aren’t
+    occurring, this strategy will cause them to raise immediately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`raiseload()`](#sqlalchemy.orm.raiseload "sqlalchemy.orm.raiseload") applies
+    to [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    attributes only. In order to apply raise-on-SQL behavior to a column-based attribute,
+    use the [`defer.raiseload`](columns.html#sqlalchemy.orm.defer.params.raiseload
+    "sqlalchemy.orm.defer") parameter on the [`defer()`](columns.html#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer") loader option.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**sql_only** – if True, raise only if the lazy load would emit SQL, but not
+    if it is only checking the identity map, or determining that the related value
+    should just be None due to missing keys. When False, the strategy will raise for
+    all varieties of relationship loading.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Preventing unwanted lazy loads using raiseload](#prevent-lazy-with-raiseload)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using raiseload to prevent deferred column loads](columns.html#orm-queryguide-deferred-raiseload)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE171]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using SELECT IN eager loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE172]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**recursion_depth** –'
+  prefs: []
+  type: TYPE_NORMAL
+- en: optional int; when set to a positive integer in conjunction with a self-referential
+    relationship, indicates “selectin” loading will continue that many levels deep
+    automatically until no items are found.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`selectinload.recursion_depth`](#sqlalchemy.orm.selectinload.params.recursion_depth
+    "sqlalchemy.orm.selectinload") option currently supports only self-referential
+    relationships. There is not yet an option to automatically traverse recursive
+    structures with more than one relationship involved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additionally, the [`selectinload.recursion_depth`](#sqlalchemy.orm.selectinload.params.recursion_depth
+    "sqlalchemy.orm.selectinload") parameter is new and experimental and should be
+    treated as “alpha” status for the 2.0 series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: added [`selectinload.recursion_depth`](#sqlalchemy.orm.selectinload.params.recursion_depth
+    "sqlalchemy.orm.selectinload")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Select IN loading](#selectin-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE173]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given attribute should be loaded using subquery eager loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    interface and supports both method-chained and standalone operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE174]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Relationship Loading Techniques](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Subquery Eager Loading](#subquery-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL

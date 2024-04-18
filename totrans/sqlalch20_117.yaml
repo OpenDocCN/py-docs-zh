@@ -1,0 +1,1403 @@
+- en: SQL Expressions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/faq/sqlexpressions.html](https://docs.sqlalchemy.org/en/20/faq/sqlexpressions.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[How do I render SQL expressions as strings, possibly with bound parameters
+    inlined?](#how-do-i-render-sql-expressions-as-strings-possibly-with-bound-parameters-inlined)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Stringifying for Specific Databases](#stringifying-for-specific-databases)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Rendering Bound Parameters Inline](#rendering-bound-parameters-inline)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Rendering “POSTCOMPILE” Parameters as Bound Parameters](#rendering-postcompile-parameters-as-bound-parameters)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Why are percent signs being doubled up when stringifying SQL statements?](#why-are-percent-signs-being-doubled-up-when-stringifying-sql-statements)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[I’m using op() to generate a custom operator and my parenthesis are not coming
+    out correctly](#i-m-using-op-to-generate-a-custom-operator-and-my-parenthesis-are-not-coming-out-correctly)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Why are the parentheses rules like this?](#why-are-the-parentheses-rules-like-this)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## How do I render SQL expressions as strings, possibly with bound parameters
+    inlined?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “stringification” of a SQLAlchemy Core statement object or expression fragment,
+    as well as that of an ORM [`Query`](../orm/queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object, in the majority of simple cases is as simple as
+    using the `str()` builtin function, as below when use it with the `print` function
+    (note the Python `print` function also calls `str()` automatically if we don’t
+    use it explicitly):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `str()` builtin, or an equivalent, can be invoked on ORM [`Query`](../orm/queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object as well as any statement such as that of [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"), [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
+    "sqlalchemy.sql.expression.insert") etc. and also any expression fragment, such
+    as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Stringifying for Specific Databases
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A complication arises when the statement or fragment we are stringifying contains
+    elements that have a database-specific string format, or when it contains elements
+    that are only available within a certain kind of database. In these cases, we
+    might get a stringified statement that is not in the correct syntax for the database
+    we are targeting, or the operation may raise a [`UnsupportedCompilationError`](../core/exceptions.html#sqlalchemy.exc.UnsupportedCompilationError
+    "sqlalchemy.exc.UnsupportedCompilationError") exception. In these cases, it is
+    necessary that we stringify the statement using the [`ClauseElement.compile()`](../core/foundation.html#sqlalchemy.sql.expression.ClauseElement.compile
+    "sqlalchemy.sql.expression.ClauseElement.compile") method, while passing along
+    an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    or [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    object that represents the target database. Such as below, if we have a MySQL
+    database engine, we can stringify a statement in terms of the MySQL dialect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'More directly, without building up an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object we can instantiate a [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") object directly, as below where we use a PostgreSQL
+    dialect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that any dialect can be assembled using [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") itself with a dummy URL and then accessing the `Engine.dialect`
+    attribute, such as if we wanted a dialect object for psycopg2:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When given an ORM [`Query`](../orm/queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") object, in order to get at the [`ClauseElement.compile()`](../core/foundation.html#sqlalchemy.sql.expression.ClauseElement.compile
+    "sqlalchemy.sql.expression.ClauseElement.compile") method we only need access
+    the `Query.statement` accessor first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Rendering Bound Parameters Inline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Never** use these techniques with string content received from untrusted
+    input, such as from web forms or other user-input applications. SQLAlchemy’s facilities
+    to coerce Python values into direct SQL string values are **not secure against
+    untrusted input and do not validate the type of data being passed**. Always use
+    bound parameters when programmatically invoking non-DDL SQL statements against
+    a relational database.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The above forms will render the SQL statement as it is passed to the Python
+    [DBAPI](../glossary.html#term-DBAPI), which includes that bound parameters are
+    not rendered inline. SQLAlchemy normally does not stringify bound parameters,
+    as this is handled appropriately by the Python DBAPI, not to mention bypassing
+    bound parameters is probably the most widely exploited security hole in modern
+    web applications. SQLAlchemy has limited ability to do this stringification in
+    certain circumstances such as that of emitting DDL. In order to access this functionality
+    one can use the `literal_binds` flag, passed to `compile_kwargs`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: This functionality is provided mainly for logging or debugging purposes, where
+    having the raw sql string of a query may prove useful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above approach has the caveats that it is only supported for basic types,
+    such as ints and strings, and furthermore if a [`bindparam()`](../core/sqlelement.html#sqlalchemy.sql.expression.bindparam
+    "sqlalchemy.sql.expression.bindparam") without a pre-set value is used directly,
+    it won’t be able to stringify that either. Methods of stringifying all parameters
+    unconditionally are detailed below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The reason SQLAlchemy does not support full stringification of all datatypes
+    is threefold:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a functionality that is already supported by the DBAPI in use when the
+    DBAPI is used normally. The SQLAlchemy project cannot be tasked with duplicating
+    this functionality for every datatype for all backends, as this is redundant work
+    which also incurs significant testing and ongoing support overhead.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Stringifying with bound parameters inlined for specific databases suggests a
+    usage that is actually passing these fully stringified statements onto the database
+    for execution. This is unnecessary and insecure, and SQLAlchemy does not want
+    to encourage this use in any way.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The area of rendering literal values is the most likely area for security issues
+    to be reported. SQLAlchemy tries to keep the area of safe parameter stringification
+    an issue for the DBAPI drivers as much as possible where the specifics for each
+    DBAPI can be handled appropriately and securely.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'As SQLAlchemy intentionally does not support full stringification of literal
+    values, techniques to do so within specific debugging scenarios include the following.
+    As an example, we will use the PostgreSQL `UUID` datatype:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Given the above model and statement which will compare a column to a single
+    UUID value, options for stringifying this statement with inline values include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some DBAPIs such as psycopg2 support helper functions like [mogrify()](https://www.psycopg.org/docs/cursor.html#cursor.mogrify)
+    which provide access to their literal-rendering functionality. To use such features,
+    render the SQL string without using `literal_binds` and pass the parameters separately
+    via the [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params") accessor:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The above code will produce psycopg2’s raw bytestring:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Render the [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params") directly into the statement, using
+    the appropriate [paramstyle](https://www.python.org/dev/peps/pep-0249/#paramstyle)
+    of the target DBAPI. For example, the psycopg2 DBAPI uses the named `pyformat`
+    style. The meaning of `render_postcompile` will be discussed in the next section.
+    **WARNING this is NOT secure, do NOT use untrusted input**:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This will produce a non-working string, that nonetheless is suitable for debugging:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Another example using a positional paramstyle such as `qmark`, we can render
+    our above statement in terms of SQLite by also using the [`SQLCompiler.positiontup`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.positiontup
+    "sqlalchemy.sql.compiler.SQLCompiler.positiontup") collection in conjunction with
+    [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params"), in order to retrieve the parameters
+    in their positional order for the statement as compiled:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The above snippet prints:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Use the [Custom SQL Constructs and Compilation Extension](../core/compiler.html)
+    extension to render [`BindParameter`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") objects in a custom way when a user-defined
+    flag is present. This flag is sent through the `compile_kwargs` dictionary like
+    any other flag:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The above recipe will print:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For type-specific stringification that’s built into a model or a statement,
+    the [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") class may be used to provide custom stringification
+    of any datatype using the [`TypeDecorator.process_literal_param()`](../core/custom_types.html#sqlalchemy.types.TypeDecorator.process_literal_param
+    "sqlalchemy.types.TypeDecorator.process_literal_param") method:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The above datatype needs to be used either explicitly within the model or locally
+    within the statement using [`type_coerce()`](../core/sqlelement.html#sqlalchemy.sql.expression.type_coerce
+    "sqlalchemy.sql.expression.type_coerce"), such as
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Again printing the same form:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Rendering “POSTCOMPILE” Parameters as Bound Parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy includes a variant on a bound parameter known as [`BindParameter.expanding`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter.params.expanding
+    "sqlalchemy.sql.expression.BindParameter"), which is a “late evaluated” parameter
+    that is rendered in an intermediary state when a SQL construct is compiled, which
+    is then further processed at statement execution time when the actual known values
+    are passed. “Expanding” parameters are used for [`ColumnOperators.in_()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") expressions by default so that
+    the SQL string can be safely cached independently of the actual lists of values
+    being passed to a particular invocation of [`ColumnOperators.in_()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To render the IN clause with real bound parameter symbols, use the `render_postcompile=True`
+    flag with [`ClauseElement.compile()`](../core/foundation.html#sqlalchemy.sql.expression.ClauseElement.compile
+    "sqlalchemy.sql.expression.ClauseElement.compile"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `literal_binds` flag, described in the previous section regarding rendering
+    of bound parameters, automatically sets `render_postcompile` to True, so for a
+    statement with simple ints/strings, these can be stringified directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params") and [`SQLCompiler.positiontup`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.positiontup
+    "sqlalchemy.sql.compiler.SQLCompiler.positiontup") are also compatible with `render_postcompile`,
+    so that the previous recipes for rendering inline bound parameters will work here
+    in the same way, such as SQLite’s positional form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Remember, **all** of the above code recipes which stringify literal values,
+    bypassing the use of bound parameters when sending statements to the database,
+    are **only to be used when**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: the use is **debugging purposes only**
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: the string **is not to be passed to a live production database**
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: only with **local, trusted input**
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The above recipes for stringification of literal values are **not secure in
+    any way and should never be used against production databases**.  ## Why are percent
+    signs being doubled up when stringifying SQL statements?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many [DBAPI](../glossary.html#term-DBAPI) implementations make use of the `pyformat`
+    or `format` [paramstyle](https://www.python.org/dev/peps/pep-0249/#paramstyle),
+    which necessarily involve percent signs in their syntax. Most DBAPIs that do this
+    expect percent signs used for other reasons to be doubled up (i.e. escaped) in
+    the string form of the statements used, e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When SQL statements are passed to the underlying DBAPI by SQLAlchemy, substitution
+    of bound parameters works in the same way as the Python string interpolation operator
+    `%`, and in many cases the DBAPI actually uses this operator directly. Above,
+    the substitution of bound parameters would then look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The default compilers for databases like PostgreSQL (default DBAPI is psycopg2)
+    and MySQL (default DBAPI is mysqlclient) will have this percent sign escaping
+    behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When such a dialect is being used, if non-DBAPI statements are desired that
+    don’t include bound parameter symbols, one quick way to remove the percent signs
+    is to simply substitute in an empty set of parameters using Python’s `%` operator
+    directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The other is to set a different parameter style on the dialect being used;
+    all [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    implementations accept a parameter `paramstyle` which will cause the compiler
+    for that dialect to use the given parameter style. Below, the very common `named`
+    parameter style is set within the dialect used for the compilation so that percent
+    signs are no longer significant in the compiled form of SQL, and will no longer
+    be escaped:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]  ## I’m using op() to generate a custom operator and my parenthesis
+    are not coming out correctly'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Operators.op()`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op") method allows one to create a custom
+    database operator otherwise not known by SQLAlchemy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, when using it on the right side of a compound expression, it doesn’t
+    generate parenthesis as we expect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, we probably want `(q1 + q2) -> p`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The solution to this case is to set the precedence of the operator, using the
+    [`Operators.op.precedence`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op.params.precedence
+    "sqlalchemy.sql.expression.Operators.op") parameter, to a high number, where 100
+    is the maximum value, and the highest number used by any SQLAlchemy operator is
+    currently 15:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can also usually force parenthesization around a binary expression (e.g.
+    an expression that has left/right operands and an operator) using the [`ColumnElement.self_group()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnElement.self_group
+    "sqlalchemy.sql.expression.ColumnElement.self_group") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Why are the parentheses rules like this?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A lot of databases barf when there are excessive parenthesis or when parenthesis
+    are in unusual places they doesn’t expect, so SQLAlchemy does not generate parenthesis
+    based on groupings, it uses operator precedence and if the operator is known to
+    be associative, so that parenthesis are generated minimally. Otherwise, an expression
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'would produce:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which is fine but would probably annoy people (and be reported as a bug). In
+    other cases, it leads to things that are more likely to confuse databases or at
+    the very least readability, such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'would produce:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are also some edge cases where we get things like `"(x) = 7"` and databases
+    really don’t like that either. So parenthesization doesn’t naively parenthesize,
+    it uses operator precedence and associativity to determine groupings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For [`Operators.op()`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op"), the value of precedence defaults to
+    zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What if we defaulted the value of [`Operators.op.precedence`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op.params.precedence
+    "sqlalchemy.sql.expression.Operators.op") to 100, e.g. the highest? Then this
+    expression makes more parenthesis, but is otherwise OK, that is, these two are
+    equivalent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'but these two are not:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: For now, it’s not clear that as long as we are doing parenthesization based
+    on operator precedence and associativity, if there is really a way to parenthesize
+    automatically for a generic operator with no precedence given that is going to
+    work in all cases, because sometimes you want a custom op to have a lower precedence
+    than the other operators and sometimes you want it to be higher.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is possible that maybe if the “binary” expression above forced the use of
+    the `self_group()` method when `op()` is called, making the assumption that a
+    compound expression on the left side can always be parenthesized harmlessly. Perhaps
+    this change can be made at some point, however for the time being keeping the
+    parenthesization rules more internally consistent seems to be the safer approach.  ##
+    How do I render SQL expressions as strings, possibly with bound parameters inlined?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “stringification” of a SQLAlchemy Core statement object or expression fragment,
+    as well as that of an ORM [`Query`](../orm/queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object, in the majority of simple cases is as simple as
+    using the `str()` builtin function, as below when use it with the `print` function
+    (note the Python `print` function also calls `str()` automatically if we don’t
+    use it explicitly):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `str()` builtin, or an equivalent, can be invoked on ORM [`Query`](../orm/queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object as well as any statement such as that of [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"), [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
+    "sqlalchemy.sql.expression.insert") etc. and also any expression fragment, such
+    as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Stringifying for Specific Databases
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A complication arises when the statement or fragment we are stringifying contains
+    elements that have a database-specific string format, or when it contains elements
+    that are only available within a certain kind of database. In these cases, we
+    might get a stringified statement that is not in the correct syntax for the database
+    we are targeting, or the operation may raise a [`UnsupportedCompilationError`](../core/exceptions.html#sqlalchemy.exc.UnsupportedCompilationError
+    "sqlalchemy.exc.UnsupportedCompilationError") exception. In these cases, it is
+    necessary that we stringify the statement using the [`ClauseElement.compile()`](../core/foundation.html#sqlalchemy.sql.expression.ClauseElement.compile
+    "sqlalchemy.sql.expression.ClauseElement.compile") method, while passing along
+    an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    or [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    object that represents the target database. Such as below, if we have a MySQL
+    database engine, we can stringify a statement in terms of the MySQL dialect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'More directly, without building up an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object we can instantiate a [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") object directly, as below where we use a PostgreSQL
+    dialect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that any dialect can be assembled using [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") itself with a dummy URL and then accessing the `Engine.dialect`
+    attribute, such as if we wanted a dialect object for psycopg2:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When given an ORM [`Query`](../orm/queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") object, in order to get at the [`ClauseElement.compile()`](../core/foundation.html#sqlalchemy.sql.expression.ClauseElement.compile
+    "sqlalchemy.sql.expression.ClauseElement.compile") method we only need access
+    the `Query.statement` accessor first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Rendering Bound Parameters Inline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Never** use these techniques with string content received from untrusted
+    input, such as from web forms or other user-input applications. SQLAlchemy’s facilities
+    to coerce Python values into direct SQL string values are **not secure against
+    untrusted input and do not validate the type of data being passed**. Always use
+    bound parameters when programmatically invoking non-DDL SQL statements against
+    a relational database.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The above forms will render the SQL statement as it is passed to the Python
+    [DBAPI](../glossary.html#term-DBAPI), which includes that bound parameters are
+    not rendered inline. SQLAlchemy normally does not stringify bound parameters,
+    as this is handled appropriately by the Python DBAPI, not to mention bypassing
+    bound parameters is probably the most widely exploited security hole in modern
+    web applications. SQLAlchemy has limited ability to do this stringification in
+    certain circumstances such as that of emitting DDL. In order to access this functionality
+    one can use the `literal_binds` flag, passed to `compile_kwargs`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: This functionality is provided mainly for logging or debugging purposes, where
+    having the raw sql string of a query may prove useful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above approach has the caveats that it is only supported for basic types,
+    such as ints and strings, and furthermore if a [`bindparam()`](../core/sqlelement.html#sqlalchemy.sql.expression.bindparam
+    "sqlalchemy.sql.expression.bindparam") without a pre-set value is used directly,
+    it won’t be able to stringify that either. Methods of stringifying all parameters
+    unconditionally are detailed below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The reason SQLAlchemy does not support full stringification of all datatypes
+    is threefold:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a functionality that is already supported by the DBAPI in use when the
+    DBAPI is used normally. The SQLAlchemy project cannot be tasked with duplicating
+    this functionality for every datatype for all backends, as this is redundant work
+    which also incurs significant testing and ongoing support overhead.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Stringifying with bound parameters inlined for specific databases suggests a
+    usage that is actually passing these fully stringified statements onto the database
+    for execution. This is unnecessary and insecure, and SQLAlchemy does not want
+    to encourage this use in any way.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The area of rendering literal values is the most likely area for security issues
+    to be reported. SQLAlchemy tries to keep the area of safe parameter stringification
+    an issue for the DBAPI drivers as much as possible where the specifics for each
+    DBAPI can be handled appropriately and securely.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'As SQLAlchemy intentionally does not support full stringification of literal
+    values, techniques to do so within specific debugging scenarios include the following.
+    As an example, we will use the PostgreSQL `UUID` datatype:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Given the above model and statement which will compare a column to a single
+    UUID value, options for stringifying this statement with inline values include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some DBAPIs such as psycopg2 support helper functions like [mogrify()](https://www.psycopg.org/docs/cursor.html#cursor.mogrify)
+    which provide access to their literal-rendering functionality. To use such features,
+    render the SQL string without using `literal_binds` and pass the parameters separately
+    via the [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params") accessor:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The above code will produce psycopg2’s raw bytestring:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Render the [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params") directly into the statement, using
+    the appropriate [paramstyle](https://www.python.org/dev/peps/pep-0249/#paramstyle)
+    of the target DBAPI. For example, the psycopg2 DBAPI uses the named `pyformat`
+    style. The meaning of `render_postcompile` will be discussed in the next section.
+    **WARNING this is NOT secure, do NOT use untrusted input**:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This will produce a non-working string, that nonetheless is suitable for debugging:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Another example using a positional paramstyle such as `qmark`, we can render
+    our above statement in terms of SQLite by also using the [`SQLCompiler.positiontup`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.positiontup
+    "sqlalchemy.sql.compiler.SQLCompiler.positiontup") collection in conjunction with
+    [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params"), in order to retrieve the parameters
+    in their positional order for the statement as compiled:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The above snippet prints:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Use the [Custom SQL Constructs and Compilation Extension](../core/compiler.html)
+    extension to render [`BindParameter`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") objects in a custom way when a user-defined
+    flag is present. This flag is sent through the `compile_kwargs` dictionary like
+    any other flag:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The above recipe will print:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For type-specific stringification that’s built into a model or a statement,
+    the [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") class may be used to provide custom stringification
+    of any datatype using the [`TypeDecorator.process_literal_param()`](../core/custom_types.html#sqlalchemy.types.TypeDecorator.process_literal_param
+    "sqlalchemy.types.TypeDecorator.process_literal_param") method:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The above datatype needs to be used either explicitly within the model or locally
+    within the statement using [`type_coerce()`](../core/sqlelement.html#sqlalchemy.sql.expression.type_coerce
+    "sqlalchemy.sql.expression.type_coerce"), such as
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Again printing the same form:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Rendering “POSTCOMPILE” Parameters as Bound Parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy includes a variant on a bound parameter known as [`BindParameter.expanding`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter.params.expanding
+    "sqlalchemy.sql.expression.BindParameter"), which is a “late evaluated” parameter
+    that is rendered in an intermediary state when a SQL construct is compiled, which
+    is then further processed at statement execution time when the actual known values
+    are passed. “Expanding” parameters are used for [`ColumnOperators.in_()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") expressions by default so that
+    the SQL string can be safely cached independently of the actual lists of values
+    being passed to a particular invocation of [`ColumnOperators.in_()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To render the IN clause with real bound parameter symbols, use the `render_postcompile=True`
+    flag with [`ClauseElement.compile()`](../core/foundation.html#sqlalchemy.sql.expression.ClauseElement.compile
+    "sqlalchemy.sql.expression.ClauseElement.compile"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `literal_binds` flag, described in the previous section regarding rendering
+    of bound parameters, automatically sets `render_postcompile` to True, so for a
+    statement with simple ints/strings, these can be stringified directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params") and [`SQLCompiler.positiontup`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.positiontup
+    "sqlalchemy.sql.compiler.SQLCompiler.positiontup") are also compatible with `render_postcompile`,
+    so that the previous recipes for rendering inline bound parameters will work here
+    in the same way, such as SQLite’s positional form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Remember, **all** of the above code recipes which stringify literal values,
+    bypassing the use of bound parameters when sending statements to the database,
+    are **only to be used when**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: the use is **debugging purposes only**
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: the string **is not to be passed to a live production database**
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: only with **local, trusted input**
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The above recipes for stringification of literal values are **not secure in
+    any way and should never be used against production databases**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Stringifying for Specific Databases
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A complication arises when the statement or fragment we are stringifying contains
+    elements that have a database-specific string format, or when it contains elements
+    that are only available within a certain kind of database. In these cases, we
+    might get a stringified statement that is not in the correct syntax for the database
+    we are targeting, or the operation may raise a [`UnsupportedCompilationError`](../core/exceptions.html#sqlalchemy.exc.UnsupportedCompilationError
+    "sqlalchemy.exc.UnsupportedCompilationError") exception. In these cases, it is
+    necessary that we stringify the statement using the [`ClauseElement.compile()`](../core/foundation.html#sqlalchemy.sql.expression.ClauseElement.compile
+    "sqlalchemy.sql.expression.ClauseElement.compile") method, while passing along
+    an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    or [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    object that represents the target database. Such as below, if we have a MySQL
+    database engine, we can stringify a statement in terms of the MySQL dialect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'More directly, without building up an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object we can instantiate a [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") object directly, as below where we use a PostgreSQL
+    dialect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that any dialect can be assembled using [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") itself with a dummy URL and then accessing the `Engine.dialect`
+    attribute, such as if we wanted a dialect object for psycopg2:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When given an ORM [`Query`](../orm/queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") object, in order to get at the [`ClauseElement.compile()`](../core/foundation.html#sqlalchemy.sql.expression.ClauseElement.compile
+    "sqlalchemy.sql.expression.ClauseElement.compile") method we only need access
+    the `Query.statement` accessor first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: Rendering Bound Parameters Inline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Never** use these techniques with string content received from untrusted
+    input, such as from web forms or other user-input applications. SQLAlchemy’s facilities
+    to coerce Python values into direct SQL string values are **not secure against
+    untrusted input and do not validate the type of data being passed**. Always use
+    bound parameters when programmatically invoking non-DDL SQL statements against
+    a relational database.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The above forms will render the SQL statement as it is passed to the Python
+    [DBAPI](../glossary.html#term-DBAPI), which includes that bound parameters are
+    not rendered inline. SQLAlchemy normally does not stringify bound parameters,
+    as this is handled appropriately by the Python DBAPI, not to mention bypassing
+    bound parameters is probably the most widely exploited security hole in modern
+    web applications. SQLAlchemy has limited ability to do this stringification in
+    certain circumstances such as that of emitting DDL. In order to access this functionality
+    one can use the `literal_binds` flag, passed to `compile_kwargs`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: This functionality is provided mainly for logging or debugging purposes, where
+    having the raw sql string of a query may prove useful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above approach has the caveats that it is only supported for basic types,
+    such as ints and strings, and furthermore if a [`bindparam()`](../core/sqlelement.html#sqlalchemy.sql.expression.bindparam
+    "sqlalchemy.sql.expression.bindparam") without a pre-set value is used directly,
+    it won’t be able to stringify that either. Methods of stringifying all parameters
+    unconditionally are detailed below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The reason SQLAlchemy does not support full stringification of all datatypes
+    is threefold:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a functionality that is already supported by the DBAPI in use when the
+    DBAPI is used normally. The SQLAlchemy project cannot be tasked with duplicating
+    this functionality for every datatype for all backends, as this is redundant work
+    which also incurs significant testing and ongoing support overhead.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Stringifying with bound parameters inlined for specific databases suggests a
+    usage that is actually passing these fully stringified statements onto the database
+    for execution. This is unnecessary and insecure, and SQLAlchemy does not want
+    to encourage this use in any way.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The area of rendering literal values is the most likely area for security issues
+    to be reported. SQLAlchemy tries to keep the area of safe parameter stringification
+    an issue for the DBAPI drivers as much as possible where the specifics for each
+    DBAPI can be handled appropriately and securely.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'As SQLAlchemy intentionally does not support full stringification of literal
+    values, techniques to do so within specific debugging scenarios include the following.
+    As an example, we will use the PostgreSQL `UUID` datatype:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Given the above model and statement which will compare a column to a single
+    UUID value, options for stringifying this statement with inline values include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some DBAPIs such as psycopg2 support helper functions like [mogrify()](https://www.psycopg.org/docs/cursor.html#cursor.mogrify)
+    which provide access to their literal-rendering functionality. To use such features,
+    render the SQL string without using `literal_binds` and pass the parameters separately
+    via the [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params") accessor:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The above code will produce psycopg2’s raw bytestring:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Render the [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params") directly into the statement, using
+    the appropriate [paramstyle](https://www.python.org/dev/peps/pep-0249/#paramstyle)
+    of the target DBAPI. For example, the psycopg2 DBAPI uses the named `pyformat`
+    style. The meaning of `render_postcompile` will be discussed in the next section.
+    **WARNING this is NOT secure, do NOT use untrusted input**:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This will produce a non-working string, that nonetheless is suitable for debugging:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Another example using a positional paramstyle such as `qmark`, we can render
+    our above statement in terms of SQLite by also using the [`SQLCompiler.positiontup`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.positiontup
+    "sqlalchemy.sql.compiler.SQLCompiler.positiontup") collection in conjunction with
+    [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params"), in order to retrieve the parameters
+    in their positional order for the statement as compiled:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The above snippet prints:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Use the [Custom SQL Constructs and Compilation Extension](../core/compiler.html)
+    extension to render [`BindParameter`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") objects in a custom way when a user-defined
+    flag is present. This flag is sent through the `compile_kwargs` dictionary like
+    any other flag:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The above recipe will print:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For type-specific stringification that’s built into a model or a statement,
+    the [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") class may be used to provide custom stringification
+    of any datatype using the [`TypeDecorator.process_literal_param()`](../core/custom_types.html#sqlalchemy.types.TypeDecorator.process_literal_param
+    "sqlalchemy.types.TypeDecorator.process_literal_param") method:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The above datatype needs to be used either explicitly within the model or locally
+    within the statement using [`type_coerce()`](../core/sqlelement.html#sqlalchemy.sql.expression.type_coerce
+    "sqlalchemy.sql.expression.type_coerce"), such as
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Again printing the same form:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Rendering “POSTCOMPILE” Parameters as Bound Parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy includes a variant on a bound parameter known as [`BindParameter.expanding`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter.params.expanding
+    "sqlalchemy.sql.expression.BindParameter"), which is a “late evaluated” parameter
+    that is rendered in an intermediary state when a SQL construct is compiled, which
+    is then further processed at statement execution time when the actual known values
+    are passed. “Expanding” parameters are used for [`ColumnOperators.in_()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") expressions by default so that
+    the SQL string can be safely cached independently of the actual lists of values
+    being passed to a particular invocation of [`ColumnOperators.in_()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To render the IN clause with real bound parameter symbols, use the `render_postcompile=True`
+    flag with [`ClauseElement.compile()`](../core/foundation.html#sqlalchemy.sql.expression.ClauseElement.compile
+    "sqlalchemy.sql.expression.ClauseElement.compile"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `literal_binds` flag, described in the previous section regarding rendering
+    of bound parameters, automatically sets `render_postcompile` to True, so for a
+    statement with simple ints/strings, these can be stringified directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`SQLCompiler.params`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.params
+    "sqlalchemy.sql.compiler.SQLCompiler.params") and [`SQLCompiler.positiontup`](../core/internals.html#sqlalchemy.sql.compiler.SQLCompiler.positiontup
+    "sqlalchemy.sql.compiler.SQLCompiler.positiontup") are also compatible with `render_postcompile`,
+    so that the previous recipes for rendering inline bound parameters will work here
+    in the same way, such as SQLite’s positional form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Remember, **all** of the above code recipes which stringify literal values,
+    bypassing the use of bound parameters when sending statements to the database,
+    are **only to be used when**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: the use is **debugging purposes only**
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: the string **is not to be passed to a live production database**
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: only with **local, trusted input**
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The above recipes for stringification of literal values are **not secure in
+    any way and should never be used against production databases**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Why are percent signs being doubled up when stringifying SQL statements?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many [DBAPI](../glossary.html#term-DBAPI) implementations make use of the `pyformat`
+    or `format` [paramstyle](https://www.python.org/dev/peps/pep-0249/#paramstyle),
+    which necessarily involve percent signs in their syntax. Most DBAPIs that do this
+    expect percent signs used for other reasons to be doubled up (i.e. escaped) in
+    the string form of the statements used, e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When SQL statements are passed to the underlying DBAPI by SQLAlchemy, substitution
+    of bound parameters works in the same way as the Python string interpolation operator
+    `%`, and in many cases the DBAPI actually uses this operator directly. Above,
+    the substitution of bound parameters would then look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The default compilers for databases like PostgreSQL (default DBAPI is psycopg2)
+    and MySQL (default DBAPI is mysqlclient) will have this percent sign escaping
+    behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When such a dialect is being used, if non-DBAPI statements are desired that
+    don’t include bound parameter symbols, one quick way to remove the percent signs
+    is to simply substitute in an empty set of parameters using Python’s `%` operator
+    directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The other is to set a different parameter style on the dialect being used;
+    all [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    implementations accept a parameter `paramstyle` which will cause the compiler
+    for that dialect to use the given parameter style. Below, the very common `named`
+    parameter style is set within the dialect used for the compilation so that percent
+    signs are no longer significant in the compiled form of SQL, and will no longer
+    be escaped:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## I’m using op() to generate a custom operator and my parenthesis are not
+    coming out correctly'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Operators.op()`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op") method allows one to create a custom
+    database operator otherwise not known by SQLAlchemy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, when using it on the right side of a compound expression, it doesn’t
+    generate parenthesis as we expect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, we probably want `(q1 + q2) -> p`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The solution to this case is to set the precedence of the operator, using the
+    [`Operators.op.precedence`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op.params.precedence
+    "sqlalchemy.sql.expression.Operators.op") parameter, to a high number, where 100
+    is the maximum value, and the highest number used by any SQLAlchemy operator is
+    currently 15:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can also usually force parenthesization around a binary expression (e.g.
+    an expression that has left/right operands and an operator) using the [`ColumnElement.self_group()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnElement.self_group
+    "sqlalchemy.sql.expression.ColumnElement.self_group") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: Why are the parentheses rules like this?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A lot of databases barf when there are excessive parenthesis or when parenthesis
+    are in unusual places they doesn’t expect, so SQLAlchemy does not generate parenthesis
+    based on groupings, it uses operator precedence and if the operator is known to
+    be associative, so that parenthesis are generated minimally. Otherwise, an expression
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'would produce:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which is fine but would probably annoy people (and be reported as a bug). In
+    other cases, it leads to things that are more likely to confuse databases or at
+    the very least readability, such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'would produce:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are also some edge cases where we get things like `"(x) = 7"` and databases
+    really don’t like that either. So parenthesization doesn’t naively parenthesize,
+    it uses operator precedence and associativity to determine groupings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For [`Operators.op()`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op"), the value of precedence defaults to
+    zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What if we defaulted the value of [`Operators.op.precedence`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op.params.precedence
+    "sqlalchemy.sql.expression.Operators.op") to 100, e.g. the highest? Then this
+    expression makes more parenthesis, but is otherwise OK, that is, these two are
+    equivalent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'but these two are not:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: For now, it’s not clear that as long as we are doing parenthesization based
+    on operator precedence and associativity, if there is really a way to parenthesize
+    automatically for a generic operator with no precedence given that is going to
+    work in all cases, because sometimes you want a custom op to have a lower precedence
+    than the other operators and sometimes you want it to be higher.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is possible that maybe if the “binary” expression above forced the use of
+    the `self_group()` method when `op()` is called, making the assumption that a
+    compound expression on the left side can always be parenthesized harmlessly. Perhaps
+    this change can be made at some point, however for the time being keeping the
+    parenthesization rules more internally consistent seems to be the safer approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why are the parentheses rules like this?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A lot of databases barf when there are excessive parenthesis or when parenthesis
+    are in unusual places they doesn’t expect, so SQLAlchemy does not generate parenthesis
+    based on groupings, it uses operator precedence and if the operator is known to
+    be associative, so that parenthesis are generated minimally. Otherwise, an expression
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'would produce:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which is fine but would probably annoy people (and be reported as a bug). In
+    other cases, it leads to things that are more likely to confuse databases or at
+    the very least readability, such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'would produce:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are also some edge cases where we get things like `"(x) = 7"` and databases
+    really don’t like that either. So parenthesization doesn’t naively parenthesize,
+    it uses operator precedence and associativity to determine groupings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For [`Operators.op()`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op"), the value of precedence defaults to
+    zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What if we defaulted the value of [`Operators.op.precedence`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op.params.precedence
+    "sqlalchemy.sql.expression.Operators.op") to 100, e.g. the highest? Then this
+    expression makes more parenthesis, but is otherwise OK, that is, these two are
+    equivalent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'but these two are not:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: For now, it’s not clear that as long as we are doing parenthesization based
+    on operator precedence and associativity, if there is really a way to parenthesize
+    automatically for a generic operator with no precedence given that is going to
+    work in all cases, because sometimes you want a custom op to have a lower precedence
+    than the other operators and sometimes you want it to be higher.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is possible that maybe if the “binary” expression above forced the use of
+    the `self_group()` method when `op()` is called, making the assumption that a
+    compound expression on the left side can always be parenthesized harmlessly. Perhaps
+    this change can be made at some point, however for the time being keeping the
+    parenthesization rules more internally consistent seems to be the safer approach.
+  prefs: []
+  type: TYPE_NORMAL

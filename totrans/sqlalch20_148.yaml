@@ -1,0 +1,3852 @@
+- en: What’s New in SQLAlchemy 0.7?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/changelog/migration_07.html](https://docs.sqlalchemy.org/en/20/changelog/migration_07.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: About this Document
+  prefs: []
+  type: TYPE_NORMAL
+- en: This document describes changes between SQLAlchemy version 0.6, last released
+    May 5, 2012, and SQLAlchemy version 0.7, undergoing maintenance releases as of
+    October, 2012.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Document date: July 27, 2011'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This guide introduces what’s new in SQLAlchemy version 0.7, and also documents
+    changes which affect users migrating their applications from the 0.6 series of
+    SQLAlchemy to 0.7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To as great a degree as possible, changes are made in such a way as to not break
+    compatibility with applications built for 0.6\. The changes that are necessarily
+    not backwards compatible are very few, and all but one, the change to mutable
+    attribute defaults, should affect an exceedingly small portion of applications
+    - many of the changes regard non-public APIs and undocumented hacks some users
+    may have been attempting to use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A second, even smaller class of non-backwards-compatible changes is also documented.
+    This class of change regards those features and behaviors that have been deprecated
+    at least since version 0.5 and have been raising warnings since their deprecation.
+    These changes would only affect applications that are still using 0.4- or early
+    0.5-style APIs. As the project matures, we have fewer and fewer of these kinds
+    of changes with 0.x level releases, which is a product of our API having ever
+    fewer features that are less than ideal for the use cases they were meant to solve.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An array of existing functionalities have been superseded in SQLAlchemy 0.7\.
+    There’s not much difference between the terms “superseded” and “deprecated”, except
+    that the former has a much weaker suggestion of the old feature would ever be
+    removed. In 0.7, features like `synonym` and `comparable_property`, as well as
+    all the `Extension` and other event classes, have been superseded. But these “superseded”
+    features have been re-implemented such that their implementations live mostly
+    outside of core ORM code, so their continued “hanging around” doesn’t impact SQLAlchemy’s
+    ability to further streamline and refine its internals, and we expect them to
+    remain within the API for the foreseeable future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Features
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: New Event System
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQLAlchemy started early with the `MapperExtension` class, which provided hooks
+    into the persistence cycle of mappers. As SQLAlchemy quickly became more componentized,
+    pushing mappers into a more focused configurational role, many more “extension”,
+    “listener”, and “proxy” classes popped up to solve various activity-interception
+    use cases in an ad-hoc fashion. Part of this was driven by the divergence of activities;
+    `ConnectionProxy` objects wanted to provide a system of rewriting statements and
+    parameters; `AttributeExtension` provided a system of replacing incoming values,
+    and `DDL` objects had events that could be switched off of dialect-sensitive callables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 0.7 re-implements virtually all of these plugin points with a new, unified approach,
+    which retains all the functionalities of the different systems, provides more
+    flexibility and less boilerplate, performs better, and eliminates the need to
+    learn radically different APIs for each event subsystem. The pre-existing classes
+    `MapperExtension`, `SessionExtension`, `AttributeExtension`, `ConnectionProxy`,
+    `PoolListener` as well as the `DDLElement.execute_at` method are deprecated and
+    now implemented in terms of the new system - these APIs remain fully functional
+    and are expected to remain in place for the foreseeable future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The new approach uses named events and user-defined callables to associate activities
+    with events. The API’s look and feel was driven by such diverse sources as JQuery,
+    Blinker, and Hibernate, and was also modified further on several occasions during
+    conferences with dozens of users on Twitter, which appears to have a much higher
+    response rate than the mailing list for such questions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It also features an open-ended system of target specification that allows events
+    to be associated with API classes, such as for all `Session` or `Engine` objects,
+    with specific instances of API classes, such as for a specific `Pool` or `Mapper`,
+    as well as for related objects like a user- defined class that’s mapped, or something
+    as specific as a certain attribute on instances of a particular subclass of a
+    mapped parent class. Individual listener subsystems can apply wrappers to incoming
+    user- defined listener functions which modify how they are called - an mapper
+    event can receive either the instance of the object being operated upon, or its
+    underlying `InstanceState` object. An attribute event can opt whether or not to
+    have the responsibility of returning a new value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Several systems now build upon the new event API, including the new “mutable
+    attributes” API as well as composite attributes. The greater emphasis on events
+    has also led to the introduction of a handful of new events, including attribute
+    expiration and refresh operations, pickle loads/dumps operations, completed mapper
+    construction operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Events](../core/event.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1902](https://www.sqlalchemy.org/trac/ticket/1902)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hybrid Attributes, implements/supersedes synonym(), comparable_property()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The “derived attributes” example has now been turned into an official extension.
+    The typical use case for `synonym()` is to provide descriptor access to a mapped
+    column; the use case for `comparable_property()` is to be able to return a `PropComparator`
+    from any descriptor. In practice, the approach of “derived” is easier to use,
+    more extensible, is implemented in a few dozen lines of pure Python with almost
+    no imports, and doesn’t require the ORM core to even be aware of it. The feature
+    is now known as the “Hybrid Attributes” extension.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`synonym()` and `comparable_property()` are still part of the ORM, though their
+    implementations have been moved outwards, building on an approach that is similar
+    to that of the hybrid extension, so that the core ORM mapper/query/property modules
+    aren’t really aware of them otherwise.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Hybrid Attributes](../orm/extensions/hybrid.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1903](https://www.sqlalchemy.org/trac/ticket/1903)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Speed Enhancements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As is customary with all major SQLA releases, a wide pass through the internals
+    to reduce overhead and callcounts has been made which further reduces the work
+    needed in common scenarios. Highlights of this release include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The flush process will now bundle INSERT statements into batches fed to `cursor.executemany()`,
+    for rows where the primary key is already present. In particular this usually
+    applies to the “child” table on a joined table inheritance configuration, meaning
+    the number of calls to `cursor.execute` for a large bulk insert of joined- table
+    objects can be cut in half, allowing native DBAPI optimizations to take place
+    for those statements passed to `cursor.executemany()` (such as re-using a prepared
+    statement).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The codepath invoked when accessing a many-to-one reference to a related object
+    that’s already loaded has been greatly simplified. The identity map is checked
+    directly without the need to generate a new `Query` object first, which is expensive
+    in the context of thousands of in-memory many-to-ones being accessed. The usage
+    of constructed-per-call “loader” objects is also no longer used for the majority
+    of lazy attribute loads.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The rewrite of composites allows a shorter codepath when mapper internals access
+    mapped attributes within a flush.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New inlined attribute access functions replace the previous usage of “history”
+    when the “save-update” and other cascade operations need to cascade among the
+    full scope of datamembers associated with an attribute. This reduces the overhead
+    of generating a new `History` object for this speed-critical operation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The internals of the `ExecutionContext`, the object corresponding to a statement
+    execution, have been inlined and simplified.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `bind_processor()` and `result_processor()` callables generated by types
+    for each statement execution are now cached (carefully, so as to avoid memory
+    leaks for ad-hoc types and dialects) for the lifespan of that type, further reducing
+    per-statement call overhead.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The collection of “bind processors” for a particular `Compiled` instance of
+    a statement is also cached on the `Compiled` object, taking further advantage
+    of the “compiled cache” used by the flush process to re-use the same compiled
+    form of INSERT, UPDATE, DELETE statements.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A demonstration of callcount reduction including a sample benchmark script is
+    at [https://techspot.zzzeek.org/2010/12/12/a-tale-of-three](https://techspot.zzzeek.org/2010/12/12/a-tale-of-three)-
+    profiles/
+  prefs: []
+  type: TYPE_NORMAL
+- en: Composites Rewritten
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The “composite” feature has been rewritten, like `synonym()` and `comparable_property()`,
+    to use a lighter weight implementation based on descriptors and events, rather
+    than building into the ORM internals. This allowed the removal of some latency
+    from the mapper/unit of work internals, and simplifies the workings of composite.
+    The composite attribute now no longer conceals the underlying columns it builds
+    upon, which now remain as regular attributes. Composites can also act as a proxy
+    for `relationship()` as well as `Column()` attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The major backwards-incompatible change of composites is that they no longer
+    use the `mutable=True` system to detect in-place mutations. Please use the [Mutation
+    Tracking](https://www.sqlalchemy.org/docs/07/orm/extensions/mutable.html) extension
+    to establish in-place change events to existing composite usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Composite Column Types](../orm/composites.html#mapper-composite)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2008](https://www.sqlalchemy.org/trac/ticket/2008) [#2024](https://www.sqlalchemy.org/trac/ticket/2024)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: More succinct form of query.join(target, onclause)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The default method of issuing `query.join()` to a target with an explicit onclause
+    is now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: In 0.6, this usage was considered to be an error, because `join()` accepts multiple
+    arguments corresponding to multiple JOIN clauses - the two-argument form needed
+    to be in a tuple to disambiguate between single-argument and two- argument join
+    targets. In the middle of 0.6 we added detection and an error message for this
+    specific calling style, since it was so common. In 0.7, since we are detecting
+    the exact pattern anyway, and since having to type out a tuple for no reason is
+    extremely annoying, the non- tuple method now becomes the “normal” way to do it.
+    The “multiple JOIN” use case is exceedingly rare compared to the single join case,
+    and multiple joins these days are more clearly represented by multiple calls to
+    `join()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The tuple form will remain for backwards compatibility.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that all the other forms of `query.join()` remain unchanged:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[Querying with Joins](https://www.sqlalchemy.org/docs/07/orm/tutorial.html#querying-with-joins)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1923](https://www.sqlalchemy.org/trac/ticket/1923)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mutation event extension, supersedes “mutable=True”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A new extension, [Mutation Tracking](../orm/extensions/mutable.html), provides
+    a mechanism by which user-defined datatypes can provide change events back to
+    the owning parent or parents. The extension includes an approach for scalar database
+    values, such as those managed by [`PickleType`](../core/type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType"), `postgresql.ARRAY`, or other custom `MutableType`
+    classes, as well as an approach for ORM “composites”, those configured using [`composite()`](../orm/composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite").
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: NULLS FIRST / NULLS LAST operators
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: These are implemented as an extension to the `asc()` and `desc()` operators,
+    called `nullsfirst()` and `nullslast()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`nullsfirst()`](../core/sqlelement.html#sqlalchemy.sql.expression.nullsfirst
+    "sqlalchemy.sql.expression.nullsfirst")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`nullslast()`](../core/sqlelement.html#sqlalchemy.sql.expression.nullslast
+    "sqlalchemy.sql.expression.nullslast")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#723](https://www.sqlalchemy.org/trac/ticket/723)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: select.distinct(), query.distinct() accepts *args for PostgreSQL DISTINCT ON
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This was already available by passing a list of expressions to the `distinct`
+    keyword argument of `select()`, the `distinct()` method of `select()` and `Query`
+    now accept positional arguments which are rendered as DISTINCT ON when a PostgreSQL
+    backend is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[distinct()](https://www.sqlalchemy.org/docs/07/core/expression_api.html#sqlalchemy.sql.expression.Select.distinct)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Query.distinct()](https://www.sqlalchemy.org/docs/07/orm/query.html#sqlalchemy.orm.query.Query.distinct)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1069](https://www.sqlalchemy.org/trac/ticket/1069)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Index()` can be placed inline inside of `Table`, `__table_args__`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The Index() construct can be created inline with a Table definition, using
+    strings as column names, as an alternative to the creation of the index outside
+    of the Table. That is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The primary rationale here is for the benefit of declarative `__table_args__`,
+    particularly when used with mixins:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[Indexes](https://www.sqlalchemy.org/docs/07/core/schema.html#indexes)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Window Function SQL Construct
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A “window function” provides to a statement information about the result set
+    as it’s produced. This allows criteria against various things like “row number”,
+    “rank” and so forth. They are known to be supported at least by PostgreSQL, SQL
+    Server and Oracle, possibly others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The best introduction to window functions is on PostgreSQL’s site, where window
+    functions have been supported since version 8.4:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.postgresql.org/docs/current/static/tutorial-window.html](https://www.postgresql.org/docs/current/static/tutorial-window.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy provides a simple construct typically invoked via an existing function
+    clause, using the `over()` method, which accepts `order_by` and `partition_by`
+    keyword arguments. Below we replicate the first example in PG’s tutorial:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'SQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[sqlalchemy.sql.expression.over](https://www.sqlalchemy.org/docs/07/core/expression_api.html#sqlalchemy.sql.expression.over)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1844](https://www.sqlalchemy.org/trac/ticket/1844)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: execution_options() on Connection accepts “isolation_level” argument
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This sets the transaction isolation level for a single `Connection`, until that
+    `Connection` is closed and its underlying DBAPI resource returned to the connection
+    pool, upon which the isolation level is reset back to the default. The default
+    isolation level is set using the `isolation_level` argument to `create_engine()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transaction isolation support is currently only supported by the PostgreSQL
+    and SQLite backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[execution_options()](https://www.sqlalchemy.org/docs/07/core/connections.html#sqlalchemy.engine.base.Connection.execution_options)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2001](https://www.sqlalchemy.org/trac/ticket/2001)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`TypeDecorator` works with integer primary key columns'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A `TypeDecorator` which extends the behavior of `Integer` can be used with a
+    primary key column. The “autoincrement” feature of `Column` will now recognize
+    that the underlying database column is still an integer so that lastrowid mechanisms
+    continue to function. The `TypeDecorator` itself will have its result value processor
+    applied to newly generated primary keys, including those received by the DBAPI
+    `cursor.lastrowid` accessor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2005](https://www.sqlalchemy.org/trac/ticket/2005) [#2006](https://www.sqlalchemy.org/trac/ticket/2006)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`TypeDecorator` is present in the “sqlalchemy” import space'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: No longer need to import this from `sqlalchemy.types`, it’s now mirrored in
+    `sqlalchemy`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Dialects
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Dialects have been added:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'a MySQLdb driver for the Drizzle database:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Drizzle](https://www.sqlalchemy.org/docs/07/dialects/drizzle.html)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'support for the pymysql DBAPI:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[pymsql Notes](https://www.sqlalchemy.org/docs/07/dialects/mysql.html#module-sqlalchemy.dialects.mysql.pymysql)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: psycopg2 now works with Python 3
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Behavioral Changes (Backwards Compatible)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: C Extensions Build by Default
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is as of 0.7b4\. The exts will build if cPython 2.xx is detected. If the
+    build fails, such as on a windows install, that condition is caught and the non-C
+    install proceeds. The C exts won’t build if Python 3 or PyPy is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Query.count() simplified, should work virtually always
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The very old guesswork which occurred within `Query.count()` has been modernized
+    to use `.from_self()`. That is, `query.count()` is now equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Previously, internal logic attempted to rewrite the columns clause of the query
+    itself, and upon detection of a “subquery” condition, such as a column-based query
+    that might have aggregates in it, or a query with DISTINCT, would go through a
+    convoluted process of rewriting the columns clause. This logic failed in complex
+    conditions, particularly those involving joined table inheritance, and was long
+    obsolete by the more comprehensive `.from_self()` call.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The SQL emitted by `query.count()` is now always of the form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: that is, the original query is preserved entirely inside of a subquery, with
+    no more guessing as to how count should be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2093](https://www.sqlalchemy.org/trac/ticket/2093)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To emit a non-subquery form of count()
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'MySQL users have already reported that the MyISAM engine not surprisingly falls
+    over completely with this simple change. Note that for a simple `count()` that
+    optimizes for DBs that can’t handle simple subqueries, `func.count()` should be
+    used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'or for `count(*)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: LIMIT/OFFSET clauses now use bind parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The LIMIT and OFFSET clauses, or their backend equivalents (i.e. TOP, ROW NUMBER
+    OVER, etc.), use bind parameters for the actual values, for all backends which
+    support it (most except for Sybase). This allows better query optimizer performance
+    as the textual string for multiple statements with differing LIMIT/OFFSET are
+    now identical.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#805](https://www.sqlalchemy.org/trac/ticket/805)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Logging enhancements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Vinay Sajip has provided a patch to our logging system such that the “hex string”
+    embedded in logging statements for engines and pools is no longer needed to allow
+    the `echo` flag to work correctly. A new system that uses filtered logging objects
+    allows us to maintain our current behavior of `echo` being local to individual
+    engines without the need for additional identifying strings local to those engines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1926](https://www.sqlalchemy.org/trac/ticket/1926)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simplified polymorphic_on assignment
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The population of the `polymorphic_on` column-mapped attribute, when used in
+    an inheritance scenario, now occurs when the object is constructed, i.e. its `__init__`
+    method is called, using the init event. The attribute then behaves the same as
+    any other column-mapped attribute. Previously, special logic would fire off during
+    flush to populate this column, which prevented any user code from modifying its
+    behavior. The new approach improves upon this in three ways: 1\. the polymorphic
+    identity is now present on the object as soon as its constructed; 2\. the polymorphic
+    identity can be changed by user code without any difference in behavior from any
+    other column-mapped attribute; 3\. the internals of the mapper during flush are
+    simplified and no longer need to make special checks for this column.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1895](https://www.sqlalchemy.org/trac/ticket/1895)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: contains_eager() chains across multiple paths (i.e. “all()”)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The ``contains_eager()[PRE10]contains_eager()`` calls. Instead of:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'you can say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[#2032](https://www.sqlalchemy.org/trac/ticket/2032)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Flushing of orphans that have no parent is allowed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We’ve had a long standing behavior that checks for a so- called “orphan” during
+    flush, that is, an object which is associated with a `relationship()` that specifies
+    “delete- orphan” cascade, has been newly added to the session for an INSERT, and
+    no parent relationship has been established. This check was added years ago to
+    accommodate some test cases which tested the orphan behavior for consistency.
+    In modern SQLA, this check is no longer needed on the Python side. The equivalent
+    behavior of the “orphan check” is accomplished by making the foreign key reference
+    to the object’s parent row NOT NULL, where the database does its job of establishing
+    data consistency in the same way SQLA allows most other operations to do. If the
+    object’s parent foreign key is nullable, then the row can be inserted. The “orphan”
+    behavior runs when the object was persisted with a particular parent, and is then
+    disassociated with that parent, leading to a DELETE statement emitted for it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1912](https://www.sqlalchemy.org/trac/ticket/1912)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warnings generated when collection members, scalar referents not part of the
+    flush
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Warnings are now emitted when related objects referenced via a loaded `relationship()`
+    on a parent object marked as “dirty” are not present in the current `Session`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `save-update` cascade takes effect when objects are added to the `Session`,
+    or when objects are first associated with a parent, so that an object and everything
+    related to it are usually all present in the same `Session`. However, if `save-update`
+    cascade is disabled for a particular `relationship()`, then this behavior does
+    not occur, and the flush process does not try to correct for it, instead staying
+    consistent to the configured cascade behavior. Previously, when such objects were
+    detected during the flush, they were silently skipped. The new behavior is that
+    a warning is emitted, for the purposes of alerting to a situation that more often
+    than not is the source of unexpected behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1973](https://www.sqlalchemy.org/trac/ticket/1973)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setup no longer installs a Nose plugin
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Since we moved to nose we’ve used a plugin that installs via setuptools, so
+    that the `nosetests` script would automatically run SQLA’s plugin code, necessary
+    for our tests to have a full environment. In the middle of 0.6, we realized that
+    the import pattern here meant that Nose’s “coverage” plugin would break, since
+    “coverage” requires that it be started before any modules to be covered are imported;
+    so in the middle of 0.6 we made the situation worse by adding a separate `sqlalchemy-nose`
+    package to the build to overcome this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In 0.7 we’ve done away with trying to get `nosetests` to work automatically,
+    since the SQLAlchemy module would produce a large number of nose configuration
+    options for all usages of `nosetests`, not just the SQLAlchemy unit tests themselves,
+    and the additional `sqlalchemy-nose` install was an even worse idea, producing
+    an extra package in Python environments. The `sqla_nose.py` script in 0.7 is now
+    the only way to run the tests with nose.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1949](https://www.sqlalchemy.org/trac/ticket/1949)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Non-`Table`-derived constructs can be mapped
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A construct that isn’t against any `Table` at all, like a function, can be mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[#1876](https://www.sqlalchemy.org/trac/ticket/1876)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: aliased() accepts `FromClause` elements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is a convenience helper such that in the case a plain `FromClause`, such
+    as a `select`, `Table` or `join` is passed to the `orm.aliased()` construct, it
+    passes through to the `.alias()` method of that from construct rather than constructing
+    an ORM level `AliasedClass`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2018](https://www.sqlalchemy.org/trac/ticket/2018)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Session.connection(), Session.execute() accept ‘bind’
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is to allow execute/connection operations to participate in the open transaction
+    of an engine explicitly. It also allows custom subclasses of `Session` that implement
+    their own `get_bind()` method and arguments to use those custom arguments with
+    both the `execute()` and `connection()` methods equally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Session.connection](https://www.sqlalchemy.org/docs/07/orm/session.html#sqlalchemy.orm.session.Session.connection)
+    [Session.execute](https://www.sqlalchemy.org/docs/07/orm/session.html#sqlalchemy.orm.session.Session.execute)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1996](https://www.sqlalchemy.org/trac/ticket/1996)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Standalone bind parameters in columns clause auto-labeled.
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Bind parameters present in the “columns clause” of a select are now auto-labeled
+    like other “anonymous” clauses, which among other things allows their “type” to
+    be meaningful when the row is fetched, as in result row processors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite - relative file paths are normalized through os.path.abspath()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This so that a script that changes the current directory will continue to target
+    the same location as subsequent SQLite connections are established.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2036](https://www.sqlalchemy.org/trac/ticket/2036)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: MS-SQL - `String`/`Unicode`/`VARCHAR`/`NVARCHAR`/`VARBINARY` emit “max” for
+    no length
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: On the MS-SQL backend, the String/Unicode types, and their counterparts VARCHAR/
+    NVARCHAR, as well as VARBINARY ([#1833](https://www.sqlalchemy.org/trac/ticket/1833))
+    emit “max” as the length when no length is specified. This makes it more compatible
+    with PostgreSQL’s VARCHAR type which is similarly unbounded when no length specified.
+    SQL Server defaults the length on these types to ‘1’ when no length is specified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Behavioral Changes (Backwards Incompatible)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Note again, aside from the default mutability change, most of these changes
+    are *extremely minor* and will not affect most users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`PickleType` and ARRAY mutability turned off by default'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This change refers to the default behavior of the ORM when mapping columns
+    that have either the `PickleType` or `postgresql.ARRAY` datatypes. The `mutable`
+    flag is now set to `False` by default. If an existing application uses these types
+    and depends upon detection of in-place mutations, the type object must be constructed
+    with `mutable=True` to restore the 0.6 behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `mutable=True` flag is being phased out, in favor of the new [Mutation Tracking](https://www.sqlalchemy.org/docs/07/orm/extensions/mutable.html)
+    extension. This extension provides a mechanism by which user-defined datatypes
+    can provide change events back to the owning parent or parents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The previous approach of using `mutable=True` does not provide for change events
+    - instead, the ORM must scan through all mutable values present in a session and
+    compare them against their original value for changes every time `flush()` is
+    called, which is a very time consuming event. This is a holdover from the very
+    early days of SQLAlchemy when `flush()` was not automatic and the history tracking
+    system was not nearly as sophisticated as it is now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Existing applications which use `PickleType`, `postgresql.ARRAY` or other `MutableType`
+    subclasses, and require in-place mutation detection, should migrate to the new
+    mutation tracking system, as `mutable=True` is likely to be deprecated in the
+    future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1980](https://www.sqlalchemy.org/trac/ticket/1980)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mutability detection of `composite()` requires the Mutation Tracking Extension
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So-called “composite” mapped attributes, those configured using the technique
+    described at [Composite Column Types](https://www.sqlalchemy.org/docs/07/orm/mapper_config.html#composite-column-types),
+    have been re-implemented such that the ORM internals are no longer aware of them
+    (leading to shorter and more efficient codepaths in critical sections). While
+    composite types are generally intended to be treated as immutable value objects,
+    this was never enforced. For applications that use composites with mutability,
+    the [Mutation Tracking](https://www.sqlalchemy.org/docs/07/orm/extensions/mutable.html)
+    extension offers a base class which establishes a mechanism for user-defined composite
+    types to send change event messages back to the owning parent or parents of each
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Applications which use composite types and rely upon in- place mutation detection
+    of these objects should either migrate to the “mutation tracking” extension, or
+    change the usage of the composite types such that in-place changes are no longer
+    needed (i.e., treat them as immutable value objects).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite - the SQLite dialect now uses `NullPool` for file-based databases
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This change is **99.999% backwards compatible**, unless you are using temporary
+    tables across connection pool connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A file-based SQLite connection is blazingly fast, and using `NullPool` means
+    that each call to `Engine.connect` creates a new pysqlite connection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Previously, the `SingletonThreadPool` was used, which meant that all connections
+    to a certain engine in a thread would be the same connection. It’s intended that
+    the new approach is more intuitive, particularly when multiple connections are
+    used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SingletonThreadPool` is still the default engine when a `:memory:` database
+    is used.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that this change **breaks temporary tables used across Session commits**,
+    due to the way SQLite handles temp tables. See the note at [https://www.sqlalchemy.org/docs/dialects/sqlite.html#using](https://www.sqlalchemy.org/docs/dialects/sqlite.html#using)-
+    temporary-tables-with-sqlite if temporary tables beyond the scope of one pool
+    connection are desired.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1921](https://www.sqlalchemy.org/trac/ticket/1921)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Session.merge()` checks version ids for versioned mappers'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Session.merge() will check the version id of the incoming state against that
+    of the database, assuming the mapping uses version ids and incoming state has
+    a version_id assigned, and raise StaleDataError if they don’t match. This is the
+    correct behavior, in that if incoming state contains a stale version id, it should
+    be assumed the state is stale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If merging data into a versioned state, the version id attribute can be left
+    undefined, and no version check will take place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This check was confirmed by examining what Hibernate does - both the `merge()`
+    and the versioning features were originally adapted from Hibernate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2027](https://www.sqlalchemy.org/trac/ticket/2027)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tuple label names in Query Improved
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This improvement is potentially slightly backwards incompatible for an application
+    that relied upon the old behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given two mapped classes `Foo` and `Bar` each with a column `spam`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The name given to the single column yielded by `qu` will be `spam`. Previously
+    it would be something like `foo_spam` due to the way the `union` would combine
+    things, which is inconsistent with the name `spam` in the case of a non-unioned
+    query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1942](https://www.sqlalchemy.org/trac/ticket/1942)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapped column attributes reference the most specific column first
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is a change to the behavior involved when a mapped column attribute references
+    multiple columns, specifically when dealing with an attribute on a joined-table
+    subclass that has the same name as that of an attribute on the superclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using declarative, the scenario is this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the attribute `Child.id` refers to both the `child.id` column as well
+    as `parent.id` - this due to the name of the attribute. If it were named differently
+    on the class, such as `Child.child_id`, it then maps distinctly to `child.id`,
+    with `Child.id` being the same attribute as `Parent.id`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the `id` attribute is made to reference both `parent.id` and `child.id`,
+    it stores them in an ordered list. An expression such as `Child.id` then refers
+    to just *one* of those columns when rendered. Up until 0.6, this column would
+    be `parent.id`. In 0.7, it is the less surprising `child.id`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The legacy of this behavior deals with behaviors and restrictions of the ORM
+    that don’t really apply anymore; all that was needed was to reverse the order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A primary advantage of this approach is that it’s now easier to construct `primaryjoin`
+    expressions that refer to the local column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Prior to 0.7 the `Child.id` expression would reference `Parent.id`, and it would
+    be necessary to map `child.id` to a distinct attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It also means that a query like this one changes its behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In 0.6, this would render:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'in 0.7, you get:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which you’ll note is a cartesian product - this behavior is now equivalent
+    to that of any other attribute that is local to `Child`. The `with_polymorphic()`
+    method, or a similar strategy of explicitly joining the underlying `Table` objects,
+    is used to render a query against all `Parent` objects with criteria against `Child`,
+    in the same manner as that of 0.5 and 0.6:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Which on both 0.6 and 0.7 renders:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Another effect of this change is that a joined-inheritance load across two tables
+    will populate from the child table’s value, not that of the parent table. An unusual
+    case is that a query against “Parent” using `with_polymorphic="*"` issues a query
+    against “parent”, with a LEFT OUTER JOIN to “child”. The row is located in “Parent”,
+    sees the polymorphic identity corresponds to “Child”, but suppose the actual row
+    in “child” has been *deleted*. Due to this corruption, the row comes in with all
+    the columns corresponding to “child” set to NULL - this is now the value that
+    gets populated, not the one in the parent table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1892](https://www.sqlalchemy.org/trac/ticket/1892)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapping to joins with two or more same-named columns requires explicit declaration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is somewhat related to the previous change in [#1892](https://www.sqlalchemy.org/trac/ticket/1892).
+    When mapping to a join, same-named columns must be explicitly linked to mapped
+    attributes, i.e. as described in [Mapping a Class Against Multiple Tables](http://www.sqlalchemy.org/docs/07/orm/mapper_config.html#mapping-a-class-against-multiple-tables).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given two tables `foo` and `bar`, each with a primary key column `id`, the
+    following now produces an error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This because the `mapper()` refuses to guess what column is the primary representation
+    of `FooBar.id` - is it `foo.c.id` or is it `bar.c.id` ? The attribute must be
+    explicit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[#1896](https://www.sqlalchemy.org/trac/ticket/1896)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapper requires that polymorphic_on column be present in the mapped selectable
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This is a warning in 0.6, now an error in 0.7\. The column given for `polymorphic_on`
+    must be in the mapped selectable. This to prevent some occasional user errors
+    such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: where above the polymorphic_on needs to be on a `sometable` column, in this
+    case perhaps `sometable.c.some_lookup_id`. There are also some “polymorphic union”
+    scenarios where similar mistakes sometimes occur.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Such a configuration error has always been “wrong”, and the above mapping doesn’t
+    work as specified - the column would be ignored. It is however potentially backwards
+    incompatible in the rare case that an application has been unknowingly relying
+    upon this behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1875](https://www.sqlalchemy.org/trac/ticket/1875)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`DDL()` constructs now escape percent signs'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Previously, percent signs in `DDL()` strings would have to be escaped, i.e.
+    `%%` depending on DBAPI, for those DBAPIs that accept `pyformat` or `format` binds
+    (i.e. psycopg2, mysql-python), which was inconsistent versus `text()` constructs
+    which did this automatically. The same escaping now occurs for `DDL()` as for
+    `text()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1897](https://www.sqlalchemy.org/trac/ticket/1897)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Table.c` / `MetaData.tables` refined a bit, don’t allow direct mutation'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another area where some users were tinkering around in such a way that doesn’t
+    actually work as expected, but still left an exceedingly small chance that some
+    application was relying upon this behavior, the construct returned by the `.c`
+    attribute on `Table` and the `.tables` attribute on `MetaData` is explicitly non-mutable.
+    The “mutable” version of the construct is now private. Adding columns to `.c`
+    involves using the `append_column()` method of `Table`, which ensures things are
+    associated with the parent `Table` in the appropriate way; similarly, `MetaData.tables`
+    has a contract with the `Table` objects stored in this dictionary, as well as
+    a little bit of new bookkeeping in that a `set()` of all schema names is tracked,
+    which is satisfied only by using the public `Table` constructor as well as `Table.tometadata()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is of course possible that the `ColumnCollection` and `dict` collections
+    consulted by these attributes could someday implement events on all of their mutational
+    methods such that the appropriate bookkeeping occurred upon direct mutation of
+    the collections, but until someone has the motivation to implement all that along
+    with dozens of new unit tests, narrowing the paths to mutation of these collections
+    will ensure no application is attempting to rely upon usages that are currently
+    not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1893](https://www.sqlalchemy.org/trac/ticket/1893) [#1917](https://www.sqlalchemy.org/trac/ticket/1917)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: server_default consistently returns None for all inserted_primary_key values
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Established consistency when server_default is present on an Integer PK column.
+    SQLA doesn’t pre-fetch these, nor do they come back in cursor.lastrowid (DBAPI).
+    Ensured all backends consistently return None in result.inserted_primary_key for
+    these - some backends may have returned a value previously. Using a server_default
+    on a primary key column is extremely unusual. If a special function or SQL expression
+    is used to generate primary key defaults, this should be established as a Python-side
+    “default” instead of server_default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regarding reflection for this case, reflection of an int PK col with a server_default
+    sets the “autoincrement” flag to False, except in the case of a PG SERIAL col
+    where we detected a sequence default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2020](https://www.sqlalchemy.org/trac/ticket/2020) [#2021](https://www.sqlalchemy.org/trac/ticket/2021)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `sqlalchemy.exceptions` alias in sys.modules is removed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For a few years we’ve added the string `sqlalchemy.exceptions` to `sys.modules`,
+    so that a statement like “`import sqlalchemy.exceptions`” would work. The name
+    of the core exceptions module has been `exc` for a long time now, so the recommended
+    import for this module is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `exceptions` name is still present in “`sqlalchemy`” for applications which
+    might have said `from sqlalchemy import exceptions`, but they should also start
+    using the `exc` name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Query Timing Recipe Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: While not part of SQLAlchemy itself, it’s worth mentioning that the rework of
+    the `ConnectionProxy` into the new event system means it is no longer appropriate
+    for the “Timing all Queries” recipe. Please adjust query-timers to use the `before_cursor_execute()`
+    and `after_cursor_execute()` events, demonstrated in the updated recipe UsageRecipes/Profiling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deprecated API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Default constructor on types will not accept arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Simple types like `Integer`, `Date` etc. in the core types module don’t accept
+    arguments. The default constructor that accepts/ignores a catchall `\*args, \**kwargs`
+    is restored as of 0.7b4/0.7.0, but emits a deprecation warning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If arguments are being used with a core type like `Integer`, it may be that
+    you intended to use a dialect specific type, such as `sqlalchemy.dialects.mysql.INTEGER`
+    which does accept a “display_width” argument for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: compile_mappers() renamed configure_mappers(), simplified configuration internals
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This system slowly morphed from something small, implemented local to an individual
+    mapper, and poorly named into something that’s more of a global “registry-” level
+    function and poorly named, so we’ve fixed both by moving the implementation out
+    of `Mapper` altogether and renaming it to `configure_mappers()`. It is of course
+    normally not needed for an application to call `configure_mappers()` as this process
+    occurs on an as-needed basis, as soon as the mappings are needed via attribute
+    or query access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1966](https://www.sqlalchemy.org/trac/ticket/1966)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Core listener/proxy superseded by event listeners
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`PoolListener`, `ConnectionProxy`, `DDLElement.execute_at` are superseded by
+    `event.listen()`, using the `PoolEvents`, `EngineEvents`, `DDLEvents` dispatch
+    targets, respectively.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ORM extensions superseded by event listeners
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`MapperExtension`, `AttributeExtension`, `SessionExtension` are superseded
+    by `event.listen()`, using the `MapperEvents`/`InstanceEvents`, `AttributeEvents`,
+    `SessionEvents`, dispatch targets, respectively.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sending a string to ‘distinct’ in select() for MySQL should be done via prefixes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This obscure feature allows this pattern with the MySQL backend:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `prefixes` keyword or `prefix_with()` method should be used for non-standard
+    or unusual prefixes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`useexisting` superseded by `extend_existing` and `keep_existing`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The `useexisting` flag on Table has been superseded by a new pair of flags `keep_existing`
+    and `extend_existing`. `extend_existing` is equivalent to `useexisting` - the
+    existing Table is returned, and additional constructor elements are added. With
+    `keep_existing`, the existing Table is returned, but additional constructor elements
+    are not added - these elements are only applied when the Table is newly created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Backwards Incompatible API Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Callables passed to `bindparam()` don’t get evaluated - affects the Beaker example
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[#1950](https://www.sqlalchemy.org/trac/ticket/1950)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note this affects the Beaker caching example, where the workings of the `_params_from_query()`
+    function needed a slight adjustment. If you’re using code from the Beaker example,
+    this change should be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: types.type_map is now private, types._type_map
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We noticed some users tapping into this dictionary inside of `sqlalchemy.types`
+    as a shortcut to associating Python types with SQL types. We can’t guarantee the
+    contents or format of this dictionary, and additionally the business of associating
+    Python types in a one-to-one fashion has some grey areas that should are best
+    decided by individual applications, so we’ve underscored this attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1870](https://www.sqlalchemy.org/trac/ticket/1870)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Renamed the `alias` keyword arg of standalone `alias()` function to `name`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This so that the keyword argument `name` matches that of the `alias()` methods
+    on all `FromClause` objects as well as the `name` argument on `Query.subquery()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Only code that uses the standalone `alias()` function, and not the method bound
+    functions, and passes the alias name using the explicit keyword name `alias`,
+    and not positionally, would need modification here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Non-public `Pool` methods underscored
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All methods of `Pool` and subclasses which are not intended for public use have
+    been renamed with underscores. That they were not named this way previously was
+    a bug.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Pooling methods now underscored or removed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.create_connection()` -> `Pool._create_connection()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.do_get()` -> `Pool._do_get()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.do_return_conn()` -> `Pool._do_return_conn()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.do_return_invalid()` -> removed, was not used'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.return_conn()` -> `Pool._return_conn()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.get()` -> `Pool._get()`, public API is `Pool.connect()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SingletonThreadPool.cleanup()` -> `_cleanup()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SingletonThreadPool.dispose_local()` -> removed, use `conn.invalidate()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1982](https://www.sqlalchemy.org/trac/ticket/1982)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Previously Deprecated, Now Removed
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Query.join(), Query.outerjoin(), eagerload(), eagerload_all(), others no longer
+    allow lists of attributes as arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Passing a list of attributes or attribute names to `Query.join`, `eagerload()`,
+    and similar has been deprecated since 0.5:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These methods all accept *args as of the 0.5 series:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`ScopedSession.mapper` is removed'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This feature provided a mapper extension which linked class- based functionality
+    with a particular `ScopedSession`, in particular providing the behavior such that
+    new object instances would be automatically associated with that session. The
+    feature was overused by tutorials and frameworks which led to great user confusion
+    due to its implicit behavior, and was deprecated in 0.5.5\. Techniques for replicating
+    its functionality are at [wiki:UsageRecipes/SessionAwareMapper]
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This guide introduces what’s new in SQLAlchemy version 0.7, and also documents
+    changes which affect users migrating their applications from the 0.6 series of
+    SQLAlchemy to 0.7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To as great a degree as possible, changes are made in such a way as to not break
+    compatibility with applications built for 0.6\. The changes that are necessarily
+    not backwards compatible are very few, and all but one, the change to mutable
+    attribute defaults, should affect an exceedingly small portion of applications
+    - many of the changes regard non-public APIs and undocumented hacks some users
+    may have been attempting to use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A second, even smaller class of non-backwards-compatible changes is also documented.
+    This class of change regards those features and behaviors that have been deprecated
+    at least since version 0.5 and have been raising warnings since their deprecation.
+    These changes would only affect applications that are still using 0.4- or early
+    0.5-style APIs. As the project matures, we have fewer and fewer of these kinds
+    of changes with 0.x level releases, which is a product of our API having ever
+    fewer features that are less than ideal for the use cases they were meant to solve.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An array of existing functionalities have been superseded in SQLAlchemy 0.7\.
+    There’s not much difference between the terms “superseded” and “deprecated”, except
+    that the former has a much weaker suggestion of the old feature would ever be
+    removed. In 0.7, features like `synonym` and `comparable_property`, as well as
+    all the `Extension` and other event classes, have been superseded. But these “superseded”
+    features have been re-implemented such that their implementations live mostly
+    outside of core ORM code, so their continued “hanging around” doesn’t impact SQLAlchemy’s
+    ability to further streamline and refine its internals, and we expect them to
+    remain within the API for the foreseeable future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Features
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: New Event System
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQLAlchemy started early with the `MapperExtension` class, which provided hooks
+    into the persistence cycle of mappers. As SQLAlchemy quickly became more componentized,
+    pushing mappers into a more focused configurational role, many more “extension”,
+    “listener”, and “proxy” classes popped up to solve various activity-interception
+    use cases in an ad-hoc fashion. Part of this was driven by the divergence of activities;
+    `ConnectionProxy` objects wanted to provide a system of rewriting statements and
+    parameters; `AttributeExtension` provided a system of replacing incoming values,
+    and `DDL` objects had events that could be switched off of dialect-sensitive callables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 0.7 re-implements virtually all of these plugin points with a new, unified approach,
+    which retains all the functionalities of the different systems, provides more
+    flexibility and less boilerplate, performs better, and eliminates the need to
+    learn radically different APIs for each event subsystem. The pre-existing classes
+    `MapperExtension`, `SessionExtension`, `AttributeExtension`, `ConnectionProxy`,
+    `PoolListener` as well as the `DDLElement.execute_at` method are deprecated and
+    now implemented in terms of the new system - these APIs remain fully functional
+    and are expected to remain in place for the foreseeable future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The new approach uses named events and user-defined callables to associate activities
+    with events. The API’s look and feel was driven by such diverse sources as JQuery,
+    Blinker, and Hibernate, and was also modified further on several occasions during
+    conferences with dozens of users on Twitter, which appears to have a much higher
+    response rate than the mailing list for such questions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It also features an open-ended system of target specification that allows events
+    to be associated with API classes, such as for all `Session` or `Engine` objects,
+    with specific instances of API classes, such as for a specific `Pool` or `Mapper`,
+    as well as for related objects like a user- defined class that’s mapped, or something
+    as specific as a certain attribute on instances of a particular subclass of a
+    mapped parent class. Individual listener subsystems can apply wrappers to incoming
+    user- defined listener functions which modify how they are called - an mapper
+    event can receive either the instance of the object being operated upon, or its
+    underlying `InstanceState` object. An attribute event can opt whether or not to
+    have the responsibility of returning a new value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Several systems now build upon the new event API, including the new “mutable
+    attributes” API as well as composite attributes. The greater emphasis on events
+    has also led to the introduction of a handful of new events, including attribute
+    expiration and refresh operations, pickle loads/dumps operations, completed mapper
+    construction operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Events](../core/event.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1902](https://www.sqlalchemy.org/trac/ticket/1902)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hybrid Attributes, implements/supersedes synonym(), comparable_property()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The “derived attributes” example has now been turned into an official extension.
+    The typical use case for `synonym()` is to provide descriptor access to a mapped
+    column; the use case for `comparable_property()` is to be able to return a `PropComparator`
+    from any descriptor. In practice, the approach of “derived” is easier to use,
+    more extensible, is implemented in a few dozen lines of pure Python with almost
+    no imports, and doesn’t require the ORM core to even be aware of it. The feature
+    is now known as the “Hybrid Attributes” extension.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`synonym()` and `comparable_property()` are still part of the ORM, though their
+    implementations have been moved outwards, building on an approach that is similar
+    to that of the hybrid extension, so that the core ORM mapper/query/property modules
+    aren’t really aware of them otherwise.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Hybrid Attributes](../orm/extensions/hybrid.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1903](https://www.sqlalchemy.org/trac/ticket/1903)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Speed Enhancements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As is customary with all major SQLA releases, a wide pass through the internals
+    to reduce overhead and callcounts has been made which further reduces the work
+    needed in common scenarios. Highlights of this release include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The flush process will now bundle INSERT statements into batches fed to `cursor.executemany()`,
+    for rows where the primary key is already present. In particular this usually
+    applies to the “child” table on a joined table inheritance configuration, meaning
+    the number of calls to `cursor.execute` for a large bulk insert of joined- table
+    objects can be cut in half, allowing native DBAPI optimizations to take place
+    for those statements passed to `cursor.executemany()` (such as re-using a prepared
+    statement).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The codepath invoked when accessing a many-to-one reference to a related object
+    that’s already loaded has been greatly simplified. The identity map is checked
+    directly without the need to generate a new `Query` object first, which is expensive
+    in the context of thousands of in-memory many-to-ones being accessed. The usage
+    of constructed-per-call “loader” objects is also no longer used for the majority
+    of lazy attribute loads.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The rewrite of composites allows a shorter codepath when mapper internals access
+    mapped attributes within a flush.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New inlined attribute access functions replace the previous usage of “history”
+    when the “save-update” and other cascade operations need to cascade among the
+    full scope of datamembers associated with an attribute. This reduces the overhead
+    of generating a new `History` object for this speed-critical operation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The internals of the `ExecutionContext`, the object corresponding to a statement
+    execution, have been inlined and simplified.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `bind_processor()` and `result_processor()` callables generated by types
+    for each statement execution are now cached (carefully, so as to avoid memory
+    leaks for ad-hoc types and dialects) for the lifespan of that type, further reducing
+    per-statement call overhead.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The collection of “bind processors” for a particular `Compiled` instance of
+    a statement is also cached on the `Compiled` object, taking further advantage
+    of the “compiled cache” used by the flush process to re-use the same compiled
+    form of INSERT, UPDATE, DELETE statements.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A demonstration of callcount reduction including a sample benchmark script is
+    at [https://techspot.zzzeek.org/2010/12/12/a-tale-of-three](https://techspot.zzzeek.org/2010/12/12/a-tale-of-three)-
+    profiles/
+  prefs: []
+  type: TYPE_NORMAL
+- en: Composites Rewritten
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The “composite” feature has been rewritten, like `synonym()` and `comparable_property()`,
+    to use a lighter weight implementation based on descriptors and events, rather
+    than building into the ORM internals. This allowed the removal of some latency
+    from the mapper/unit of work internals, and simplifies the workings of composite.
+    The composite attribute now no longer conceals the underlying columns it builds
+    upon, which now remain as regular attributes. Composites can also act as a proxy
+    for `relationship()` as well as `Column()` attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The major backwards-incompatible change of composites is that they no longer
+    use the `mutable=True` system to detect in-place mutations. Please use the [Mutation
+    Tracking](https://www.sqlalchemy.org/docs/07/orm/extensions/mutable.html) extension
+    to establish in-place change events to existing composite usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Composite Column Types](../orm/composites.html#mapper-composite)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2008](https://www.sqlalchemy.org/trac/ticket/2008) [#2024](https://www.sqlalchemy.org/trac/ticket/2024)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: More succinct form of query.join(target, onclause)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The default method of issuing `query.join()` to a target with an explicit onclause
+    is now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: In 0.6, this usage was considered to be an error, because `join()` accepts multiple
+    arguments corresponding to multiple JOIN clauses - the two-argument form needed
+    to be in a tuple to disambiguate between single-argument and two- argument join
+    targets. In the middle of 0.6 we added detection and an error message for this
+    specific calling style, since it was so common. In 0.7, since we are detecting
+    the exact pattern anyway, and since having to type out a tuple for no reason is
+    extremely annoying, the non- tuple method now becomes the “normal” way to do it.
+    The “multiple JOIN” use case is exceedingly rare compared to the single join case,
+    and multiple joins these days are more clearly represented by multiple calls to
+    `join()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The tuple form will remain for backwards compatibility.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that all the other forms of `query.join()` remain unchanged:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[Querying with Joins](https://www.sqlalchemy.org/docs/07/orm/tutorial.html#querying-with-joins)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1923](https://www.sqlalchemy.org/trac/ticket/1923)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mutation event extension, supersedes “mutable=True”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A new extension, [Mutation Tracking](../orm/extensions/mutable.html), provides
+    a mechanism by which user-defined datatypes can provide change events back to
+    the owning parent or parents. The extension includes an approach for scalar database
+    values, such as those managed by [`PickleType`](../core/type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType"), `postgresql.ARRAY`, or other custom `MutableType`
+    classes, as well as an approach for ORM “composites”, those configured using [`composite()`](../orm/composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite").
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: NULLS FIRST / NULLS LAST operators
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: These are implemented as an extension to the `asc()` and `desc()` operators,
+    called `nullsfirst()` and `nullslast()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`nullsfirst()`](../core/sqlelement.html#sqlalchemy.sql.expression.nullsfirst
+    "sqlalchemy.sql.expression.nullsfirst")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`nullslast()`](../core/sqlelement.html#sqlalchemy.sql.expression.nullslast
+    "sqlalchemy.sql.expression.nullslast")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#723](https://www.sqlalchemy.org/trac/ticket/723)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: select.distinct(), query.distinct() accepts *args for PostgreSQL DISTINCT ON
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This was already available by passing a list of expressions to the `distinct`
+    keyword argument of `select()`, the `distinct()` method of `select()` and `Query`
+    now accept positional arguments which are rendered as DISTINCT ON when a PostgreSQL
+    backend is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[distinct()](https://www.sqlalchemy.org/docs/07/core/expression_api.html#sqlalchemy.sql.expression.Select.distinct)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Query.distinct()](https://www.sqlalchemy.org/docs/07/orm/query.html#sqlalchemy.orm.query.Query.distinct)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1069](https://www.sqlalchemy.org/trac/ticket/1069)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Index()` can be placed inline inside of `Table`, `__table_args__`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The Index() construct can be created inline with a Table definition, using
+    strings as column names, as an alternative to the creation of the index outside
+    of the Table. That is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The primary rationale here is for the benefit of declarative `__table_args__`,
+    particularly when used with mixins:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[Indexes](https://www.sqlalchemy.org/docs/07/core/schema.html#indexes)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Window Function SQL Construct
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A “window function” provides to a statement information about the result set
+    as it’s produced. This allows criteria against various things like “row number”,
+    “rank” and so forth. They are known to be supported at least by PostgreSQL, SQL
+    Server and Oracle, possibly others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The best introduction to window functions is on PostgreSQL’s site, where window
+    functions have been supported since version 8.4:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.postgresql.org/docs/current/static/tutorial-window.html](https://www.postgresql.org/docs/current/static/tutorial-window.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy provides a simple construct typically invoked via an existing function
+    clause, using the `over()` method, which accepts `order_by` and `partition_by`
+    keyword arguments. Below we replicate the first example in PG’s tutorial:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'SQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[sqlalchemy.sql.expression.over](https://www.sqlalchemy.org/docs/07/core/expression_api.html#sqlalchemy.sql.expression.over)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1844](https://www.sqlalchemy.org/trac/ticket/1844)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: execution_options() on Connection accepts “isolation_level” argument
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This sets the transaction isolation level for a single `Connection`, until that
+    `Connection` is closed and its underlying DBAPI resource returned to the connection
+    pool, upon which the isolation level is reset back to the default. The default
+    isolation level is set using the `isolation_level` argument to `create_engine()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transaction isolation support is currently only supported by the PostgreSQL
+    and SQLite backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[execution_options()](https://www.sqlalchemy.org/docs/07/core/connections.html#sqlalchemy.engine.base.Connection.execution_options)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2001](https://www.sqlalchemy.org/trac/ticket/2001)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`TypeDecorator` works with integer primary key columns'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A `TypeDecorator` which extends the behavior of `Integer` can be used with a
+    primary key column. The “autoincrement” feature of `Column` will now recognize
+    that the underlying database column is still an integer so that lastrowid mechanisms
+    continue to function. The `TypeDecorator` itself will have its result value processor
+    applied to newly generated primary keys, including those received by the DBAPI
+    `cursor.lastrowid` accessor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2005](https://www.sqlalchemy.org/trac/ticket/2005) [#2006](https://www.sqlalchemy.org/trac/ticket/2006)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`TypeDecorator` is present in the “sqlalchemy” import space'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: No longer need to import this from `sqlalchemy.types`, it’s now mirrored in
+    `sqlalchemy`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Dialects
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Dialects have been added:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'a MySQLdb driver for the Drizzle database:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Drizzle](https://www.sqlalchemy.org/docs/07/dialects/drizzle.html)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'support for the pymysql DBAPI:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[pymsql Notes](https://www.sqlalchemy.org/docs/07/dialects/mysql.html#module-sqlalchemy.dialects.mysql.pymysql)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: psycopg2 now works with Python 3
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New Event System
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQLAlchemy started early with the `MapperExtension` class, which provided hooks
+    into the persistence cycle of mappers. As SQLAlchemy quickly became more componentized,
+    pushing mappers into a more focused configurational role, many more “extension”,
+    “listener”, and “proxy” classes popped up to solve various activity-interception
+    use cases in an ad-hoc fashion. Part of this was driven by the divergence of activities;
+    `ConnectionProxy` objects wanted to provide a system of rewriting statements and
+    parameters; `AttributeExtension` provided a system of replacing incoming values,
+    and `DDL` objects had events that could be switched off of dialect-sensitive callables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 0.7 re-implements virtually all of these plugin points with a new, unified approach,
+    which retains all the functionalities of the different systems, provides more
+    flexibility and less boilerplate, performs better, and eliminates the need to
+    learn radically different APIs for each event subsystem. The pre-existing classes
+    `MapperExtension`, `SessionExtension`, `AttributeExtension`, `ConnectionProxy`,
+    `PoolListener` as well as the `DDLElement.execute_at` method are deprecated and
+    now implemented in terms of the new system - these APIs remain fully functional
+    and are expected to remain in place for the foreseeable future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The new approach uses named events and user-defined callables to associate activities
+    with events. The API’s look and feel was driven by such diverse sources as JQuery,
+    Blinker, and Hibernate, and was also modified further on several occasions during
+    conferences with dozens of users on Twitter, which appears to have a much higher
+    response rate than the mailing list for such questions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It also features an open-ended system of target specification that allows events
+    to be associated with API classes, such as for all `Session` or `Engine` objects,
+    with specific instances of API classes, such as for a specific `Pool` or `Mapper`,
+    as well as for related objects like a user- defined class that’s mapped, or something
+    as specific as a certain attribute on instances of a particular subclass of a
+    mapped parent class. Individual listener subsystems can apply wrappers to incoming
+    user- defined listener functions which modify how they are called - an mapper
+    event can receive either the instance of the object being operated upon, or its
+    underlying `InstanceState` object. An attribute event can opt whether or not to
+    have the responsibility of returning a new value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Several systems now build upon the new event API, including the new “mutable
+    attributes” API as well as composite attributes. The greater emphasis on events
+    has also led to the introduction of a handful of new events, including attribute
+    expiration and refresh operations, pickle loads/dumps operations, completed mapper
+    construction operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Events](../core/event.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1902](https://www.sqlalchemy.org/trac/ticket/1902)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hybrid Attributes, implements/supersedes synonym(), comparable_property()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The “derived attributes” example has now been turned into an official extension.
+    The typical use case for `synonym()` is to provide descriptor access to a mapped
+    column; the use case for `comparable_property()` is to be able to return a `PropComparator`
+    from any descriptor. In practice, the approach of “derived” is easier to use,
+    more extensible, is implemented in a few dozen lines of pure Python with almost
+    no imports, and doesn’t require the ORM core to even be aware of it. The feature
+    is now known as the “Hybrid Attributes” extension.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`synonym()` and `comparable_property()` are still part of the ORM, though their
+    implementations have been moved outwards, building on an approach that is similar
+    to that of the hybrid extension, so that the core ORM mapper/query/property modules
+    aren’t really aware of them otherwise.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Hybrid Attributes](../orm/extensions/hybrid.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1903](https://www.sqlalchemy.org/trac/ticket/1903)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Speed Enhancements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As is customary with all major SQLA releases, a wide pass through the internals
+    to reduce overhead and callcounts has been made which further reduces the work
+    needed in common scenarios. Highlights of this release include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The flush process will now bundle INSERT statements into batches fed to `cursor.executemany()`,
+    for rows where the primary key is already present. In particular this usually
+    applies to the “child” table on a joined table inheritance configuration, meaning
+    the number of calls to `cursor.execute` for a large bulk insert of joined- table
+    objects can be cut in half, allowing native DBAPI optimizations to take place
+    for those statements passed to `cursor.executemany()` (such as re-using a prepared
+    statement).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The codepath invoked when accessing a many-to-one reference to a related object
+    that’s already loaded has been greatly simplified. The identity map is checked
+    directly without the need to generate a new `Query` object first, which is expensive
+    in the context of thousands of in-memory many-to-ones being accessed. The usage
+    of constructed-per-call “loader” objects is also no longer used for the majority
+    of lazy attribute loads.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The rewrite of composites allows a shorter codepath when mapper internals access
+    mapped attributes within a flush.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New inlined attribute access functions replace the previous usage of “history”
+    when the “save-update” and other cascade operations need to cascade among the
+    full scope of datamembers associated with an attribute. This reduces the overhead
+    of generating a new `History` object for this speed-critical operation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The internals of the `ExecutionContext`, the object corresponding to a statement
+    execution, have been inlined and simplified.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `bind_processor()` and `result_processor()` callables generated by types
+    for each statement execution are now cached (carefully, so as to avoid memory
+    leaks for ad-hoc types and dialects) for the lifespan of that type, further reducing
+    per-statement call overhead.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The collection of “bind processors” for a particular `Compiled` instance of
+    a statement is also cached on the `Compiled` object, taking further advantage
+    of the “compiled cache” used by the flush process to re-use the same compiled
+    form of INSERT, UPDATE, DELETE statements.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A demonstration of callcount reduction including a sample benchmark script is
+    at [https://techspot.zzzeek.org/2010/12/12/a-tale-of-three](https://techspot.zzzeek.org/2010/12/12/a-tale-of-three)-
+    profiles/
+  prefs: []
+  type: TYPE_NORMAL
+- en: Composites Rewritten
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The “composite” feature has been rewritten, like `synonym()` and `comparable_property()`,
+    to use a lighter weight implementation based on descriptors and events, rather
+    than building into the ORM internals. This allowed the removal of some latency
+    from the mapper/unit of work internals, and simplifies the workings of composite.
+    The composite attribute now no longer conceals the underlying columns it builds
+    upon, which now remain as regular attributes. Composites can also act as a proxy
+    for `relationship()` as well as `Column()` attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The major backwards-incompatible change of composites is that they no longer
+    use the `mutable=True` system to detect in-place mutations. Please use the [Mutation
+    Tracking](https://www.sqlalchemy.org/docs/07/orm/extensions/mutable.html) extension
+    to establish in-place change events to existing composite usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Composite Column Types](../orm/composites.html#mapper-composite)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2008](https://www.sqlalchemy.org/trac/ticket/2008) [#2024](https://www.sqlalchemy.org/trac/ticket/2024)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: More succinct form of query.join(target, onclause)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The default method of issuing `query.join()` to a target with an explicit onclause
+    is now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: In 0.6, this usage was considered to be an error, because `join()` accepts multiple
+    arguments corresponding to multiple JOIN clauses - the two-argument form needed
+    to be in a tuple to disambiguate between single-argument and two- argument join
+    targets. In the middle of 0.6 we added detection and an error message for this
+    specific calling style, since it was so common. In 0.7, since we are detecting
+    the exact pattern anyway, and since having to type out a tuple for no reason is
+    extremely annoying, the non- tuple method now becomes the “normal” way to do it.
+    The “multiple JOIN” use case is exceedingly rare compared to the single join case,
+    and multiple joins these days are more clearly represented by multiple calls to
+    `join()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The tuple form will remain for backwards compatibility.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that all the other forms of `query.join()` remain unchanged:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[Querying with Joins](https://www.sqlalchemy.org/docs/07/orm/tutorial.html#querying-with-joins)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1923](https://www.sqlalchemy.org/trac/ticket/1923)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mutation event extension, supersedes “mutable=True”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A new extension, [Mutation Tracking](../orm/extensions/mutable.html), provides
+    a mechanism by which user-defined datatypes can provide change events back to
+    the owning parent or parents. The extension includes an approach for scalar database
+    values, such as those managed by [`PickleType`](../core/type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType"), `postgresql.ARRAY`, or other custom `MutableType`
+    classes, as well as an approach for ORM “composites”, those configured using [`composite()`](../orm/composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite").
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: NULLS FIRST / NULLS LAST operators
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: These are implemented as an extension to the `asc()` and `desc()` operators,
+    called `nullsfirst()` and `nullslast()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`nullsfirst()`](../core/sqlelement.html#sqlalchemy.sql.expression.nullsfirst
+    "sqlalchemy.sql.expression.nullsfirst")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`nullslast()`](../core/sqlelement.html#sqlalchemy.sql.expression.nullslast
+    "sqlalchemy.sql.expression.nullslast")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#723](https://www.sqlalchemy.org/trac/ticket/723)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: select.distinct(), query.distinct() accepts *args for PostgreSQL DISTINCT ON
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This was already available by passing a list of expressions to the `distinct`
+    keyword argument of `select()`, the `distinct()` method of `select()` and `Query`
+    now accept positional arguments which are rendered as DISTINCT ON when a PostgreSQL
+    backend is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[distinct()](https://www.sqlalchemy.org/docs/07/core/expression_api.html#sqlalchemy.sql.expression.Select.distinct)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Query.distinct()](https://www.sqlalchemy.org/docs/07/orm/query.html#sqlalchemy.orm.query.Query.distinct)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1069](https://www.sqlalchemy.org/trac/ticket/1069)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Index()` can be placed inline inside of `Table`, `__table_args__`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The Index() construct can be created inline with a Table definition, using
+    strings as column names, as an alternative to the creation of the index outside
+    of the Table. That is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The primary rationale here is for the benefit of declarative `__table_args__`,
+    particularly when used with mixins:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[Indexes](https://www.sqlalchemy.org/docs/07/core/schema.html#indexes)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Window Function SQL Construct
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A “window function” provides to a statement information about the result set
+    as it’s produced. This allows criteria against various things like “row number”,
+    “rank” and so forth. They are known to be supported at least by PostgreSQL, SQL
+    Server and Oracle, possibly others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The best introduction to window functions is on PostgreSQL’s site, where window
+    functions have been supported since version 8.4:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.postgresql.org/docs/current/static/tutorial-window.html](https://www.postgresql.org/docs/current/static/tutorial-window.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy provides a simple construct typically invoked via an existing function
+    clause, using the `over()` method, which accepts `order_by` and `partition_by`
+    keyword arguments. Below we replicate the first example in PG’s tutorial:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'SQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[sqlalchemy.sql.expression.over](https://www.sqlalchemy.org/docs/07/core/expression_api.html#sqlalchemy.sql.expression.over)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1844](https://www.sqlalchemy.org/trac/ticket/1844)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: execution_options() on Connection accepts “isolation_level” argument
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This sets the transaction isolation level for a single `Connection`, until that
+    `Connection` is closed and its underlying DBAPI resource returned to the connection
+    pool, upon which the isolation level is reset back to the default. The default
+    isolation level is set using the `isolation_level` argument to `create_engine()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transaction isolation support is currently only supported by the PostgreSQL
+    and SQLite backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[execution_options()](https://www.sqlalchemy.org/docs/07/core/connections.html#sqlalchemy.engine.base.Connection.execution_options)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2001](https://www.sqlalchemy.org/trac/ticket/2001)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`TypeDecorator` works with integer primary key columns'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A `TypeDecorator` which extends the behavior of `Integer` can be used with a
+    primary key column. The “autoincrement” feature of `Column` will now recognize
+    that the underlying database column is still an integer so that lastrowid mechanisms
+    continue to function. The `TypeDecorator` itself will have its result value processor
+    applied to newly generated primary keys, including those received by the DBAPI
+    `cursor.lastrowid` accessor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2005](https://www.sqlalchemy.org/trac/ticket/2005) [#2006](https://www.sqlalchemy.org/trac/ticket/2006)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`TypeDecorator` is present in the “sqlalchemy” import space'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: No longer need to import this from `sqlalchemy.types`, it’s now mirrored in
+    `sqlalchemy`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Dialects
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Dialects have been added:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'a MySQLdb driver for the Drizzle database:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Drizzle](https://www.sqlalchemy.org/docs/07/dialects/drizzle.html)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'support for the pymysql DBAPI:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[pymsql Notes](https://www.sqlalchemy.org/docs/07/dialects/mysql.html#module-sqlalchemy.dialects.mysql.pymysql)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: psycopg2 now works with Python 3
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Behavioral Changes (Backwards Compatible)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: C Extensions Build by Default
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is as of 0.7b4\. The exts will build if cPython 2.xx is detected. If the
+    build fails, such as on a windows install, that condition is caught and the non-C
+    install proceeds. The C exts won’t build if Python 3 or PyPy is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Query.count() simplified, should work virtually always
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The very old guesswork which occurred within `Query.count()` has been modernized
+    to use `.from_self()`. That is, `query.count()` is now equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Previously, internal logic attempted to rewrite the columns clause of the query
+    itself, and upon detection of a “subquery” condition, such as a column-based query
+    that might have aggregates in it, or a query with DISTINCT, would go through a
+    convoluted process of rewriting the columns clause. This logic failed in complex
+    conditions, particularly those involving joined table inheritance, and was long
+    obsolete by the more comprehensive `.from_self()` call.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The SQL emitted by `query.count()` is now always of the form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: that is, the original query is preserved entirely inside of a subquery, with
+    no more guessing as to how count should be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2093](https://www.sqlalchemy.org/trac/ticket/2093)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To emit a non-subquery form of count()
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'MySQL users have already reported that the MyISAM engine not surprisingly falls
+    over completely with this simple change. Note that for a simple `count()` that
+    optimizes for DBs that can’t handle simple subqueries, `func.count()` should be
+    used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'or for `count(*)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: LIMIT/OFFSET clauses now use bind parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The LIMIT and OFFSET clauses, or their backend equivalents (i.e. TOP, ROW NUMBER
+    OVER, etc.), use bind parameters for the actual values, for all backends which
+    support it (most except for Sybase). This allows better query optimizer performance
+    as the textual string for multiple statements with differing LIMIT/OFFSET are
+    now identical.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#805](https://www.sqlalchemy.org/trac/ticket/805)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Logging enhancements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Vinay Sajip has provided a patch to our logging system such that the “hex string”
+    embedded in logging statements for engines and pools is no longer needed to allow
+    the `echo` flag to work correctly. A new system that uses filtered logging objects
+    allows us to maintain our current behavior of `echo` being local to individual
+    engines without the need for additional identifying strings local to those engines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1926](https://www.sqlalchemy.org/trac/ticket/1926)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simplified polymorphic_on assignment
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The population of the `polymorphic_on` column-mapped attribute, when used in
+    an inheritance scenario, now occurs when the object is constructed, i.e. its `__init__`
+    method is called, using the init event. The attribute then behaves the same as
+    any other column-mapped attribute. Previously, special logic would fire off during
+    flush to populate this column, which prevented any user code from modifying its
+    behavior. The new approach improves upon this in three ways: 1\. the polymorphic
+    identity is now present on the object as soon as its constructed; 2\. the polymorphic
+    identity can be changed by user code without any difference in behavior from any
+    other column-mapped attribute; 3\. the internals of the mapper during flush are
+    simplified and no longer need to make special checks for this column.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1895](https://www.sqlalchemy.org/trac/ticket/1895)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: contains_eager() chains across multiple paths (i.e. “all()”)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The ``contains_eager()[PRE47]contains_eager()`` calls. Instead of:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'you can say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[#2032](https://www.sqlalchemy.org/trac/ticket/2032)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Flushing of orphans that have no parent is allowed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We’ve had a long standing behavior that checks for a so- called “orphan” during
+    flush, that is, an object which is associated with a `relationship()` that specifies
+    “delete- orphan” cascade, has been newly added to the session for an INSERT, and
+    no parent relationship has been established. This check was added years ago to
+    accommodate some test cases which tested the orphan behavior for consistency.
+    In modern SQLA, this check is no longer needed on the Python side. The equivalent
+    behavior of the “orphan check” is accomplished by making the foreign key reference
+    to the object’s parent row NOT NULL, where the database does its job of establishing
+    data consistency in the same way SQLA allows most other operations to do. If the
+    object’s parent foreign key is nullable, then the row can be inserted. The “orphan”
+    behavior runs when the object was persisted with a particular parent, and is then
+    disassociated with that parent, leading to a DELETE statement emitted for it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1912](https://www.sqlalchemy.org/trac/ticket/1912)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warnings generated when collection members, scalar referents not part of the
+    flush
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Warnings are now emitted when related objects referenced via a loaded `relationship()`
+    on a parent object marked as “dirty” are not present in the current `Session`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `save-update` cascade takes effect when objects are added to the `Session`,
+    or when objects are first associated with a parent, so that an object and everything
+    related to it are usually all present in the same `Session`. However, if `save-update`
+    cascade is disabled for a particular `relationship()`, then this behavior does
+    not occur, and the flush process does not try to correct for it, instead staying
+    consistent to the configured cascade behavior. Previously, when such objects were
+    detected during the flush, they were silently skipped. The new behavior is that
+    a warning is emitted, for the purposes of alerting to a situation that more often
+    than not is the source of unexpected behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1973](https://www.sqlalchemy.org/trac/ticket/1973)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setup no longer installs a Nose plugin
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Since we moved to nose we’ve used a plugin that installs via setuptools, so
+    that the `nosetests` script would automatically run SQLA’s plugin code, necessary
+    for our tests to have a full environment. In the middle of 0.6, we realized that
+    the import pattern here meant that Nose’s “coverage” plugin would break, since
+    “coverage” requires that it be started before any modules to be covered are imported;
+    so in the middle of 0.6 we made the situation worse by adding a separate `sqlalchemy-nose`
+    package to the build to overcome this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In 0.7 we’ve done away with trying to get `nosetests` to work automatically,
+    since the SQLAlchemy module would produce a large number of nose configuration
+    options for all usages of `nosetests`, not just the SQLAlchemy unit tests themselves,
+    and the additional `sqlalchemy-nose` install was an even worse idea, producing
+    an extra package in Python environments. The `sqla_nose.py` script in 0.7 is now
+    the only way to run the tests with nose.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1949](https://www.sqlalchemy.org/trac/ticket/1949)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Non-`Table`-derived constructs can be mapped
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A construct that isn’t against any `Table` at all, like a function, can be mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[#1876](https://www.sqlalchemy.org/trac/ticket/1876)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: aliased() accepts `FromClause` elements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is a convenience helper such that in the case a plain `FromClause`, such
+    as a `select`, `Table` or `join` is passed to the `orm.aliased()` construct, it
+    passes through to the `.alias()` method of that from construct rather than constructing
+    an ORM level `AliasedClass`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2018](https://www.sqlalchemy.org/trac/ticket/2018)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Session.connection(), Session.execute() accept ‘bind’
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is to allow execute/connection operations to participate in the open transaction
+    of an engine explicitly. It also allows custom subclasses of `Session` that implement
+    their own `get_bind()` method and arguments to use those custom arguments with
+    both the `execute()` and `connection()` methods equally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Session.connection](https://www.sqlalchemy.org/docs/07/orm/session.html#sqlalchemy.orm.session.Session.connection)
+    [Session.execute](https://www.sqlalchemy.org/docs/07/orm/session.html#sqlalchemy.orm.session.Session.execute)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1996](https://www.sqlalchemy.org/trac/ticket/1996)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Standalone bind parameters in columns clause auto-labeled.
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Bind parameters present in the “columns clause” of a select are now auto-labeled
+    like other “anonymous” clauses, which among other things allows their “type” to
+    be meaningful when the row is fetched, as in result row processors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite - relative file paths are normalized through os.path.abspath()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This so that a script that changes the current directory will continue to target
+    the same location as subsequent SQLite connections are established.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2036](https://www.sqlalchemy.org/trac/ticket/2036)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: MS-SQL - `String`/`Unicode`/`VARCHAR`/`NVARCHAR`/`VARBINARY` emit “max” for
+    no length
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: On the MS-SQL backend, the String/Unicode types, and their counterparts VARCHAR/
+    NVARCHAR, as well as VARBINARY ([#1833](https://www.sqlalchemy.org/trac/ticket/1833))
+    emit “max” as the length when no length is specified. This makes it more compatible
+    with PostgreSQL’s VARCHAR type which is similarly unbounded when no length specified.
+    SQL Server defaults the length on these types to ‘1’ when no length is specified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: C Extensions Build by Default
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is as of 0.7b4\. The exts will build if cPython 2.xx is detected. If the
+    build fails, such as on a windows install, that condition is caught and the non-C
+    install proceeds. The C exts won’t build if Python 3 or PyPy is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Query.count() simplified, should work virtually always
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The very old guesswork which occurred within `Query.count()` has been modernized
+    to use `.from_self()`. That is, `query.count()` is now equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Previously, internal logic attempted to rewrite the columns clause of the query
+    itself, and upon detection of a “subquery” condition, such as a column-based query
+    that might have aggregates in it, or a query with DISTINCT, would go through a
+    convoluted process of rewriting the columns clause. This logic failed in complex
+    conditions, particularly those involving joined table inheritance, and was long
+    obsolete by the more comprehensive `.from_self()` call.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The SQL emitted by `query.count()` is now always of the form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: that is, the original query is preserved entirely inside of a subquery, with
+    no more guessing as to how count should be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2093](https://www.sqlalchemy.org/trac/ticket/2093)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To emit a non-subquery form of count()
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'MySQL users have already reported that the MyISAM engine not surprisingly falls
+    over completely with this simple change. Note that for a simple `count()` that
+    optimizes for DBs that can’t handle simple subqueries, `func.count()` should be
+    used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'or for `count(*)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: To emit a non-subquery form of count()
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'MySQL users have already reported that the MyISAM engine not surprisingly falls
+    over completely with this simple change. Note that for a simple `count()` that
+    optimizes for DBs that can’t handle simple subqueries, `func.count()` should be
+    used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'or for `count(*)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: LIMIT/OFFSET clauses now use bind parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The LIMIT and OFFSET clauses, or their backend equivalents (i.e. TOP, ROW NUMBER
+    OVER, etc.), use bind parameters for the actual values, for all backends which
+    support it (most except for Sybase). This allows better query optimizer performance
+    as the textual string for multiple statements with differing LIMIT/OFFSET are
+    now identical.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#805](https://www.sqlalchemy.org/trac/ticket/805)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Logging enhancements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Vinay Sajip has provided a patch to our logging system such that the “hex string”
+    embedded in logging statements for engines and pools is no longer needed to allow
+    the `echo` flag to work correctly. A new system that uses filtered logging objects
+    allows us to maintain our current behavior of `echo` being local to individual
+    engines without the need for additional identifying strings local to those engines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1926](https://www.sqlalchemy.org/trac/ticket/1926)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simplified polymorphic_on assignment
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The population of the `polymorphic_on` column-mapped attribute, when used in
+    an inheritance scenario, now occurs when the object is constructed, i.e. its `__init__`
+    method is called, using the init event. The attribute then behaves the same as
+    any other column-mapped attribute. Previously, special logic would fire off during
+    flush to populate this column, which prevented any user code from modifying its
+    behavior. The new approach improves upon this in three ways: 1\. the polymorphic
+    identity is now present on the object as soon as its constructed; 2\. the polymorphic
+    identity can be changed by user code without any difference in behavior from any
+    other column-mapped attribute; 3\. the internals of the mapper during flush are
+    simplified and no longer need to make special checks for this column.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1895](https://www.sqlalchemy.org/trac/ticket/1895)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: contains_eager() chains across multiple paths (i.e. “all()”)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The ``contains_eager()[PRE57]contains_eager()`` calls. Instead of:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'you can say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[#2032](https://www.sqlalchemy.org/trac/ticket/2032)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Flushing of orphans that have no parent is allowed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We’ve had a long standing behavior that checks for a so- called “orphan” during
+    flush, that is, an object which is associated with a `relationship()` that specifies
+    “delete- orphan” cascade, has been newly added to the session for an INSERT, and
+    no parent relationship has been established. This check was added years ago to
+    accommodate some test cases which tested the orphan behavior for consistency.
+    In modern SQLA, this check is no longer needed on the Python side. The equivalent
+    behavior of the “orphan check” is accomplished by making the foreign key reference
+    to the object’s parent row NOT NULL, where the database does its job of establishing
+    data consistency in the same way SQLA allows most other operations to do. If the
+    object’s parent foreign key is nullable, then the row can be inserted. The “orphan”
+    behavior runs when the object was persisted with a particular parent, and is then
+    disassociated with that parent, leading to a DELETE statement emitted for it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1912](https://www.sqlalchemy.org/trac/ticket/1912)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warnings generated when collection members, scalar referents not part of the
+    flush
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Warnings are now emitted when related objects referenced via a loaded `relationship()`
+    on a parent object marked as “dirty” are not present in the current `Session`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `save-update` cascade takes effect when objects are added to the `Session`,
+    or when objects are first associated with a parent, so that an object and everything
+    related to it are usually all present in the same `Session`. However, if `save-update`
+    cascade is disabled for a particular `relationship()`, then this behavior does
+    not occur, and the flush process does not try to correct for it, instead staying
+    consistent to the configured cascade behavior. Previously, when such objects were
+    detected during the flush, they were silently skipped. The new behavior is that
+    a warning is emitted, for the purposes of alerting to a situation that more often
+    than not is the source of unexpected behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1973](https://www.sqlalchemy.org/trac/ticket/1973)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setup no longer installs a Nose plugin
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Since we moved to nose we’ve used a plugin that installs via setuptools, so
+    that the `nosetests` script would automatically run SQLA’s plugin code, necessary
+    for our tests to have a full environment. In the middle of 0.6, we realized that
+    the import pattern here meant that Nose’s “coverage” plugin would break, since
+    “coverage” requires that it be started before any modules to be covered are imported;
+    so in the middle of 0.6 we made the situation worse by adding a separate `sqlalchemy-nose`
+    package to the build to overcome this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In 0.7 we’ve done away with trying to get `nosetests` to work automatically,
+    since the SQLAlchemy module would produce a large number of nose configuration
+    options for all usages of `nosetests`, not just the SQLAlchemy unit tests themselves,
+    and the additional `sqlalchemy-nose` install was an even worse idea, producing
+    an extra package in Python environments. The `sqla_nose.py` script in 0.7 is now
+    the only way to run the tests with nose.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1949](https://www.sqlalchemy.org/trac/ticket/1949)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Non-`Table`-derived constructs can be mapped
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A construct that isn’t against any `Table` at all, like a function, can be mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[#1876](https://www.sqlalchemy.org/trac/ticket/1876)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: aliased() accepts `FromClause` elements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is a convenience helper such that in the case a plain `FromClause`, such
+    as a `select`, `Table` or `join` is passed to the `orm.aliased()` construct, it
+    passes through to the `.alias()` method of that from construct rather than constructing
+    an ORM level `AliasedClass`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2018](https://www.sqlalchemy.org/trac/ticket/2018)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Session.connection(), Session.execute() accept ‘bind’
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is to allow execute/connection operations to participate in the open transaction
+    of an engine explicitly. It also allows custom subclasses of `Session` that implement
+    their own `get_bind()` method and arguments to use those custom arguments with
+    both the `execute()` and `connection()` methods equally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Session.connection](https://www.sqlalchemy.org/docs/07/orm/session.html#sqlalchemy.orm.session.Session.connection)
+    [Session.execute](https://www.sqlalchemy.org/docs/07/orm/session.html#sqlalchemy.orm.session.Session.execute)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1996](https://www.sqlalchemy.org/trac/ticket/1996)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Standalone bind parameters in columns clause auto-labeled.
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Bind parameters present in the “columns clause” of a select are now auto-labeled
+    like other “anonymous” clauses, which among other things allows their “type” to
+    be meaningful when the row is fetched, as in result row processors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite - relative file paths are normalized through os.path.abspath()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This so that a script that changes the current directory will continue to target
+    the same location as subsequent SQLite connections are established.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2036](https://www.sqlalchemy.org/trac/ticket/2036)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: MS-SQL - `String`/`Unicode`/`VARCHAR`/`NVARCHAR`/`VARBINARY` emit “max” for
+    no length
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: On the MS-SQL backend, the String/Unicode types, and their counterparts VARCHAR/
+    NVARCHAR, as well as VARBINARY ([#1833](https://www.sqlalchemy.org/trac/ticket/1833))
+    emit “max” as the length when no length is specified. This makes it more compatible
+    with PostgreSQL’s VARCHAR type which is similarly unbounded when no length specified.
+    SQL Server defaults the length on these types to ‘1’ when no length is specified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Behavioral Changes (Backwards Incompatible)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Note again, aside from the default mutability change, most of these changes
+    are *extremely minor* and will not affect most users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`PickleType` and ARRAY mutability turned off by default'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This change refers to the default behavior of the ORM when mapping columns
+    that have either the `PickleType` or `postgresql.ARRAY` datatypes. The `mutable`
+    flag is now set to `False` by default. If an existing application uses these types
+    and depends upon detection of in-place mutations, the type object must be constructed
+    with `mutable=True` to restore the 0.6 behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `mutable=True` flag is being phased out, in favor of the new [Mutation Tracking](https://www.sqlalchemy.org/docs/07/orm/extensions/mutable.html)
+    extension. This extension provides a mechanism by which user-defined datatypes
+    can provide change events back to the owning parent or parents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The previous approach of using `mutable=True` does not provide for change events
+    - instead, the ORM must scan through all mutable values present in a session and
+    compare them against their original value for changes every time `flush()` is
+    called, which is a very time consuming event. This is a holdover from the very
+    early days of SQLAlchemy when `flush()` was not automatic and the history tracking
+    system was not nearly as sophisticated as it is now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Existing applications which use `PickleType`, `postgresql.ARRAY` or other `MutableType`
+    subclasses, and require in-place mutation detection, should migrate to the new
+    mutation tracking system, as `mutable=True` is likely to be deprecated in the
+    future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1980](https://www.sqlalchemy.org/trac/ticket/1980)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mutability detection of `composite()` requires the Mutation Tracking Extension
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So-called “composite” mapped attributes, those configured using the technique
+    described at [Composite Column Types](https://www.sqlalchemy.org/docs/07/orm/mapper_config.html#composite-column-types),
+    have been re-implemented such that the ORM internals are no longer aware of them
+    (leading to shorter and more efficient codepaths in critical sections). While
+    composite types are generally intended to be treated as immutable value objects,
+    this was never enforced. For applications that use composites with mutability,
+    the [Mutation Tracking](https://www.sqlalchemy.org/docs/07/orm/extensions/mutable.html)
+    extension offers a base class which establishes a mechanism for user-defined composite
+    types to send change event messages back to the owning parent or parents of each
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Applications which use composite types and rely upon in- place mutation detection
+    of these objects should either migrate to the “mutation tracking” extension, or
+    change the usage of the composite types such that in-place changes are no longer
+    needed (i.e., treat them as immutable value objects).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite - the SQLite dialect now uses `NullPool` for file-based databases
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This change is **99.999% backwards compatible**, unless you are using temporary
+    tables across connection pool connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A file-based SQLite connection is blazingly fast, and using `NullPool` means
+    that each call to `Engine.connect` creates a new pysqlite connection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Previously, the `SingletonThreadPool` was used, which meant that all connections
+    to a certain engine in a thread would be the same connection. It’s intended that
+    the new approach is more intuitive, particularly when multiple connections are
+    used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SingletonThreadPool` is still the default engine when a `:memory:` database
+    is used.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that this change **breaks temporary tables used across Session commits**,
+    due to the way SQLite handles temp tables. See the note at [https://www.sqlalchemy.org/docs/dialects/sqlite.html#using](https://www.sqlalchemy.org/docs/dialects/sqlite.html#using)-
+    temporary-tables-with-sqlite if temporary tables beyond the scope of one pool
+    connection are desired.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1921](https://www.sqlalchemy.org/trac/ticket/1921)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Session.merge()` checks version ids for versioned mappers'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Session.merge() will check the version id of the incoming state against that
+    of the database, assuming the mapping uses version ids and incoming state has
+    a version_id assigned, and raise StaleDataError if they don’t match. This is the
+    correct behavior, in that if incoming state contains a stale version id, it should
+    be assumed the state is stale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If merging data into a versioned state, the version id attribute can be left
+    undefined, and no version check will take place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This check was confirmed by examining what Hibernate does - both the `merge()`
+    and the versioning features were originally adapted from Hibernate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2027](https://www.sqlalchemy.org/trac/ticket/2027)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tuple label names in Query Improved
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This improvement is potentially slightly backwards incompatible for an application
+    that relied upon the old behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given two mapped classes `Foo` and `Bar` each with a column `spam`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: The name given to the single column yielded by `qu` will be `spam`. Previously
+    it would be something like `foo_spam` due to the way the `union` would combine
+    things, which is inconsistent with the name `spam` in the case of a non-unioned
+    query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1942](https://www.sqlalchemy.org/trac/ticket/1942)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapped column attributes reference the most specific column first
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is a change to the behavior involved when a mapped column attribute references
+    multiple columns, specifically when dealing with an attribute on a joined-table
+    subclass that has the same name as that of an attribute on the superclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using declarative, the scenario is this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the attribute `Child.id` refers to both the `child.id` column as well
+    as `parent.id` - this due to the name of the attribute. If it were named differently
+    on the class, such as `Child.child_id`, it then maps distinctly to `child.id`,
+    with `Child.id` being the same attribute as `Parent.id`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the `id` attribute is made to reference both `parent.id` and `child.id`,
+    it stores them in an ordered list. An expression such as `Child.id` then refers
+    to just *one* of those columns when rendered. Up until 0.6, this column would
+    be `parent.id`. In 0.7, it is the less surprising `child.id`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The legacy of this behavior deals with behaviors and restrictions of the ORM
+    that don’t really apply anymore; all that was needed was to reverse the order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A primary advantage of this approach is that it’s now easier to construct `primaryjoin`
+    expressions that refer to the local column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: Prior to 0.7 the `Child.id` expression would reference `Parent.id`, and it would
+    be necessary to map `child.id` to a distinct attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It also means that a query like this one changes its behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In 0.6, this would render:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'in 0.7, you get:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which you’ll note is a cartesian product - this behavior is now equivalent
+    to that of any other attribute that is local to `Child`. The `with_polymorphic()`
+    method, or a similar strategy of explicitly joining the underlying `Table` objects,
+    is used to render a query against all `Parent` objects with criteria against `Child`,
+    in the same manner as that of 0.5 and 0.6:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Which on both 0.6 and 0.7 renders:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: Another effect of this change is that a joined-inheritance load across two tables
+    will populate from the child table’s value, not that of the parent table. An unusual
+    case is that a query against “Parent” using `with_polymorphic="*"` issues a query
+    against “parent”, with a LEFT OUTER JOIN to “child”. The row is located in “Parent”,
+    sees the polymorphic identity corresponds to “Child”, but suppose the actual row
+    in “child” has been *deleted*. Due to this corruption, the row comes in with all
+    the columns corresponding to “child” set to NULL - this is now the value that
+    gets populated, not the one in the parent table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1892](https://www.sqlalchemy.org/trac/ticket/1892)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapping to joins with two or more same-named columns requires explicit declaration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is somewhat related to the previous change in [#1892](https://www.sqlalchemy.org/trac/ticket/1892).
+    When mapping to a join, same-named columns must be explicitly linked to mapped
+    attributes, i.e. as described in [Mapping a Class Against Multiple Tables](http://www.sqlalchemy.org/docs/07/orm/mapper_config.html#mapping-a-class-against-multiple-tables).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given two tables `foo` and `bar`, each with a primary key column `id`, the
+    following now produces an error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This because the `mapper()` refuses to guess what column is the primary representation
+    of `FooBar.id` - is it `foo.c.id` or is it `bar.c.id` ? The attribute must be
+    explicit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[#1896](https://www.sqlalchemy.org/trac/ticket/1896)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapper requires that polymorphic_on column be present in the mapped selectable
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This is a warning in 0.6, now an error in 0.7\. The column given for `polymorphic_on`
+    must be in the mapped selectable. This to prevent some occasional user errors
+    such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: where above the polymorphic_on needs to be on a `sometable` column, in this
+    case perhaps `sometable.c.some_lookup_id`. There are also some “polymorphic union”
+    scenarios where similar mistakes sometimes occur.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Such a configuration error has always been “wrong”, and the above mapping doesn’t
+    work as specified - the column would be ignored. It is however potentially backwards
+    incompatible in the rare case that an application has been unknowingly relying
+    upon this behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1875](https://www.sqlalchemy.org/trac/ticket/1875)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`DDL()` constructs now escape percent signs'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Previously, percent signs in `DDL()` strings would have to be escaped, i.e.
+    `%%` depending on DBAPI, for those DBAPIs that accept `pyformat` or `format` binds
+    (i.e. psycopg2, mysql-python), which was inconsistent versus `text()` constructs
+    which did this automatically. The same escaping now occurs for `DDL()` as for
+    `text()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1897](https://www.sqlalchemy.org/trac/ticket/1897)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Table.c` / `MetaData.tables` refined a bit, don’t allow direct mutation'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another area where some users were tinkering around in such a way that doesn’t
+    actually work as expected, but still left an exceedingly small chance that some
+    application was relying upon this behavior, the construct returned by the `.c`
+    attribute on `Table` and the `.tables` attribute on `MetaData` is explicitly non-mutable.
+    The “mutable” version of the construct is now private. Adding columns to `.c`
+    involves using the `append_column()` method of `Table`, which ensures things are
+    associated with the parent `Table` in the appropriate way; similarly, `MetaData.tables`
+    has a contract with the `Table` objects stored in this dictionary, as well as
+    a little bit of new bookkeeping in that a `set()` of all schema names is tracked,
+    which is satisfied only by using the public `Table` constructor as well as `Table.tometadata()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is of course possible that the `ColumnCollection` and `dict` collections
+    consulted by these attributes could someday implement events on all of their mutational
+    methods such that the appropriate bookkeeping occurred upon direct mutation of
+    the collections, but until someone has the motivation to implement all that along
+    with dozens of new unit tests, narrowing the paths to mutation of these collections
+    will ensure no application is attempting to rely upon usages that are currently
+    not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1893](https://www.sqlalchemy.org/trac/ticket/1893) [#1917](https://www.sqlalchemy.org/trac/ticket/1917)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: server_default consistently returns None for all inserted_primary_key values
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Established consistency when server_default is present on an Integer PK column.
+    SQLA doesn’t pre-fetch these, nor do they come back in cursor.lastrowid (DBAPI).
+    Ensured all backends consistently return None in result.inserted_primary_key for
+    these - some backends may have returned a value previously. Using a server_default
+    on a primary key column is extremely unusual. If a special function or SQL expression
+    is used to generate primary key defaults, this should be established as a Python-side
+    “default” instead of server_default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regarding reflection for this case, reflection of an int PK col with a server_default
+    sets the “autoincrement” flag to False, except in the case of a PG SERIAL col
+    where we detected a sequence default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2020](https://www.sqlalchemy.org/trac/ticket/2020) [#2021](https://www.sqlalchemy.org/trac/ticket/2021)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `sqlalchemy.exceptions` alias in sys.modules is removed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For a few years we’ve added the string `sqlalchemy.exceptions` to `sys.modules`,
+    so that a statement like “`import sqlalchemy.exceptions`” would work. The name
+    of the core exceptions module has been `exc` for a long time now, so the recommended
+    import for this module is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `exceptions` name is still present in “`sqlalchemy`” for applications which
+    might have said `from sqlalchemy import exceptions`, but they should also start
+    using the `exc` name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Query Timing Recipe Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: While not part of SQLAlchemy itself, it’s worth mentioning that the rework of
+    the `ConnectionProxy` into the new event system means it is no longer appropriate
+    for the “Timing all Queries” recipe. Please adjust query-timers to use the `before_cursor_execute()`
+    and `after_cursor_execute()` events, demonstrated in the updated recipe UsageRecipes/Profiling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`PickleType` and ARRAY mutability turned off by default'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This change refers to the default behavior of the ORM when mapping columns
+    that have either the `PickleType` or `postgresql.ARRAY` datatypes. The `mutable`
+    flag is now set to `False` by default. If an existing application uses these types
+    and depends upon detection of in-place mutations, the type object must be constructed
+    with `mutable=True` to restore the 0.6 behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `mutable=True` flag is being phased out, in favor of the new [Mutation Tracking](https://www.sqlalchemy.org/docs/07/orm/extensions/mutable.html)
+    extension. This extension provides a mechanism by which user-defined datatypes
+    can provide change events back to the owning parent or parents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The previous approach of using `mutable=True` does not provide for change events
+    - instead, the ORM must scan through all mutable values present in a session and
+    compare them against their original value for changes every time `flush()` is
+    called, which is a very time consuming event. This is a holdover from the very
+    early days of SQLAlchemy when `flush()` was not automatic and the history tracking
+    system was not nearly as sophisticated as it is now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Existing applications which use `PickleType`, `postgresql.ARRAY` or other `MutableType`
+    subclasses, and require in-place mutation detection, should migrate to the new
+    mutation tracking system, as `mutable=True` is likely to be deprecated in the
+    future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1980](https://www.sqlalchemy.org/trac/ticket/1980)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mutability detection of `composite()` requires the Mutation Tracking Extension
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So-called “composite” mapped attributes, those configured using the technique
+    described at [Composite Column Types](https://www.sqlalchemy.org/docs/07/orm/mapper_config.html#composite-column-types),
+    have been re-implemented such that the ORM internals are no longer aware of them
+    (leading to shorter and more efficient codepaths in critical sections). While
+    composite types are generally intended to be treated as immutable value objects,
+    this was never enforced. For applications that use composites with mutability,
+    the [Mutation Tracking](https://www.sqlalchemy.org/docs/07/orm/extensions/mutable.html)
+    extension offers a base class which establishes a mechanism for user-defined composite
+    types to send change event messages back to the owning parent or parents of each
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Applications which use composite types and rely upon in- place mutation detection
+    of these objects should either migrate to the “mutation tracking” extension, or
+    change the usage of the composite types such that in-place changes are no longer
+    needed (i.e., treat them as immutable value objects).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite - the SQLite dialect now uses `NullPool` for file-based databases
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This change is **99.999% backwards compatible**, unless you are using temporary
+    tables across connection pool connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A file-based SQLite connection is blazingly fast, and using `NullPool` means
+    that each call to `Engine.connect` creates a new pysqlite connection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Previously, the `SingletonThreadPool` was used, which meant that all connections
+    to a certain engine in a thread would be the same connection. It’s intended that
+    the new approach is more intuitive, particularly when multiple connections are
+    used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SingletonThreadPool` is still the default engine when a `:memory:` database
+    is used.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that this change **breaks temporary tables used across Session commits**,
+    due to the way SQLite handles temp tables. See the note at [https://www.sqlalchemy.org/docs/dialects/sqlite.html#using](https://www.sqlalchemy.org/docs/dialects/sqlite.html#using)-
+    temporary-tables-with-sqlite if temporary tables beyond the scope of one pool
+    connection are desired.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1921](https://www.sqlalchemy.org/trac/ticket/1921)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Session.merge()` checks version ids for versioned mappers'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Session.merge() will check the version id of the incoming state against that
+    of the database, assuming the mapping uses version ids and incoming state has
+    a version_id assigned, and raise StaleDataError if they don’t match. This is the
+    correct behavior, in that if incoming state contains a stale version id, it should
+    be assumed the state is stale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If merging data into a versioned state, the version id attribute can be left
+    undefined, and no version check will take place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This check was confirmed by examining what Hibernate does - both the `merge()`
+    and the versioning features were originally adapted from Hibernate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2027](https://www.sqlalchemy.org/trac/ticket/2027)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tuple label names in Query Improved
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This improvement is potentially slightly backwards incompatible for an application
+    that relied upon the old behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given two mapped classes `Foo` and `Bar` each with a column `spam`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: The name given to the single column yielded by `qu` will be `spam`. Previously
+    it would be something like `foo_spam` due to the way the `union` would combine
+    things, which is inconsistent with the name `spam` in the case of a non-unioned
+    query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1942](https://www.sqlalchemy.org/trac/ticket/1942)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapped column attributes reference the most specific column first
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is a change to the behavior involved when a mapped column attribute references
+    multiple columns, specifically when dealing with an attribute on a joined-table
+    subclass that has the same name as that of an attribute on the superclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using declarative, the scenario is this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the attribute `Child.id` refers to both the `child.id` column as well
+    as `parent.id` - this due to the name of the attribute. If it were named differently
+    on the class, such as `Child.child_id`, it then maps distinctly to `child.id`,
+    with `Child.id` being the same attribute as `Parent.id`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the `id` attribute is made to reference both `parent.id` and `child.id`,
+    it stores them in an ordered list. An expression such as `Child.id` then refers
+    to just *one* of those columns when rendered. Up until 0.6, this column would
+    be `parent.id`. In 0.7, it is the less surprising `child.id`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The legacy of this behavior deals with behaviors and restrictions of the ORM
+    that don’t really apply anymore; all that was needed was to reverse the order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A primary advantage of this approach is that it’s now easier to construct `primaryjoin`
+    expressions that refer to the local column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: Prior to 0.7 the `Child.id` expression would reference `Parent.id`, and it would
+    be necessary to map `child.id` to a distinct attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It also means that a query like this one changes its behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In 0.6, this would render:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'in 0.7, you get:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which you’ll note is a cartesian product - this behavior is now equivalent
+    to that of any other attribute that is local to `Child`. The `with_polymorphic()`
+    method, or a similar strategy of explicitly joining the underlying `Table` objects,
+    is used to render a query against all `Parent` objects with criteria against `Child`,
+    in the same manner as that of 0.5 and 0.6:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Which on both 0.6 and 0.7 renders:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: Another effect of this change is that a joined-inheritance load across two tables
+    will populate from the child table’s value, not that of the parent table. An unusual
+    case is that a query against “Parent” using `with_polymorphic="*"` issues a query
+    against “parent”, with a LEFT OUTER JOIN to “child”. The row is located in “Parent”,
+    sees the polymorphic identity corresponds to “Child”, but suppose the actual row
+    in “child” has been *deleted*. Due to this corruption, the row comes in with all
+    the columns corresponding to “child” set to NULL - this is now the value that
+    gets populated, not the one in the parent table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1892](https://www.sqlalchemy.org/trac/ticket/1892)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapping to joins with two or more same-named columns requires explicit declaration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is somewhat related to the previous change in [#1892](https://www.sqlalchemy.org/trac/ticket/1892).
+    When mapping to a join, same-named columns must be explicitly linked to mapped
+    attributes, i.e. as described in [Mapping a Class Against Multiple Tables](http://www.sqlalchemy.org/docs/07/orm/mapper_config.html#mapping-a-class-against-multiple-tables).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given two tables `foo` and `bar`, each with a primary key column `id`, the
+    following now produces an error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This because the `mapper()` refuses to guess what column is the primary representation
+    of `FooBar.id` - is it `foo.c.id` or is it `bar.c.id` ? The attribute must be
+    explicit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[#1896](https://www.sqlalchemy.org/trac/ticket/1896)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapper requires that polymorphic_on column be present in the mapped selectable
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This is a warning in 0.6, now an error in 0.7\. The column given for `polymorphic_on`
+    must be in the mapped selectable. This to prevent some occasional user errors
+    such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: where above the polymorphic_on needs to be on a `sometable` column, in this
+    case perhaps `sometable.c.some_lookup_id`. There are also some “polymorphic union”
+    scenarios where similar mistakes sometimes occur.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Such a configuration error has always been “wrong”, and the above mapping doesn’t
+    work as specified - the column would be ignored. It is however potentially backwards
+    incompatible in the rare case that an application has been unknowingly relying
+    upon this behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1875](https://www.sqlalchemy.org/trac/ticket/1875)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`DDL()` constructs now escape percent signs'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Previously, percent signs in `DDL()` strings would have to be escaped, i.e.
+    `%%` depending on DBAPI, for those DBAPIs that accept `pyformat` or `format` binds
+    (i.e. psycopg2, mysql-python), which was inconsistent versus `text()` constructs
+    which did this automatically. The same escaping now occurs for `DDL()` as for
+    `text()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1897](https://www.sqlalchemy.org/trac/ticket/1897)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Table.c` / `MetaData.tables` refined a bit, don’t allow direct mutation'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another area where some users were tinkering around in such a way that doesn’t
+    actually work as expected, but still left an exceedingly small chance that some
+    application was relying upon this behavior, the construct returned by the `.c`
+    attribute on `Table` and the `.tables` attribute on `MetaData` is explicitly non-mutable.
+    The “mutable” version of the construct is now private. Adding columns to `.c`
+    involves using the `append_column()` method of `Table`, which ensures things are
+    associated with the parent `Table` in the appropriate way; similarly, `MetaData.tables`
+    has a contract with the `Table` objects stored in this dictionary, as well as
+    a little bit of new bookkeeping in that a `set()` of all schema names is tracked,
+    which is satisfied only by using the public `Table` constructor as well as `Table.tometadata()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is of course possible that the `ColumnCollection` and `dict` collections
+    consulted by these attributes could someday implement events on all of their mutational
+    methods such that the appropriate bookkeeping occurred upon direct mutation of
+    the collections, but until someone has the motivation to implement all that along
+    with dozens of new unit tests, narrowing the paths to mutation of these collections
+    will ensure no application is attempting to rely upon usages that are currently
+    not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1893](https://www.sqlalchemy.org/trac/ticket/1893) [#1917](https://www.sqlalchemy.org/trac/ticket/1917)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: server_default consistently returns None for all inserted_primary_key values
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Established consistency when server_default is present on an Integer PK column.
+    SQLA doesn’t pre-fetch these, nor do they come back in cursor.lastrowid (DBAPI).
+    Ensured all backends consistently return None in result.inserted_primary_key for
+    these - some backends may have returned a value previously. Using a server_default
+    on a primary key column is extremely unusual. If a special function or SQL expression
+    is used to generate primary key defaults, this should be established as a Python-side
+    “default” instead of server_default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regarding reflection for this case, reflection of an int PK col with a server_default
+    sets the “autoincrement” flag to False, except in the case of a PG SERIAL col
+    where we detected a sequence default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#2020](https://www.sqlalchemy.org/trac/ticket/2020) [#2021](https://www.sqlalchemy.org/trac/ticket/2021)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `sqlalchemy.exceptions` alias in sys.modules is removed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For a few years we’ve added the string `sqlalchemy.exceptions` to `sys.modules`,
+    so that a statement like “`import sqlalchemy.exceptions`” would work. The name
+    of the core exceptions module has been `exc` for a long time now, so the recommended
+    import for this module is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `exceptions` name is still present in “`sqlalchemy`” for applications which
+    might have said `from sqlalchemy import exceptions`, but they should also start
+    using the `exc` name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Query Timing Recipe Changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: While not part of SQLAlchemy itself, it’s worth mentioning that the rework of
+    the `ConnectionProxy` into the new event system means it is no longer appropriate
+    for the “Timing all Queries” recipe. Please adjust query-timers to use the `before_cursor_execute()`
+    and `after_cursor_execute()` events, demonstrated in the updated recipe UsageRecipes/Profiling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deprecated API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Default constructor on types will not accept arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Simple types like `Integer`, `Date` etc. in the core types module don’t accept
+    arguments. The default constructor that accepts/ignores a catchall `\*args, \**kwargs`
+    is restored as of 0.7b4/0.7.0, but emits a deprecation warning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If arguments are being used with a core type like `Integer`, it may be that
+    you intended to use a dialect specific type, such as `sqlalchemy.dialects.mysql.INTEGER`
+    which does accept a “display_width” argument for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: compile_mappers() renamed configure_mappers(), simplified configuration internals
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This system slowly morphed from something small, implemented local to an individual
+    mapper, and poorly named into something that’s more of a global “registry-” level
+    function and poorly named, so we’ve fixed both by moving the implementation out
+    of `Mapper` altogether and renaming it to `configure_mappers()`. It is of course
+    normally not needed for an application to call `configure_mappers()` as this process
+    occurs on an as-needed basis, as soon as the mappings are needed via attribute
+    or query access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1966](https://www.sqlalchemy.org/trac/ticket/1966)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Core listener/proxy superseded by event listeners
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`PoolListener`, `ConnectionProxy`, `DDLElement.execute_at` are superseded by
+    `event.listen()`, using the `PoolEvents`, `EngineEvents`, `DDLEvents` dispatch
+    targets, respectively.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ORM extensions superseded by event listeners
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`MapperExtension`, `AttributeExtension`, `SessionExtension` are superseded
+    by `event.listen()`, using the `MapperEvents`/`InstanceEvents`, `AttributeEvents`,
+    `SessionEvents`, dispatch targets, respectively.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sending a string to ‘distinct’ in select() for MySQL should be done via prefixes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This obscure feature allows this pattern with the MySQL backend:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `prefixes` keyword or `prefix_with()` method should be used for non-standard
+    or unusual prefixes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`useexisting` superseded by `extend_existing` and `keep_existing`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The `useexisting` flag on Table has been superseded by a new pair of flags `keep_existing`
+    and `extend_existing`. `extend_existing` is equivalent to `useexisting` - the
+    existing Table is returned, and additional constructor elements are added. With
+    `keep_existing`, the existing Table is returned, but additional constructor elements
+    are not added - these elements are only applied when the Table is newly created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Default constructor on types will not accept arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Simple types like `Integer`, `Date` etc. in the core types module don’t accept
+    arguments. The default constructor that accepts/ignores a catchall `\*args, \**kwargs`
+    is restored as of 0.7b4/0.7.0, but emits a deprecation warning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If arguments are being used with a core type like `Integer`, it may be that
+    you intended to use a dialect specific type, such as `sqlalchemy.dialects.mysql.INTEGER`
+    which does accept a “display_width” argument for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: compile_mappers() renamed configure_mappers(), simplified configuration internals
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This system slowly morphed from something small, implemented local to an individual
+    mapper, and poorly named into something that’s more of a global “registry-” level
+    function and poorly named, so we’ve fixed both by moving the implementation out
+    of `Mapper` altogether and renaming it to `configure_mappers()`. It is of course
+    normally not needed for an application to call `configure_mappers()` as this process
+    occurs on an as-needed basis, as soon as the mappings are needed via attribute
+    or query access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1966](https://www.sqlalchemy.org/trac/ticket/1966)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Core listener/proxy superseded by event listeners
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`PoolListener`, `ConnectionProxy`, `DDLElement.execute_at` are superseded by
+    `event.listen()`, using the `PoolEvents`, `EngineEvents`, `DDLEvents` dispatch
+    targets, respectively.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ORM extensions superseded by event listeners
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`MapperExtension`, `AttributeExtension`, `SessionExtension` are superseded
+    by `event.listen()`, using the `MapperEvents`/`InstanceEvents`, `AttributeEvents`,
+    `SessionEvents`, dispatch targets, respectively.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sending a string to ‘distinct’ in select() for MySQL should be done via prefixes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This obscure feature allows this pattern with the MySQL backend:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `prefixes` keyword or `prefix_with()` method should be used for non-standard
+    or unusual prefixes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`useexisting` superseded by `extend_existing` and `keep_existing`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The `useexisting` flag on Table has been superseded by a new pair of flags `keep_existing`
+    and `extend_existing`. `extend_existing` is equivalent to `useexisting` - the
+    existing Table is returned, and additional constructor elements are added. With
+    `keep_existing`, the existing Table is returned, but additional constructor elements
+    are not added - these elements are only applied when the Table is newly created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Backwards Incompatible API Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Callables passed to `bindparam()` don’t get evaluated - affects the Beaker example
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[#1950](https://www.sqlalchemy.org/trac/ticket/1950)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note this affects the Beaker caching example, where the workings of the `_params_from_query()`
+    function needed a slight adjustment. If you’re using code from the Beaker example,
+    this change should be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: types.type_map is now private, types._type_map
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We noticed some users tapping into this dictionary inside of `sqlalchemy.types`
+    as a shortcut to associating Python types with SQL types. We can’t guarantee the
+    contents or format of this dictionary, and additionally the business of associating
+    Python types in a one-to-one fashion has some grey areas that should are best
+    decided by individual applications, so we’ve underscored this attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1870](https://www.sqlalchemy.org/trac/ticket/1870)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Renamed the `alias` keyword arg of standalone `alias()` function to `name`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This so that the keyword argument `name` matches that of the `alias()` methods
+    on all `FromClause` objects as well as the `name` argument on `Query.subquery()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Only code that uses the standalone `alias()` function, and not the method bound
+    functions, and passes the alias name using the explicit keyword name `alias`,
+    and not positionally, would need modification here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Non-public `Pool` methods underscored
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All methods of `Pool` and subclasses which are not intended for public use have
+    been renamed with underscores. That they were not named this way previously was
+    a bug.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Pooling methods now underscored or removed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.create_connection()` -> `Pool._create_connection()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.do_get()` -> `Pool._do_get()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.do_return_conn()` -> `Pool._do_return_conn()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.do_return_invalid()` -> removed, was not used'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.return_conn()` -> `Pool._return_conn()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.get()` -> `Pool._get()`, public API is `Pool.connect()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SingletonThreadPool.cleanup()` -> `_cleanup()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SingletonThreadPool.dispose_local()` -> removed, use `conn.invalidate()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1982](https://www.sqlalchemy.org/trac/ticket/1982)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Callables passed to `bindparam()` don’t get evaluated - affects the Beaker example
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[#1950](https://www.sqlalchemy.org/trac/ticket/1950)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note this affects the Beaker caching example, where the workings of the `_params_from_query()`
+    function needed a slight adjustment. If you’re using code from the Beaker example,
+    this change should be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: types.type_map is now private, types._type_map
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We noticed some users tapping into this dictionary inside of `sqlalchemy.types`
+    as a shortcut to associating Python types with SQL types. We can’t guarantee the
+    contents or format of this dictionary, and additionally the business of associating
+    Python types in a one-to-one fashion has some grey areas that should are best
+    decided by individual applications, so we’ve underscored this attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1870](https://www.sqlalchemy.org/trac/ticket/1870)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Renamed the `alias` keyword arg of standalone `alias()` function to `name`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This so that the keyword argument `name` matches that of the `alias()` methods
+    on all `FromClause` objects as well as the `name` argument on `Query.subquery()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Only code that uses the standalone `alias()` function, and not the method bound
+    functions, and passes the alias name using the explicit keyword name `alias`,
+    and not positionally, would need modification here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Non-public `Pool` methods underscored
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All methods of `Pool` and subclasses which are not intended for public use have
+    been renamed with underscores. That they were not named this way previously was
+    a bug.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Pooling methods now underscored or removed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.create_connection()` -> `Pool._create_connection()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.do_get()` -> `Pool._do_get()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.do_return_conn()` -> `Pool._do_return_conn()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.do_return_invalid()` -> removed, was not used'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.return_conn()` -> `Pool._return_conn()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Pool.get()` -> `Pool._get()`, public API is `Pool.connect()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SingletonThreadPool.cleanup()` -> `_cleanup()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SingletonThreadPool.dispose_local()` -> removed, use `conn.invalidate()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[#1982](https://www.sqlalchemy.org/trac/ticket/1982)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Previously Deprecated, Now Removed
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Query.join(), Query.outerjoin(), eagerload(), eagerload_all(), others no longer
+    allow lists of attributes as arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Passing a list of attributes or attribute names to `Query.join`, `eagerload()`,
+    and similar has been deprecated since 0.5:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These methods all accept *args as of the 0.5 series:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`ScopedSession.mapper` is removed'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This feature provided a mapper extension which linked class- based functionality
+    with a particular `ScopedSession`, in particular providing the behavior such that
+    new object instances would be automatically associated with that session. The
+    feature was overused by tutorials and frameworks which led to great user confusion
+    due to its implicit behavior, and was deprecated in 0.5.5\. Techniques for replicating
+    its functionality are at [wiki:UsageRecipes/SessionAwareMapper]
+  prefs: []
+  type: TYPE_NORMAL
+- en: Query.join(), Query.outerjoin(), eagerload(), eagerload_all(), others no longer
+    allow lists of attributes as arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Passing a list of attributes or attribute names to `Query.join`, `eagerload()`,
+    and similar has been deprecated since 0.5:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These methods all accept *args as of the 0.5 series:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`ScopedSession.mapper` is removed'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This feature provided a mapper extension which linked class- based functionality
+    with a particular `ScopedSession`, in particular providing the behavior such that
+    new object instances would be automatically associated with that session. The
+    feature was overused by tutorials and frameworks which led to great user confusion
+    due to its implicit behavior, and was deprecated in 0.5.5\. Techniques for replicating
+    its functionality are at [wiki:UsageRecipes/SessionAwareMapper]
+  prefs: []
+  type: TYPE_NORMAL

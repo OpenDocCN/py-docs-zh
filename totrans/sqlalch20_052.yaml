@@ -1,0 +1,1493 @@
+- en: Cascades
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/cascades.html](https://docs.sqlalchemy.org/en/20/orm/cascades.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Mappers support the concept of configurable [cascade](../glossary.html#term-cascade)
+    behavior on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs. This refers to how operations performed
+    on a “parent” object relative to a particular [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") should be propagated to items referred to by that relationship
+    (e.g. “child” objects), and is affected by the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The default behavior of cascade is limited to cascades of the so-called [save-update](#cascade-save-update)
+    and [merge](#cascade-merge) settings. The typical “alternative” setting for cascade
+    is to add the [delete](#cascade-delete) and [delete-orphan](#cascade-delete-orphan)
+    options; these settings are appropriate for related objects which only exist as
+    long as they are attached to their parent, and are otherwise deleted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Cascade behavior is configured using the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") option on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To set cascades on a backref, the same flag can be used with the [`backref()`](relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") function, which ultimately feeds its arguments back
+    into [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The default value of [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") is `save-update, merge`. The typical alternative
+    setting for this parameter is either `all` or more commonly `all, delete-orphan`.
+    The `all` symbol is a synonym for `save-update, merge, refresh-expire, expunge,
+    delete`, and using it in conjunction with `delete-orphan` indicates that the child
+    object should follow along with its parent in all cases, and be deleted once it
+    is no longer associated with that parent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `all` cascade option implies the [refresh-expire](#cascade-refresh-expire)
+    cascade setting which may not be desirable when using the [Asynchronous I/O (asyncio)](extensions/asyncio.html)
+    extension, as it will expire related objects more aggressively than is typically
+    appropriate in an explicit IO context. See the notes at [Preventing Implicit IO
+    when Using AsyncSession](extensions/asyncio.html#asyncio-orm-avoid-lazyloads)
+    for further background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The list of available values which can be specified for the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") parameter are described in the following subsections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## save-update'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`save-update` cascade indicates that when an object is placed into a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") via [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add"), all the objects associated with it via this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") should also be added to that same [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). Suppose we have an object `user1` with two related
+    objects `address1`, `address2`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we add `user1` to a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), it will also add `address1`, `address2` implicitly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`save-update` cascade also affects attribute operations for objects that are
+    already present in a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    If we add a third object, `address3` to the `user1.addresses` collection, it becomes
+    part of the state of that [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A `save-update` cascade can exhibit surprising behavior when removing an item
+    from a collection or de-associating an object from a scalar attribute. In some
+    cases, the orphaned objects may still be pulled into the ex-parent’s [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"); this is so that the flush process may handle that related
+    object appropriately. This case usually only arises if an object is removed from
+    one [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    and added to another:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `save-update` cascade is on by default, and is typically taken for granted;
+    it simplifies code by allowing a single call to [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") to register an entire structure of objects within
+    that [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    at once. While it can be disabled, there is usually not a need to do so.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Behavior of save-update cascade with bi-directional relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `save-update` cascade takes place **uni-directionally** in the context of
+    a bi-directional relationship, i.e. when using the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") or [`relationship.backref`](relationship_api.html#sqlalchemy.orm.relationship.params.backref
+    "sqlalchemy.orm.relationship") parameters to create two separate [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") objects which refer to each other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An object that’s not associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), when assigned to an attribute or collection on a parent
+    object that is associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), will be automatically added to that same [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). However, the same operation in reverse will not have
+    this effect; an object that’s not associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), upon which a child object that is associated with a
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    is assigned, will not result in an automatic addition of that parent object to
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    The overall subject of this behavior is known as “cascade backrefs”, and represents
+    a change in behavior that was standardized as of SQLAlchemy 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate, given a mapping of `Order` objects which relate bi-directionally
+    to a series of `Item` objects via relationships `Order.items` and `Item.order`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If an `Order` is already associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), and an `Item` object is then created and appended to
+    the `Order.items` collection of that `Order`, the `Item` will be automatically
+    cascaded into that same [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the bidirectional nature of `Order.items` and `Item.order` means that
+    appending to `Order.items` also assigns to `Item.order`. At the same time, the
+    `save-update` cascade allowed for the `Item` object to be added to the same [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") which the parent `Order` was already associated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, if the operation above is performed in the **reverse** direction,
+    where `Item.order` is assigned rather than appending directly to `Order.item`,
+    the cascade operation into the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will **not** take place automatically, even though the
+    object assignments `Order.items` and `Item.order` will be in the same state as
+    in the previous example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the above case, after the `Item` object is created and all the desired state
+    is set upon it, it should then be added to the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") explicitly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: In older versions of SQLAlchemy, the save-update cascade would occur bidirectionally
+    in all cases. It was then made optional using an option known as `cascade_backrefs`.
+    Finally, in SQLAlchemy 1.4 the old behavior was deprecated and the `cascade_backrefs`
+    option was removed in SQLAlchemy 2.0. The rationale is that users generally do
+    not find it intuitive that assigning to an attribute on an object, illustrated
+    above as the assignment of `i1.order = o1`, would alter the persistence state
+    of that object `i1` such that it’s now pending within a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), and there would frequently be subsequent issues where
+    autoflush would prematurely flush the object and cause errors, in those cases
+    where the given object was still being constructed and wasn’t in a ready state
+    to be flushed. The option to select between uni-directional and bi-directional
+    behvaiors was also removed, as this option created two slightly different ways
+    of working, adding to the overall learning curve of the ORM as well as to the
+    documentation and user support burden.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cascade_backrefs behavior deprecated for removal in 2.0](../changelog/migration_14.html#change-5150)
+    - background on the change in behavior for “cascade backrefs”  ## delete'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `delete` cascade indicates that when a “parent” object is marked for deletion,
+    its related “child” objects should also be marked for deletion. If for example
+    we have a relationship `User.addresses` with `delete` cascade configured:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If using the above mapping, we have a `User` object and two related `Address`
+    objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we mark `user1` for deletion, after the flush operation proceeds, `address1`
+    and `address2` will also be deleted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, if our `User.addresses` relationship does *not* have `delete`
+    cascade, SQLAlchemy’s default behavior is to instead de-associate `address1` and
+    `address2` from `user1` by setting their foreign key reference to `NULL`. Using
+    a mapping as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Upon deletion of a parent `User` object, the rows in `address` are not deleted,
+    but are instead de-associated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[delete](#cascade-delete) cascade on one-to-many relationships is often combined
+    with [delete-orphan](#cascade-delete-orphan) cascade, which will emit a DELETE
+    for the related row if the “child” object is deassociated from the parent. The
+    combination of `delete` and `delete-orphan` cascade covers both situations where
+    SQLAlchemy has to decide between setting a foreign key column to NULL versus deleting
+    the row entirely.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The feature by default works completely independently of database-configured
+    `FOREIGN KEY` constraints that may themselves configure `CASCADE` behavior. In
+    order to integrate more efficiently with this configuration, additional directives
+    described at [Using foreign key ON DELETE cascade with ORM relationships](#passive-deletes)
+    should be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the ORM’s “delete” and “delete-orphan” behavior applies **only** to
+    the use of the [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method to mark individual ORM instances for deletion
+    within the [unit of work](../glossary.html#term-unit-of-work) process. It does
+    **not** apply to “bulk” deletes, which would be emitted using the [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete
+    "sqlalchemy.sql.expression.delete") construct as illustrated at [ORM UPDATE and
+    DELETE with Custom WHERE Criteria](queryguide/dml.html#orm-queryguide-update-delete-where).
+    See [Important Notes and Caveats for ORM-Enabled Update and Delete](queryguide/dml.html#orm-queryguide-update-delete-caveats)
+    for additional background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE cascade with ORM relationships](#passive-deletes)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using delete cascade with many-to-many relationships](#cascade-delete-many-to-many)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete-orphan](#cascade-delete-orphan)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using delete cascade with many-to-many relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `cascade="all, delete"` option works equally well with a many-to-many relationship,
+    one that uses [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") to indicate an association table. When a parent
+    object is deleted, and therefore de-associated with its related objects, the unit
+    of work process will normally delete rows from the association table, but leave
+    the related objects intact. When combined with `cascade="all, delete"`, additional
+    `DELETE` statements will take place for the child rows themselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following example adapts that of [Many To Many](basic_relationships.html#relationships-many-to-many)
+    to illustrate the `cascade="all, delete"` setting on **one** side of the association:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, when a `Parent` object is marked for deletion using [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete"), the flush process will as usual delete the associated
+    rows from the `association` table, however per cascade rules it will also delete
+    all related `Child` rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the above `cascade="all, delete"` setting were configured on **both** relationships,
+    then the cascade action would continue cascading through all `Parent` and `Child`
+    objects, loading each `children` and `parents` collection encountered and deleting
+    everything that’s connected. It is typically not desirable for “delete” cascade
+    to be configured bidirectionally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Deleting Rows from the Many to Many Table](basic_relationships.html#relationships-many-to-many-deletion)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE with many-to-many relationships](#passive-deletes-many-to-many)  ###
+    Using foreign key ON DELETE cascade with ORM relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The behavior of SQLAlchemy’s “delete” cascade overlaps with the `ON DELETE`
+    feature of a database `FOREIGN KEY` constraint. SQLAlchemy allows configuration
+    of these schema-level [DDL](../glossary.html#term-DDL) behaviors using the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") and [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") constructs; usage of these objects in
+    conjunction with [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    metadata is described at [ON UPDATE and ON DELETE](../core/constraints.html#on-update-on-delete).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In order to use `ON DELETE` foreign key cascades in conjunction with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), it’s important to note first and foremost that
+    the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") setting must still be configured to match the desired
+    “delete” or “set null” behavior (using `delete` cascade or leaving it omitted),
+    so that whether the ORM or the database level constraints will handle the task
+    of actually modifying the data in the database, the ORM will still be able to
+    appropriately track the state of locally present objects that may be affected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is then an additional option on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") which indicates the degree to which the ORM should
+    try to run DELETE/UPDATE operations on related rows itself, vs. how much it should
+    rely upon expecting the database-side FOREIGN KEY constraint cascade to handle
+    the task; this is the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") parameter and it accepts options `False` (the default),
+    `True` and `"all"`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most typical example is that where child rows are to be deleted when parent
+    rows are deleted, and that `ON DELETE CASCADE` is configured on the relevant `FOREIGN
+    KEY` constraint as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The behavior of the above configuration when a parent row is deleted is as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The application calls `session.delete(my_parent)`, where `my_parent` is an instance
+    of `Parent`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: When the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    next flushes changes to the database, all of the **currently loaded** items within
+    the `my_parent.children` collection are deleted by the ORM, meaning a `DELETE`
+    statement is emitted for each record.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the `my_parent.children` collection is **unloaded**, then no `DELETE` statements
+    are emitted. If the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") flag were **not** set on this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), then a `SELECT` statement for unloaded `Child`
+    objects would have been emitted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A `DELETE` statement is then emitted for the `my_parent` row itself.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The database-level `ON DELETE CASCADE` setting ensures that all rows in `child`
+    which refer to the affected row in `parent` are also deleted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The `Parent` instance referred to by `my_parent`, as well as all instances of
+    `Child` that were related to this object and were **loaded** (i.e. step 2 above
+    took place), are de-associated from the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To use “ON DELETE CASCADE”, the underlying database engine must support `FOREIGN
+    KEY` constraints and they must be enforcing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using MySQL, an appropriate storage engine must be selected. See [CREATE
+    TABLE arguments including Storage Engines](../dialects/mysql.html#mysql-storage-engines)
+    for details.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'When using SQLite, foreign key support must be enabled explicitly. See [Foreign
+    Key Support](../dialects/sqlite.html#sqlite-foreign-keys) for details.  ### Using
+    foreign key ON DELETE with many-to-many relationships'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As described at [Using delete cascade with many-to-many relationships](#cascade-delete-many-to-many),
+    “delete” cascade works for many-to-many relationships as well. To make use of
+    `ON DELETE CASCADE` foreign keys in conjunction with many to many, `FOREIGN KEY`
+    directives are configured on the association table. These directives can handle
+    the task of automatically deleting from the association table, but cannot accommodate
+    the automatic deletion of the related objects themselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this case, the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") directive can save us some additional `SELECT`
+    statements during a delete operation but there are still some collections that
+    the ORM will continue to load, in order to locate affected child objects and handle
+    them correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hypothetical optimizations to this could include a single `DELETE` statement
+    against all parent-associated rows of the association table at once, then use
+    `RETURNING` to locate affected related child rows, however this is not currently
+    part of the ORM unit of work implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this configuration, we configure `ON DELETE CASCADE` on both foreign key
+    constraints of the association table. We configure `cascade="all, delete"` on
+    the parent->child side of the relationship, and we can then configure `passive_deletes=True`
+    on the **other** side of the bidirectional relationship as illustrated below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above configuration, the deletion of a `Parent` object proceeds as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A `Parent` object is marked for deletion using [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete").
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: When the flush occurs, if the `Parent.children` collection is not loaded, the
+    ORM will first emit a SELECT statement in order to load the `Child` objects that
+    correspond to `Parent.children`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: It will then then emit `DELETE` statements for the rows in `association` which
+    correspond to that parent row.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: for each `Child` object affected by this immediate deletion, because `passive_deletes=True`
+    is configured, the unit of work will not need to try to emit SELECT statements
+    for each `Child.parents` collection as it is assumed the corresponding rows in
+    `association` will be deleted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`DELETE` statements are then emitted for each `Child` object that was loaded
+    from `Parent.children`.  ## delete-orphan'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`delete-orphan` cascade adds behavior to the `delete` cascade, such that a
+    child object will be marked for deletion when it is de-associated from the parent,
+    not just when the parent is marked for deletion. This is a common feature when
+    dealing with a related object that is “owned” by its parent, with a NOT NULL foreign
+    key, so that removal of the item from the parent collection results in its deletion.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`delete-orphan` cascade implies that each child object can only have one parent
+    at a time, and in the **vast majority of cases is configured only on a one-to-many
+    relationship.** For the much less common case of setting it on a many-to-one or
+    many-to-many relationship, the “many” side can be forced to allow only a single
+    object at a time by configuring the [`relationship.single_parent`](relationship_api.html#sqlalchemy.orm.relationship.params.single_parent
+    "sqlalchemy.orm.relationship") argument, which establishes Python-side validation
+    that ensures the object is associated with only one parent at a time, however
+    this greatly limits the functionality of the “many” relationship and is usually
+    not what’s desired.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[For relationship <relationship>, delete-orphan cascade is normally configured
+    only on the “one” side of a one-to-many relationship, and not on the “many” side
+    of a many-to-one or many-to-many relationship.](../errors.html#error-bbf0) - background
+    on a common error scenario involving delete-orphan cascade.  ## merge'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`merge` cascade indicates that the [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") operation should be propagated from a parent that’s
+    the subject of the [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") call down to referred objects. This cascade is
+    also on by default.  ## refresh-expire'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`refresh-expire` is an uncommon option, indicating that the [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") operation should be propagated from a parent
+    down to referred objects. When using [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh"), the referred objects are expired only, but
+    not actually refreshed.  ## expunge'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`expunge` cascade indicates that when the parent object is removed from the
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    using [`Session.expunge()`](session_api.html#sqlalchemy.orm.Session.expunge "sqlalchemy.orm.Session.expunge"),
+    the operation should be propagated down to referred objects.  ## Notes on Delete
+    - Deleting Objects Referenced from Collections and Scalar Relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ORM in general never modifies the contents of a collection or scalar relationship
+    during the flush process. This means, if your class has a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") that refers to a collection of objects, or a reference
+    to a single object such as many-to-one, the contents of this attribute will not
+    be modified when the flush process occurs. Instead, it is expected that the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") would eventually be expired, either through the expire-on-commit
+    behavior of [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or through explicit use of [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire"). At that point, any referenced object or collection
+    associated with that [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    will be cleared and will re-load itself upon next access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A common confusion that arises regarding this behavior involves the use of the
+    [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete "sqlalchemy.orm.Session.delete")
+    method. When [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") is invoked upon an object and the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is flushed, the row is deleted from the database. Rows
+    that refer to the target row via foreign key, assuming they are tracked using
+    a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    between the two mapped object types, will also see their foreign key attributes
+    UPDATED to null, or if delete cascade is set up, the related rows will be deleted
+    as well. However, even though rows related to the deleted object might be themselves
+    modified as well, **no changes occur to relationship-bound collections or object
+    references on the objects** involved in the operation within the scope of the
+    flush itself. This means if the object was a member of a related collection, it
+    will still be present on the Python side until that collection is expired. Similarly,
+    if the object were referenced via many-to-one or one-to-one from another object,
+    that reference will remain present on that object until the object is expired
+    as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below, we illustrate that after an `Address` object is marked for deletion,
+    it’s still present in the collection associated with the parent `User`, even after
+    a flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the above session is committed, all attributes are expired. The next access
+    of `user.addresses` will re-load the collection, revealing the desired state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is a recipe for intercepting [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") and invoking this expiration automatically; see
+    [ExpireRelationshipOnFKChange](https://www.sqlalchemy.org/trac/wiki/UsageRecipes/ExpireRelationshipOnFKChange)
+    for this. However, the usual practice of deleting items within collections is
+    to forego the usage of [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") directly, and instead use cascade behavior to
+    automatically invoke the deletion as a result of removing the object from the
+    parent collection. The `delete-orphan` cascade accomplishes this, as illustrated
+    in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, upon removing the `Address` object from the `User.addresses` collection,
+    the `delete-orphan` cascade has the effect of marking the `Address` object for
+    deletion in the same way as passing it to [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `delete-orphan` cascade can also be applied to a many-to-one or one-to-one
+    relationship, so that when an object is de-associated from its parent, it is also
+    automatically marked for deletion. Using `delete-orphan` cascade on a many-to-one
+    or one-to-one requires an additional flag [`relationship.single_parent`](relationship_api.html#sqlalchemy.orm.relationship.params.single_parent
+    "sqlalchemy.orm.relationship") which invokes an assertion that this related object
+    is not to shared with any other parent simultaneously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if a hypothetical `Preference` object is removed from a `User`, it will
+    be deleted on flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Cascades](#unitofwork-cascades) for detail on cascades.  ## save-update'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`save-update` cascade indicates that when an object is placed into a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") via [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add"), all the objects associated with it via this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") should also be added to that same [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). Suppose we have an object `user1` with two related
+    objects `address1`, `address2`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we add `user1` to a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), it will also add `address1`, `address2` implicitly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`save-update` cascade also affects attribute operations for objects that are
+    already present in a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    If we add a third object, `address3` to the `user1.addresses` collection, it becomes
+    part of the state of that [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A `save-update` cascade can exhibit surprising behavior when removing an item
+    from a collection or de-associating an object from a scalar attribute. In some
+    cases, the orphaned objects may still be pulled into the ex-parent’s [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"); this is so that the flush process may handle that related
+    object appropriately. This case usually only arises if an object is removed from
+    one [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    and added to another:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `save-update` cascade is on by default, and is typically taken for granted;
+    it simplifies code by allowing a single call to [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") to register an entire structure of objects within
+    that [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    at once. While it can be disabled, there is usually not a need to do so.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Behavior of save-update cascade with bi-directional relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `save-update` cascade takes place **uni-directionally** in the context of
+    a bi-directional relationship, i.e. when using the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") or [`relationship.backref`](relationship_api.html#sqlalchemy.orm.relationship.params.backref
+    "sqlalchemy.orm.relationship") parameters to create two separate [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") objects which refer to each other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An object that’s not associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), when assigned to an attribute or collection on a parent
+    object that is associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), will be automatically added to that same [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). However, the same operation in reverse will not have
+    this effect; an object that’s not associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), upon which a child object that is associated with a
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    is assigned, will not result in an automatic addition of that parent object to
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    The overall subject of this behavior is known as “cascade backrefs”, and represents
+    a change in behavior that was standardized as of SQLAlchemy 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate, given a mapping of `Order` objects which relate bi-directionally
+    to a series of `Item` objects via relationships `Order.items` and `Item.order`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If an `Order` is already associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), and an `Item` object is then created and appended to
+    the `Order.items` collection of that `Order`, the `Item` will be automatically
+    cascaded into that same [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the bidirectional nature of `Order.items` and `Item.order` means that
+    appending to `Order.items` also assigns to `Item.order`. At the same time, the
+    `save-update` cascade allowed for the `Item` object to be added to the same [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") which the parent `Order` was already associated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, if the operation above is performed in the **reverse** direction,
+    where `Item.order` is assigned rather than appending directly to `Order.item`,
+    the cascade operation into the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will **not** take place automatically, even though the
+    object assignments `Order.items` and `Item.order` will be in the same state as
+    in the previous example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the above case, after the `Item` object is created and all the desired state
+    is set upon it, it should then be added to the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") explicitly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: In older versions of SQLAlchemy, the save-update cascade would occur bidirectionally
+    in all cases. It was then made optional using an option known as `cascade_backrefs`.
+    Finally, in SQLAlchemy 1.4 the old behavior was deprecated and the `cascade_backrefs`
+    option was removed in SQLAlchemy 2.0. The rationale is that users generally do
+    not find it intuitive that assigning to an attribute on an object, illustrated
+    above as the assignment of `i1.order = o1`, would alter the persistence state
+    of that object `i1` such that it’s now pending within a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), and there would frequently be subsequent issues where
+    autoflush would prematurely flush the object and cause errors, in those cases
+    where the given object was still being constructed and wasn’t in a ready state
+    to be flushed. The option to select between uni-directional and bi-directional
+    behvaiors was also removed, as this option created two slightly different ways
+    of working, adding to the overall learning curve of the ORM as well as to the
+    documentation and user support burden.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cascade_backrefs behavior deprecated for removal in 2.0](../changelog/migration_14.html#change-5150)
+    - background on the change in behavior for “cascade backrefs”  ### Behavior of
+    save-update cascade with bi-directional relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `save-update` cascade takes place **uni-directionally** in the context of
+    a bi-directional relationship, i.e. when using the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") or [`relationship.backref`](relationship_api.html#sqlalchemy.orm.relationship.params.backref
+    "sqlalchemy.orm.relationship") parameters to create two separate [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") objects which refer to each other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An object that’s not associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), when assigned to an attribute or collection on a parent
+    object that is associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), will be automatically added to that same [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). However, the same operation in reverse will not have
+    this effect; an object that’s not associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), upon which a child object that is associated with a
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    is assigned, will not result in an automatic addition of that parent object to
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    The overall subject of this behavior is known as “cascade backrefs”, and represents
+    a change in behavior that was standardized as of SQLAlchemy 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate, given a mapping of `Order` objects which relate bi-directionally
+    to a series of `Item` objects via relationships `Order.items` and `Item.order`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If an `Order` is already associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), and an `Item` object is then created and appended to
+    the `Order.items` collection of that `Order`, the `Item` will be automatically
+    cascaded into that same [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the bidirectional nature of `Order.items` and `Item.order` means that
+    appending to `Order.items` also assigns to `Item.order`. At the same time, the
+    `save-update` cascade allowed for the `Item` object to be added to the same [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") which the parent `Order` was already associated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, if the operation above is performed in the **reverse** direction,
+    where `Item.order` is assigned rather than appending directly to `Order.item`,
+    the cascade operation into the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will **not** take place automatically, even though the
+    object assignments `Order.items` and `Item.order` will be in the same state as
+    in the previous example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the above case, after the `Item` object is created and all the desired state
+    is set upon it, it should then be added to the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") explicitly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: In older versions of SQLAlchemy, the save-update cascade would occur bidirectionally
+    in all cases. It was then made optional using an option known as `cascade_backrefs`.
+    Finally, in SQLAlchemy 1.4 the old behavior was deprecated and the `cascade_backrefs`
+    option was removed in SQLAlchemy 2.0. The rationale is that users generally do
+    not find it intuitive that assigning to an attribute on an object, illustrated
+    above as the assignment of `i1.order = o1`, would alter the persistence state
+    of that object `i1` such that it’s now pending within a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), and there would frequently be subsequent issues where
+    autoflush would prematurely flush the object and cause errors, in those cases
+    where the given object was still being constructed and wasn’t in a ready state
+    to be flushed. The option to select between uni-directional and bi-directional
+    behvaiors was also removed, as this option created two slightly different ways
+    of working, adding to the overall learning curve of the ORM as well as to the
+    documentation and user support burden.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cascade_backrefs behavior deprecated for removal in 2.0](../changelog/migration_14.html#change-5150)
+    - background on the change in behavior for “cascade backrefs”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## delete'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `delete` cascade indicates that when a “parent” object is marked for deletion,
+    its related “child” objects should also be marked for deletion. If for example
+    we have a relationship `User.addresses` with `delete` cascade configured:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If using the above mapping, we have a `User` object and two related `Address`
+    objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we mark `user1` for deletion, after the flush operation proceeds, `address1`
+    and `address2` will also be deleted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, if our `User.addresses` relationship does *not* have `delete`
+    cascade, SQLAlchemy’s default behavior is to instead de-associate `address1` and
+    `address2` from `user1` by setting their foreign key reference to `NULL`. Using
+    a mapping as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Upon deletion of a parent `User` object, the rows in `address` are not deleted,
+    but are instead de-associated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[delete](#cascade-delete) cascade on one-to-many relationships is often combined
+    with [delete-orphan](#cascade-delete-orphan) cascade, which will emit a DELETE
+    for the related row if the “child” object is deassociated from the parent. The
+    combination of `delete` and `delete-orphan` cascade covers both situations where
+    SQLAlchemy has to decide between setting a foreign key column to NULL versus deleting
+    the row entirely.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The feature by default works completely independently of database-configured
+    `FOREIGN KEY` constraints that may themselves configure `CASCADE` behavior. In
+    order to integrate more efficiently with this configuration, additional directives
+    described at [Using foreign key ON DELETE cascade with ORM relationships](#passive-deletes)
+    should be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the ORM’s “delete” and “delete-orphan” behavior applies **only** to
+    the use of the [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method to mark individual ORM instances for deletion
+    within the [unit of work](../glossary.html#term-unit-of-work) process. It does
+    **not** apply to “bulk” deletes, which would be emitted using the [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete
+    "sqlalchemy.sql.expression.delete") construct as illustrated at [ORM UPDATE and
+    DELETE with Custom WHERE Criteria](queryguide/dml.html#orm-queryguide-update-delete-where).
+    See [Important Notes and Caveats for ORM-Enabled Update and Delete](queryguide/dml.html#orm-queryguide-update-delete-caveats)
+    for additional background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE cascade with ORM relationships](#passive-deletes)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using delete cascade with many-to-many relationships](#cascade-delete-many-to-many)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete-orphan](#cascade-delete-orphan)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using delete cascade with many-to-many relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `cascade="all, delete"` option works equally well with a many-to-many relationship,
+    one that uses [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") to indicate an association table. When a parent
+    object is deleted, and therefore de-associated with its related objects, the unit
+    of work process will normally delete rows from the association table, but leave
+    the related objects intact. When combined with `cascade="all, delete"`, additional
+    `DELETE` statements will take place for the child rows themselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following example adapts that of [Many To Many](basic_relationships.html#relationships-many-to-many)
+    to illustrate the `cascade="all, delete"` setting on **one** side of the association:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, when a `Parent` object is marked for deletion using [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete"), the flush process will as usual delete the associated
+    rows from the `association` table, however per cascade rules it will also delete
+    all related `Child` rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the above `cascade="all, delete"` setting were configured on **both** relationships,
+    then the cascade action would continue cascading through all `Parent` and `Child`
+    objects, loading each `children` and `parents` collection encountered and deleting
+    everything that’s connected. It is typically not desirable for “delete” cascade
+    to be configured bidirectionally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Deleting Rows from the Many to Many Table](basic_relationships.html#relationships-many-to-many-deletion)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE with many-to-many relationships](#passive-deletes-many-to-many)  ###
+    Using foreign key ON DELETE cascade with ORM relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The behavior of SQLAlchemy’s “delete” cascade overlaps with the `ON DELETE`
+    feature of a database `FOREIGN KEY` constraint. SQLAlchemy allows configuration
+    of these schema-level [DDL](../glossary.html#term-DDL) behaviors using the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") and [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") constructs; usage of these objects in
+    conjunction with [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    metadata is described at [ON UPDATE and ON DELETE](../core/constraints.html#on-update-on-delete).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In order to use `ON DELETE` foreign key cascades in conjunction with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), it’s important to note first and foremost that
+    the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") setting must still be configured to match the desired
+    “delete” or “set null” behavior (using `delete` cascade or leaving it omitted),
+    so that whether the ORM or the database level constraints will handle the task
+    of actually modifying the data in the database, the ORM will still be able to
+    appropriately track the state of locally present objects that may be affected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is then an additional option on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") which indicates the degree to which the ORM should
+    try to run DELETE/UPDATE operations on related rows itself, vs. how much it should
+    rely upon expecting the database-side FOREIGN KEY constraint cascade to handle
+    the task; this is the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") parameter and it accepts options `False` (the default),
+    `True` and `"all"`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most typical example is that where child rows are to be deleted when parent
+    rows are deleted, and that `ON DELETE CASCADE` is configured on the relevant `FOREIGN
+    KEY` constraint as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The behavior of the above configuration when a parent row is deleted is as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The application calls `session.delete(my_parent)`, where `my_parent` is an instance
+    of `Parent`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: When the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    next flushes changes to the database, all of the **currently loaded** items within
+    the `my_parent.children` collection are deleted by the ORM, meaning a `DELETE`
+    statement is emitted for each record.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the `my_parent.children` collection is **unloaded**, then no `DELETE` statements
+    are emitted. If the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") flag were **not** set on this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), then a `SELECT` statement for unloaded `Child`
+    objects would have been emitted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A `DELETE` statement is then emitted for the `my_parent` row itself.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The database-level `ON DELETE CASCADE` setting ensures that all rows in `child`
+    which refer to the affected row in `parent` are also deleted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The `Parent` instance referred to by `my_parent`, as well as all instances of
+    `Child` that were related to this object and were **loaded** (i.e. step 2 above
+    took place), are de-associated from the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To use “ON DELETE CASCADE”, the underlying database engine must support `FOREIGN
+    KEY` constraints and they must be enforcing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using MySQL, an appropriate storage engine must be selected. See [CREATE
+    TABLE arguments including Storage Engines](../dialects/mysql.html#mysql-storage-engines)
+    for details.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'When using SQLite, foreign key support must be enabled explicitly. See [Foreign
+    Key Support](../dialects/sqlite.html#sqlite-foreign-keys) for details.  ### Using
+    foreign key ON DELETE with many-to-many relationships'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As described at [Using delete cascade with many-to-many relationships](#cascade-delete-many-to-many),
+    “delete” cascade works for many-to-many relationships as well. To make use of
+    `ON DELETE CASCADE` foreign keys in conjunction with many to many, `FOREIGN KEY`
+    directives are configured on the association table. These directives can handle
+    the task of automatically deleting from the association table, but cannot accommodate
+    the automatic deletion of the related objects themselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this case, the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") directive can save us some additional `SELECT`
+    statements during a delete operation but there are still some collections that
+    the ORM will continue to load, in order to locate affected child objects and handle
+    them correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hypothetical optimizations to this could include a single `DELETE` statement
+    against all parent-associated rows of the association table at once, then use
+    `RETURNING` to locate affected related child rows, however this is not currently
+    part of the ORM unit of work implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this configuration, we configure `ON DELETE CASCADE` on both foreign key
+    constraints of the association table. We configure `cascade="all, delete"` on
+    the parent->child side of the relationship, and we can then configure `passive_deletes=True`
+    on the **other** side of the bidirectional relationship as illustrated below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above configuration, the deletion of a `Parent` object proceeds as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A `Parent` object is marked for deletion using [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete").
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: When the flush occurs, if the `Parent.children` collection is not loaded, the
+    ORM will first emit a SELECT statement in order to load the `Child` objects that
+    correspond to `Parent.children`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: It will then then emit `DELETE` statements for the rows in `association` which
+    correspond to that parent row.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: for each `Child` object affected by this immediate deletion, because `passive_deletes=True`
+    is configured, the unit of work will not need to try to emit SELECT statements
+    for each `Child.parents` collection as it is assumed the corresponding rows in
+    `association` will be deleted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`DELETE` statements are then emitted for each `Child` object that was loaded
+    from `Parent.children`.  ### Using delete cascade with many-to-many relationships'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The `cascade="all, delete"` option works equally well with a many-to-many relationship,
+    one that uses [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") to indicate an association table. When a parent
+    object is deleted, and therefore de-associated with its related objects, the unit
+    of work process will normally delete rows from the association table, but leave
+    the related objects intact. When combined with `cascade="all, delete"`, additional
+    `DELETE` statements will take place for the child rows themselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following example adapts that of [Many To Many](basic_relationships.html#relationships-many-to-many)
+    to illustrate the `cascade="all, delete"` setting on **one** side of the association:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, when a `Parent` object is marked for deletion using [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete"), the flush process will as usual delete the associated
+    rows from the `association` table, however per cascade rules it will also delete
+    all related `Child` rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the above `cascade="all, delete"` setting were configured on **both** relationships,
+    then the cascade action would continue cascading through all `Parent` and `Child`
+    objects, loading each `children` and `parents` collection encountered and deleting
+    everything that’s connected. It is typically not desirable for “delete” cascade
+    to be configured bidirectionally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Deleting Rows from the Many to Many Table](basic_relationships.html#relationships-many-to-many-deletion)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE with many-to-many relationships](#passive-deletes-many-to-many)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using foreign key ON DELETE cascade with ORM relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The behavior of SQLAlchemy’s “delete” cascade overlaps with the `ON DELETE`
+    feature of a database `FOREIGN KEY` constraint. SQLAlchemy allows configuration
+    of these schema-level [DDL](../glossary.html#term-DDL) behaviors using the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") and [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") constructs; usage of these objects in
+    conjunction with [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    metadata is described at [ON UPDATE and ON DELETE](../core/constraints.html#on-update-on-delete).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In order to use `ON DELETE` foreign key cascades in conjunction with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), it’s important to note first and foremost that
+    the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") setting must still be configured to match the desired
+    “delete” or “set null” behavior (using `delete` cascade or leaving it omitted),
+    so that whether the ORM or the database level constraints will handle the task
+    of actually modifying the data in the database, the ORM will still be able to
+    appropriately track the state of locally present objects that may be affected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is then an additional option on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") which indicates the degree to which the ORM should
+    try to run DELETE/UPDATE operations on related rows itself, vs. how much it should
+    rely upon expecting the database-side FOREIGN KEY constraint cascade to handle
+    the task; this is the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") parameter and it accepts options `False` (the default),
+    `True` and `"all"`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most typical example is that where child rows are to be deleted when parent
+    rows are deleted, and that `ON DELETE CASCADE` is configured on the relevant `FOREIGN
+    KEY` constraint as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The behavior of the above configuration when a parent row is deleted is as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The application calls `session.delete(my_parent)`, where `my_parent` is an instance
+    of `Parent`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: When the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    next flushes changes to the database, all of the **currently loaded** items within
+    the `my_parent.children` collection are deleted by the ORM, meaning a `DELETE`
+    statement is emitted for each record.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the `my_parent.children` collection is **unloaded**, then no `DELETE` statements
+    are emitted. If the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") flag were **not** set on this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), then a `SELECT` statement for unloaded `Child`
+    objects would have been emitted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A `DELETE` statement is then emitted for the `my_parent` row itself.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The database-level `ON DELETE CASCADE` setting ensures that all rows in `child`
+    which refer to the affected row in `parent` are also deleted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The `Parent` instance referred to by `my_parent`, as well as all instances of
+    `Child` that were related to this object and were **loaded** (i.e. step 2 above
+    took place), are de-associated from the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To use “ON DELETE CASCADE”, the underlying database engine must support `FOREIGN
+    KEY` constraints and they must be enforcing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using MySQL, an appropriate storage engine must be selected. See [CREATE
+    TABLE arguments including Storage Engines](../dialects/mysql.html#mysql-storage-engines)
+    for details.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When using SQLite, foreign key support must be enabled explicitly. See [Foreign
+    Key Support](../dialects/sqlite.html#sqlite-foreign-keys) for details.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '### Using foreign key ON DELETE with many-to-many relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As described at [Using delete cascade with many-to-many relationships](#cascade-delete-many-to-many),
+    “delete” cascade works for many-to-many relationships as well. To make use of
+    `ON DELETE CASCADE` foreign keys in conjunction with many to many, `FOREIGN KEY`
+    directives are configured on the association table. These directives can handle
+    the task of automatically deleting from the association table, but cannot accommodate
+    the automatic deletion of the related objects themselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this case, the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") directive can save us some additional `SELECT`
+    statements during a delete operation but there are still some collections that
+    the ORM will continue to load, in order to locate affected child objects and handle
+    them correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hypothetical optimizations to this could include a single `DELETE` statement
+    against all parent-associated rows of the association table at once, then use
+    `RETURNING` to locate affected related child rows, however this is not currently
+    part of the ORM unit of work implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this configuration, we configure `ON DELETE CASCADE` on both foreign key
+    constraints of the association table. We configure `cascade="all, delete"` on
+    the parent->child side of the relationship, and we can then configure `passive_deletes=True`
+    on the **other** side of the bidirectional relationship as illustrated below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above configuration, the deletion of a `Parent` object proceeds as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A `Parent` object is marked for deletion using [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete").
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: When the flush occurs, if the `Parent.children` collection is not loaded, the
+    ORM will first emit a SELECT statement in order to load the `Child` objects that
+    correspond to `Parent.children`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: It will then then emit `DELETE` statements for the rows in `association` which
+    correspond to that parent row.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: for each `Child` object affected by this immediate deletion, because `passive_deletes=True`
+    is configured, the unit of work will not need to try to emit SELECT statements
+    for each `Child.parents` collection as it is assumed the corresponding rows in
+    `association` will be deleted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`DELETE` statements are then emitted for each `Child` object that was loaded
+    from `Parent.children`.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '## delete-orphan'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`delete-orphan` cascade adds behavior to the `delete` cascade, such that a
+    child object will be marked for deletion when it is de-associated from the parent,
+    not just when the parent is marked for deletion. This is a common feature when
+    dealing with a related object that is “owned” by its parent, with a NOT NULL foreign
+    key, so that removal of the item from the parent collection results in its deletion.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`delete-orphan` cascade implies that each child object can only have one parent
+    at a time, and in the **vast majority of cases is configured only on a one-to-many
+    relationship.** For the much less common case of setting it on a many-to-one or
+    many-to-many relationship, the “many” side can be forced to allow only a single
+    object at a time by configuring the [`relationship.single_parent`](relationship_api.html#sqlalchemy.orm.relationship.params.single_parent
+    "sqlalchemy.orm.relationship") argument, which establishes Python-side validation
+    that ensures the object is associated with only one parent at a time, however
+    this greatly limits the functionality of the “many” relationship and is usually
+    not what’s desired.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[For relationship <relationship>, delete-orphan cascade is normally configured
+    only on the “one” side of a one-to-many relationship, and not on the “many” side
+    of a many-to-one or many-to-many relationship.](../errors.html#error-bbf0) - background
+    on a common error scenario involving delete-orphan cascade.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## merge'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`merge` cascade indicates that the [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") operation should be propagated from a parent that’s
+    the subject of the [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") call down to referred objects. This cascade is
+    also on by default.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## refresh-expire'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`refresh-expire` is an uncommon option, indicating that the [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") operation should be propagated from a parent
+    down to referred objects. When using [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh"), the referred objects are expired only, but
+    not actually refreshed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## expunge'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`expunge` cascade indicates that when the parent object is removed from the
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    using [`Session.expunge()`](session_api.html#sqlalchemy.orm.Session.expunge "sqlalchemy.orm.Session.expunge"),
+    the operation should be propagated down to referred objects.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Notes on Delete - Deleting Objects Referenced from Collections and Scalar
+    Relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ORM in general never modifies the contents of a collection or scalar relationship
+    during the flush process. This means, if your class has a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") that refers to a collection of objects, or a reference
+    to a single object such as many-to-one, the contents of this attribute will not
+    be modified when the flush process occurs. Instead, it is expected that the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") would eventually be expired, either through the expire-on-commit
+    behavior of [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or through explicit use of [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire"). At that point, any referenced object or collection
+    associated with that [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    will be cleared and will re-load itself upon next access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A common confusion that arises regarding this behavior involves the use of the
+    [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete "sqlalchemy.orm.Session.delete")
+    method. When [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") is invoked upon an object and the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is flushed, the row is deleted from the database. Rows
+    that refer to the target row via foreign key, assuming they are tracked using
+    a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    between the two mapped object types, will also see their foreign key attributes
+    UPDATED to null, or if delete cascade is set up, the related rows will be deleted
+    as well. However, even though rows related to the deleted object might be themselves
+    modified as well, **no changes occur to relationship-bound collections or object
+    references on the objects** involved in the operation within the scope of the
+    flush itself. This means if the object was a member of a related collection, it
+    will still be present on the Python side until that collection is expired. Similarly,
+    if the object were referenced via many-to-one or one-to-one from another object,
+    that reference will remain present on that object until the object is expired
+    as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below, we illustrate that after an `Address` object is marked for deletion,
+    it’s still present in the collection associated with the parent `User`, even after
+    a flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the above session is committed, all attributes are expired. The next access
+    of `user.addresses` will re-load the collection, revealing the desired state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is a recipe for intercepting [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") and invoking this expiration automatically; see
+    [ExpireRelationshipOnFKChange](https://www.sqlalchemy.org/trac/wiki/UsageRecipes/ExpireRelationshipOnFKChange)
+    for this. However, the usual practice of deleting items within collections is
+    to forego the usage of [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") directly, and instead use cascade behavior to
+    automatically invoke the deletion as a result of removing the object from the
+    parent collection. The `delete-orphan` cascade accomplishes this, as illustrated
+    in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, upon removing the `Address` object from the `User.addresses` collection,
+    the `delete-orphan` cascade has the effect of marking the `Address` object for
+    deletion in the same way as passing it to [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `delete-orphan` cascade can also be applied to a many-to-one or one-to-one
+    relationship, so that when an object is de-associated from its parent, it is also
+    automatically marked for deletion. Using `delete-orphan` cascade on a many-to-one
+    or one-to-one requires an additional flag [`relationship.single_parent`](relationship_api.html#sqlalchemy.orm.relationship.params.single_parent
+    "sqlalchemy.orm.relationship") which invokes an assertion that this related object
+    is not to shared with any other parent simultaneously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if a hypothetical `Preference` object is removed from a `User`, it will
+    be deleted on flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Cascades](#unitofwork-cascades) for detail on cascades.'
+  prefs: []
+  type: TYPE_NORMAL

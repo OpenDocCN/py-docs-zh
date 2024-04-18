@@ -1,0 +1,880 @@
+- en: Composite Column Types
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/composites.html](https://docs.sqlalchemy.org/en/20/orm/composites.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Sets of columns can be associated with a single user-defined datatype, which
+    in modern use is normally a Python [dataclass](https://docs.python.org/3/library/dataclasses.html).
+    The ORM provides a single attribute which represents the group of columns using
+    the class you provide.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A simple example represents pairs of [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") columns as a `Point` object, with attributes `.x`
+    and `.y`. Using a dataclass, these attributes are defined with the corresponding
+    `int` Python type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Non-dataclass forms are also accepted, but require additional methods to be
+    implemented. For an example using a non-dataclass class, see the section [Using
+    Legacy Non-Dataclasses](#composite-legacy-no-dataclass).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: The [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    construct fully supports Python dataclasses including the ability to derive mapped
+    column datatypes from the composite class.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will create a mapping to a table `vertices`, which represents two points
+    as `x1/y1` and `x2/y2`. The `Point` class is associated with the mapped columns
+    using the [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The example below illustrates the most modern form of [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") as used with a fully [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
+    configuration. [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") constructs representing each column are passed
+    directly to [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite"),
+    indicating zero or more aspects of the columns to be generated, in this case the
+    names; the [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    construct derives the column types (in this case `int`, corresponding to [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer")) from the dataclass directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the example above the columns that represent the composites (`x1`, `y1`,
+    etc.) are also accessible on the class but are not correctly understood by type
+    checkers. If accessing the single columns is important they can be explicitly
+    declared, as shown in [Map columns directly, pass attribute names to composite](#composite-with-typing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The above mapping would correspond to a CREATE TABLE statement as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Working with Mapped Composite Column Types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With a mapping as illustrated in the top section, we can work with the `Vertex`
+    class, where the `.start` and `.end` attributes will transparently refer to the
+    columns referenced by the `Point` class, as well as with instances of the `Vertex`
+    class, where the `.start` and `.end` attributes will refer to instances of the
+    `Point` class. The `x1`, `y1`, `x2`, and `y2` columns are handled transparently:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Persisting Point objects**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We can create a `Vertex` object, assign `Point` objects as members, and they
+    will be persisted as expected:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Selecting Point objects as columns**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite") will
+    allow the `Vertex.start` and `Vertex.end` attributes to behave like a single SQL
+    expression to as much an extent as possible when using the ORM [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") (including the legacy [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object) to select `Point` objects:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Comparing Point objects in SQL expressions**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `Vertex.start` and `Vertex.end` attributes may be used in WHERE criteria
+    and similar, using ad-hoc `Point` objects for comparisons:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'New in version 2.0: [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    constructs now support “ordering” comparisons such as `<`, `>=`, and similar,
+    in addition to the already-present support for `==`, `!=`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The “ordering” comparison above using the “less than” operator (`<`) as well
+    as the “equality” comparison using `==`, when used to generate SQL expressions,
+    are implemented by the `Comparator` class, and don’t make use of the comparison
+    methods on the composite class itself, e.g. the `__lt__()` or `__eq__()` methods.
+    From this it follows that the `Point` dataclass above also need not implement
+    the dataclasses `order=True` parameter for the above SQL operations to work. The
+    section [Redefining Comparison Operations for Composites](#composite-operations)
+    contains background on how to customize the comparison operations.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**Updating Point objects on Vertex Instances**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'By default, the `Point` object **must be replaced by a new object** for changes
+    to be detected:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: In order to allow in place changes on the composite object, the [Mutation Tracking](extensions/mutable.html)
+    extension must be used. See the section [Establishing Mutability on Composites](extensions/mutable.html#mutable-composites)
+    for examples.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '## Other mapping forms for composites'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite") construct
+    may be passed the relevant columns using a [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct, a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), or the string name of an existing mapped column.
+    The following examples illustrate an equivalent mapping as that of the main section
+    above.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Map columns directly, then pass to composite
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Here we pass the existing [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") instances to the [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") construct, as in the non-annotated example below where
+    we also pass the `Point` class as the first argument to [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Map columns directly, pass attribute names to composite'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can write the same example above using more annotated forms where we have
+    the option to pass attribute names to [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") instead of full column constructs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Imperative mapping and imperative table
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When using [imperative table](declarative_tables.html#orm-imperative-table-configuration)
+    or fully [imperative](mapping_styles.html#orm-imperative-mapping) mappings, we
+    have access to [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects directly. These may be passed to [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") as well, as in the imperative example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]  ## Using Legacy Non-Dataclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If not using a dataclass, the requirements for the custom datatype class are
+    that it have a constructor which accepts positional arguments corresponding to
+    its column format, and also provides a method `__composite_values__()` which returns
+    the state of the object as a list or tuple, in order of its column-based attributes.
+    It also should supply adequate `__eq__()` and `__ne__()` methods which test the
+    equality of two instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate the equivalent `Point` class from the main section not using
+    a dataclass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Usage with [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    then proceeds where the columns to be associated with the `Point` class must also
+    be declared with explicit types, using one of the forms at [Other mapping forms
+    for composites](#orm-composite-other-forms).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tracking In-Place Mutations on Composites
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In-place changes to an existing composite value are not tracked automatically.
+    Instead, the composite class needs to provide events to its parent object explicitly.
+    This task is largely automated via the usage of the [`MutableComposite`](extensions/mutable.html#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite") mixin, which uses events to associate
+    each user-defined composite object with all parent associations. Please see the
+    example in [Establishing Mutability on Composites](extensions/mutable.html#mutable-composites).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Redefining Comparison Operations for Composites'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “equals” comparison operation by default produces an AND of all corresponding
+    columns equated to one another. This can be changed using the `comparator_factory`
+    argument to [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite"),
+    where we specify a custom [`Comparator`](internals.html#sqlalchemy.orm.CompositeProperty.Comparator
+    "sqlalchemy.orm.CompositeProperty.Comparator") class to define existing or new
+    operations. Below we illustrate the “greater than” operator, implementing the
+    same expression that the base “greater than” does:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since `Point` is a dataclass, we may make use of `dataclasses.astuple()` to
+    get a tuple form of `Point` instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The custom comparator then returns the appropriate SQL expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nesting Composites
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Composite objects can be defined to work in simple nested schemes, by redefining
+    behaviors within the composite class to work as desired, then mapping the composite
+    class to the full length of individual columns normally. This requires that additional
+    methods to move between the “nested” and “flat” forms are defined.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Below we reorganize the `Vertex` class to itself be a composite object which
+    refers to `Point` objects. `Vertex` and `Point` can be dataclasses, however we
+    will add a custom construction method to `Vertex` that can be used to create new
+    `Vertex` objects given four column values, which will will arbitrarily name `_generate()`
+    and define as a classmethod so that we can make new `Vertex` objects by passing
+    values to the `Vertex._generate()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will also implement the `__composite_values__()` method, which is a fixed
+    name recognized by the [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    construct (introduced previously at [Using Legacy Non-Dataclasses](#composite-legacy-no-dataclass))
+    that indicates a standard way of receiving the object as a flat tuple of column
+    values, which in this case will supersede the usual dataclass-oriented methodology.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With our custom `_generate()` constructor and `__composite_values__()` serializer
+    method, we can now move between a flat tuple of columns and `Vertex` objects that
+    contain `Point` instances. The `Vertex._generate` method is passed as the first
+    argument to the [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    construct as the source of new `Vertex` instances, and the `__composite_values__()`
+    method will be used implicitly by [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the purposes of the example, the `Vertex` composite is then mapped to a
+    class called `HasVertex`, which is where the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") containing the four source columns ultimately resides:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above mapping can then be used in terms of `HasVertex`, `Vertex`, and `Point`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Composite API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [composite](#sqlalchemy.orm.composite)([_class_or_attr], *attrs, [group,
+    deferred, raiseload, comparator_factory, active_history, init, repr, default,
+    default_factory, compare, kw_only, info, doc], **__kw) | Return a composite column-based
+    property for use with a Mapper. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a composite column-based property for use with a Mapper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the mapping documentation section [Composite Column Types](#mapper-composite)
+    for a full usage example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty")
+    returned by [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    is the [`Composite`](internals.html#sqlalchemy.orm.Composite "sqlalchemy.orm.Composite").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`class_` – The “composite type” class, or any classmethod or callable which
+    will produce a new instance of the composite object given the column values in
+    order.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`*attrs` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'List of elements to be mapped, which may include:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column")
+    constructs'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: string names of other attributes on the mapped class, which may be any other
+    SQL or object-mapped attribute. This can for example allow a composite that refers
+    to a many-to-one relationship
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`active_history=False` – When `True`, indicates that the “previous” value for
+    a scalar attribute should be loaded when replaced, if not already loaded. See
+    the same flag on [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`group` – A group name for this property when marked as deferred.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`deferred` – When True, the column property is “deferred”, meaning that it
+    does not load immediately, and is instead loaded when the attribute is first accessed
+    on an instance. See also [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`comparator_factory` – a class which extends `Comparator` which provides custom
+    SQL clause generation for comparison operations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`doc` – optional string that will be applied as the doc on the class-bound
+    descriptor.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`info` – Optional data dictionary which will be populated into the [`MapperProperty.info`](internals.html#sqlalchemy.orm.MapperProperty.info
+    "sqlalchemy.orm.MapperProperty.info") attribute of this object.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`init` – Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    specifies if the mapped attribute should be part of the `__init__()` method as
+    generated by the dataclass process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`repr` – Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    specifies if the mapped attribute should be part of the `__repr__()` method as
+    generated by the dataclass process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default_factory` – Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    specifies a default-value generation function that will take place as part of
+    the `__init__()` method as generated by the dataclass process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`compare` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    indicates if this field should be included in comparison operations when generating
+    the `__eq__()` and `__ne__()` methods for the mapped class.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.0b4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`kw_only` – Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    indicates if this field should be marked as keyword-only when generating the `__init__()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Working with Mapped Composite Column Types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With a mapping as illustrated in the top section, we can work with the `Vertex`
+    class, where the `.start` and `.end` attributes will transparently refer to the
+    columns referenced by the `Point` class, as well as with instances of the `Vertex`
+    class, where the `.start` and `.end` attributes will refer to instances of the
+    `Point` class. The `x1`, `y1`, `x2`, and `y2` columns are handled transparently:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Persisting Point objects**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We can create a `Vertex` object, assign `Point` objects as members, and they
+    will be persisted as expected:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Selecting Point objects as columns**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite") will
+    allow the `Vertex.start` and `Vertex.end` attributes to behave like a single SQL
+    expression to as much an extent as possible when using the ORM [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") (including the legacy [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object) to select `Point` objects:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Comparing Point objects in SQL expressions**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `Vertex.start` and `Vertex.end` attributes may be used in WHERE criteria
+    and similar, using ad-hoc `Point` objects for comparisons:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'New in version 2.0: [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    constructs now support “ordering” comparisons such as `<`, `>=`, and similar,
+    in addition to the already-present support for `==`, `!=`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The “ordering” comparison above using the “less than” operator (`<`) as well
+    as the “equality” comparison using `==`, when used to generate SQL expressions,
+    are implemented by the `Comparator` class, and don’t make use of the comparison
+    methods on the composite class itself, e.g. the `__lt__()` or `__eq__()` methods.
+    From this it follows that the `Point` dataclass above also need not implement
+    the dataclasses `order=True` parameter for the above SQL operations to work. The
+    section [Redefining Comparison Operations for Composites](#composite-operations)
+    contains background on how to customize the comparison operations.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**Updating Point objects on Vertex Instances**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'By default, the `Point` object **must be replaced by a new object** for changes
+    to be detected:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: In order to allow in place changes on the composite object, the [Mutation Tracking](extensions/mutable.html)
+    extension must be used. See the section [Establishing Mutability on Composites](extensions/mutable.html#mutable-composites)
+    for examples.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '## Other mapping forms for composites'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite") construct
+    may be passed the relevant columns using a [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct, a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), or the string name of an existing mapped column.
+    The following examples illustrate an equivalent mapping as that of the main section
+    above.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Map columns directly, then pass to composite
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Here we pass the existing [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") instances to the [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") construct, as in the non-annotated example below where
+    we also pass the `Point` class as the first argument to [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Map columns directly, pass attribute names to composite'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can write the same example above using more annotated forms where we have
+    the option to pass attribute names to [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") instead of full column constructs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Imperative mapping and imperative table
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When using [imperative table](declarative_tables.html#orm-imperative-table-configuration)
+    or fully [imperative](mapping_styles.html#orm-imperative-mapping) mappings, we
+    have access to [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects directly. These may be passed to [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") as well, as in the imperative example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Map columns directly, then pass to composite
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Here we pass the existing [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") instances to the [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") construct, as in the non-annotated example below where
+    we also pass the `Point` class as the first argument to [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Map columns directly, pass attribute names to composite'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can write the same example above using more annotated forms where we have
+    the option to pass attribute names to [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") instead of full column constructs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Imperative mapping and imperative table
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When using [imperative table](declarative_tables.html#orm-imperative-table-configuration)
+    or fully [imperative](mapping_styles.html#orm-imperative-mapping) mappings, we
+    have access to [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects directly. These may be passed to [`composite()`](#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") as well, as in the imperative example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Using Legacy Non-Dataclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If not using a dataclass, the requirements for the custom datatype class are
+    that it have a constructor which accepts positional arguments corresponding to
+    its column format, and also provides a method `__composite_values__()` which returns
+    the state of the object as a list or tuple, in order of its column-based attributes.
+    It also should supply adequate `__eq__()` and `__ne__()` methods which test the
+    equality of two instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate the equivalent `Point` class from the main section not using
+    a dataclass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Usage with [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    then proceeds where the columns to be associated with the `Point` class must also
+    be declared with explicit types, using one of the forms at [Other mapping forms
+    for composites](#orm-composite-other-forms).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tracking In-Place Mutations on Composites
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In-place changes to an existing composite value are not tracked automatically.
+    Instead, the composite class needs to provide events to its parent object explicitly.
+    This task is largely automated via the usage of the [`MutableComposite`](extensions/mutable.html#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite") mixin, which uses events to associate
+    each user-defined composite object with all parent associations. Please see the
+    example in [Establishing Mutability on Composites](extensions/mutable.html#mutable-composites).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Redefining Comparison Operations for Composites'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “equals” comparison operation by default produces an AND of all corresponding
+    columns equated to one another. This can be changed using the `comparator_factory`
+    argument to [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite"),
+    where we specify a custom [`Comparator`](internals.html#sqlalchemy.orm.CompositeProperty.Comparator
+    "sqlalchemy.orm.CompositeProperty.Comparator") class to define existing or new
+    operations. Below we illustrate the “greater than” operator, implementing the
+    same expression that the base “greater than” does:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since `Point` is a dataclass, we may make use of `dataclasses.astuple()` to
+    get a tuple form of `Point` instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The custom comparator then returns the appropriate SQL expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nesting Composites
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Composite objects can be defined to work in simple nested schemes, by redefining
+    behaviors within the composite class to work as desired, then mapping the composite
+    class to the full length of individual columns normally. This requires that additional
+    methods to move between the “nested” and “flat” forms are defined.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Below we reorganize the `Vertex` class to itself be a composite object which
+    refers to `Point` objects. `Vertex` and `Point` can be dataclasses, however we
+    will add a custom construction method to `Vertex` that can be used to create new
+    `Vertex` objects given four column values, which will will arbitrarily name `_generate()`
+    and define as a classmethod so that we can make new `Vertex` objects by passing
+    values to the `Vertex._generate()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will also implement the `__composite_values__()` method, which is a fixed
+    name recognized by the [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    construct (introduced previously at [Using Legacy Non-Dataclasses](#composite-legacy-no-dataclass))
+    that indicates a standard way of receiving the object as a flat tuple of column
+    values, which in this case will supersede the usual dataclass-oriented methodology.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With our custom `_generate()` constructor and `__composite_values__()` serializer
+    method, we can now move between a flat tuple of columns and `Vertex` objects that
+    contain `Point` instances. The `Vertex._generate` method is passed as the first
+    argument to the [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    construct as the source of new `Vertex` instances, and the `__composite_values__()`
+    method will be used implicitly by [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the purposes of the example, the `Vertex` composite is then mapped to a
+    class called `HasVertex`, which is where the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") containing the four source columns ultimately resides:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above mapping can then be used in terms of `HasVertex`, `Vertex`, and `Point`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Composite API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [composite](#sqlalchemy.orm.composite)([_class_or_attr], *attrs, [group,
+    deferred, raiseload, comparator_factory, active_history, init, repr, default,
+    default_factory, compare, kw_only, info, doc], **__kw) | Return a composite column-based
+    property for use with a Mapper. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a composite column-based property for use with a Mapper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the mapping documentation section [Composite Column Types](#mapper-composite)
+    for a full usage example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty")
+    returned by [`composite()`](#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
+    is the [`Composite`](internals.html#sqlalchemy.orm.Composite "sqlalchemy.orm.Composite").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`class_` – The “composite type” class, or any classmethod or callable which
+    will produce a new instance of the composite object given the column values in
+    order.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`*attrs` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'List of elements to be mapped, which may include:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column")
+    constructs'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: string names of other attributes on the mapped class, which may be any other
+    SQL or object-mapped attribute. This can for example allow a composite that refers
+    to a many-to-one relationship
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`active_history=False` – When `True`, indicates that the “previous” value for
+    a scalar attribute should be loaded when replaced, if not already loaded. See
+    the same flag on [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`group` – A group name for this property when marked as deferred.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`deferred` – When True, the column property is “deferred”, meaning that it
+    does not load immediately, and is instead loaded when the attribute is first accessed
+    on an instance. See also [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`comparator_factory` – a class which extends `Comparator` which provides custom
+    SQL clause generation for comparison operations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`doc` – optional string that will be applied as the doc on the class-bound
+    descriptor.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`info` – Optional data dictionary which will be populated into the [`MapperProperty.info`](internals.html#sqlalchemy.orm.MapperProperty.info
+    "sqlalchemy.orm.MapperProperty.info") attribute of this object.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`init` – Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    specifies if the mapped attribute should be part of the `__init__()` method as
+    generated by the dataclass process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`repr` – Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    specifies if the mapped attribute should be part of the `__repr__()` method as
+    generated by the dataclass process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default_factory` – Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    specifies a default-value generation function that will take place as part of
+    the `__init__()` method as generated by the dataclass process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`compare` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    indicates if this field should be included in comparison operations when generating
+    the `__eq__()` and `__ne__()` methods for the mapped class.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.0b4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`kw_only` – Specific to [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses),
+    indicates if this field should be marked as keyword-only when generating the `__init__()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

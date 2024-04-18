@@ -1,0 +1,1039 @@
+- en: Composing Mapped Hierarchies with Mixins
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/declarative_mixins.html](https://docs.sqlalchemy.org/en/20/orm/declarative_mixins.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: A common need when mapping classes using the [Declarative](mapping_styles.html#orm-declarative-mapping)
+    style is to share common functionality, such as particular columns, table or mapper
+    options, naming schemes, or other mapped properties, across many classes. When
+    using declarative mappings, this idiom is supported via the use of [mixin classes](../glossary.html#term-mixin-classes),
+    as well as via augmenting the declarative base class itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to mixin classes, common column options may also be shared among
+    many classes using [**PEP 593**](https://peps.python.org/pep-0593/) `Annotated`
+    types; see [Mapping Multiple Type Configurations to Python Types](declarative_tables.html#orm-declarative-mapped-column-type-map-pep593)
+    and [Mapping Whole Column Declarations to Python Types](declarative_tables.html#orm-declarative-mapped-column-pep593)
+    for background on these SQLAlchemy 2.0 features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of some commonly mixed-in idioms is below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above example illustrates a class `MyModel` which includes two mixins `CommonMixin`
+    and `HasLogRecord` in its bases, as well as a supplementary class `LogRecord`
+    which also includes `CommonMixin`, demonstrating a variety of constructs that
+    are supported on mixins and base classes, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: columns declared using [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") or [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") are copied from mixins or base classes onto the target
+    class to be mapped; above this is illustrated via the column attributes `CommonMixin.id`
+    and `HasLogRecord.log_record_id`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Declarative directives such as `__table_args__` and `__mapper_args__` can be
+    assigned to a mixin or base class, where they will take effect automatically for
+    any classes which inherit from the mixin or base. The above example illustrates
+    this using the `__table_args__` and `__mapper_args__` attributes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: All Declarative directives, including all of `__tablename__`, `__table__`, `__table_args__`
+    and `__mapper_args__`, may be implemented using user-defined class methods, which
+    are decorated with the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") decorator (specifically the [`declared_attr.directive`](mapping_api.html#sqlalchemy.orm.declared_attr.directive
+    "sqlalchemy.orm.declared_attr.directive") sub-member, more on that in a moment).
+    Above, this is illustrated using a `def __tablename__(cls)` classmethod that generates
+    a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    name dynamically; when applied to the `MyModel` class, the table name will be
+    generated as `"mymodel"`, and when applied to the `LogRecord` class, the table
+    name will be generated as `"logrecord"`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Other ORM properties such as [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") can be generated on the target class to be mapped
+    using user-defined class methods also decorated with the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") decorator. Above, this is illustrated by generating
+    a many-to-one [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to a mapped object called `LogRecord`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The features above may all be demonstrated using a [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The examples of [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") will attempt to illustrate the correct [**PEP
+    484**](https://peps.python.org/pep-0484/) annotations for each method example.
+    The use of annotations with [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") functions are **completely optional**, and are
+    not consumed by Declarative; however, these annotations are required in order
+    to pass Mypy `--strict` type checking.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additionally, the [`declared_attr.directive`](mapping_api.html#sqlalchemy.orm.declared_attr.directive
+    "sqlalchemy.orm.declared_attr.directive") sub-member illustrated above is optional
+    as well, and is only significant for [**PEP 484**](https://peps.python.org/pep-0484/)
+    typing tools, as it adjusts for the expected return type when creating methods
+    to override Declarative directives such as `__tablename__`, `__mapper_args__`
+    and `__table_args__`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: As part of [**PEP 484**](https://peps.python.org/pep-0484/)
+    typing support for the SQLAlchemy ORM, added the [`declared_attr.directive`](mapping_api.html#sqlalchemy.orm.declared_attr.directive
+    "sqlalchemy.orm.declared_attr.directive") to [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") to distinguish between [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") attributes and Declarative configurational attributes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There’s no fixed convention for the order of mixins and base classes. Normal
+    Python method resolution rules apply, and the above example would work just as
+    well with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: This works because `Base` here doesn’t define any of the variables that `CommonMixin`
+    or `HasLogRecord` defines, i.e. `__tablename__`, `__table_args__`, `id`, etc.
+    If the `Base` did define an attribute of the same name, the class placed first
+    in the inherits list would determine which attribute is used on the newly defined
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the above example is using [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
+    form based on the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    annotation class, mixin classes also work perfectly well with non-annotated and
+    legacy Declarative forms, such as when using [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") directly instead of [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: For users coming from the 1.4 series of SQLAlchemy
+    who may have been using the [mypy plugin](extensions/mypy.html), the [`declarative_mixin()`](mapping_api.html#sqlalchemy.orm.declarative_mixin
+    "sqlalchemy.orm.declarative_mixin") class decorator is no longer needed to mark
+    declarative mixins, assuming the mypy plugin is no longer in use.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Augmenting the Base
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In addition to using a pure mixin, most of the techniques in this section can
+    also be applied to the base class directly, for patterns that should apply to
+    all classes derived from a particular base. The example below illustrates some
+    of the previous section’s example in terms of the `Base` class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, `MyModel` as well as `LogRecord`, in deriving from `Base`, will
+    both have their table name derived from their class name, a primary key column
+    named `id`, as well as the above table and mapper arguments defined by `Base.__table_args__`
+    and `Base.__mapper_args__`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using legacy [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base
+    "sqlalchemy.orm.declarative_base") or [`registry.generate_base()`](mapping_api.html#sqlalchemy.orm.registry.generate_base
+    "sqlalchemy.orm.registry.generate_base"), the [`declarative_base.cls`](mapping_api.html#sqlalchemy.orm.declarative_base.params.cls
+    "sqlalchemy.orm.declarative_base") parameter may be used as follows to generate
+    an equivalent effect, as illustrated in the non-annotated example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mixing in Columns
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Columns can be indicated in mixins assuming the [Declarative table](declarative_tables.html#orm-declarative-table)
+    style of configuration is in use (as opposed to [imperative table](declarative_tables.html#orm-imperative-table-configuration)
+    configuration), so that columns declared on the mixin can then be copied to be
+    part of the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that the Declarative process generates. All three of the [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), and [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") constructs may be declared inline in a declarative
+    mixin:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, all declarative classes that include `TimestampMixin` in their
+    class bases will automatically include a column `created_at` that applies a timestamp
+    to all row insertions, as well as an `updated_at` column, which does not include
+    a default for the purposes of the example (if it did, we would use the [`Column.onupdate`](../core/metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") parameter which is accepted by [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column")). These column constructs are always **copied
+    from the originating mixin or base class**, so that the same mixin/base class
+    may be applied to any number of target classes which will each have their own
+    column constructs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All Declarative column forms are supported by mixins, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Annotated attributes** - with or without [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") present:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**mapped_column** - with or without [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") present:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Column** - legacy Declarative form:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: In each of the above forms, Declarative handles the column-based attributes
+    on the mixin class by creating a **copy** of the construct, which is then applied
+    to the target class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The declarative API can now accommodate [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects as well as [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") constructs of any form when using mixins without
+    the need to use [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr"). Previous limitations which prevented columns
+    with [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")
+    elements from being used directly in mixins have been removed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Mixing in Relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Relationships created by [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") are provided with declarative mixin classes exclusively
+    using the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    approach, eliminating any ambiguity which could arise when copying a relationship
+    and its possibly column-bound contents. Below is an example which combines a foreign
+    key column and a relationship so that two classes `Foo` and `Bar` can both be
+    configured to reference a common target class via many-to-one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, each of `Foo` and `Bar` contain a relationship to `Target`
+    accessed along the `.target` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Special arguments such as [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") may also be used within mixed-in classmethods,
+    which often need to refer to the class that’s being mapped. For schemes that need
+    to refer to locally mapped columns, in ordinary cases these columns are made available
+    by Declarative as attributes on the mapped class which is passed as the `cls`
+    argument to the decorated classmethod. Using this feature, we could for example
+    rewrite the `RefTargetMixin.target` method using an explicit primaryjoin which
+    refers to pending mapped columns on both `Target` and `cls`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]  ## Mixing in [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") and other [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") classes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Like [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship"),
+    other [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty")
+    subclasses such as [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") also need to have class-local copies generated
+    when used by mixins, so are also declared within functions that are decorated
+    by [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr").
+    Within the function, other ordinary mapped columns that were declared with [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), or [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") will be made available from the `cls` argument so
+    that they may be used to compose new attributes, as in the example below which
+    adds two columns together:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, we may make use of `Something.x_plus_y` in a statement where it produces
+    the full expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    decorator causes the decorated callable to behave exactly as a classmethod. However,
+    typing tools like [Pylance](https://github.com/microsoft/pylance-release) may
+    not be able to recognize this, which can sometimes cause it to complain about
+    access to the `cls` variable inside the body of the function. To resolve this
+    issue when it occurs, the `@classmethod` decorator may be combined directly with
+    [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 2.0: - [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") can accommodate a function decorated with `@classmethod`
+    to help with [**PEP 484**](https://peps.python.org/pep-0484/) integration where
+    needed.  ## Using Mixins and Base Classes with Mapped Inheritance Patterns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When dealing with mapper inheritance patterns as documented at [Mapping Class
+    Inheritance Hierarchies](inheritance.html), some additional capabilities are present
+    when using [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    either with mixin classes, or when augmenting both mapped and un-mapped superclasses
+    in a class hierarchy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When defining functions decorated by [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") on mixins or base classes to be interpreted by
+    subclasses in a mapped inheritance hierarchy, there is an important distinction
+    made between functions that generate the special names used by Declarative such
+    as `__tablename__`, `__mapper_args__` vs. those that may generate ordinary mapped
+    attributes such as [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") and [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). Functions that define **Declarative directives**
+    are **invoked for each subclass in a hierarchy**, whereas functions that generate
+    **mapped attributes** are **invoked only for the first mapped superclass in a
+    hierarchy**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The rationale for this difference in behavior is based on the fact that mapped
+    properties are already inheritable by classes, such as a particular column on
+    a superclass’ mapped table should not be duplicated to that of a subclass as well,
+    whereas elements that are specific to a particular class or its mapped table are
+    not inheritable, such as the name of the table that is locally mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The difference in behavior between these two use cases is demonstrated in the
+    following two sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    with inheriting [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    and [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A common recipe with mixins is to create a `def __tablename__(cls)` function
+    that generates a name for the mapped [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") dynamically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This recipe can be used to generate table names for an inheriting mapper hierarchy
+    as in the example below which creates a mixin that gives every class a simple
+    table name based on class name. The recipe is illustrated below where a table
+    name is generated for the `Person` mapped class and the `Engineer` subclass of
+    `Person`, but not for the `Manager` subclass of `Person`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, both the `Person` base class as well as the `Engineer`
+    class, being subclasses of the `Tablename` mixin class which generates new table
+    names, will have a generated `__tablename__` attribute, which to Declarative indicates
+    that each class should have its own [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") generated to which it will be mapped. For the `Engineer`
+    subclass, the style of inheritance applied is [joined table inheritance](inheritance.html#joined-inheritance),
+    as it will be mapped to a table `engineer` that joins to the base `person` table.
+    Any other subclasses that inherit from `Person` will also have this style of inheritance
+    applied by default (and within this particular example, would need to each specify
+    a primary key column; more on that in the next section).
+  prefs: []
+  type: TYPE_NORMAL
+- en: By contrast, the `Manager` subclass of `Person` **overrides** the `__tablename__`
+    classmethod to return `None`. This indicates to Declarative that this class should
+    **not** have a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    generated, and will instead make use exclusively of the base [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to which `Person` is mapped. For the `Manager` subclass,
+    the style of inheritance applied is [single table inheritance](inheritance.html#single-inheritance).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The example above illustrates that Declarative directives like `__tablename__`
+    are necessarily **applied to each subclass** individually, as each mapped class
+    needs to state which [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    it will be mapped towards, or if it will map itself to the inheriting superclass’
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we instead wanted to **reverse** the default table scheme illustrated above,
+    so that single table inheritance were the default and joined table inheritance
+    could be defined only when a `__tablename__` directive were supplied to override
+    it, we can make use of Declarative helpers within the top-most `__tablename__()`
+    method, in this case a helper called [`has_inherited_table()`](mapping_api.html#sqlalchemy.orm.has_inherited_table
+    "sqlalchemy.orm.has_inherited_table"). This function will return `True` if a superclass
+    is already mapped to a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"). We may use this helper within the base-most `__tablename__()`
+    classmethod so that we may **conditionally** return `None` for the table name,
+    if a table is already present, thus indicating single-table inheritance for inheriting
+    subclasses by default:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") to generate table-specific inheriting columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In contrast to how `__tablename__` and other special names are handled when
+    used with [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr"),
+    when we mix in columns and properties (e.g. relationships, column properties,
+    etc.), the function is invoked for the **base class only** in the hierarchy, unless
+    the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    directive is used in combination with the [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading") sub-directive. Below, only the `Person`
+    class will receive a column called `id`; the mapping will fail on `Engineer`,
+    which is not given a primary key:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It is usually the case in joined-table inheritance that we want distinctly
+    named columns on each subclass. However in this case, we may want to have an `id`
+    column on every table, and have them refer to each other via foreign key. We can
+    achieve this as a mixin by using the [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading") modifier, which indicates that the function
+    should be invoked **for each class in the hierarchy**, in *almost* (see warning
+    below) the same way as it does for `__tablename__`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading") feature currently does **not** allow
+    for a subclass to override the attribute with a different function or value. This
+    is a current limitation in the mechanics of how `@declared_attr` is resolved,
+    and a warning is emitted if this condition is detected. This limitation only applies
+    to ORM mapped columns, relationships, and other [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") styles of attribute. It does **not** apply to
+    Declarative directives such as `__tablename__`, `__mapper_args__`, etc., which
+    resolve in a different way internally than that of [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combining Table/Mapper Arguments from Multiple Mixins
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In the case of `__table_args__` or `__mapper_args__` specified with declarative
+    mixins, you may want to combine some parameters from several mixins with those
+    you wish to define on the class itself. The [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") decorator can be used here to create user-defined
+    collation routines that pull from multiple collections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Creating Indexes and Constraints with Naming Conventions on Mixins'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using named constraints such as [`Index`](../core/constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index"), [`UniqueConstraint`](../core/constraints.html#sqlalchemy.schema.UniqueConstraint
+    "sqlalchemy.schema.UniqueConstraint"), [`CheckConstraint`](../core/constraints.html#sqlalchemy.schema.CheckConstraint
+    "sqlalchemy.schema.CheckConstraint"), where each object is to be unique to a specific
+    table descending from a mixin, requires that an individual instance of each object
+    is created per actual mapped class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a simple example, to define a named, potentially multicolumn [`Index`](../core/constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index") that applies to all tables derived from a mixin, use
+    the “inline” form of [`Index`](../core/constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index") and establish it as part of `__table_args__`, using
+    [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    to establish `__table_args__()` as a class method that will be invoked for each
+    subclass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example would generate two tables `"table_a"` and `"table_b"`, with
+    indexes `"test_idx_table_a"` and `"test_idx_table_b"`
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Typically, in modern SQLAlchemy we would use a naming convention, as documented
+    at [Configuring Constraint Naming Conventions](../core/constraints.html#constraint-naming-conventions).
+    While naming conventions take place automatically using the [`MetaData.naming_convention`](../core/metadata.html#sqlalchemy.schema.MetaData.params.naming_convention
+    "sqlalchemy.schema.MetaData") as new [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") objects are created, as this convention is applied
+    at object construction time based on the parent [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") for a particular [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint"), a distinct [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") object needs to be created for each inheriting
+    subclass with its own [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), again using [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") with `__table_args__()`, below illustrated using
+    an abstract mapped base:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above mapping will generate DDL that includes table-specific names for
+    all constraints, including primary key, CHECK constraint, unique constraint:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Augmenting the Base
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In addition to using a pure mixin, most of the techniques in this section can
+    also be applied to the base class directly, for patterns that should apply to
+    all classes derived from a particular base. The example below illustrates some
+    of the previous section’s example in terms of the `Base` class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, `MyModel` as well as `LogRecord`, in deriving from `Base`, will
+    both have their table name derived from their class name, a primary key column
+    named `id`, as well as the above table and mapper arguments defined by `Base.__table_args__`
+    and `Base.__mapper_args__`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using legacy [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base
+    "sqlalchemy.orm.declarative_base") or [`registry.generate_base()`](mapping_api.html#sqlalchemy.orm.registry.generate_base
+    "sqlalchemy.orm.registry.generate_base"), the [`declarative_base.cls`](mapping_api.html#sqlalchemy.orm.declarative_base.params.cls
+    "sqlalchemy.orm.declarative_base") parameter may be used as follows to generate
+    an equivalent effect, as illustrated in the non-annotated example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mixing in Columns
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Columns can be indicated in mixins assuming the [Declarative table](declarative_tables.html#orm-declarative-table)
+    style of configuration is in use (as opposed to [imperative table](declarative_tables.html#orm-imperative-table-configuration)
+    configuration), so that columns declared on the mixin can then be copied to be
+    part of the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that the Declarative process generates. All three of the [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), and [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") constructs may be declared inline in a declarative
+    mixin:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, all declarative classes that include `TimestampMixin` in their
+    class bases will automatically include a column `created_at` that applies a timestamp
+    to all row insertions, as well as an `updated_at` column, which does not include
+    a default for the purposes of the example (if it did, we would use the [`Column.onupdate`](../core/metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") parameter which is accepted by [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column")). These column constructs are always **copied
+    from the originating mixin or base class**, so that the same mixin/base class
+    may be applied to any number of target classes which will each have their own
+    column constructs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All Declarative column forms are supported by mixins, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Annotated attributes** - with or without [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") present:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**mapped_column** - with or without [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") present:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Column** - legacy Declarative form:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: In each of the above forms, Declarative handles the column-based attributes
+    on the mixin class by creating a **copy** of the construct, which is then applied
+    to the target class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The declarative API can now accommodate [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects as well as [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") constructs of any form when using mixins without
+    the need to use [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr"). Previous limitations which prevented columns
+    with [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")
+    elements from being used directly in mixins have been removed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Mixing in Relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Relationships created by [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") are provided with declarative mixin classes exclusively
+    using the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    approach, eliminating any ambiguity which could arise when copying a relationship
+    and its possibly column-bound contents. Below is an example which combines a foreign
+    key column and a relationship so that two classes `Foo` and `Bar` can both be
+    configured to reference a common target class via many-to-one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, each of `Foo` and `Bar` contain a relationship to `Target`
+    accessed along the `.target` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Special arguments such as [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") may also be used within mixed-in classmethods,
+    which often need to refer to the class that’s being mapped. For schemes that need
+    to refer to locally mapped columns, in ordinary cases these columns are made available
+    by Declarative as attributes on the mapped class which is passed as the `cls`
+    argument to the decorated classmethod. Using this feature, we could for example
+    rewrite the `RefTargetMixin.target` method using an explicit primaryjoin which
+    refers to pending mapped columns on both `Target` and `cls`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Mixing in [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") and other [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") classes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Like [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship"),
+    other [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty")
+    subclasses such as [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") also need to have class-local copies generated
+    when used by mixins, so are also declared within functions that are decorated
+    by [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr").
+    Within the function, other ordinary mapped columns that were declared with [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), or [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") will be made available from the `cls` argument so
+    that they may be used to compose new attributes, as in the example below which
+    adds two columns together:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, we may make use of `Something.x_plus_y` in a statement where it produces
+    the full expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    decorator causes the decorated callable to behave exactly as a classmethod. However,
+    typing tools like [Pylance](https://github.com/microsoft/pylance-release) may
+    not be able to recognize this, which can sometimes cause it to complain about
+    access to the `cls` variable inside the body of the function. To resolve this
+    issue when it occurs, the `@classmethod` decorator may be combined directly with
+    [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 2.0: - [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") can accommodate a function decorated with `@classmethod`
+    to help with [**PEP 484**](https://peps.python.org/pep-0484/) integration where
+    needed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Using Mixins and Base Classes with Mapped Inheritance Patterns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When dealing with mapper inheritance patterns as documented at [Mapping Class
+    Inheritance Hierarchies](inheritance.html), some additional capabilities are present
+    when using [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    either with mixin classes, or when augmenting both mapped and un-mapped superclasses
+    in a class hierarchy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When defining functions decorated by [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") on mixins or base classes to be interpreted by
+    subclasses in a mapped inheritance hierarchy, there is an important distinction
+    made between functions that generate the special names used by Declarative such
+    as `__tablename__`, `__mapper_args__` vs. those that may generate ordinary mapped
+    attributes such as [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") and [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). Functions that define **Declarative directives**
+    are **invoked for each subclass in a hierarchy**, whereas functions that generate
+    **mapped attributes** are **invoked only for the first mapped superclass in a
+    hierarchy**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The rationale for this difference in behavior is based on the fact that mapped
+    properties are already inheritable by classes, such as a particular column on
+    a superclass’ mapped table should not be duplicated to that of a subclass as well,
+    whereas elements that are specific to a particular class or its mapped table are
+    not inheritable, such as the name of the table that is locally mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The difference in behavior between these two use cases is demonstrated in the
+    following two sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    with inheriting [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    and [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A common recipe with mixins is to create a `def __tablename__(cls)` function
+    that generates a name for the mapped [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") dynamically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This recipe can be used to generate table names for an inheriting mapper hierarchy
+    as in the example below which creates a mixin that gives every class a simple
+    table name based on class name. The recipe is illustrated below where a table
+    name is generated for the `Person` mapped class and the `Engineer` subclass of
+    `Person`, but not for the `Manager` subclass of `Person`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, both the `Person` base class as well as the `Engineer`
+    class, being subclasses of the `Tablename` mixin class which generates new table
+    names, will have a generated `__tablename__` attribute, which to Declarative indicates
+    that each class should have its own [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") generated to which it will be mapped. For the `Engineer`
+    subclass, the style of inheritance applied is [joined table inheritance](inheritance.html#joined-inheritance),
+    as it will be mapped to a table `engineer` that joins to the base `person` table.
+    Any other subclasses that inherit from `Person` will also have this style of inheritance
+    applied by default (and within this particular example, would need to each specify
+    a primary key column; more on that in the next section).
+  prefs: []
+  type: TYPE_NORMAL
+- en: By contrast, the `Manager` subclass of `Person` **overrides** the `__tablename__`
+    classmethod to return `None`. This indicates to Declarative that this class should
+    **not** have a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    generated, and will instead make use exclusively of the base [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to which `Person` is mapped. For the `Manager` subclass,
+    the style of inheritance applied is [single table inheritance](inheritance.html#single-inheritance).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The example above illustrates that Declarative directives like `__tablename__`
+    are necessarily **applied to each subclass** individually, as each mapped class
+    needs to state which [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    it will be mapped towards, or if it will map itself to the inheriting superclass’
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we instead wanted to **reverse** the default table scheme illustrated above,
+    so that single table inheritance were the default and joined table inheritance
+    could be defined only when a `__tablename__` directive were supplied to override
+    it, we can make use of Declarative helpers within the top-most `__tablename__()`
+    method, in this case a helper called [`has_inherited_table()`](mapping_api.html#sqlalchemy.orm.has_inherited_table
+    "sqlalchemy.orm.has_inherited_table"). This function will return `True` if a superclass
+    is already mapped to a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"). We may use this helper within the base-most `__tablename__()`
+    classmethod so that we may **conditionally** return `None` for the table name,
+    if a table is already present, thus indicating single-table inheritance for inheriting
+    subclasses by default:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") to generate table-specific inheriting columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In contrast to how `__tablename__` and other special names are handled when
+    used with [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr"),
+    when we mix in columns and properties (e.g. relationships, column properties,
+    etc.), the function is invoked for the **base class only** in the hierarchy, unless
+    the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    directive is used in combination with the [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading") sub-directive. Below, only the `Person`
+    class will receive a column called `id`; the mapping will fail on `Engineer`,
+    which is not given a primary key:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It is usually the case in joined-table inheritance that we want distinctly
+    named columns on each subclass. However in this case, we may want to have an `id`
+    column on every table, and have them refer to each other via foreign key. We can
+    achieve this as a mixin by using the [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading") modifier, which indicates that the function
+    should be invoked **for each class in the hierarchy**, in *almost* (see warning
+    below) the same way as it does for `__tablename__`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading") feature currently does **not** allow
+    for a subclass to override the attribute with a different function or value. This
+    is a current limitation in the mechanics of how `@declared_attr` is resolved,
+    and a warning is emitted if this condition is detected. This limitation only applies
+    to ORM mapped columns, relationships, and other [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") styles of attribute. It does **not** apply to
+    Declarative directives such as `__tablename__`, `__mapper_args__`, etc., which
+    resolve in a different way internally than that of [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    with inheriting [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    and [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A common recipe with mixins is to create a `def __tablename__(cls)` function
+    that generates a name for the mapped [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") dynamically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This recipe can be used to generate table names for an inheriting mapper hierarchy
+    as in the example below which creates a mixin that gives every class a simple
+    table name based on class name. The recipe is illustrated below where a table
+    name is generated for the `Person` mapped class and the `Engineer` subclass of
+    `Person`, but not for the `Manager` subclass of `Person`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, both the `Person` base class as well as the `Engineer`
+    class, being subclasses of the `Tablename` mixin class which generates new table
+    names, will have a generated `__tablename__` attribute, which to Declarative indicates
+    that each class should have its own [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") generated to which it will be mapped. For the `Engineer`
+    subclass, the style of inheritance applied is [joined table inheritance](inheritance.html#joined-inheritance),
+    as it will be mapped to a table `engineer` that joins to the base `person` table.
+    Any other subclasses that inherit from `Person` will also have this style of inheritance
+    applied by default (and within this particular example, would need to each specify
+    a primary key column; more on that in the next section).
+  prefs: []
+  type: TYPE_NORMAL
+- en: By contrast, the `Manager` subclass of `Person` **overrides** the `__tablename__`
+    classmethod to return `None`. This indicates to Declarative that this class should
+    **not** have a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    generated, and will instead make use exclusively of the base [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to which `Person` is mapped. For the `Manager` subclass,
+    the style of inheritance applied is [single table inheritance](inheritance.html#single-inheritance).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The example above illustrates that Declarative directives like `__tablename__`
+    are necessarily **applied to each subclass** individually, as each mapped class
+    needs to state which [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    it will be mapped towards, or if it will map itself to the inheriting superclass’
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we instead wanted to **reverse** the default table scheme illustrated above,
+    so that single table inheritance were the default and joined table inheritance
+    could be defined only when a `__tablename__` directive were supplied to override
+    it, we can make use of Declarative helpers within the top-most `__tablename__()`
+    method, in this case a helper called [`has_inherited_table()`](mapping_api.html#sqlalchemy.orm.has_inherited_table
+    "sqlalchemy.orm.has_inherited_table"). This function will return `True` if a superclass
+    is already mapped to a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"). We may use this helper within the base-most `__tablename__()`
+    classmethod so that we may **conditionally** return `None` for the table name,
+    if a table is already present, thus indicating single-table inheritance for inheriting
+    subclasses by default:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") to generate table-specific inheriting columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In contrast to how `__tablename__` and other special names are handled when
+    used with [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr"),
+    when we mix in columns and properties (e.g. relationships, column properties,
+    etc.), the function is invoked for the **base class only** in the hierarchy, unless
+    the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    directive is used in combination with the [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading") sub-directive. Below, only the `Person`
+    class will receive a column called `id`; the mapping will fail on `Engineer`,
+    which is not given a primary key:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It is usually the case in joined-table inheritance that we want distinctly
+    named columns on each subclass. However in this case, we may want to have an `id`
+    column on every table, and have them refer to each other via foreign key. We can
+    achieve this as a mixin by using the [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading") modifier, which indicates that the function
+    should be invoked **for each class in the hierarchy**, in *almost* (see warning
+    below) the same way as it does for `__tablename__`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading") feature currently does **not** allow
+    for a subclass to override the attribute with a different function or value. This
+    is a current limitation in the mechanics of how `@declared_attr` is resolved,
+    and a warning is emitted if this condition is detected. This limitation only applies
+    to ORM mapped columns, relationships, and other [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") styles of attribute. It does **not** apply to
+    Declarative directives such as `__tablename__`, `__mapper_args__`, etc., which
+    resolve in a different way internally than that of [`declared_attr.cascading`](mapping_api.html#sqlalchemy.orm.declared_attr.cascading
+    "sqlalchemy.orm.declared_attr.cascading").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combining Table/Mapper Arguments from Multiple Mixins
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In the case of `__table_args__` or `__mapper_args__` specified with declarative
+    mixins, you may want to combine some parameters from several mixins with those
+    you wish to define on the class itself. The [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") decorator can be used here to create user-defined
+    collation routines that pull from multiple collections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Creating Indexes and Constraints with Naming Conventions on Mixins'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using named constraints such as [`Index`](../core/constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index"), [`UniqueConstraint`](../core/constraints.html#sqlalchemy.schema.UniqueConstraint
+    "sqlalchemy.schema.UniqueConstraint"), [`CheckConstraint`](../core/constraints.html#sqlalchemy.schema.CheckConstraint
+    "sqlalchemy.schema.CheckConstraint"), where each object is to be unique to a specific
+    table descending from a mixin, requires that an individual instance of each object
+    is created per actual mapped class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a simple example, to define a named, potentially multicolumn [`Index`](../core/constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index") that applies to all tables derived from a mixin, use
+    the “inline” form of [`Index`](../core/constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index") and establish it as part of `__table_args__`, using
+    [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    to establish `__table_args__()` as a class method that will be invoked for each
+    subclass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example would generate two tables `"table_a"` and `"table_b"`, with
+    indexes `"test_idx_table_a"` and `"test_idx_table_b"`
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Typically, in modern SQLAlchemy we would use a naming convention, as documented
+    at [Configuring Constraint Naming Conventions](../core/constraints.html#constraint-naming-conventions).
+    While naming conventions take place automatically using the [`MetaData.naming_convention`](../core/metadata.html#sqlalchemy.schema.MetaData.params.naming_convention
+    "sqlalchemy.schema.MetaData") as new [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") objects are created, as this convention is applied
+    at object construction time based on the parent [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") for a particular [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint"), a distinct [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") object needs to be created for each inheriting
+    subclass with its own [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), again using [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") with `__table_args__()`, below illustrated using
+    an abstract mapped base:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above mapping will generate DDL that includes table-specific names for
+    all constraints, including primary key, CHECK constraint, unique constraint:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE

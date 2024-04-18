@@ -1,0 +1,2796 @@
+- en: Collection Customization and API Details
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/collection_api.html](https://docs.sqlalchemy.org/en/20/orm/collection_api.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    function defines a linkage between two classes. When the linkage defines a one-to-many
+    or many-to-many relationship, it’s represented as a Python collection when objects
+    are loaded and manipulated. This section presents additional information about
+    collection configuration and techniques.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Customizing Collection Access'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Mapping a one-to-many or many-to-many relationship results in a collection
+    of values accessible through an attribute on the parent instance. The two common
+    collection types for these are `list` and `set`, which in [Declarative](declarative_styles.html)
+    mappings that use [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    is established by using the collection type within the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") container, as demonstrated in the `Parent.children` collection
+    below where `list` is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or for a `set`, illustrated in the same `Parent.children` collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If using Python 3.7 or 3.8, annotations for collections need to use `typing.List`
+    or `typing.Set`, e.g. `Mapped[List["Child"]]` or `Mapped[Set["Child"]]`; the `list`
+    and `set` Python built-ins don’t yet support generic annotation in these Python
+    versions, such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using mappings without the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation, such as when using [imperative mappings](mapping_styles.html#orm-imperative-mapping)
+    or untyped Python code, as well as in a few special cases, the collection class
+    for a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    can always be specified directly using the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the absence of [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") or [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), the default collection type is `list`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beyond `list` and `set` builtins, there is also support for two varieties of
+    dictionary, described below at [Dictionary Collections](#orm-dictionary-collection).
+    There is also support for any arbitrary mutable sequence type can be set up as
+    the target collection, with some additional configuration steps; this is described
+    in the section [Custom Collection Implementations](#orm-custom-collection).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Dictionary Collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A little extra detail is needed when using a dictionary as a collection. This
+    because objects are always loaded from the database as lists, and a key-generation
+    strategy must be available to populate the dictionary correctly. The [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") function is by far the most common way
+    to achieve a simple dictionary collection. It produces a dictionary class that
+    will apply a particular attribute of the mapped class as a key. Below we map an
+    `Item` class containing a dictionary of `Note` items keyed to the `Note.keyword`
+    attribute. When using [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict"), the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation may be typed using the [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") or just plain `dict` as illustrated in the following
+    example. However, the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter is required in this case so that the
+    [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")
+    may be appropriately parametrized:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`Item.notes` is then a dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")
+    will ensure that the `.keyword` attribute of each `Note` complies with the key
+    in the dictionary. Such as, when assigning to `Item.notes`, the dictionary key
+    we supply must match that of the actual `Note` object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The attribute which [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") uses as a key does not need to be mapped
+    at all! Using a regular Python `@property` allows virtually any detail or combination
+    of details about the object to be used as the key, as below when we establish
+    it as a tuple of `Note.keyword` and the first ten letters of the `Note.text` field:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above we added a `Note.item` relationship, with a bi-directional [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") configuration. Assigning to this reverse relationship,
+    the `Note` is added to the `Item.notes` dictionary and the key is generated for
+    us automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other built-in dictionary types include [`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict
+    "sqlalchemy.orm.column_keyed_dict"), which is almost like [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") except given the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'as well as `mapped_collection()` which is passed any callable function. Note
+    that it’s usually easier to use [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") along with a `@property` as mentioned earlier:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Dictionary mappings are often combined with the “Association Proxy” extension
+    to produce streamlined dictionary views. See [Proxying to Dictionary Based Collections](extensions/associationproxy.html#proxying-dictionaries)
+    and [Composite Association Proxies](extensions/associationproxy.html#composite-association-proxy)
+    for examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Dealing with Key Mutations and back-populating for Dictionary collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict"), the “key” for the dictionary is taken
+    from an attribute on the target object. **Changes to this key are not tracked**.
+    This means that the key must be assigned towards when it is first used, and if
+    the key changes, the collection will not be mutated. A typical example where this
+    might be an issue is when relying upon backrefs to populate an attribute mapped
+    collection. Given the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if we create a `B()` that refers to a specific `A()`, the back populates
+    will then add the `B()` to the `A.bs` collection, however if the value of `B.data`
+    is not set yet, the key will be `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Setting `b1.data` after the fact does not update the collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This can also be seen if one attempts to set up `B()` in the constructor. The
+    order of arguments changes the result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'vs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: If backrefs are being used in this way, ensure that attributes are populated
+    in the correct order using an `__init__` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An event handler such as the following may also be used to track changes in
+    the collection as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]  ## Custom Collection Implementations'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can use your own types for collections as well. In simple cases, inheriting
+    from `list` or `set`, adding custom behavior, is all that’s needed. In other cases,
+    special decorators are needed to tell SQLAlchemy more detail about how the collection
+    operates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collections in SQLAlchemy are transparently *instrumented*. Instrumentation
+    means that normal operations on the collection are tracked and result in changes
+    being written to the database at flush time. Additionally, collection operations
+    can fire *events* which indicate some secondary operation must take place. Examples
+    of a secondary operation include saving the child item in the parent’s [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session") (i.e. the `save-update` cascade), as well as
+    synchronizing the state of a bi-directional relationship (i.e. a [`backref()`](relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref")).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The collections package understands the basic interface of lists, sets and
+    dicts and will automatically apply instrumentation to those built-in types and
+    their subclasses. Object-derived types that implement a basic collection interface
+    are detected and instrumented via duck-typing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`append`, `remove`, and `extend` are known members of `list`, and will be instrumented
+    automatically. `__iter__` is not a mutator method and won’t be instrumented, and
+    `foo` won’t be either.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Duck-typing (i.e. guesswork) isn’t rock-solid, of course, so you can be explicit
+    about the interface you are implementing by providing an `__emulates__` class
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: This class looks similar to a Python `list` (i.e. “list-like”) as it has an
+    `append` method, but the `__emulates__` attribute forces it to be treated as a
+    `set`. `remove` is known to be part of the set interface and will be instrumented.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But this class won’t work quite yet: a little glue is needed to adapt it for
+    use by SQLAlchemy. The ORM needs to know which methods to use to append, remove
+    and iterate over members of the collection. When using a type like `list` or `set`,
+    the appropriate methods are well-known and used automatically when present. However
+    the class above, which only roughly resembles a `set`, does not provide the expected
+    `add` method, so we must indicate to the ORM the method that will instead take
+    the place of the `add` method, in this case using a decorator `@collection.appender`;
+    this is illustrated in the next section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Annotating Custom Collections via Decorators
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Decorators can be used to tag the individual methods the ORM needs to manage
+    collections. Use them when your class doesn’t quite meet the regular interface
+    for its container type, or when you otherwise would like to use a different method
+    to get the job done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And that’s all that’s needed to complete the example. SQLAlchemy will add instances
+    via the `append` method. `remove` and `__iter__` are the default methods for sets
+    and will be used for removing and iteration. Default methods can be changed as
+    well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: There is no requirement to be “list-like” or “set-like” at all. Collection classes
+    can be any shape, so long as they have the append, remove and iterate interface
+    marked for SQLAlchemy’s use. Append and remove methods will be called with a mapped
+    entity as the single argument, and iterator methods are called with no arguments
+    and must return an iterator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Custom Dictionary-Based Collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    class can be used as a base class for your custom types or as a mix-in to quickly
+    add `dict` collection support to other classes. It uses a keying function to delegate
+    to `__setitem__` and `__delitem__`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When subclassing [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict"),
+    user-defined versions of `__setitem__()` or `__delitem__()` should be decorated
+    with [`collection.internally_instrumented()`](#sqlalchemy.orm.collections.collection.internally_instrumented
+    "sqlalchemy.orm.collections.collection.internally_instrumented"), **if** they
+    call down to those same methods on [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict"). This because the methods on [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") are already instrumented - calling them from within
+    an already instrumented call can cause events to be fired off repeatedly, or inappropriately,
+    leading to internal state corruption in rare cases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: The ORM understands the `dict` interface just like lists and sets, and will
+    automatically instrument all “dict-like” methods if you choose to subclass `dict`
+    or provide dict-like collection behavior in a duck-typed class. You must decorate
+    appender and remover methods, however- there are no compatible methods in the
+    basic dictionary interface for SQLAlchemy to use by default. Iteration will go
+    through `values()` unless otherwise decorated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instrumentation and Custom Types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Many custom types and existing library classes can be used as a entity collection
+    type as-is without further ado. However, it is important to note that the instrumentation
+    process will modify the type, adding decorators around methods automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The decorations are lightweight and no-op outside of relationships, but they
+    do add unneeded overhead when triggered elsewhere. When using a library class
+    as a collection, it can be good practice to use the “trivial subclass” trick to
+    restrict the decorations to just your usage in relationships. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The ORM uses this approach for built-ins, quietly substituting a trivial subclass
+    when a `list`, `set` or `dict` is used directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collection API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [attribute_keyed_dict](#sqlalchemy.orm.attribute_keyed_dict)(attr_name, *,
+    [ignore_unpopulated_attribute]) | A dictionary-based collection type with attribute-based
+    keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [attribute_mapped_collection](#sqlalchemy.orm.attribute_mapped_collection)
+    | A dictionary-based collection type with attribute-based keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [column_keyed_dict](#sqlalchemy.orm.column_keyed_dict)(mapping_spec, *, [ignore_unpopulated_attribute])
+    | A dictionary-based collection type with column-based keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [column_mapped_collection](#sqlalchemy.orm.column_mapped_collection) | A
+    dictionary-based collection type with column-based keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [keyfunc_mapping](#sqlalchemy.orm.keyfunc_mapping)(keyfunc, *, [ignore_unpopulated_attribute])
+    | A dictionary-based collection type with arbitrary keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [KeyFuncDict](#sqlalchemy.orm.KeyFuncDict) | Base for ORM mapped dictionary
+    classes. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [mapped_collection](#sqlalchemy.orm.mapped_collection) | A dictionary-based
+    collection type with arbitrary keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [MappedCollection](#sqlalchemy.orm.MappedCollection) | Base for ORM mapped
+    dictionary classes. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with attribute-based keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`attribute_mapped_collection`](#sqlalchemy.orm.attribute_mapped_collection
+    "sqlalchemy.orm.attribute_mapped_collection") to [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory which will produce new dictionary keys based on the value of a particular
+    named attribute on ORM mapped instances to be added to the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the value of the target attribute must be assigned with its value at the time
+    that the object is being added to the dictionary collection. Additionally, changes
+    to the key attribute are **not tracked**, which means the key in the dictionary
+    is not automatically synchronized with the key value on the target object itself.
+    See [Dealing with Key Mutations and back-populating for Dictionary collections](#key-collections-mutations)
+    for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`attr_name` – string name of an ORM-mapped attribute on the mapped class, the
+    value of which on a particular instance is to be used as the key for a new dictionary
+    entry for that instance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the target attribute on an object is not populated at all, the
+    operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the attribute being used
+    for the dictionary key is determined that it was never populated with any value.
+    The [`attribute_keyed_dict.ignore_unpopulated_attribute`](#sqlalchemy.orm.attribute_keyed_dict.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.attribute_keyed_dict") parameter may be set which will instead
+    indicate that this condition should be ignored, and the append operation silently
+    skipped. This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with column-based keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`column_mapped_collection`](#sqlalchemy.orm.column_mapped_collection
+    "sqlalchemy.orm.column_mapped_collection") to `column_keyed_dict`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory which will produce new dictionary keys based on the value of a particular
+    [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")-mapped
+    attribute on ORM mapped instances to be added to the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the value of the target attribute must be assigned with its value at the time
+    that the object is being added to the dictionary collection. Additionally, changes
+    to the key attribute are **not tracked**, which means the key in the dictionary
+    is not automatically synchronized with the key value on the target object itself.
+    See [Dealing with Key Mutations and back-populating for Dictionary collections](#key-collections-mutations)
+    for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mapping_spec` – a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object that is expected to be mapped by the target
+    mapper to a particular attribute on the mapped class, the value of which on a
+    particular instance is to be used as the key for a new dictionary entry for that
+    instance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the mapped attribute indicated by the given [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") target attribute on an object is not populated at
+    all, the operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the attribute being used
+    for the dictionary key is determined that it was never populated with any value.
+    The [`column_keyed_dict.ignore_unpopulated_attribute`](#sqlalchemy.orm.column_keyed_dict.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.column_keyed_dict") parameter may be set which will instead indicate
+    that this condition should be ignored, and the append operation silently skipped.
+    This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with arbitrary keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`mapped_collection`](#sqlalchemy.orm.mapped_collection
+    "sqlalchemy.orm.mapped_collection") to [`keyfunc_mapping()`](#sqlalchemy.orm.keyfunc_mapping
+    "sqlalchemy.orm.keyfunc_mapping").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory with a keying function generated from keyfunc, a callable that takes an
+    entity and returns a key value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the given keyfunc is called only once at the time that the target object is
+    being added to the collection. Changes to the effective value returned by the
+    function are not tracked.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`keyfunc` – a callable that will be passed the ORM-mapped instance which should
+    then generate a new key to use in the dictionary. If the value returned is [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE"), an error is raised.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the callable returns [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE") for a particular instance, the
+    operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the callable being used
+    for the dictionary key returns [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE"), which in an ORM attribute context
+    indicates an attribute that was never populated with any value. The [`mapped_collection.ignore_unpopulated_attribute`](#sqlalchemy.orm.mapped_collection.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.mapped_collection") parameter may be set which will instead indicate
+    that this condition should be ignored, and the append operation silently skipped.
+    This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with attribute-based keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`attribute_mapped_collection`](#sqlalchemy.orm.attribute_mapped_collection
+    "sqlalchemy.orm.attribute_mapped_collection") to [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory which will produce new dictionary keys based on the value of a particular
+    named attribute on ORM mapped instances to be added to the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the value of the target attribute must be assigned with its value at the time
+    that the object is being added to the dictionary collection. Additionally, changes
+    to the key attribute are **not tracked**, which means the key in the dictionary
+    is not automatically synchronized with the key value on the target object itself.
+    See [Dealing with Key Mutations and back-populating for Dictionary collections](#key-collections-mutations)
+    for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`attr_name` – string name of an ORM-mapped attribute on the mapped class, the
+    value of which on a particular instance is to be used as the key for a new dictionary
+    entry for that instance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the target attribute on an object is not populated at all, the
+    operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the attribute being used
+    for the dictionary key is determined that it was never populated with any value.
+    The [`attribute_keyed_dict.ignore_unpopulated_attribute`](#sqlalchemy.orm.attribute_keyed_dict.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.attribute_keyed_dict") parameter may be set which will instead
+    indicate that this condition should be ignored, and the append operation silently
+    skipped. This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with column-based keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`column_mapped_collection`](#sqlalchemy.orm.column_mapped_collection
+    "sqlalchemy.orm.column_mapped_collection") to `column_keyed_dict`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory which will produce new dictionary keys based on the value of a particular
+    [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")-mapped
+    attribute on ORM mapped instances to be added to the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the value of the target attribute must be assigned with its value at the time
+    that the object is being added to the dictionary collection. Additionally, changes
+    to the key attribute are **not tracked**, which means the key in the dictionary
+    is not automatically synchronized with the key value on the target object itself.
+    See [Dealing with Key Mutations and back-populating for Dictionary collections](#key-collections-mutations)
+    for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mapping_spec` – a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object that is expected to be mapped by the target
+    mapper to a particular attribute on the mapped class, the value of which on a
+    particular instance is to be used as the key for a new dictionary entry for that
+    instance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the mapped attribute indicated by the given [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") target attribute on an object is not populated at
+    all, the operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the attribute being used
+    for the dictionary key is determined that it was never populated with any value.
+    The [`column_keyed_dict.ignore_unpopulated_attribute`](#sqlalchemy.orm.column_keyed_dict.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.column_keyed_dict") parameter may be set which will instead indicate
+    that this condition should be ignored, and the append operation silently skipped.
+    This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with arbitrary keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`mapped_collection`](#sqlalchemy.orm.mapped_collection
+    "sqlalchemy.orm.mapped_collection") to [`keyfunc_mapping()`](#sqlalchemy.orm.keyfunc_mapping
+    "sqlalchemy.orm.keyfunc_mapping").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory with a keying function generated from keyfunc, a callable that takes an
+    entity and returns a key value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the given keyfunc is called only once at the time that the target object is
+    being added to the collection. Changes to the effective value returned by the
+    function are not tracked.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`keyfunc` – a callable that will be passed the ORM-mapped instance which should
+    then generate a new key to use in the dictionary. If the value returned is [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE"), an error is raised.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the callable returns [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE") for a particular instance, the
+    operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the callable being used
+    for the dictionary key returns [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE"), which in an ORM attribute context
+    indicates an attribute that was never populated with any value. The [`mapped_collection.ignore_unpopulated_attribute`](#sqlalchemy.orm.mapped_collection.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.mapped_collection") parameter may be set which will instead indicate
+    that this condition should be ignored, and the append operation silently skipped.
+    This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base for ORM mapped dictionary classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extends the `dict` type with additional methods needed by SQLAlchemy ORM collection
+    classes. Use of [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    is most directly by using the [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") or [`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict
+    "sqlalchemy.orm.column_keyed_dict") class factories. [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") may also serve as the base for user-defined custom
+    dictionary classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed `MappedCollection` to [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict "sqlalchemy.orm.column_keyed_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Custom Collection Implementations](#orm-custom-collection)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.orm.KeyFuncDict.__init__), [clear()](#sqlalchemy.orm.KeyFuncDict.clear),
+    [pop()](#sqlalchemy.orm.KeyFuncDict.pop), [popitem()](#sqlalchemy.orm.KeyFuncDict.popitem),
+    [remove()](#sqlalchemy.orm.KeyFuncDict.remove), [set()](#sqlalchemy.orm.KeyFuncDict.set),
+    [setdefault()](#sqlalchemy.orm.KeyFuncDict.setdefault), [update()](#sqlalchemy.orm.KeyFuncDict.update)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    (`builtins.dict`, `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new collection with keying provided by keyfunc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: keyfunc may be any callable that takes an object and returns an object for use
+    as a dictionary key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The keyfunc will be called every time the ORM needs to add a member by value-only
+    (such as when loading instances from the database) or remove a member. The usual
+    cautions about dictionary keying apply- `keyfunc(object)` should return the same
+    output for the life of the collection. Keying based on mutable properties can
+    result in unreachable instances “lost” in the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the key is not found, return the default if given; otherwise, raise a KeyError.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remove and return a (key, value) pair as a 2-tuple.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pairs are returned in LIFO (last-in, first-out) order. Raises KeyError if the
+    dict is empty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remove an item by value, consulting the keyfunc for the key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Add an item by value, consulting the keyfunc for the key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Insert key with a value of default if key is not in the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Return the value for key if key is in the dictionary, else default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If E is present and has a .keys() method, then does: for k in E: D[k] = E[k]
+    If E is present and lacks a .keys() method, then does: for k, v in E: D[k] = v
+    In either case, this is followed by: for k in F: D[k] = F[k]'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base for ORM mapped dictionary classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extends the `dict` type with additional methods needed by SQLAlchemy ORM collection
+    classes. Use of [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    is most directly by using the [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") or [`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict
+    "sqlalchemy.orm.column_keyed_dict") class factories. [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") may also serve as the base for user-defined custom
+    dictionary classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed `MappedCollection` to [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict "sqlalchemy.orm.column_keyed_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Custom Collection Implementations](#orm-custom-collection)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collection Internals
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [bulk_replace](#sqlalchemy.orm.collections.bulk_replace)(values, existing_adapter,
+    new_adapter[, initiator]) | Load a new collection, firing events based on prior
+    like membership. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [collection](#sqlalchemy.orm.collections.collection) | Decorators for entity
+    collection classes. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [collection_adapter](#sqlalchemy.orm.collections.collection_adapter) | attrgetter(attr,
+    …) –> attrgetter object |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CollectionAdapter](#sqlalchemy.orm.collections.CollectionAdapter) | Bridges
+    between the ORM and arbitrary Python collections. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [InstrumentedDict](#sqlalchemy.orm.collections.InstrumentedDict) | An instrumented
+    version of the built-in dict. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [InstrumentedList](#sqlalchemy.orm.collections.InstrumentedList) | An instrumented
+    version of the built-in list. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [InstrumentedSet](#sqlalchemy.orm.collections.InstrumentedSet) | An instrumented
+    version of the built-in set. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [prepare_instrumentation](#sqlalchemy.orm.collections.prepare_instrumentation)(factory)
+    | Prepare a callable for future use as a collection class factory. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Load a new collection, firing events based on prior like membership.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Appends instances in `values` onto the `new_adapter`. Events will be fired for
+    any instance not present in the `existing_adapter`. Any instances in `existing_adapter`
+    not present in `values` will have remove events fired upon them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`values` – An iterable of collection member instances'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`existing_adapter` – A [`CollectionAdapter`](#sqlalchemy.orm.collections.CollectionAdapter
+    "sqlalchemy.orm.collections.CollectionAdapter") of instances to be replaced'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`new_adapter` – An empty [`CollectionAdapter`](#sqlalchemy.orm.collections.CollectionAdapter
+    "sqlalchemy.orm.collections.CollectionAdapter") to load with `values`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Decorators for entity collection classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The decorators fall into two groups: annotations and interception recipes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The annotating decorators (appender, remover, iterator, converter, internally_instrumented)
+    indicate the method’s purpose and take no arguments. They are not written with
+    parens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The recipe decorators all require parens, even those that take no arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[adds()](#sqlalchemy.orm.collections.collection.adds), [appender()](#sqlalchemy.orm.collections.collection.appender),
+    [converter()](#sqlalchemy.orm.collections.collection.converter), [internally_instrumented()](#sqlalchemy.orm.collections.collection.internally_instrumented),
+    [iterator()](#sqlalchemy.orm.collections.collection.iterator), [remover()](#sqlalchemy.orm.collections.collection.remover),
+    [removes()](#sqlalchemy.orm.collections.collection.removes), [removes_return()](#sqlalchemy.orm.collections.collection.removes_return),
+    [replaces()](#sqlalchemy.orm.collections.collection.replaces)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mark the method as adding an entity to the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Adds “add to collection” handling to the method. The decorator argument indicates
+    which method argument holds the SQLAlchemy-relevant value. Arguments can be specified
+    positionally (i.e. integer) or by name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as the collection appender.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The appender method is called with one positional argument: the value to append.
+    The method will be automatically decorated with ‘adds(1)’ if not already decorated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the value to append is not allowed in the collection, you may raise an exception.
+    Something to remember is that the appender will be called for each object mapped
+    by a database query. If the database contains rows that violate your collection
+    semantics, you will need to get creative to fix the problem, as access via the
+    collection will not work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the appender method is internally instrumented, you must also receive the
+    keyword argument ‘_sa_initiator’ and ensure its promulgation to collection events.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as the collection converter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 1.3: The [`collection.converter()`](#sqlalchemy.orm.collections.collection.converter
+    "sqlalchemy.orm.collections.collection.converter") handler is deprecated and will
+    be removed in a future release. Please refer to the `bulk_replace` listener interface
+    in conjunction with the [`listen()`](../core/event.html#sqlalchemy.event.listen
+    "sqlalchemy.event.listen") function.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This optional method will be called when a collection is being replaced entirely,
+    as in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: The converter method will receive the object being assigned and should return
+    an iterable of values suitable for use by the `appender` method. A converter must
+    not assign values or mutate the collection, its sole job is to adapt the value
+    the user provides into an iterable of values for the ORM’s use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default converter implementation will use duck-typing to do the conversion.
+    A dict-like collection will be convert into an iterable of dictionary values,
+    and other types will simply be iterated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the duck-typing of the object does not match the type of this collection,
+    a TypeError is raised.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Supply an implementation of this method if you want to expand the range of possible
+    types that can be assigned in bulk or perform validation on the values about to
+    be assigned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as instrumented.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This tag will prevent any decoration from being applied to the method. Use
+    this if you are orchestrating your own calls to `collection_adapter()` in one
+    of the basic SQLAlchemy interface methods, or to prevent an automatic ABC method
+    decoration from wrapping your implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as the collection remover.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The iterator method is called with no arguments. It is expected to return an
+    iterator over all collection members:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as the collection remover.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The remover method is called with one positional argument: the value to remove.
+    The method will be automatically decorated with [`removes_return()`](#sqlalchemy.orm.collections.collection.removes_return
+    "sqlalchemy.orm.collections.collection.removes_return") if not already decorated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the value to remove is not present in the collection, you may raise an exception
+    or return None to ignore the error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the remove method is internally instrumented, you must also receive the keyword
+    argument ‘_sa_initiator’ and ensure its promulgation to collection events.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mark the method as removing an entity in the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Adds “remove from collection” handling to the method. The decorator argument
+    indicates which method argument holds the SQLAlchemy-relevant value to be removed.
+    Arguments can be specified positionally (i.e. integer) or by name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: For methods where the value to remove is not known at call-time, use collection.removes_return.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mark the method as removing an entity in the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Adds “remove from collection” handling to the method. The return value of the
+    method, if any, is considered the value to remove. The method arguments are not
+    inspected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: For methods where the value to remove is known at call-time, use collection.remove.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mark the method as replacing an entity in the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adds “add to collection” and “remove from collection” handling to the method.
+    The decorator argument indicates which method argument holds the SQLAlchemy-relevant
+    value to be added, and return value, if any will be considered the value to remove.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Arguments can be specified positionally (i.e. integer) or by name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: attrgetter(attr, …) –> attrgetter object
+  prefs: []
+  type: TYPE_NORMAL
+- en: Return a callable object that fetches the given attribute(s) from its operand.
+    After f = attrgetter(‘name’), the call f(r) returns r.name. After g = attrgetter(‘name’,
+    ‘date’), the call g(r) returns (r.name, r.date). After h = attrgetter(‘name.first’,
+    ‘name.last’), the call h(r) returns (r.name.first, r.name.last).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: Bridges between the ORM and arbitrary Python collections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Proxies base-level collection operations (append, remove, iterate) to the underlying
+    Python collection, and emits add/remove events for entities entering or leaving
+    the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ORM uses [`CollectionAdapter`](#sqlalchemy.orm.collections.CollectionAdapter
+    "sqlalchemy.orm.collections.CollectionAdapter") exclusively for interaction with
+    entity collections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instrumented version of the built-in dict.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.collections.InstrumentedDict`](#sqlalchemy.orm.collections.InstrumentedDict
+    "sqlalchemy.orm.collections.InstrumentedDict") (`builtins.dict`, `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instrumented version of the built-in list.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.collections.InstrumentedList`](#sqlalchemy.orm.collections.InstrumentedList
+    "sqlalchemy.orm.collections.InstrumentedList") (`builtins.list`, `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instrumented version of the built-in set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.collections.InstrumentedSet`](#sqlalchemy.orm.collections.InstrumentedSet
+    "sqlalchemy.orm.collections.InstrumentedSet") (`builtins.set`, `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: Prepare a callable for future use as a collection class factory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Given a collection class factory (either a type or no-arg callable), return
+    another factory that will produce compatible instances when called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is responsible for converting collection_class=list into the run-time
+    behavior of collection_class=InstrumentedList.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Customizing Collection Access'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Mapping a one-to-many or many-to-many relationship results in a collection
+    of values accessible through an attribute on the parent instance. The two common
+    collection types for these are `list` and `set`, which in [Declarative](declarative_styles.html)
+    mappings that use [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    is established by using the collection type within the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") container, as demonstrated in the `Parent.children` collection
+    below where `list` is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or for a `set`, illustrated in the same `Parent.children` collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If using Python 3.7 or 3.8, annotations for collections need to use `typing.List`
+    or `typing.Set`, e.g. `Mapped[List["Child"]]` or `Mapped[Set["Child"]]`; the `list`
+    and `set` Python built-ins don’t yet support generic annotation in these Python
+    versions, such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using mappings without the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation, such as when using [imperative mappings](mapping_styles.html#orm-imperative-mapping)
+    or untyped Python code, as well as in a few special cases, the collection class
+    for a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    can always be specified directly using the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the absence of [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") or [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), the default collection type is `list`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beyond `list` and `set` builtins, there is also support for two varieties of
+    dictionary, described below at [Dictionary Collections](#orm-dictionary-collection).
+    There is also support for any arbitrary mutable sequence type can be set up as
+    the target collection, with some additional configuration steps; this is described
+    in the section [Custom Collection Implementations](#orm-custom-collection).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Dictionary Collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A little extra detail is needed when using a dictionary as a collection. This
+    because objects are always loaded from the database as lists, and a key-generation
+    strategy must be available to populate the dictionary correctly. The [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") function is by far the most common way
+    to achieve a simple dictionary collection. It produces a dictionary class that
+    will apply a particular attribute of the mapped class as a key. Below we map an
+    `Item` class containing a dictionary of `Note` items keyed to the `Note.keyword`
+    attribute. When using [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict"), the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation may be typed using the [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") or just plain `dict` as illustrated in the following
+    example. However, the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter is required in this case so that the
+    [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")
+    may be appropriately parametrized:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`Item.notes` is then a dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")
+    will ensure that the `.keyword` attribute of each `Note` complies with the key
+    in the dictionary. Such as, when assigning to `Item.notes`, the dictionary key
+    we supply must match that of the actual `Note` object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The attribute which [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") uses as a key does not need to be mapped
+    at all! Using a regular Python `@property` allows virtually any detail or combination
+    of details about the object to be used as the key, as below when we establish
+    it as a tuple of `Note.keyword` and the first ten letters of the `Note.text` field:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above we added a `Note.item` relationship, with a bi-directional [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") configuration. Assigning to this reverse relationship,
+    the `Note` is added to the `Item.notes` dictionary and the key is generated for
+    us automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other built-in dictionary types include [`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict
+    "sqlalchemy.orm.column_keyed_dict"), which is almost like [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") except given the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'as well as `mapped_collection()` which is passed any callable function. Note
+    that it’s usually easier to use [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") along with a `@property` as mentioned earlier:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: Dictionary mappings are often combined with the “Association Proxy” extension
+    to produce streamlined dictionary views. See [Proxying to Dictionary Based Collections](extensions/associationproxy.html#proxying-dictionaries)
+    and [Composite Association Proxies](extensions/associationproxy.html#composite-association-proxy)
+    for examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Dealing with Key Mutations and back-populating for Dictionary collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict"), the “key” for the dictionary is taken
+    from an attribute on the target object. **Changes to this key are not tracked**.
+    This means that the key must be assigned towards when it is first used, and if
+    the key changes, the collection will not be mutated. A typical example where this
+    might be an issue is when relying upon backrefs to populate an attribute mapped
+    collection. Given the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if we create a `B()` that refers to a specific `A()`, the back populates
+    will then add the `B()` to the `A.bs` collection, however if the value of `B.data`
+    is not set yet, the key will be `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Setting `b1.data` after the fact does not update the collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This can also be seen if one attempts to set up `B()` in the constructor. The
+    order of arguments changes the result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'vs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: If backrefs are being used in this way, ensure that attributes are populated
+    in the correct order using an `__init__` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An event handler such as the following may also be used to track changes in
+    the collection as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]  ### Dictionary Collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A little extra detail is needed when using a dictionary as a collection. This
+    because objects are always loaded from the database as lists, and a key-generation
+    strategy must be available to populate the dictionary correctly. The [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") function is by far the most common way
+    to achieve a simple dictionary collection. It produces a dictionary class that
+    will apply a particular attribute of the mapped class as a key. Below we map an
+    `Item` class containing a dictionary of `Note` items keyed to the `Note.keyword`
+    attribute. When using [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict"), the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation may be typed using the [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") or just plain `dict` as illustrated in the following
+    example. However, the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter is required in this case so that the
+    [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")
+    may be appropriately parametrized:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`Item.notes` is then a dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")
+    will ensure that the `.keyword` attribute of each `Note` complies with the key
+    in the dictionary. Such as, when assigning to `Item.notes`, the dictionary key
+    we supply must match that of the actual `Note` object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The attribute which [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") uses as a key does not need to be mapped
+    at all! Using a regular Python `@property` allows virtually any detail or combination
+    of details about the object to be used as the key, as below when we establish
+    it as a tuple of `Note.keyword` and the first ten letters of the `Note.text` field:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above we added a `Note.item` relationship, with a bi-directional [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") configuration. Assigning to this reverse relationship,
+    the `Note` is added to the `Item.notes` dictionary and the key is generated for
+    us automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other built-in dictionary types include [`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict
+    "sqlalchemy.orm.column_keyed_dict"), which is almost like [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") except given the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'as well as `mapped_collection()` which is passed any callable function. Note
+    that it’s usually easier to use [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") along with a `@property` as mentioned earlier:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: Dictionary mappings are often combined with the “Association Proxy” extension
+    to produce streamlined dictionary views. See [Proxying to Dictionary Based Collections](extensions/associationproxy.html#proxying-dictionaries)
+    and [Composite Association Proxies](extensions/associationproxy.html#composite-association-proxy)
+    for examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Dealing with Key Mutations and back-populating for Dictionary collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict"), the “key” for the dictionary is taken
+    from an attribute on the target object. **Changes to this key are not tracked**.
+    This means that the key must be assigned towards when it is first used, and if
+    the key changes, the collection will not be mutated. A typical example where this
+    might be an issue is when relying upon backrefs to populate an attribute mapped
+    collection. Given the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if we create a `B()` that refers to a specific `A()`, the back populates
+    will then add the `B()` to the `A.bs` collection, however if the value of `B.data`
+    is not set yet, the key will be `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Setting `b1.data` after the fact does not update the collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This can also be seen if one attempts to set up `B()` in the constructor. The
+    order of arguments changes the result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'vs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: If backrefs are being used in this way, ensure that attributes are populated
+    in the correct order using an `__init__` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An event handler such as the following may also be used to track changes in
+    the collection as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]  #### Dealing with Key Mutations and back-populating for Dictionary
+    collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict"), the “key” for the dictionary is taken
+    from an attribute on the target object. **Changes to this key are not tracked**.
+    This means that the key must be assigned towards when it is first used, and if
+    the key changes, the collection will not be mutated. A typical example where this
+    might be an issue is when relying upon backrefs to populate an attribute mapped
+    collection. Given the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if we create a `B()` that refers to a specific `A()`, the back populates
+    will then add the `B()` to the `A.bs` collection, however if the value of `B.data`
+    is not set yet, the key will be `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Setting `b1.data` after the fact does not update the collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This can also be seen if one attempts to set up `B()` in the constructor. The
+    order of arguments changes the result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'vs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: If backrefs are being used in this way, ensure that attributes are populated
+    in the correct order using an `__init__` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An event handler such as the following may also be used to track changes in
+    the collection as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Custom Collection Implementations'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can use your own types for collections as well. In simple cases, inheriting
+    from `list` or `set`, adding custom behavior, is all that’s needed. In other cases,
+    special decorators are needed to tell SQLAlchemy more detail about how the collection
+    operates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collections in SQLAlchemy are transparently *instrumented*. Instrumentation
+    means that normal operations on the collection are tracked and result in changes
+    being written to the database at flush time. Additionally, collection operations
+    can fire *events* which indicate some secondary operation must take place. Examples
+    of a secondary operation include saving the child item in the parent’s [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session") (i.e. the `save-update` cascade), as well as
+    synchronizing the state of a bi-directional relationship (i.e. a [`backref()`](relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref")).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The collections package understands the basic interface of lists, sets and
+    dicts and will automatically apply instrumentation to those built-in types and
+    their subclasses. Object-derived types that implement a basic collection interface
+    are detected and instrumented via duck-typing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`append`, `remove`, and `extend` are known members of `list`, and will be instrumented
+    automatically. `__iter__` is not a mutator method and won’t be instrumented, and
+    `foo` won’t be either.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Duck-typing (i.e. guesswork) isn’t rock-solid, of course, so you can be explicit
+    about the interface you are implementing by providing an `__emulates__` class
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: This class looks similar to a Python `list` (i.e. “list-like”) as it has an
+    `append` method, but the `__emulates__` attribute forces it to be treated as a
+    `set`. `remove` is known to be part of the set interface and will be instrumented.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But this class won’t work quite yet: a little glue is needed to adapt it for
+    use by SQLAlchemy. The ORM needs to know which methods to use to append, remove
+    and iterate over members of the collection. When using a type like `list` or `set`,
+    the appropriate methods are well-known and used automatically when present. However
+    the class above, which only roughly resembles a `set`, does not provide the expected
+    `add` method, so we must indicate to the ORM the method that will instead take
+    the place of the `add` method, in this case using a decorator `@collection.appender`;
+    this is illustrated in the next section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Annotating Custom Collections via Decorators
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Decorators can be used to tag the individual methods the ORM needs to manage
+    collections. Use them when your class doesn’t quite meet the regular interface
+    for its container type, or when you otherwise would like to use a different method
+    to get the job done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And that’s all that’s needed to complete the example. SQLAlchemy will add instances
+    via the `append` method. `remove` and `__iter__` are the default methods for sets
+    and will be used for removing and iteration. Default methods can be changed as
+    well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: There is no requirement to be “list-like” or “set-like” at all. Collection classes
+    can be any shape, so long as they have the append, remove and iterate interface
+    marked for SQLAlchemy’s use. Append and remove methods will be called with a mapped
+    entity as the single argument, and iterator methods are called with no arguments
+    and must return an iterator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Custom Dictionary-Based Collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    class can be used as a base class for your custom types or as a mix-in to quickly
+    add `dict` collection support to other classes. It uses a keying function to delegate
+    to `__setitem__` and `__delitem__`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When subclassing [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict"),
+    user-defined versions of `__setitem__()` or `__delitem__()` should be decorated
+    with [`collection.internally_instrumented()`](#sqlalchemy.orm.collections.collection.internally_instrumented
+    "sqlalchemy.orm.collections.collection.internally_instrumented"), **if** they
+    call down to those same methods on [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict"). This because the methods on [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") are already instrumented - calling them from within
+    an already instrumented call can cause events to be fired off repeatedly, or inappropriately,
+    leading to internal state corruption in rare cases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: The ORM understands the `dict` interface just like lists and sets, and will
+    automatically instrument all “dict-like” methods if you choose to subclass `dict`
+    or provide dict-like collection behavior in a duck-typed class. You must decorate
+    appender and remover methods, however- there are no compatible methods in the
+    basic dictionary interface for SQLAlchemy to use by default. Iteration will go
+    through `values()` unless otherwise decorated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instrumentation and Custom Types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Many custom types and existing library classes can be used as a entity collection
+    type as-is without further ado. However, it is important to note that the instrumentation
+    process will modify the type, adding decorators around methods automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The decorations are lightweight and no-op outside of relationships, but they
+    do add unneeded overhead when triggered elsewhere. When using a library class
+    as a collection, it can be good practice to use the “trivial subclass” trick to
+    restrict the decorations to just your usage in relationships. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: The ORM uses this approach for built-ins, quietly substituting a trivial subclass
+    when a `list`, `set` or `dict` is used directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Annotating Custom Collections via Decorators
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Decorators can be used to tag the individual methods the ORM needs to manage
+    collections. Use them when your class doesn’t quite meet the regular interface
+    for its container type, or when you otherwise would like to use a different method
+    to get the job done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And that’s all that’s needed to complete the example. SQLAlchemy will add instances
+    via the `append` method. `remove` and `__iter__` are the default methods for sets
+    and will be used for removing and iteration. Default methods can be changed as
+    well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: There is no requirement to be “list-like” or “set-like” at all. Collection classes
+    can be any shape, so long as they have the append, remove and iterate interface
+    marked for SQLAlchemy’s use. Append and remove methods will be called with a mapped
+    entity as the single argument, and iterator methods are called with no arguments
+    and must return an iterator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Custom Dictionary-Based Collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    class can be used as a base class for your custom types or as a mix-in to quickly
+    add `dict` collection support to other classes. It uses a keying function to delegate
+    to `__setitem__` and `__delitem__`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When subclassing [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict"),
+    user-defined versions of `__setitem__()` or `__delitem__()` should be decorated
+    with [`collection.internally_instrumented()`](#sqlalchemy.orm.collections.collection.internally_instrumented
+    "sqlalchemy.orm.collections.collection.internally_instrumented"), **if** they
+    call down to those same methods on [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict"). This because the methods on [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") are already instrumented - calling them from within
+    an already instrumented call can cause events to be fired off repeatedly, or inappropriately,
+    leading to internal state corruption in rare cases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: The ORM understands the `dict` interface just like lists and sets, and will
+    automatically instrument all “dict-like” methods if you choose to subclass `dict`
+    or provide dict-like collection behavior in a duck-typed class. You must decorate
+    appender and remover methods, however- there are no compatible methods in the
+    basic dictionary interface for SQLAlchemy to use by default. Iteration will go
+    through `values()` unless otherwise decorated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instrumentation and Custom Types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Many custom types and existing library classes can be used as a entity collection
+    type as-is without further ado. However, it is important to note that the instrumentation
+    process will modify the type, adding decorators around methods automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The decorations are lightweight and no-op outside of relationships, but they
+    do add unneeded overhead when triggered elsewhere. When using a library class
+    as a collection, it can be good practice to use the “trivial subclass” trick to
+    restrict the decorations to just your usage in relationships. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: The ORM uses this approach for built-ins, quietly substituting a trivial subclass
+    when a `list`, `set` or `dict` is used directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collection API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [attribute_keyed_dict](#sqlalchemy.orm.attribute_keyed_dict)(attr_name, *,
+    [ignore_unpopulated_attribute]) | A dictionary-based collection type with attribute-based
+    keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [attribute_mapped_collection](#sqlalchemy.orm.attribute_mapped_collection)
+    | A dictionary-based collection type with attribute-based keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [column_keyed_dict](#sqlalchemy.orm.column_keyed_dict)(mapping_spec, *, [ignore_unpopulated_attribute])
+    | A dictionary-based collection type with column-based keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [column_mapped_collection](#sqlalchemy.orm.column_mapped_collection) | A
+    dictionary-based collection type with column-based keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [keyfunc_mapping](#sqlalchemy.orm.keyfunc_mapping)(keyfunc, *, [ignore_unpopulated_attribute])
+    | A dictionary-based collection type with arbitrary keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [KeyFuncDict](#sqlalchemy.orm.KeyFuncDict) | Base for ORM mapped dictionary
+    classes. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [mapped_collection](#sqlalchemy.orm.mapped_collection) | A dictionary-based
+    collection type with arbitrary keying. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [MappedCollection](#sqlalchemy.orm.MappedCollection) | Base for ORM mapped
+    dictionary classes. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with attribute-based keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`attribute_mapped_collection`](#sqlalchemy.orm.attribute_mapped_collection
+    "sqlalchemy.orm.attribute_mapped_collection") to [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory which will produce new dictionary keys based on the value of a particular
+    named attribute on ORM mapped instances to be added to the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the value of the target attribute must be assigned with its value at the time
+    that the object is being added to the dictionary collection. Additionally, changes
+    to the key attribute are **not tracked**, which means the key in the dictionary
+    is not automatically synchronized with the key value on the target object itself.
+    See [Dealing with Key Mutations and back-populating for Dictionary collections](#key-collections-mutations)
+    for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`attr_name` – string name of an ORM-mapped attribute on the mapped class, the
+    value of which on a particular instance is to be used as the key for a new dictionary
+    entry for that instance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the target attribute on an object is not populated at all, the
+    operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the attribute being used
+    for the dictionary key is determined that it was never populated with any value.
+    The [`attribute_keyed_dict.ignore_unpopulated_attribute`](#sqlalchemy.orm.attribute_keyed_dict.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.attribute_keyed_dict") parameter may be set which will instead
+    indicate that this condition should be ignored, and the append operation silently
+    skipped. This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with column-based keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`column_mapped_collection`](#sqlalchemy.orm.column_mapped_collection
+    "sqlalchemy.orm.column_mapped_collection") to `column_keyed_dict`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory which will produce new dictionary keys based on the value of a particular
+    [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")-mapped
+    attribute on ORM mapped instances to be added to the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the value of the target attribute must be assigned with its value at the time
+    that the object is being added to the dictionary collection. Additionally, changes
+    to the key attribute are **not tracked**, which means the key in the dictionary
+    is not automatically synchronized with the key value on the target object itself.
+    See [Dealing with Key Mutations and back-populating for Dictionary collections](#key-collections-mutations)
+    for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mapping_spec` – a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object that is expected to be mapped by the target
+    mapper to a particular attribute on the mapped class, the value of which on a
+    particular instance is to be used as the key for a new dictionary entry for that
+    instance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the mapped attribute indicated by the given [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") target attribute on an object is not populated at
+    all, the operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the attribute being used
+    for the dictionary key is determined that it was never populated with any value.
+    The [`column_keyed_dict.ignore_unpopulated_attribute`](#sqlalchemy.orm.column_keyed_dict.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.column_keyed_dict") parameter may be set which will instead indicate
+    that this condition should be ignored, and the append operation silently skipped.
+    This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with arbitrary keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`mapped_collection`](#sqlalchemy.orm.mapped_collection
+    "sqlalchemy.orm.mapped_collection") to [`keyfunc_mapping()`](#sqlalchemy.orm.keyfunc_mapping
+    "sqlalchemy.orm.keyfunc_mapping").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory with a keying function generated from keyfunc, a callable that takes an
+    entity and returns a key value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the given keyfunc is called only once at the time that the target object is
+    being added to the collection. Changes to the effective value returned by the
+    function are not tracked.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`keyfunc` – a callable that will be passed the ORM-mapped instance which should
+    then generate a new key to use in the dictionary. If the value returned is [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE"), an error is raised.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the callable returns [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE") for a particular instance, the
+    operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the callable being used
+    for the dictionary key returns [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE"), which in an ORM attribute context
+    indicates an attribute that was never populated with any value. The [`mapped_collection.ignore_unpopulated_attribute`](#sqlalchemy.orm.mapped_collection.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.mapped_collection") parameter may be set which will instead indicate
+    that this condition should be ignored, and the append operation silently skipped.
+    This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with attribute-based keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`attribute_mapped_collection`](#sqlalchemy.orm.attribute_mapped_collection
+    "sqlalchemy.orm.attribute_mapped_collection") to [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory which will produce new dictionary keys based on the value of a particular
+    named attribute on ORM mapped instances to be added to the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the value of the target attribute must be assigned with its value at the time
+    that the object is being added to the dictionary collection. Additionally, changes
+    to the key attribute are **not tracked**, which means the key in the dictionary
+    is not automatically synchronized with the key value on the target object itself.
+    See [Dealing with Key Mutations and back-populating for Dictionary collections](#key-collections-mutations)
+    for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`attr_name` – string name of an ORM-mapped attribute on the mapped class, the
+    value of which on a particular instance is to be used as the key for a new dictionary
+    entry for that instance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the target attribute on an object is not populated at all, the
+    operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the attribute being used
+    for the dictionary key is determined that it was never populated with any value.
+    The [`attribute_keyed_dict.ignore_unpopulated_attribute`](#sqlalchemy.orm.attribute_keyed_dict.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.attribute_keyed_dict") parameter may be set which will instead
+    indicate that this condition should be ignored, and the append operation silently
+    skipped. This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with column-based keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`column_mapped_collection`](#sqlalchemy.orm.column_mapped_collection
+    "sqlalchemy.orm.column_mapped_collection") to `column_keyed_dict`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory which will produce new dictionary keys based on the value of a particular
+    [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")-mapped
+    attribute on ORM mapped instances to be added to the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the value of the target attribute must be assigned with its value at the time
+    that the object is being added to the dictionary collection. Additionally, changes
+    to the key attribute are **not tracked**, which means the key in the dictionary
+    is not automatically synchronized with the key value on the target object itself.
+    See [Dealing with Key Mutations and back-populating for Dictionary collections](#key-collections-mutations)
+    for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mapping_spec` – a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object that is expected to be mapped by the target
+    mapper to a particular attribute on the mapped class, the value of which on a
+    particular instance is to be used as the key for a new dictionary entry for that
+    instance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the mapped attribute indicated by the given [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") target attribute on an object is not populated at
+    all, the operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the attribute being used
+    for the dictionary key is determined that it was never populated with any value.
+    The [`column_keyed_dict.ignore_unpopulated_attribute`](#sqlalchemy.orm.column_keyed_dict.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.column_keyed_dict") parameter may be set which will instead indicate
+    that this condition should be ignored, and the append operation silently skipped.
+    This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: A dictionary-based collection type with arbitrary keying.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed [`mapped_collection`](#sqlalchemy.orm.mapped_collection
+    "sqlalchemy.orm.mapped_collection") to [`keyfunc_mapping()`](#sqlalchemy.orm.keyfunc_mapping
+    "sqlalchemy.orm.keyfunc_mapping").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns a [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    factory with a keying function generated from keyfunc, a callable that takes an
+    entity and returns a key value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: the given keyfunc is called only once at the time that the target object is
+    being added to the collection. Changes to the effective value returned by the
+    function are not tracked.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection) - background on use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`keyfunc` – a callable that will be passed the ORM-mapped instance which should
+    then generate a new key to use in the dictionary. If the value returned is [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE"), an error is raised.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ignore_unpopulated_attribute` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, and the callable returns [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE") for a particular instance, the
+    operation will be silently skipped. By default, an error is raised.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: an error is raised by default if the callable being used
+    for the dictionary key returns [`LoaderCallableStatus.NO_VALUE`](internals.html#sqlalchemy.orm.LoaderCallableStatus.NO_VALUE
+    "sqlalchemy.orm.LoaderCallableStatus.NO_VALUE"), which in an ORM attribute context
+    indicates an attribute that was never populated with any value. The [`mapped_collection.ignore_unpopulated_attribute`](#sqlalchemy.orm.mapped_collection.params.ignore_unpopulated_attribute
+    "sqlalchemy.orm.mapped_collection") parameter may be set which will instead indicate
+    that this condition should be ignored, and the append operation silently skipped.
+    This is in contrast to the behavior of the 1.x series which would erroneously
+    populate the value in the dictionary with an arbitrary key value of `None`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base for ORM mapped dictionary classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extends the `dict` type with additional methods needed by SQLAlchemy ORM collection
+    classes. Use of [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    is most directly by using the [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") or [`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict
+    "sqlalchemy.orm.column_keyed_dict") class factories. [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") may also serve as the base for user-defined custom
+    dictionary classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed `MappedCollection` to [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict "sqlalchemy.orm.column_keyed_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Custom Collection Implementations](#orm-custom-collection)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.orm.KeyFuncDict.__init__), [clear()](#sqlalchemy.orm.KeyFuncDict.clear),
+    [pop()](#sqlalchemy.orm.KeyFuncDict.pop), [popitem()](#sqlalchemy.orm.KeyFuncDict.popitem),
+    [remove()](#sqlalchemy.orm.KeyFuncDict.remove), [set()](#sqlalchemy.orm.KeyFuncDict.set),
+    [setdefault()](#sqlalchemy.orm.KeyFuncDict.setdefault), [update()](#sqlalchemy.orm.KeyFuncDict.update)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    (`builtins.dict`, `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new collection with keying provided by keyfunc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: keyfunc may be any callable that takes an object and returns an object for use
+    as a dictionary key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The keyfunc will be called every time the ORM needs to add a member by value-only
+    (such as when loading instances from the database) or remove a member. The usual
+    cautions about dictionary keying apply- `keyfunc(object)` should return the same
+    output for the life of the collection. Keying based on mutable properties can
+    result in unreachable instances “lost” in the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the key is not found, return the default if given; otherwise, raise a KeyError.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remove and return a (key, value) pair as a 2-tuple.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pairs are returned in LIFO (last-in, first-out) order. Raises KeyError if the
+    dict is empty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remove an item by value, consulting the keyfunc for the key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE129]'
+  prefs: []
+  type: TYPE_PRE
+- en: Add an item by value, consulting the keyfunc for the key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE130]'
+  prefs: []
+  type: TYPE_PRE
+- en: Insert key with a value of default if key is not in the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Return the value for key if key is in the dictionary, else default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE131]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If E is present and has a .keys() method, then does: for k in E: D[k] = E[k]
+    If E is present and lacks a .keys() method, then does: for k, v in E: D[k] = v
+    In either case, this is followed by: for k in F: D[k] = F[k]'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE132]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base for ORM mapped dictionary classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extends the `dict` type with additional methods needed by SQLAlchemy ORM collection
+    classes. Use of [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict "sqlalchemy.orm.KeyFuncDict")
+    is most directly by using the [`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict
+    "sqlalchemy.orm.attribute_keyed_dict") or [`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict
+    "sqlalchemy.orm.column_keyed_dict") class factories. [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict") may also serve as the base for user-defined custom
+    dictionary classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: Renamed `MappedCollection` to [`KeyFuncDict`](#sqlalchemy.orm.KeyFuncDict
+    "sqlalchemy.orm.KeyFuncDict").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`attribute_keyed_dict()`](#sqlalchemy.orm.attribute_keyed_dict "sqlalchemy.orm.attribute_keyed_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`column_keyed_dict()`](#sqlalchemy.orm.column_keyed_dict "sqlalchemy.orm.column_keyed_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dictionary Collections](#orm-dictionary-collection)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Custom Collection Implementations](#orm-custom-collection)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collection Internals
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [bulk_replace](#sqlalchemy.orm.collections.bulk_replace)(values, existing_adapter,
+    new_adapter[, initiator]) | Load a new collection, firing events based on prior
+    like membership. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [collection](#sqlalchemy.orm.collections.collection) | Decorators for entity
+    collection classes. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [collection_adapter](#sqlalchemy.orm.collections.collection_adapter) | attrgetter(attr,
+    …) –> attrgetter object |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CollectionAdapter](#sqlalchemy.orm.collections.CollectionAdapter) | Bridges
+    between the ORM and arbitrary Python collections. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [InstrumentedDict](#sqlalchemy.orm.collections.InstrumentedDict) | An instrumented
+    version of the built-in dict. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [InstrumentedList](#sqlalchemy.orm.collections.InstrumentedList) | An instrumented
+    version of the built-in list. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [InstrumentedSet](#sqlalchemy.orm.collections.InstrumentedSet) | An instrumented
+    version of the built-in set. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [prepare_instrumentation](#sqlalchemy.orm.collections.prepare_instrumentation)(factory)
+    | Prepare a callable for future use as a collection class factory. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE133]'
+  prefs: []
+  type: TYPE_PRE
+- en: Load a new collection, firing events based on prior like membership.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Appends instances in `values` onto the `new_adapter`. Events will be fired for
+    any instance not present in the `existing_adapter`. Any instances in `existing_adapter`
+    not present in `values` will have remove events fired upon them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`values` – An iterable of collection member instances'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`existing_adapter` – A [`CollectionAdapter`](#sqlalchemy.orm.collections.CollectionAdapter
+    "sqlalchemy.orm.collections.CollectionAdapter") of instances to be replaced'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`new_adapter` – An empty [`CollectionAdapter`](#sqlalchemy.orm.collections.CollectionAdapter
+    "sqlalchemy.orm.collections.CollectionAdapter") to load with `values`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE134]'
+  prefs: []
+  type: TYPE_PRE
+- en: Decorators for entity collection classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The decorators fall into two groups: annotations and interception recipes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The annotating decorators (appender, remover, iterator, converter, internally_instrumented)
+    indicate the method’s purpose and take no arguments. They are not written with
+    parens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE135]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The recipe decorators all require parens, even those that take no arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[adds()](#sqlalchemy.orm.collections.collection.adds), [appender()](#sqlalchemy.orm.collections.collection.appender),
+    [converter()](#sqlalchemy.orm.collections.collection.converter), [internally_instrumented()](#sqlalchemy.orm.collections.collection.internally_instrumented),
+    [iterator()](#sqlalchemy.orm.collections.collection.iterator), [remover()](#sqlalchemy.orm.collections.collection.remover),
+    [removes()](#sqlalchemy.orm.collections.collection.removes), [removes_return()](#sqlalchemy.orm.collections.collection.removes_return),
+    [replaces()](#sqlalchemy.orm.collections.collection.replaces)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE136]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE137]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mark the method as adding an entity to the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Adds “add to collection” handling to the method. The decorator argument indicates
+    which method argument holds the SQLAlchemy-relevant value. Arguments can be specified
+    positionally (i.e. integer) or by name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE138]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE139]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as the collection appender.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The appender method is called with one positional argument: the value to append.
+    The method will be automatically decorated with ‘adds(1)’ if not already decorated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE140]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the value to append is not allowed in the collection, you may raise an exception.
+    Something to remember is that the appender will be called for each object mapped
+    by a database query. If the database contains rows that violate your collection
+    semantics, you will need to get creative to fix the problem, as access via the
+    collection will not work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the appender method is internally instrumented, you must also receive the
+    keyword argument ‘_sa_initiator’ and ensure its promulgation to collection events.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE141]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as the collection converter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 1.3: The [`collection.converter()`](#sqlalchemy.orm.collections.collection.converter
+    "sqlalchemy.orm.collections.collection.converter") handler is deprecated and will
+    be removed in a future release. Please refer to the `bulk_replace` listener interface
+    in conjunction with the [`listen()`](../core/event.html#sqlalchemy.event.listen
+    "sqlalchemy.event.listen") function.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This optional method will be called when a collection is being replaced entirely,
+    as in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE142]'
+  prefs: []
+  type: TYPE_PRE
+- en: The converter method will receive the object being assigned and should return
+    an iterable of values suitable for use by the `appender` method. A converter must
+    not assign values or mutate the collection, its sole job is to adapt the value
+    the user provides into an iterable of values for the ORM’s use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default converter implementation will use duck-typing to do the conversion.
+    A dict-like collection will be convert into an iterable of dictionary values,
+    and other types will simply be iterated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE143]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the duck-typing of the object does not match the type of this collection,
+    a TypeError is raised.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Supply an implementation of this method if you want to expand the range of possible
+    types that can be assigned in bulk or perform validation on the values about to
+    be assigned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE144]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as instrumented.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This tag will prevent any decoration from being applied to the method. Use
+    this if you are orchestrating your own calls to `collection_adapter()` in one
+    of the basic SQLAlchemy interface methods, or to prevent an automatic ABC method
+    decoration from wrapping your implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE145]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE146]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as the collection remover.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The iterator method is called with no arguments. It is expected to return an
+    iterator over all collection members:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE147]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE148]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tag the method as the collection remover.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The remover method is called with one positional argument: the value to remove.
+    The method will be automatically decorated with [`removes_return()`](#sqlalchemy.orm.collections.collection.removes_return
+    "sqlalchemy.orm.collections.collection.removes_return") if not already decorated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE149]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the value to remove is not present in the collection, you may raise an exception
+    or return None to ignore the error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the remove method is internally instrumented, you must also receive the keyword
+    argument ‘_sa_initiator’ and ensure its promulgation to collection events.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE150]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mark the method as removing an entity in the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Adds “remove from collection” handling to the method. The decorator argument
+    indicates which method argument holds the SQLAlchemy-relevant value to be removed.
+    Arguments can be specified positionally (i.e. integer) or by name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE151]'
+  prefs: []
+  type: TYPE_PRE
+- en: For methods where the value to remove is not known at call-time, use collection.removes_return.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE152]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mark the method as removing an entity in the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Adds “remove from collection” handling to the method. The return value of the
+    method, if any, is considered the value to remove. The method arguments are not
+    inspected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE153]'
+  prefs: []
+  type: TYPE_PRE
+- en: For methods where the value to remove is known at call-time, use collection.remove.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE154]'
+  prefs: []
+  type: TYPE_PRE
+- en: Mark the method as replacing an entity in the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adds “add to collection” and “remove from collection” handling to the method.
+    The decorator argument indicates which method argument holds the SQLAlchemy-relevant
+    value to be added, and return value, if any will be considered the value to remove.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Arguments can be specified positionally (i.e. integer) or by name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE155]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE156]'
+  prefs: []
+  type: TYPE_PRE
+- en: attrgetter(attr, …) –> attrgetter object
+  prefs: []
+  type: TYPE_NORMAL
+- en: Return a callable object that fetches the given attribute(s) from its operand.
+    After f = attrgetter(‘name’), the call f(r) returns r.name. After g = attrgetter(‘name’,
+    ‘date’), the call g(r) returns (r.name, r.date). After h = attrgetter(‘name.first’,
+    ‘name.last’), the call h(r) returns (r.name.first, r.name.last).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE157]'
+  prefs: []
+  type: TYPE_PRE
+- en: Bridges between the ORM and arbitrary Python collections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Proxies base-level collection operations (append, remove, iterate) to the underlying
+    Python collection, and emits add/remove events for entities entering or leaving
+    the collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ORM uses [`CollectionAdapter`](#sqlalchemy.orm.collections.CollectionAdapter
+    "sqlalchemy.orm.collections.CollectionAdapter") exclusively for interaction with
+    entity collections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE158]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instrumented version of the built-in dict.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.collections.InstrumentedDict`](#sqlalchemy.orm.collections.InstrumentedDict
+    "sqlalchemy.orm.collections.InstrumentedDict") (`builtins.dict`, `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE159]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instrumented version of the built-in list.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.collections.InstrumentedList`](#sqlalchemy.orm.collections.InstrumentedList
+    "sqlalchemy.orm.collections.InstrumentedList") (`builtins.list`, `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE160]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instrumented version of the built-in set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.orm.collections.InstrumentedSet`](#sqlalchemy.orm.collections.InstrumentedSet
+    "sqlalchemy.orm.collections.InstrumentedSet") (`builtins.set`, `typing.Generic`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE161]'
+  prefs: []
+  type: TYPE_PRE
+- en: Prepare a callable for future use as a collection class factory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Given a collection class factory (either a type or no-arg callable), return
+    another factory that will produce compatible instances when called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is responsible for converting collection_class=list into the run-time
+    behavior of collection_class=InstrumentedList.
+  prefs: []
+  type: TYPE_NORMAL

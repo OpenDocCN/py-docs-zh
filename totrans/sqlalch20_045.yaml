@@ -1,0 +1,2355 @@
+- en: Column Loading Options
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/queryguide/columns.html](https://docs.sqlalchemy.org/en/20/orm/queryguide/columns.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: About this Document
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section presents additional options regarding the loading of columns. The
+    mappings used include columns that would store large string values for which we
+    may want to limit when they are loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[View the ORM setup for this page](_deferred_setup.html). Some of the examples
+    below will redefine the `Book` mapper to modify some of the column definitions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Limiting which Columns Load with Column Deferral'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Column deferral** refers to ORM mapped columns that are omitted from a SELECT
+    statement when objects of that type are queried. The general rationale here is
+    performance, in cases where tables have seldom-used columns with potentially large
+    data values, as fully loading these columns on every query may be time and/or
+    memory intensive. SQLAlchemy ORM offers a variety of ways to control the loading
+    of columns when entities are loaded.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most examples in this section are illustrating **ORM loader options**. These
+    are small constructs that are passed to the [`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
+    "sqlalchemy.sql.expression.Select.options") method of the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object, which are then consumed by the ORM
+    when the object is compiled into a SQL string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using `load_only()` to reduce loaded columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") loader
+    option is the most expedient option to use when loading objects where it is known
+    that only a small handful of columns will be accessed. This option accepts a variable
+    number of class-bound attribute objects indicating those column-mapped attributes
+    that should be loaded, where all other column-mapped attributes outside of the
+    primary key will not be part of the columns fetched . In the example below, the
+    `Book` class contains columns `.title`, `.summary` and `.cover_photo`. Using [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") we can instruct the ORM to only load the `.title`
+    and `.summary` columns up front:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the SELECT statement has omitted the `.cover_photo` column and included
+    only `.title` and `.summary`, as well as the primary key column `.id`; the ORM
+    will typically always fetch the primary key columns as these are required to establish
+    the identity for the row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once loaded, the object will normally have [lazy loading](../../glossary.html#term-lazy-loading)
+    behavior applied to the remaining unloaded attributes, meaning that when any are
+    first accessed, a SQL statement will be emitted within the current transaction
+    in order to load the value. Below, accessing `.cover_photo` emits a SELECT statement
+    to load its value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Lazy loads are always emitted using the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") to which the object is in the [persistent](../../glossary.html#term-persistent)
+    state. If the object is [detached](../../glossary.html#term-detached) from any
+    [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    the operation fails, raising an exception.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As an alternative to lazy loading on access, deferred columns may also be configured
+    to raise an informative exception when accessed, regardless of their attachment
+    state. When using the [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    construct, this may be indicated using the [`load_only.raiseload`](#sqlalchemy.orm.load_only.params.raiseload
+    "sqlalchemy.orm.load_only") parameter. See the section [Using raiseload to prevent
+    deferred column loads](#orm-queryguide-deferred-raiseload) for background and
+    examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: as noted elsewhere, lazy loading is not available when using [Asynchronous I/O
+    (asyncio)](../extensions/asyncio.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `load_only()` with multiple entities
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") limits
+    itself to the single entity that is referred towards in its list of attributes
+    (passing a list of attributes that span more than a single entity is currently
+    disallowed). In the example below, the given [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") option applies only to the `Book` entity. The `User`
+    entity that’s also selected is not affected; within the resulting SELECT statement,
+    all columns for `user_account` are present, whereas only `book.id` and `book.title`
+    are present for the `book` table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we wanted to apply [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    options to both `User` and `Book`, we would make use of two separate options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Using `load_only()` on related objects and collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using [relationship loaders](relationships.html) to control the loading
+    of related objects, the [`Load.load_only()`](relationships.html#sqlalchemy.orm.Load.load_only
+    "sqlalchemy.orm.Load.load_only") method of any relationship loader may be used
+    to apply [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    rules to columns on the sub-entity. In the example below, [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") is used to load the related `books` collection
+    on each `User` object. By applying [`Load.load_only()`](relationships.html#sqlalchemy.orm.Load.load_only
+    "sqlalchemy.orm.Load.load_only") to the resulting option object, when objects
+    are loaded for the relationship, the SELECT emitted will only refer to the `title`
+    column in addition to primary key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") may also
+    be applied to sub-entities without needing to state the style of loading to use
+    for the relationship itself. If we didn’t want to change the default loading style
+    of `User.books` but still apply load only rules to `Book`, we would link using
+    the [`defaultload()`](relationships.html#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    option, which in this case will retain the default relationship loading style
+    of `"lazy"`, and applying our custom [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") rule to the SELECT statement emitted for each `User.books`
+    collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]  ### Using `defer()` to omit specific columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") loader option
+    is a more fine grained alternative to [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only"), which allows a single specific column to be marked
+    as “dont load”. In the example below, [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    is applied directly to the `.cover_photo` column, leaving the behavior of all
+    other columns unchanged:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case with [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only"),
+    unloaded columns by default will load themselves when accessed using [lazy loading](../../glossary.html#term-lazy-loading):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Multiple [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") options may
+    be used in one statement in order to mark several columns as deferred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As is the case with [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only"),
+    the [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") option also includes
+    the ability to have a deferred attribute raise an exception on access rather than
+    lazy loading. This is illustrated in the section [Using raiseload to prevent deferred
+    column loads](#orm-queryguide-deferred-raiseload).  ### Using raiseload to prevent
+    deferred column loads'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    or [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") loader options, attributes
+    marked as deferred on an object have the default behavior that when first accessed,
+    a SELECT statement will be emitted within the current transaction in order to
+    load their value. It is often necessary to prevent this load from occurring, and
+    instead raise an exception when the attribute is accessed, indicating that the
+    need to query the database for this column was not expected. A typical scenario
+    is an operation where objects are loaded with all the columns that are known to
+    be required for the operation to proceed, which are then passed onto a view layer.
+    Any further SQL operations that emit within the view layer should be caught, so
+    that the up-front loading operation can be adjusted to accommodate for that additional
+    data up front, rather than incurring additional lazy loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this use case the [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    and [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") options
+    include a boolean parameter [`defer.raiseload`](#sqlalchemy.orm.defer.params.raiseload
+    "sqlalchemy.orm.defer"), which when set to `True` will cause the affected attributes
+    to raise on access. In the example below, the deferred column `.cover_photo` will
+    disallow attribute access:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    to name a specific set of non-deferred columns, `raiseload` behavior may be applied
+    to the remaining columns using the [`load_only.raiseload`](#sqlalchemy.orm.load_only.params.raiseload
+    "sqlalchemy.orm.load_only") parameter, which will be applied to all deferred attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is not yet possible to mix [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    and [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") options which refer
+    to the same entity together in one statement in order to change the `raiseload`
+    behavior of certain attributes; currently, doing so will produce undefined loading
+    behavior of attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`defer.raiseload`](#sqlalchemy.orm.defer.params.raiseload "sqlalchemy.orm.defer")
+    feature is the column-level version of the same “raiseload” feature that’s available
+    for relationships. For “raiseload” with relationships, see [Preventing unwanted
+    lazy loads using raiseload](relationships.html#prevent-lazy-with-raiseload) in
+    the [Relationship Loading Techniques](relationships.html) section of this guide.  ##
+    Configuring Column Deferral on Mappings'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The functionality of [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    is available as a default behavior for mapped columns, as may be appropriate for
+    columns that should not be loaded unconditionally on every query. To configure,
+    use the [`mapped_column.deferred`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred
+    "sqlalchemy.orm.mapped_column") parameter of [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"). The example below illustrates a mapping for `Book`
+    which applies default column deferral to the `summary` and `cover_photo` columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above mapping, queries against `Book` will automatically not include
+    the `summary` and `cover_photo` columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case with all deferral, the default behavior when deferred attributes
+    on the loaded object are first accessed is that they will [lazy load](../../glossary.html#term-lazy-load)
+    their value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: As is the case with the [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    and [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") loader
+    options, mapper level deferral also includes an option for `raiseload` behavior
+    to occur, rather than lazy loading, when no other options are present in a statement.
+    This allows a mapping where certain columns will not load by default and will
+    also never load lazily without explicit directives used in a statement. See the
+    section [Configuring mapper-level “raiseload” behavior](#orm-queryguide-mapper-deferred-raiseload)
+    for background on how to configure and use this behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using `deferred()` for imperative mappers, mapped SQL expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`deferred()`](#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred") function
+    is the earlier, more general purpose “deferred column” mapping directive that
+    precedes the introduction of the [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct in SQLAlchemy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`deferred()`](#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred") is used
+    when configuring ORM mappers, and accepts arbitrary SQL expressions or [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects. As such it’s suitable to be used with non-declarative
+    [imperative mappings](../mapping_styles.html#orm-imperative-mapping), passing
+    it to the [`map_imperatively.properties`](../mapping_api.html#sqlalchemy.orm.registry.map_imperatively.params.properties
+    "sqlalchemy.orm.registry.map_imperatively") dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`deferred()`](#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred") may also
+    be used in place of [`column_property()`](../mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") when mapped SQL expressions should be loaded
+    on a deferred basis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using column_property](../mapped_sql_expr.html#mapper-column-property-sql-expressions)
+    - in the section [SQL Expressions as Mapped Attributes](../mapped_sql_expr.html#mapper-sql-expressions)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Applying Load, Persistence and Mapping Options for Imperative Table Columns](../declarative_tables.html#orm-imperative-table-column-options)
+    - in the section [Table Configuration with Declarative](../declarative_tables.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `undefer()` to “eagerly” load deferred columns
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'With columns configured on mappings to defer by default, the [`undefer()`](#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer") option will cause any column that is normally deferred
+    to be undeferred, that is, to load up front with all the other columns of the
+    mapping. For example we may apply [`undefer()`](#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")
+    to the `Book.summary` column, which is indicated in the previous mapping as deferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `Book.summary` column was now eagerly loaded, and may be accessed without
+    additional SQL being emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Loading deferred columns in groups'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Normally when a column is mapped with `mapped_column(deferred=True)`, when
+    the deferred attribute is accessed on an object, SQL will be emitted to load only
+    that specific column and no others, even if the mapping has other columns that
+    are also marked as deferred. In the common case that the deferred attribute is
+    part of a group of attributes that should all load at once, rather than emitting
+    SQL for each attribute individually, the [`mapped_column.deferred_group`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred_group
+    "sqlalchemy.orm.mapped_column") parameter may be used, which accepts an arbitrary
+    string which will define a common group of columns to be undeferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above mapping, accessing either `summary` or `cover_photo` will load
+    both columns at once using just one SELECT statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Undeferring by group with `undefer_group()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If deferred columns are configured with [`mapped_column.deferred_group`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred_group
+    "sqlalchemy.orm.mapped_column") as introduced in the preceding section, the entire
+    group may be indicated to load eagerly using the [`undefer_group()`](#sqlalchemy.orm.undefer_group
+    "sqlalchemy.orm.undefer_group") option, passing the string name of the group to
+    be eagerly loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Both `summary` and `cover_photo` are available without additional loads:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Undeferring on wildcards
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Most ORM loader options accept a wildcard expression, indicated by `"*"`, which
+    indicates that the option should be applied to all relevant attributes. If a mapping
+    has a series of deferred columns, all such columns can be undeferred at once,
+    without using a group name, by indicating a wildcard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Configuring mapper-level “raiseload” behavior'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “raiseload” behavior first introduced at [Using raiseload to prevent deferred
+    column loads](#orm-queryguide-deferred-raiseload) may also be applied as a default
+    mapper-level behavior, using the [`mapped_column.deferred_raiseload`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred_raiseload
+    "sqlalchemy.orm.mapped_column") parameter of [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"). When using this parameter, the affected columns
+    will raise on access in all cases unless explicitly “undeferred” using [`undefer()`](#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer") or [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    at query time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above mapping, the `.summary` and `.cover_photo` columns are by default
+    not loadable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Only by overriding their behavior at query time, typically using [`undefer()`](#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer") or [`undefer_group()`](#sqlalchemy.orm.undefer_group
+    "sqlalchemy.orm.undefer_group"), or less commonly [`defer()`](#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer"), may the attributes be loaded. The example below applies
+    `undefer(''*'')` to undefer all attributes, also making use of [Populate Existing](api.html#orm-queryguide-populate-existing)
+    to refresh the already-loaded object’s loader options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]  ## Loading Arbitrary SQL Expressions onto Objects'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As discussed [Selecting ORM Entities and Attributes](select.html#orm-queryguide-select-columns)
+    and elsewhere, the [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct may be used to load arbitrary SQL
+    expressions in a result set. Such as if we wanted to issue a query that loads
+    `User` objects, but also includes a count of how many books each `User` owned,
+    we could use `func.count(Book.id)` to add a “count” column to a query which includes
+    a JOIN to `Book` as well as a GROUP BY owner id. This will yield [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects that each contain two entries, one for `User`
+    and one for `func.count(Book.id)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the `User` entity and the “book count” SQL expression
+    are returned separately. However, a popular use case is to produce a query that
+    will yield `User` objects alone, which can be iterated for example using [`Session.scalars()`](../session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars"), where the result of the `func.count(Book.id)`
+    SQL expression is applied *dynamically* to each `User` entity. The end result
+    would be similar to the case where an arbitrary SQL expression were mapped to
+    the class using [`column_property()`](../mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property"), except that the SQL expression can be modified
+    at query time. For this use case SQLAlchemy provides the [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") loader option, which when combined with the
+    mapper level [`query_expression()`](#sqlalchemy.orm.query_expression "sqlalchemy.orm.query_expression")
+    directive may produce this result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To apply [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    to a query, the mapped class must have pre-configured an ORM mapped attribute
+    using the [`query_expression()`](#sqlalchemy.orm.query_expression "sqlalchemy.orm.query_expression")
+    directive; this directive will produce an attribute on the mapped class that is
+    suitable for receiving query-time SQL expressions. Below we add a new attribute
+    `User.book_count` to `User`. This ORM mapped attribute is read-only and has no
+    default value; accessing it on a loaded instance will normally produce `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the `User.book_count` attribute configured in our mapping, we may populate
+    it with data from a SQL expression using the [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") loader option to apply a custom SQL expression
+    to each `User` object as it’s loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we moved our `func.count(Book.id)` expression out of the columns argument
+    of the [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct and into the [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") loader option. The ORM then considers this to
+    be a special column load option that’s applied dynamically to the statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`query_expression()`](#sqlalchemy.orm.query_expression "sqlalchemy.orm.query_expression")
+    mapping has these caveats:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: On an object where [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    were not used to populate the attribute, the attribute on an object instance will
+    have the value `None`, unless on the mapping the [`query_expression.default_expr`](#sqlalchemy.orm.query_expression.params.default_expr
+    "sqlalchemy.orm.query_expression") parameter is set to a default SQL expression.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    value **does not populate on an object that is already loaded**, unless [Populate
+    Existing](api.html#orm-queryguide-populate-existing) is used. The example below
+    will **not work**, as the `A` object is already loaded:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To ensure the attribute is re-loaded on an existing object, use the [Populate
+    Existing](api.html#orm-queryguide-populate-existing) execution option to ensure
+    all columns are re-populated:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    SQL expression **is lost when the object is expired**. Once the object is expired,
+    either via [`Session.expire()`](../session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") or via the expire_on_commit behavior of [`Session.commit()`](../session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), the SQL expression and its value is no longer
+    associated with the attribute and will return `None` on subsequent access.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression"),
+    as an object loading option, only takes effect on the **outermost part of a query**
+    and only for a query against a full entity, and not for arbitrary column selects,
+    within subqueries, or the elements of a compound statement such as a UNION. See
+    the next section [Using with_expression() with UNIONs, other subqueries](#orm-queryguide-with-expression-unions)
+    for an example.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The mapped attribute **cannot** be applied to other parts of the query, such
+    as the WHERE clause, the ORDER BY clause, and make use of the ad-hoc expression;
+    that is, this won’t work:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `A.expr` expression will resolve to NULL in the above WHERE clause and
+    ORDER BY clause. To use the expression throughout the query, assign to a variable
+    and use that:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    option is a special option used to apply SQL expressions to mapped classes dynamically
+    at query time. For ordinary fixed SQL expressions configured on mappers, see the
+    section [SQL Expressions as Mapped Attributes](../mapped_sql_expr.html#mapper-sql-expressions).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using `with_expression()` with UNIONs, other subqueries'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    construct is an ORM loader option, and as such may only be applied to the outermost
+    level of a SELECT statement which is to load a particular ORM entity. It does
+    not have any effect if used inside of a [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") that will then be used as a subquery or as
+    an element within a compound statement such as a UNION.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In order to use arbitrary SQL expressions in subqueries, normal Core-style means
+    of adding expressions should be used. To assemble a subquery-derived expression
+    onto the ORM entity’s [`query_expression()`](#sqlalchemy.orm.query_expression
+    "sqlalchemy.orm.query_expression") attributes, [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") is used at the top layer of ORM object loading,
+    referencing the SQL expression within the subquery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example below, two [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") constructs are used against the ORM entity
+    `A` with an additional SQL expression labeled in `expr`, and combined using [`union_all()`](../../core/selectable.html#sqlalchemy.sql.expression.union_all
+    "sqlalchemy.sql.expression.union_all"). Then, at the topmost layer, the `A` entity
+    is SELECTed from this UNION, using the querying technique described at [Selecting
+    Entities from UNIONs and other set operations](select.html#orm-queryguide-unions),
+    adding an option with [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    to extract this SQL expression onto newly loaded instances of `A`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Column Loading API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [defer](#sqlalchemy.orm.defer)(key, *addl_attrs, [raiseload]) | Indicate
+    that the given column-oriented attribute should be deferred, e.g. not loaded until
+    accessed. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [deferred](#sqlalchemy.orm.deferred)(column, *additional_columns, [group,
+    raiseload, comparator_factory, init, repr, default, default_factory, compare,
+    kw_only, active_history, expire_on_flush, info, doc]) | Indicate a column-based
+    mapped attribute that by default will not load unless accessed. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [load_only](#sqlalchemy.orm.load_only)(*attrs, [raiseload]) | Indicate that
+    for a particular entity, only the given list of column-based attribute names should
+    be loaded; all others will be deferred. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [query_expression](#sqlalchemy.orm.query_expression)([default_expr], *, [repr,
+    compare, expire_on_flush, info, doc]) | Indicate an attribute that populates from
+    a query-time SQL expression. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [undefer](#sqlalchemy.orm.undefer)(key, *addl_attrs) | Indicate that the
+    given column-oriented attribute should be undeferred, e.g. specified within the
+    SELECT statement of the entity as a whole. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [undefer_group](#sqlalchemy.orm.undefer_group)(name) | Indicate that columns
+    within the given deferred group name should be undeferred. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [with_expression](#sqlalchemy.orm.with_expression)(key, expression) | Apply
+    an ad-hoc SQL expression to a “deferred expression” attribute. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given column-oriented attribute should be deferred, e.g. not
+    loaded until accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](relationships.html#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") interface and supports both method-chained and standalone
+    operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To specify a deferred load of an attribute on a related class, the path can
+    be specified one token at a time, specifying the loading style for each link along
+    the chain. To leave the loading style for a link unchanged, use [`defaultload()`](relationships.html#sqlalchemy.orm.defaultload
+    "sqlalchemy.orm.defaultload"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Multiple deferral options related to a relationship can be bundled at once
+    using [`Load.options()`](relationships.html#sqlalchemy.orm.Load.options "sqlalchemy.orm.Load.options"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`key` – Attribute to be deferred.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`raiseload` – raise [`InvalidRequestError`](../../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
+    "sqlalchemy.exc.InvalidRequestError") rather than lazy loading a value when the
+    deferred attribute is accessed. Used to prevent unwanted SQL from being emitted.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Limiting which Columns Load with Column Deferral](#orm-queryguide-column-deferral)
+    - in the [ORM Querying Guide](index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`undefer()`](#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate a column-based mapped attribute that by default will not load unless
+    accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), the same functionality as that of [`deferred()`](#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") construct is provided by using the [`mapped_column.deferred`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred
+    "sqlalchemy.orm.mapped_column") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`*columns` – columns to be mapped. This is typically a single [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object, however a collection is supported in order
+    to support multiple columns mapped under the same attribute.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`raiseload` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: boolean, if True, indicates an exception should be raised if the load operation
+    is to take place.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Additional arguments are the same as that of [`column_property()`](../mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property").
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using deferred() for imperative mappers, mapped SQL expressions](#orm-queryguide-deferred-imperative)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate an attribute that populates from a query-time SQL expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**default_expr** – Optional SQL expression object that will be used in all
+    cases if not assigned later with [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Loading Arbitrary SQL Expressions onto Objects](#orm-queryguide-with-expression)
+    - background and usage examples'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that for a particular entity, only the given list of column-based attribute
+    names should be loaded; all others will be deferred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](relationships.html#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") interface and supports both method-chained and standalone
+    operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example - given a class `User`, load only the `name` and `fullname` attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example - given a relationship `User.addresses -> Address`, specify subquery
+    loading for the `User.addresses` collection, but on each `Address` object load
+    only the `email_address` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For a statement that has multiple entities, the lead entity can be specifically
+    referred to using the [`Load`](relationships.html#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: When used together with the [populate_existing](api.html#orm-queryguide-populate-existing)
+    execution option only the attributes listed will be refreshed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`*attrs` – Attributes to be loaded, all others will be deferred.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`raiseload` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: raise [`InvalidRequestError`](../../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
+    "sqlalchemy.exc.InvalidRequestError") rather than lazy loading a value when a
+    deferred attribute is accessed. Used to prevent unwanted SQL from being emitted.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Limiting which Columns Load with Column Deferral](#orm-queryguide-column-deferral)
+    - in the [ORM Querying Guide](index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`*attrs` – Attributes to be loaded, all others will be deferred.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`raiseload` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: raise [`InvalidRequestError`](../../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
+    "sqlalchemy.exc.InvalidRequestError") rather than lazy loading a value when a
+    deferred attribute is accessed. Used to prevent unwanted SQL from being emitted.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given column-oriented attribute should be undeferred, e.g.
+    specified within the SELECT statement of the entity as a whole.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The column being undeferred is typically set up on the mapping as a [`deferred()`](#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](relationships.html#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") interface and supports both method-chained and standalone
+    operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**key** – Attribute to be undeferred.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Limiting which Columns Load with Column Deferral](#orm-queryguide-column-deferral)
+    - in the [ORM Querying Guide](index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`undefer_group()`](#sqlalchemy.orm.undefer_group "sqlalchemy.orm.undefer_group")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that columns within the given deferred group name should be undeferred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The columns being undeferred are set up on the mapping as [`deferred()`](#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") attributes and include a “group” name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To undefer a group of attributes on a related entity, the path can be spelled
+    out using relationship loader options, such as [`defaultload()`](relationships.html#sqlalchemy.orm.defaultload
+    "sqlalchemy.orm.defaultload"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Limiting which Columns Load with Column Deferral](#orm-queryguide-column-deferral)
+    - in the [ORM Querying Guide](index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`undefer()`](#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Apply an ad-hoc SQL expression to a “deferred expression” attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This option is used in conjunction with the [`query_expression()`](#sqlalchemy.orm.query_expression
+    "sqlalchemy.orm.query_expression") mapper-level construct that indicates an attribute
+    which should be the target of an ad-hoc SQL expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`key` – Attribute to be populated'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`expr` – SQL expression to be applied to the attribute.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Loading Arbitrary SQL Expressions onto Objects](#orm-queryguide-with-expression)
+    - background and usage examples'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Limiting which Columns Load with Column Deferral'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Column deferral** refers to ORM mapped columns that are omitted from a SELECT
+    statement when objects of that type are queried. The general rationale here is
+    performance, in cases where tables have seldom-used columns with potentially large
+    data values, as fully loading these columns on every query may be time and/or
+    memory intensive. SQLAlchemy ORM offers a variety of ways to control the loading
+    of columns when entities are loaded.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most examples in this section are illustrating **ORM loader options**. These
+    are small constructs that are passed to the [`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
+    "sqlalchemy.sql.expression.Select.options") method of the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object, which are then consumed by the ORM
+    when the object is compiled into a SQL string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using `load_only()` to reduce loaded columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") loader
+    option is the most expedient option to use when loading objects where it is known
+    that only a small handful of columns will be accessed. This option accepts a variable
+    number of class-bound attribute objects indicating those column-mapped attributes
+    that should be loaded, where all other column-mapped attributes outside of the
+    primary key will not be part of the columns fetched . In the example below, the
+    `Book` class contains columns `.title`, `.summary` and `.cover_photo`. Using [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") we can instruct the ORM to only load the `.title`
+    and `.summary` columns up front:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the SELECT statement has omitted the `.cover_photo` column and included
+    only `.title` and `.summary`, as well as the primary key column `.id`; the ORM
+    will typically always fetch the primary key columns as these are required to establish
+    the identity for the row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once loaded, the object will normally have [lazy loading](../../glossary.html#term-lazy-loading)
+    behavior applied to the remaining unloaded attributes, meaning that when any are
+    first accessed, a SQL statement will be emitted within the current transaction
+    in order to load the value. Below, accessing `.cover_photo` emits a SELECT statement
+    to load its value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Lazy loads are always emitted using the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") to which the object is in the [persistent](../../glossary.html#term-persistent)
+    state. If the object is [detached](../../glossary.html#term-detached) from any
+    [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    the operation fails, raising an exception.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As an alternative to lazy loading on access, deferred columns may also be configured
+    to raise an informative exception when accessed, regardless of their attachment
+    state. When using the [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    construct, this may be indicated using the [`load_only.raiseload`](#sqlalchemy.orm.load_only.params.raiseload
+    "sqlalchemy.orm.load_only") parameter. See the section [Using raiseload to prevent
+    deferred column loads](#orm-queryguide-deferred-raiseload) for background and
+    examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: as noted elsewhere, lazy loading is not available when using [Asynchronous I/O
+    (asyncio)](../extensions/asyncio.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `load_only()` with multiple entities
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") limits
+    itself to the single entity that is referred towards in its list of attributes
+    (passing a list of attributes that span more than a single entity is currently
+    disallowed). In the example below, the given [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") option applies only to the `Book` entity. The `User`
+    entity that’s also selected is not affected; within the resulting SELECT statement,
+    all columns for `user_account` are present, whereas only `book.id` and `book.title`
+    are present for the `book` table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we wanted to apply [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    options to both `User` and `Book`, we would make use of two separate options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Using `load_only()` on related objects and collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using [relationship loaders](relationships.html) to control the loading
+    of related objects, the [`Load.load_only()`](relationships.html#sqlalchemy.orm.Load.load_only
+    "sqlalchemy.orm.Load.load_only") method of any relationship loader may be used
+    to apply [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    rules to columns on the sub-entity. In the example below, [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") is used to load the related `books` collection
+    on each `User` object. By applying [`Load.load_only()`](relationships.html#sqlalchemy.orm.Load.load_only
+    "sqlalchemy.orm.Load.load_only") to the resulting option object, when objects
+    are loaded for the relationship, the SELECT emitted will only refer to the `title`
+    column in addition to primary key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") may also
+    be applied to sub-entities without needing to state the style of loading to use
+    for the relationship itself. If we didn’t want to change the default loading style
+    of `User.books` but still apply load only rules to `Book`, we would link using
+    the [`defaultload()`](relationships.html#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    option, which in this case will retain the default relationship loading style
+    of `"lazy"`, and applying our custom [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") rule to the SELECT statement emitted for each `User.books`
+    collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]  ### Using `defer()` to omit specific columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") loader option
+    is a more fine grained alternative to [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only"), which allows a single specific column to be marked
+    as “dont load”. In the example below, [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    is applied directly to the `.cover_photo` column, leaving the behavior of all
+    other columns unchanged:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case with [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only"),
+    unloaded columns by default will load themselves when accessed using [lazy loading](../../glossary.html#term-lazy-loading):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: Multiple [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") options may
+    be used in one statement in order to mark several columns as deferred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As is the case with [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only"),
+    the [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") option also includes
+    the ability to have a deferred attribute raise an exception on access rather than
+    lazy loading. This is illustrated in the section [Using raiseload to prevent deferred
+    column loads](#orm-queryguide-deferred-raiseload).  ### Using raiseload to prevent
+    deferred column loads'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    or [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") loader options, attributes
+    marked as deferred on an object have the default behavior that when first accessed,
+    a SELECT statement will be emitted within the current transaction in order to
+    load their value. It is often necessary to prevent this load from occurring, and
+    instead raise an exception when the attribute is accessed, indicating that the
+    need to query the database for this column was not expected. A typical scenario
+    is an operation where objects are loaded with all the columns that are known to
+    be required for the operation to proceed, which are then passed onto a view layer.
+    Any further SQL operations that emit within the view layer should be caught, so
+    that the up-front loading operation can be adjusted to accommodate for that additional
+    data up front, rather than incurring additional lazy loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this use case the [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    and [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") options
+    include a boolean parameter [`defer.raiseload`](#sqlalchemy.orm.defer.params.raiseload
+    "sqlalchemy.orm.defer"), which when set to `True` will cause the affected attributes
+    to raise on access. In the example below, the deferred column `.cover_photo` will
+    disallow attribute access:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    to name a specific set of non-deferred columns, `raiseload` behavior may be applied
+    to the remaining columns using the [`load_only.raiseload`](#sqlalchemy.orm.load_only.params.raiseload
+    "sqlalchemy.orm.load_only") parameter, which will be applied to all deferred attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is not yet possible to mix [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    and [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") options which refer
+    to the same entity together in one statement in order to change the `raiseload`
+    behavior of certain attributes; currently, doing so will produce undefined loading
+    behavior of attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`defer.raiseload`](#sqlalchemy.orm.defer.params.raiseload "sqlalchemy.orm.defer")
+    feature is the column-level version of the same “raiseload” feature that’s available
+    for relationships. For “raiseload” with relationships, see [Preventing unwanted
+    lazy loads using raiseload](relationships.html#prevent-lazy-with-raiseload) in
+    the [Relationship Loading Techniques](relationships.html) section of this guide.  ###
+    Using `load_only()` to reduce loaded columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") loader
+    option is the most expedient option to use when loading objects where it is known
+    that only a small handful of columns will be accessed. This option accepts a variable
+    number of class-bound attribute objects indicating those column-mapped attributes
+    that should be loaded, where all other column-mapped attributes outside of the
+    primary key will not be part of the columns fetched . In the example below, the
+    `Book` class contains columns `.title`, `.summary` and `.cover_photo`. Using [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") we can instruct the ORM to only load the `.title`
+    and `.summary` columns up front:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the SELECT statement has omitted the `.cover_photo` column and included
+    only `.title` and `.summary`, as well as the primary key column `.id`; the ORM
+    will typically always fetch the primary key columns as these are required to establish
+    the identity for the row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once loaded, the object will normally have [lazy loading](../../glossary.html#term-lazy-loading)
+    behavior applied to the remaining unloaded attributes, meaning that when any are
+    first accessed, a SQL statement will be emitted within the current transaction
+    in order to load the value. Below, accessing `.cover_photo` emits a SELECT statement
+    to load its value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: Lazy loads are always emitted using the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") to which the object is in the [persistent](../../glossary.html#term-persistent)
+    state. If the object is [detached](../../glossary.html#term-detached) from any
+    [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    the operation fails, raising an exception.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As an alternative to lazy loading on access, deferred columns may also be configured
+    to raise an informative exception when accessed, regardless of their attachment
+    state. When using the [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    construct, this may be indicated using the [`load_only.raiseload`](#sqlalchemy.orm.load_only.params.raiseload
+    "sqlalchemy.orm.load_only") parameter. See the section [Using raiseload to prevent
+    deferred column loads](#orm-queryguide-deferred-raiseload) for background and
+    examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: as noted elsewhere, lazy loading is not available when using [Asynchronous I/O
+    (asyncio)](../extensions/asyncio.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `load_only()` with multiple entities
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") limits
+    itself to the single entity that is referred towards in its list of attributes
+    (passing a list of attributes that span more than a single entity is currently
+    disallowed). In the example below, the given [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") option applies only to the `Book` entity. The `User`
+    entity that’s also selected is not affected; within the resulting SELECT statement,
+    all columns for `user_account` are present, whereas only `book.id` and `book.title`
+    are present for the `book` table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we wanted to apply [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    options to both `User` and `Book`, we would make use of two separate options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Using `load_only()` on related objects and collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using [relationship loaders](relationships.html) to control the loading
+    of related objects, the [`Load.load_only()`](relationships.html#sqlalchemy.orm.Load.load_only
+    "sqlalchemy.orm.Load.load_only") method of any relationship loader may be used
+    to apply [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    rules to columns on the sub-entity. In the example below, [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") is used to load the related `books` collection
+    on each `User` object. By applying [`Load.load_only()`](relationships.html#sqlalchemy.orm.Load.load_only
+    "sqlalchemy.orm.Load.load_only") to the resulting option object, when objects
+    are loaded for the relationship, the SELECT emitted will only refer to the `title`
+    column in addition to primary key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") may also
+    be applied to sub-entities without needing to state the style of loading to use
+    for the relationship itself. If we didn’t want to change the default loading style
+    of `User.books` but still apply load only rules to `Book`, we would link using
+    the [`defaultload()`](relationships.html#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    option, which in this case will retain the default relationship loading style
+    of `"lazy"`, and applying our custom [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") rule to the SELECT statement emitted for each `User.books`
+    collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using `load_only()` with multiple entities
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") limits
+    itself to the single entity that is referred towards in its list of attributes
+    (passing a list of attributes that span more than a single entity is currently
+    disallowed). In the example below, the given [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") option applies only to the `Book` entity. The `User`
+    entity that’s also selected is not affected; within the resulting SELECT statement,
+    all columns for `user_account` are present, whereas only `book.id` and `book.title`
+    are present for the `book` table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we wanted to apply [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    options to both `User` and `Book`, we would make use of two separate options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Using `load_only()` on related objects and collections'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using [relationship loaders](relationships.html) to control the loading
+    of related objects, the [`Load.load_only()`](relationships.html#sqlalchemy.orm.Load.load_only
+    "sqlalchemy.orm.Load.load_only") method of any relationship loader may be used
+    to apply [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    rules to columns on the sub-entity. In the example below, [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") is used to load the related `books` collection
+    on each `User` object. By applying [`Load.load_only()`](relationships.html#sqlalchemy.orm.Load.load_only
+    "sqlalchemy.orm.Load.load_only") to the resulting option object, when objects
+    are loaded for the relationship, the SELECT emitted will only refer to the `title`
+    column in addition to primary key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") may also
+    be applied to sub-entities without needing to state the style of loading to use
+    for the relationship itself. If we didn’t want to change the default loading style
+    of `User.books` but still apply load only rules to `Book`, we would link using
+    the [`defaultload()`](relationships.html#sqlalchemy.orm.defaultload "sqlalchemy.orm.defaultload")
+    option, which in this case will retain the default relationship loading style
+    of `"lazy"`, and applying our custom [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only") rule to the SELECT statement emitted for each `User.books`
+    collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using `defer()` to omit specific columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") loader option
+    is a more fine grained alternative to [`load_only()`](#sqlalchemy.orm.load_only
+    "sqlalchemy.orm.load_only"), which allows a single specific column to be marked
+    as “dont load”. In the example below, [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    is applied directly to the `.cover_photo` column, leaving the behavior of all
+    other columns unchanged:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case with [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only"),
+    unloaded columns by default will load themselves when accessed using [lazy loading](../../glossary.html#term-lazy-loading):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: Multiple [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") options may
+    be used in one statement in order to mark several columns as deferred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case with [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only"),
+    the [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") option also includes
+    the ability to have a deferred attribute raise an exception on access rather than
+    lazy loading. This is illustrated in the section [Using raiseload to prevent deferred
+    column loads](#orm-queryguide-deferred-raiseload).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using raiseload to prevent deferred column loads'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    or [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") loader options, attributes
+    marked as deferred on an object have the default behavior that when first accessed,
+    a SELECT statement will be emitted within the current transaction in order to
+    load their value. It is often necessary to prevent this load from occurring, and
+    instead raise an exception when the attribute is accessed, indicating that the
+    need to query the database for this column was not expected. A typical scenario
+    is an operation where objects are loaded with all the columns that are known to
+    be required for the operation to proceed, which are then passed onto a view layer.
+    Any further SQL operations that emit within the view layer should be caught, so
+    that the up-front loading operation can be adjusted to accommodate for that additional
+    data up front, rather than incurring additional lazy loading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this use case the [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    and [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") options
+    include a boolean parameter [`defer.raiseload`](#sqlalchemy.orm.defer.params.raiseload
+    "sqlalchemy.orm.defer"), which when set to `True` will cause the affected attributes
+    to raise on access. In the example below, the deferred column `.cover_photo` will
+    disallow attribute access:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    to name a specific set of non-deferred columns, `raiseload` behavior may be applied
+    to the remaining columns using the [`load_only.raiseload`](#sqlalchemy.orm.load_only.params.raiseload
+    "sqlalchemy.orm.load_only") parameter, which will be applied to all deferred attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is not yet possible to mix [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    and [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer") options which refer
+    to the same entity together in one statement in order to change the `raiseload`
+    behavior of certain attributes; currently, doing so will produce undefined loading
+    behavior of attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`defer.raiseload`](#sqlalchemy.orm.defer.params.raiseload "sqlalchemy.orm.defer")
+    feature is the column-level version of the same “raiseload” feature that’s available
+    for relationships. For “raiseload” with relationships, see [Preventing unwanted
+    lazy loads using raiseload](relationships.html#prevent-lazy-with-raiseload) in
+    the [Relationship Loading Techniques](relationships.html) section of this guide.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Configuring Column Deferral on Mappings'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The functionality of [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    is available as a default behavior for mapped columns, as may be appropriate for
+    columns that should not be loaded unconditionally on every query. To configure,
+    use the [`mapped_column.deferred`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred
+    "sqlalchemy.orm.mapped_column") parameter of [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"). The example below illustrates a mapping for `Book`
+    which applies default column deferral to the `summary` and `cover_photo` columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above mapping, queries against `Book` will automatically not include
+    the `summary` and `cover_photo` columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case with all deferral, the default behavior when deferred attributes
+    on the loaded object are first accessed is that they will [lazy load](../../glossary.html#term-lazy-load)
+    their value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: As is the case with the [`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")
+    and [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only") loader
+    options, mapper level deferral also includes an option for `raiseload` behavior
+    to occur, rather than lazy loading, when no other options are present in a statement.
+    This allows a mapping where certain columns will not load by default and will
+    also never load lazily without explicit directives used in a statement. See the
+    section [Configuring mapper-level “raiseload” behavior](#orm-queryguide-mapper-deferred-raiseload)
+    for background on how to configure and use this behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using `deferred()` for imperative mappers, mapped SQL expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`deferred()`](#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred") function
+    is the earlier, more general purpose “deferred column” mapping directive that
+    precedes the introduction of the [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct in SQLAlchemy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`deferred()`](#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred") is used
+    when configuring ORM mappers, and accepts arbitrary SQL expressions or [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects. As such it’s suitable to be used with non-declarative
+    [imperative mappings](../mapping_styles.html#orm-imperative-mapping), passing
+    it to the [`map_imperatively.properties`](../mapping_api.html#sqlalchemy.orm.registry.map_imperatively.params.properties
+    "sqlalchemy.orm.registry.map_imperatively") dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`deferred()`](#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred") may also
+    be used in place of [`column_property()`](../mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") when mapped SQL expressions should be loaded
+    on a deferred basis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using column_property](../mapped_sql_expr.html#mapper-column-property-sql-expressions)
+    - in the section [SQL Expressions as Mapped Attributes](../mapped_sql_expr.html#mapper-sql-expressions)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Applying Load, Persistence and Mapping Options for Imperative Table Columns](../declarative_tables.html#orm-imperative-table-column-options)
+    - in the section [Table Configuration with Declarative](../declarative_tables.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `undefer()` to “eagerly” load deferred columns
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'With columns configured on mappings to defer by default, the [`undefer()`](#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer") option will cause any column that is normally deferred
+    to be undeferred, that is, to load up front with all the other columns of the
+    mapping. For example we may apply [`undefer()`](#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")
+    to the `Book.summary` column, which is indicated in the previous mapping as deferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `Book.summary` column was now eagerly loaded, and may be accessed without
+    additional SQL being emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Loading deferred columns in groups'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Normally when a column is mapped with `mapped_column(deferred=True)`, when
+    the deferred attribute is accessed on an object, SQL will be emitted to load only
+    that specific column and no others, even if the mapping has other columns that
+    are also marked as deferred. In the common case that the deferred attribute is
+    part of a group of attributes that should all load at once, rather than emitting
+    SQL for each attribute individually, the [`mapped_column.deferred_group`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred_group
+    "sqlalchemy.orm.mapped_column") parameter may be used, which accepts an arbitrary
+    string which will define a common group of columns to be undeferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above mapping, accessing either `summary` or `cover_photo` will load
+    both columns at once using just one SELECT statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: Undeferring by group with `undefer_group()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If deferred columns are configured with [`mapped_column.deferred_group`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred_group
+    "sqlalchemy.orm.mapped_column") as introduced in the preceding section, the entire
+    group may be indicated to load eagerly using the [`undefer_group()`](#sqlalchemy.orm.undefer_group
+    "sqlalchemy.orm.undefer_group") option, passing the string name of the group to
+    be eagerly loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Both `summary` and `cover_photo` are available without additional loads:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: Undeferring on wildcards
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Most ORM loader options accept a wildcard expression, indicated by `"*"`, which
+    indicates that the option should be applied to all relevant attributes. If a mapping
+    has a series of deferred columns, all such columns can be undeferred at once,
+    without using a group name, by indicating a wildcard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Configuring mapper-level “raiseload” behavior'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “raiseload” behavior first introduced at [Using raiseload to prevent deferred
+    column loads](#orm-queryguide-deferred-raiseload) may also be applied as a default
+    mapper-level behavior, using the [`mapped_column.deferred_raiseload`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred_raiseload
+    "sqlalchemy.orm.mapped_column") parameter of [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"). When using this parameter, the affected columns
+    will raise on access in all cases unless explicitly “undeferred” using [`undefer()`](#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer") or [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    at query time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above mapping, the `.summary` and `.cover_photo` columns are by default
+    not loadable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Only by overriding their behavior at query time, typically using [`undefer()`](#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer") or [`undefer_group()`](#sqlalchemy.orm.undefer_group
+    "sqlalchemy.orm.undefer_group"), or less commonly [`defer()`](#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer"), may the attributes be loaded. The example below applies
+    `undefer(''*'')` to undefer all attributes, also making use of [Populate Existing](api.html#orm-queryguide-populate-existing)
+    to refresh the already-loaded object’s loader options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]  ### Using `deferred()` for imperative mappers, mapped SQL expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`deferred()`](#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred") function
+    is the earlier, more general purpose “deferred column” mapping directive that
+    precedes the introduction of the [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct in SQLAlchemy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`deferred()`](#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred") is used
+    when configuring ORM mappers, and accepts arbitrary SQL expressions or [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects. As such it’s suitable to be used with non-declarative
+    [imperative mappings](../mapping_styles.html#orm-imperative-mapping), passing
+    it to the [`map_imperatively.properties`](../mapping_api.html#sqlalchemy.orm.registry.map_imperatively.params.properties
+    "sqlalchemy.orm.registry.map_imperatively") dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`deferred()`](#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred") may also
+    be used in place of [`column_property()`](../mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") when mapped SQL expressions should be loaded
+    on a deferred basis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using column_property](../mapped_sql_expr.html#mapper-column-property-sql-expressions)
+    - in the section [SQL Expressions as Mapped Attributes](../mapped_sql_expr.html#mapper-sql-expressions)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Applying Load, Persistence and Mapping Options for Imperative Table Columns](../declarative_tables.html#orm-imperative-table-column-options)
+    - in the section [Table Configuration with Declarative](../declarative_tables.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `undefer()` to “eagerly” load deferred columns
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'With columns configured on mappings to defer by default, the [`undefer()`](#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer") option will cause any column that is normally deferred
+    to be undeferred, that is, to load up front with all the other columns of the
+    mapping. For example we may apply [`undefer()`](#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")
+    to the `Book.summary` column, which is indicated in the previous mapping as deferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `Book.summary` column was now eagerly loaded, and may be accessed without
+    additional SQL being emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Loading deferred columns in groups'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Normally when a column is mapped with `mapped_column(deferred=True)`, when
+    the deferred attribute is accessed on an object, SQL will be emitted to load only
+    that specific column and no others, even if the mapping has other columns that
+    are also marked as deferred. In the common case that the deferred attribute is
+    part of a group of attributes that should all load at once, rather than emitting
+    SQL for each attribute individually, the [`mapped_column.deferred_group`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred_group
+    "sqlalchemy.orm.mapped_column") parameter may be used, which accepts an arbitrary
+    string which will define a common group of columns to be undeferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above mapping, accessing either `summary` or `cover_photo` will load
+    both columns at once using just one SELECT statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: Undeferring by group with `undefer_group()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If deferred columns are configured with [`mapped_column.deferred_group`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred_group
+    "sqlalchemy.orm.mapped_column") as introduced in the preceding section, the entire
+    group may be indicated to load eagerly using the [`undefer_group()`](#sqlalchemy.orm.undefer_group
+    "sqlalchemy.orm.undefer_group") option, passing the string name of the group to
+    be eagerly loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Both `summary` and `cover_photo` are available without additional loads:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: Undeferring on wildcards
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Most ORM loader options accept a wildcard expression, indicated by `"*"`, which
+    indicates that the option should be applied to all relevant attributes. If a mapping
+    has a series of deferred columns, all such columns can be undeferred at once,
+    without using a group name, by indicating a wildcard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Configuring mapper-level “raiseload” behavior'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “raiseload” behavior first introduced at [Using raiseload to prevent deferred
+    column loads](#orm-queryguide-deferred-raiseload) may also be applied as a default
+    mapper-level behavior, using the [`mapped_column.deferred_raiseload`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred_raiseload
+    "sqlalchemy.orm.mapped_column") parameter of [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"). When using this parameter, the affected columns
+    will raise on access in all cases unless explicitly “undeferred” using [`undefer()`](#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer") or [`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")
+    at query time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above mapping, the `.summary` and `.cover_photo` columns are by default
+    not loadable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Only by overriding their behavior at query time, typically using [`undefer()`](#sqlalchemy.orm.undefer
+    "sqlalchemy.orm.undefer") or [`undefer_group()`](#sqlalchemy.orm.undefer_group
+    "sqlalchemy.orm.undefer_group"), or less commonly [`defer()`](#sqlalchemy.orm.defer
+    "sqlalchemy.orm.defer"), may the attributes be loaded. The example below applies
+    `undefer(''*'')` to undefer all attributes, also making use of [Populate Existing](api.html#orm-queryguide-populate-existing)
+    to refresh the already-loaded object’s loader options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Loading Arbitrary SQL Expressions onto Objects'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As discussed [Selecting ORM Entities and Attributes](select.html#orm-queryguide-select-columns)
+    and elsewhere, the [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct may be used to load arbitrary SQL
+    expressions in a result set. Such as if we wanted to issue a query that loads
+    `User` objects, but also includes a count of how many books each `User` owned,
+    we could use `func.count(Book.id)` to add a “count” column to a query which includes
+    a JOIN to `Book` as well as a GROUP BY owner id. This will yield [`Row`](../../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects that each contain two entries, one for `User`
+    and one for `func.count(Book.id)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the `User` entity and the “book count” SQL expression
+    are returned separately. However, a popular use case is to produce a query that
+    will yield `User` objects alone, which can be iterated for example using [`Session.scalars()`](../session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars"), where the result of the `func.count(Book.id)`
+    SQL expression is applied *dynamically* to each `User` entity. The end result
+    would be similar to the case where an arbitrary SQL expression were mapped to
+    the class using [`column_property()`](../mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property"), except that the SQL expression can be modified
+    at query time. For this use case SQLAlchemy provides the [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") loader option, which when combined with the
+    mapper level [`query_expression()`](#sqlalchemy.orm.query_expression "sqlalchemy.orm.query_expression")
+    directive may produce this result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To apply [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    to a query, the mapped class must have pre-configured an ORM mapped attribute
+    using the [`query_expression()`](#sqlalchemy.orm.query_expression "sqlalchemy.orm.query_expression")
+    directive; this directive will produce an attribute on the mapped class that is
+    suitable for receiving query-time SQL expressions. Below we add a new attribute
+    `User.book_count` to `User`. This ORM mapped attribute is read-only and has no
+    default value; accessing it on a loaded instance will normally produce `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the `User.book_count` attribute configured in our mapping, we may populate
+    it with data from a SQL expression using the [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") loader option to apply a custom SQL expression
+    to each `User` object as it’s loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we moved our `func.count(Book.id)` expression out of the columns argument
+    of the [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct and into the [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") loader option. The ORM then considers this to
+    be a special column load option that’s applied dynamically to the statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`query_expression()`](#sqlalchemy.orm.query_expression "sqlalchemy.orm.query_expression")
+    mapping has these caveats:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: On an object where [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    were not used to populate the attribute, the attribute on an object instance will
+    have the value `None`, unless on the mapping the [`query_expression.default_expr`](#sqlalchemy.orm.query_expression.params.default_expr
+    "sqlalchemy.orm.query_expression") parameter is set to a default SQL expression.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    value **does not populate on an object that is already loaded**, unless [Populate
+    Existing](api.html#orm-queryguide-populate-existing) is used. The example below
+    will **not work**, as the `A` object is already loaded:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To ensure the attribute is re-loaded on an existing object, use the [Populate
+    Existing](api.html#orm-queryguide-populate-existing) execution option to ensure
+    all columns are re-populated:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    SQL expression **is lost when the object is expired**. Once the object is expired,
+    either via [`Session.expire()`](../session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") or via the expire_on_commit behavior of [`Session.commit()`](../session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), the SQL expression and its value is no longer
+    associated with the attribute and will return `None` on subsequent access.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression"),
+    as an object loading option, only takes effect on the **outermost part of a query**
+    and only for a query against a full entity, and not for arbitrary column selects,
+    within subqueries, or the elements of a compound statement such as a UNION. See
+    the next section [Using with_expression() with UNIONs, other subqueries](#orm-queryguide-with-expression-unions)
+    for an example.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The mapped attribute **cannot** be applied to other parts of the query, such
+    as the WHERE clause, the ORDER BY clause, and make use of the ad-hoc expression;
+    that is, this won’t work:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `A.expr` expression will resolve to NULL in the above WHERE clause and
+    ORDER BY clause. To use the expression throughout the query, assign to a variable
+    and use that:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    option is a special option used to apply SQL expressions to mapped classes dynamically
+    at query time. For ordinary fixed SQL expressions configured on mappers, see the
+    section [SQL Expressions as Mapped Attributes](../mapped_sql_expr.html#mapper-sql-expressions).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using `with_expression()` with UNIONs, other subqueries'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    construct is an ORM loader option, and as such may only be applied to the outermost
+    level of a SELECT statement which is to load a particular ORM entity. It does
+    not have any effect if used inside of a [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") that will then be used as a subquery or as
+    an element within a compound statement such as a UNION.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In order to use arbitrary SQL expressions in subqueries, normal Core-style means
+    of adding expressions should be used. To assemble a subquery-derived expression
+    onto the ORM entity’s [`query_expression()`](#sqlalchemy.orm.query_expression
+    "sqlalchemy.orm.query_expression") attributes, [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") is used at the top layer of ORM object loading,
+    referencing the SQL expression within the subquery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example below, two [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") constructs are used against the ORM entity
+    `A` with an additional SQL expression labeled in `expr`, and combined using [`union_all()`](../../core/selectable.html#sqlalchemy.sql.expression.union_all
+    "sqlalchemy.sql.expression.union_all"). Then, at the topmost layer, the `A` entity
+    is SELECTed from this UNION, using the querying technique described at [Selecting
+    Entities from UNIONs and other set operations](select.html#orm-queryguide-unions),
+    adding an option with [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    to extract this SQL expression onto newly loaded instances of `A`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]  ### Using `with_expression()` with UNIONs, other subqueries'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    construct is an ORM loader option, and as such may only be applied to the outermost
+    level of a SELECT statement which is to load a particular ORM entity. It does
+    not have any effect if used inside of a [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") that will then be used as a subquery or as
+    an element within a compound statement such as a UNION.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In order to use arbitrary SQL expressions in subqueries, normal Core-style means
+    of adding expressions should be used. To assemble a subquery-derived expression
+    onto the ORM entity’s [`query_expression()`](#sqlalchemy.orm.query_expression
+    "sqlalchemy.orm.query_expression") attributes, [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") is used at the top layer of ORM object loading,
+    referencing the SQL expression within the subquery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example below, two [`select()`](../../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") constructs are used against the ORM entity
+    `A` with an additional SQL expression labeled in `expr`, and combined using [`union_all()`](../../core/selectable.html#sqlalchemy.sql.expression.union_all
+    "sqlalchemy.sql.expression.union_all"). Then, at the topmost layer, the `A` entity
+    is SELECTed from this UNION, using the querying technique described at [Selecting
+    Entities from UNIONs and other set operations](select.html#orm-queryguide-unions),
+    adding an option with [`with_expression()`](#sqlalchemy.orm.with_expression "sqlalchemy.orm.with_expression")
+    to extract this SQL expression onto newly loaded instances of `A`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: Column Loading API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [defer](#sqlalchemy.orm.defer)(key, *addl_attrs, [raiseload]) | Indicate
+    that the given column-oriented attribute should be deferred, e.g. not loaded until
+    accessed. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [deferred](#sqlalchemy.orm.deferred)(column, *additional_columns, [group,
+    raiseload, comparator_factory, init, repr, default, default_factory, compare,
+    kw_only, active_history, expire_on_flush, info, doc]) | Indicate a column-based
+    mapped attribute that by default will not load unless accessed. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [load_only](#sqlalchemy.orm.load_only)(*attrs, [raiseload]) | Indicate that
+    for a particular entity, only the given list of column-based attribute names should
+    be loaded; all others will be deferred. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [query_expression](#sqlalchemy.orm.query_expression)([default_expr], *, [repr,
+    compare, expire_on_flush, info, doc]) | Indicate an attribute that populates from
+    a query-time SQL expression. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [undefer](#sqlalchemy.orm.undefer)(key, *addl_attrs) | Indicate that the
+    given column-oriented attribute should be undeferred, e.g. specified within the
+    SELECT statement of the entity as a whole. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [undefer_group](#sqlalchemy.orm.undefer_group)(name) | Indicate that columns
+    within the given deferred group name should be undeferred. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [with_expression](#sqlalchemy.orm.with_expression)(key, expression) | Apply
+    an ad-hoc SQL expression to a “deferred expression” attribute. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given column-oriented attribute should be deferred, e.g. not
+    loaded until accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](relationships.html#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") interface and supports both method-chained and standalone
+    operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To specify a deferred load of an attribute on a related class, the path can
+    be specified one token at a time, specifying the loading style for each link along
+    the chain. To leave the loading style for a link unchanged, use [`defaultload()`](relationships.html#sqlalchemy.orm.defaultload
+    "sqlalchemy.orm.defaultload"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Multiple deferral options related to a relationship can be bundled at once
+    using [`Load.options()`](relationships.html#sqlalchemy.orm.Load.options "sqlalchemy.orm.Load.options"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`key` – Attribute to be deferred.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`raiseload` – raise [`InvalidRequestError`](../../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
+    "sqlalchemy.exc.InvalidRequestError") rather than lazy loading a value when the
+    deferred attribute is accessed. Used to prevent unwanted SQL from being emitted.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Limiting which Columns Load with Column Deferral](#orm-queryguide-column-deferral)
+    - in the [ORM Querying Guide](index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`load_only()`](#sqlalchemy.orm.load_only "sqlalchemy.orm.load_only")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`undefer()`](#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate a column-based mapped attribute that by default will not load unless
+    accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using [`mapped_column()`](../mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), the same functionality as that of [`deferred()`](#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") construct is provided by using the [`mapped_column.deferred`](../mapping_api.html#sqlalchemy.orm.mapped_column.params.deferred
+    "sqlalchemy.orm.mapped_column") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`*columns` – columns to be mapped. This is typically a single [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object, however a collection is supported in order
+    to support multiple columns mapped under the same attribute.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`raiseload` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: boolean, if True, indicates an exception should be raised if the load operation
+    is to take place.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Additional arguments are the same as that of [`column_property()`](../mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property").
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using deferred() for imperative mappers, mapped SQL expressions](#orm-queryguide-deferred-imperative)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate an attribute that populates from a query-time SQL expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**default_expr** – Optional SQL expression object that will be used in all
+    cases if not assigned later with [`with_expression()`](#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Loading Arbitrary SQL Expressions onto Objects](#orm-queryguide-with-expression)
+    - background and usage examples'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that for a particular entity, only the given list of column-based attribute
+    names should be loaded; all others will be deferred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](relationships.html#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") interface and supports both method-chained and standalone
+    operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example - given a class `User`, load only the `name` and `fullname` attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example - given a relationship `User.addresses -> Address`, specify subquery
+    loading for the `User.addresses` collection, but on each `Address` object load
+    only the `email_address` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For a statement that has multiple entities, the lead entity can be specifically
+    referred to using the [`Load`](relationships.html#sqlalchemy.orm.Load "sqlalchemy.orm.Load")
+    constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: When used together with the [populate_existing](api.html#orm-queryguide-populate-existing)
+    execution option only the attributes listed will be refreshed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`*attrs` – Attributes to be loaded, all others will be deferred.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`raiseload` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: raise [`InvalidRequestError`](../../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
+    "sqlalchemy.exc.InvalidRequestError") rather than lazy loading a value when a
+    deferred attribute is accessed. Used to prevent unwanted SQL from being emitted.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Limiting which Columns Load with Column Deferral](#orm-queryguide-column-deferral)
+    - in the [ORM Querying Guide](index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`*attrs` – Attributes to be loaded, all others will be deferred.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`raiseload` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: raise [`InvalidRequestError`](../../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
+    "sqlalchemy.exc.InvalidRequestError") rather than lazy loading a value when a
+    deferred attribute is accessed. Used to prevent unwanted SQL from being emitted.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that the given column-oriented attribute should be undeferred, e.g.
+    specified within the SELECT statement of the entity as a whole.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The column being undeferred is typically set up on the mapping as a [`deferred()`](#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is part of the [`Load`](relationships.html#sqlalchemy.orm.Load
+    "sqlalchemy.orm.Load") interface and supports both method-chained and standalone
+    operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**key** – Attribute to be undeferred.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Limiting which Columns Load with Column Deferral](#orm-queryguide-column-deferral)
+    - in the [ORM Querying Guide](index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`undefer_group()`](#sqlalchemy.orm.undefer_group "sqlalchemy.orm.undefer_group")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate that columns within the given deferred group name should be undeferred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The columns being undeferred are set up on the mapping as [`deferred()`](#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") attributes and include a “group” name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To undefer a group of attributes on a related entity, the path can be spelled
+    out using relationship loader options, such as [`defaultload()`](relationships.html#sqlalchemy.orm.defaultload
+    "sqlalchemy.orm.defaultload"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Limiting which Columns Load with Column Deferral](#orm-queryguide-column-deferral)
+    - in the [ORM Querying Guide](index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`defer()`](#sqlalchemy.orm.defer "sqlalchemy.orm.defer")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`undefer()`](#sqlalchemy.orm.undefer "sqlalchemy.orm.undefer")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: Apply an ad-hoc SQL expression to a “deferred expression” attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This option is used in conjunction with the [`query_expression()`](#sqlalchemy.orm.query_expression
+    "sqlalchemy.orm.query_expression") mapper-level construct that indicates an attribute
+    which should be the target of an ad-hoc SQL expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`key` – Attribute to be populated'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`expr` – SQL expression to be applied to the attribute.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Loading Arbitrary SQL Expressions onto Objects](#orm-queryguide-with-expression)
+    - background and usage examples'
+  prefs: []
+  type: TYPE_NORMAL

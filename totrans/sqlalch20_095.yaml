@@ -1,0 +1,3236 @@
+- en: Custom Types
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/core/custom_types.html](https://docs.sqlalchemy.org/en/20/core/custom_types.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: A variety of methods exist to redefine the behavior of existing types as well
+    as to provide new ones.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overriding Type Compilation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A frequent need is to force the “string” version of a type, that is the one
+    rendered in a CREATE TABLE statement or other SQL function like CAST, to be changed.
+    For example, an application may want to force the rendering of `BINARY` for all
+    platforms except for one, in which is wants `BLOB` to be rendered. Usage of an
+    existing generic type, in this case [`LargeBinary`](type_basics.html#sqlalchemy.types.LargeBinary
+    "sqlalchemy.types.LargeBinary"), is preferred for most use cases. But to control
+    types more accurately, a compilation directive that is per-dialect can be associated
+    with any type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above code allows the usage of [`BINARY`](type_basics.html#sqlalchemy.types.BINARY
+    "sqlalchemy.types.BINARY"), which will produce the string `BINARY` against all
+    backends except SQLite, in which case it will produce `BLOB`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the section [Changing Compilation of Types](compiler.html#type-compilation-extension),
+    a subsection of [Custom SQL Constructs and Compilation Extension](compiler.html),
+    for additional examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Augmenting Existing Types'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    allows the creation of custom types which add bind-parameter and result-processing
+    behavior to an existing type object. It is used when additional in-Python [marshalling](../glossary.html#term-marshalling)
+    of data to and/or from the database is required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The bind- and result-processing of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is **in addition** to the processing already
+    performed by the hosted type, which is customized by SQLAlchemy on a per-DBAPI
+    basis to perform processing specific to that DBAPI. While it is possible to replace
+    this handling for a given type through direct subclassing, it is never needed
+    in practice and SQLAlchemy no longer supports this as a public use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [TypeDecorator](#sqlalchemy.types.TypeDecorator) | Allows the creation of
+    types which add additional functionality to an existing type. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Allows the creation of types which add additional functionality to an existing
+    type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is preferred to direct subclassing of SQLAlchemy’s built-in types
+    as it ensures that all required functionality of the underlying type is kept in
+    place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Typical usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The class-level `impl` attribute is required, and can reference any [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") class. Alternatively, the [`load_dialect_impl()`](#sqlalchemy.types.TypeDecorator.load_dialect_impl
+    "sqlalchemy.types.TypeDecorator.load_dialect_impl") method can be used to provide
+    different type classes based on the dialect given; in this case, the `impl` variable
+    can reference `TypeEngine` as a placeholder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`TypeDecorator.cache_ok`](#sqlalchemy.types.TypeDecorator.cache_ok "sqlalchemy.types.TypeDecorator.cache_ok")
+    class-level flag indicates if this custom [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is safe to be used as part of a cache key. This
+    flag defaults to `None` which will initially generate a warning when the SQL compiler
+    attempts to generate a cache key for a statement that uses this type. If the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is not guaranteed to produce the same bind/result
+    behavior and SQL generation every time, this flag should be set to `False`; otherwise
+    if the class produces the same behavior each time, it may be set to `True`. See
+    [`TypeDecorator.cache_ok`](#sqlalchemy.types.TypeDecorator.cache_ok "sqlalchemy.types.TypeDecorator.cache_ok")
+    for further notes on how this works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Types that receive a Python type that isn’t similar to the ultimate type used
+    may want to define the [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") method. This is used to
+    give the expression system a hint when coercing Python objects into bind parameters
+    within expressions. Consider this expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, if “somecol” is an `Integer` variant, it makes sense that we’re doing
+    date arithmetic, where above is usually interpreted by databases as adding a number
+    of days to the given date. The expression system does the right thing by not attempting
+    to coerce the “date()” value into an integer-oriented bind parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, in the case of `TypeDecorator`, we are usually changing an incoming
+    Python type to something new - `TypeDecorator` by default will “coerce” the non-typed
+    side to be the same type as itself. Such as below, we define an “epoch” type that
+    stores a date value as an integer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our expression of `somecol + date` with the above type will coerce the “date”
+    on the right side to also be treated as `MyEpochType`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This behavior can be overridden via the [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") method, which returns
+    a type that should be used for the value of the expression. Below we set it such
+    that an integer value will be treated as an `Integer`, and any other value is
+    assumed to be a date and will be treated as a `MyEpochType`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that the **behavior of coerce_compared_value is not inherited by default
+    from that of the base type**. If the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is augmenting a type that requires special logic
+    for certain types of operators, this method **must** be overridden. A key example
+    is when decorating the [`JSON`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.JSON
+    "sqlalchemy.dialects.postgresql.JSON") and [`JSONB`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.JSONB
+    "sqlalchemy.dialects.postgresql.JSONB") types; the default rules of [`TypeEngine.coerce_compared_value()`](type_api.html#sqlalchemy.types.TypeEngine.coerce_compared_value
+    "sqlalchemy.types.TypeEngine.coerce_compared_value") should be used in order to
+    deal with operators like index operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Without the above step, index operations such as `mycol['foo']` will cause the
+    index value `'foo'` to be JSON encoded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similarly, when working with the [`ARRAY`](type_basics.html#sqlalchemy.types.ARRAY
+    "sqlalchemy.types.ARRAY") datatype, the type coercion for index operations (e.g.
+    `mycol[5]`) is also handled by [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value"), where again a simple
+    override is sufficient unless special rules are needed for particular operators:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cache_ok](#sqlalchemy.types.TypeDecorator.cache_ok), [operate()](#sqlalchemy.types.TypeDecorator.Comparator.operate),
+    [reverse_operate()](#sqlalchemy.types.TypeDecorator.Comparator.reverse_operate),
+    [__init__()](#sqlalchemy.types.TypeDecorator.__init__), [bind_expression()](#sqlalchemy.types.TypeDecorator.bind_expression),
+    [bind_processor()](#sqlalchemy.types.TypeDecorator.bind_processor), [coerce_compared_value()](#sqlalchemy.types.TypeDecorator.coerce_compared_value),
+    [coerce_to_is_types](#sqlalchemy.types.TypeDecorator.coerce_to_is_types), [column_expression()](#sqlalchemy.types.TypeDecorator.column_expression),
+    [comparator_factory](#sqlalchemy.types.TypeDecorator.comparator_factory), [compare_values()](#sqlalchemy.types.TypeDecorator.compare_values),
+    [copy()](#sqlalchemy.types.TypeDecorator.copy), [get_dbapi_type()](#sqlalchemy.types.TypeDecorator.get_dbapi_type),
+    [literal_processor()](#sqlalchemy.types.TypeDecorator.literal_processor), [load_dialect_impl()](#sqlalchemy.types.TypeDecorator.load_dialect_impl),
+    [process_bind_param()](#sqlalchemy.types.TypeDecorator.process_bind_param), [process_literal_param()](#sqlalchemy.types.TypeDecorator.process_literal_param),
+    [process_result_value()](#sqlalchemy.types.TypeDecorator.process_result_value),
+    [result_processor()](#sqlalchemy.types.TypeDecorator.result_processor), [sort_key_function](#sqlalchemy.types.TypeDecorator.sort_key_function),
+    [type_engine()](#sqlalchemy.types.TypeDecorator.type_engine)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.types.TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    (`sqlalchemy.sql.expression.SchemaEventTarget`, [`sqlalchemy.types.ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType"), [`sqlalchemy.types.TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* [`ExternalType.cache_ok`](type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") *attribute of* [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Indicate if statements using this [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType") are “safe to cache”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default value `None` will emit a warning and then not allow caching of
+    a statement which includes this type. Set to `False` to disable statements using
+    this type from being cached at all without a warning. When set to `True`, the
+    object’s class and selected elements from its state will be used as part of the
+    cache key. For example, using a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cache key for the above type would be equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The caching scheme will extract attributes from the type that correspond to
+    the names of parameters in the `__init__()` method. Above, the “choices” attribute
+    becomes part of the cache key but “internal_only” does not, because there is no
+    parameter named “internal_only”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The requirements for cacheable elements is that they are hashable and also that
+    they indicate the same SQL rendered for expressions using this type every time
+    for a given cache value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To accommodate for datatypes that refer to unhashable structures such as dictionaries,
+    sets and lists, these objects can be made “cacheable” by assigning hashable structures
+    to the attributes whose names correspond with the names of the arguments. For
+    example, a datatype which accepts a dictionary of lookup values may publish this
+    as a sorted series of tuples. Given a previously un-cacheable type as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where “lookup” is a dictionary. The type will not be able to generate a cache
+    key:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we **did** set up such a cache key, it wouldn’t be usable. We would get
+    a tuple structure that contains a dictionary inside of it, which cannot itself
+    be used as a key in a “cache dictionary” such as SQLAlchemy’s statement cache,
+    since Python dictionaries aren’t hashable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The type may be made cacheable by assigning a sorted tuple of tuples to the
+    “.lookup” attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the cache key for `LookupType({"a": 10, "b": 20})` will be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.14: - added the `cache_ok` flag to allow some configurability
+    of caching for [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    classes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4.28: - added the [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType") mixin which generalizes the `cache_ok` flag to
+    both the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    and [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    classes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[SQL Compilation Caching](connections.html#sql-caching)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: A [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator "sqlalchemy.types.TypeEngine.Comparator")
+    that is specific to [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    classes should not typically need to modify this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.types.TypeDecorator.Comparator`](#sqlalchemy.types.TypeDecorator.Comparator
+    "sqlalchemy.types.TypeDecorator.Comparator") (`sqlalchemy.types.Comparator`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Operate on an argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the lowest level of operation, raises `NotImplementedError` by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Overriding this on a subclass can allow common behavior to be applied to all
+    operations. For example, overriding [`ColumnOperators`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators
+    "sqlalchemy.sql.expression.ColumnOperators") to apply `func.lower()` to the left
+    and right side:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`op` – Operator callable.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`*other` – the ‘other’ side of the operation. Will be a single scalar for most
+    operations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`**kwargs` – modifiers. These may be passed by special operators such as `ColumnOperators.contains()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Reverse operate on an argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Usage is the same as [`operate()`](#sqlalchemy.types.TypeDecorator.Comparator.operate
+    "sqlalchemy.types.TypeDecorator.Comparator.operate").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Arguments sent here are passed to the constructor of the class assigned to the
+    `impl` class level attribute, assuming the `impl` is a callable, and the resulting
+    object is assigned to the `self.impl` instance attribute (thus overriding the
+    class attribute of the same name).
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the class level `impl` is not a callable (the unusual case), it will be assigned
+    to the same instance attribute ‘as-is’, ignoring those arguments passed to the
+    constructor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subclasses can override this to customize the generation of `self.impl` entirely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given a bind value (i.e. a [`BindParameter`](sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") instance), return a SQL expression
+    which will typically wrap the given parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is called during the **SQL compilation** phase of a statement, when
+    rendering a SQL string. It is **not** necessarily called against specific values,
+    and should not be confused with the [`TypeDecorator.process_bind_param()`](#sqlalchemy.types.TypeDecorator.process_bind_param
+    "sqlalchemy.types.TypeDecorator.process_bind_param") method, which is the more
+    typical method that processes the actual value passed to a particular parameter
+    at statement execution time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    can override this method to provide custom bind expression behavior for the type.
+    This implementation will **replace** that of the underlying implementation type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a bound value processing function for the given [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the method that fulfills the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") contract for bound value conversion which normally
+    occurs via the [`TypeEngine.bind_processor()`](type_api.html#sqlalchemy.types.TypeEngine.bind_processor
+    "sqlalchemy.types.TypeEngine.bind_processor") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") should **not** implement this method, and should
+    instead implement [`TypeDecorator.process_bind_param()`](#sqlalchemy.types.TypeDecorator.process_bind_param
+    "sqlalchemy.types.TypeDecorator.process_bind_param") so that the “inner” processing
+    provided by the implementing type is maintained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**dialect** – Dialect instance in use.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Suggest a type for a ‘coerced’ Python value in an expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By default, returns self. This method is called by the expression system when
+    an object using this type is on the left or right side of an expression against
+    a plain Python object which does not yet have a SQLAlchemy type assigned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, if `somecolumn` uses this type, this method will be called with
+    the value `operator.add` and `35`. The return value is whatever SQLAlchemy type
+    should be used for `35` for this particular operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Specify those Python types which should be coerced at the expression level to
+    “IS <constant>” when compared using `==` (and same for `IS NOT` in conjunction
+    with `!=`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: For most SQLAlchemy types, this includes `NoneType`, as well as `bool`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    modifies this list to only include `NoneType`, as typedecorator implementations
+    that deal with boolean types are common.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    classes can override this attribute to return an empty tuple, in which case no
+    values will be coerced to constants.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given a SELECT column expression, return a wrapping SQL expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is called during the **SQL compilation** phase of a statement, when
+    rendering a SQL string. It is **not** called against specific values, and should
+    not be confused with the [`TypeDecorator.process_result_value()`](#sqlalchemy.types.TypeDecorator.process_result_value
+    "sqlalchemy.types.TypeDecorator.process_result_value") method, which is the more
+    typical method that processes the actual value returned in a result row subsequent
+    to statement execution time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    can override this method to provide custom column expression behavior for the
+    type. This implementation will **replace** that of the underlying implementation
+    type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the description of [`TypeEngine.column_expression()`](type_api.html#sqlalchemy.types.TypeEngine.column_expression
+    "sqlalchemy.types.TypeEngine.column_expression") for a complete description of
+    the method’s use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: A [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator "sqlalchemy.types.TypeEngine.Comparator")
+    class which will apply to operations performed by owning [`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement
+    "sqlalchemy.sql.expression.ColumnElement") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`comparator_factory`](#sqlalchemy.types.TypeDecorator.comparator_factory
+    "sqlalchemy.types.TypeDecorator.comparator_factory") attribute is a hook consulted
+    by the core expression system when column and SQL expression operations are performed.
+    When a [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator "sqlalchemy.types.TypeEngine.Comparator")
+    class is associated with this attribute, it allows custom re-definition of all
+    existing operators, as well as definition of new operators. Existing operators
+    include those provided by Python operator overloading such as `ColumnOperators.__add__()`
+    and `ColumnOperators.__eq__()`, those provided as standard attributes of [`ColumnOperators`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators
+    "sqlalchemy.sql.operators.ColumnOperators") such as `ColumnOperators.like()` and
+    `ColumnOperators.in_()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rudimentary usage of this hook is allowed through simple subclassing of existing
+    types, or alternatively by using [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator"). See the documentation section [Redefining and
+    Creating New Operators](#types-operators) for examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given two values, compare them for equality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default this calls upon [`TypeEngine.compare_values()`](type_api.html#sqlalchemy.types.TypeEngine.compare_values
+    "sqlalchemy.types.TypeEngine.compare_values") of the underlying “impl”, which
+    in turn usually uses the Python equals operator `==`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is used by the ORM to compare an original-loaded value with an
+    intercepted “changed” value, to determine if a net change has occurred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Produce a copy of this [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a shallow copy and is provided to fulfill part of the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") contract. It usually does not need to be overridden
+    unless the user-defined [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    has local state that should be deep-copied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the DBAPI type object represented by this [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default this calls upon [`TypeEngine.get_dbapi_type()`](type_api.html#sqlalchemy.types.TypeEngine.get_dbapi_type
+    "sqlalchemy.types.TypeEngine.get_dbapi_type") of the underlying “impl”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a literal processing function for the given [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the method that fulfills the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") contract for literal value conversion which normally
+    occurs via the [`TypeEngine.literal_processor()`](type_api.html#sqlalchemy.types.TypeEngine.literal_processor
+    "sqlalchemy.types.TypeEngine.literal_processor") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") should **not** implement this method, and should
+    instead implement [`TypeDecorator.process_literal_param()`](#sqlalchemy.types.TypeDecorator.process_literal_param
+    "sqlalchemy.types.TypeDecorator.process_literal_param") so that the “inner” processing
+    provided by the implementing type is maintained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine "sqlalchemy.types.TypeEngine")
+    object corresponding to a dialect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is an end-user override hook that can be used to provide differing types
+    depending on the given dialect. It is used by the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") implementation of [`type_engine()`](#sqlalchemy.types.TypeDecorator.type_engine
+    "sqlalchemy.types.TypeDecorator.type_engine") to help determine what type should
+    ultimately be returned for a given [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default returns `self.impl`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Receive a bound parameter value to be converted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    should override this method to provide custom behaviors for incoming data values.
+    This method is called at **statement execution time** and is passed the literal
+    Python data value which is to be associated with a bound parameter in the statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The operation could be anything desired to perform custom behavior, such as
+    transforming or serializing data. This could also be used as a hook for validating
+    logic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`value` – Data to operate upon, of any type expected by this method in the
+    subclass. Can be `None`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`dialect` – the [`Dialect`](internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Augmenting Existing Types](#types-typedecorator)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`TypeDecorator.process_result_value()`](#sqlalchemy.types.TypeDecorator.process_result_value
+    "sqlalchemy.types.TypeDecorator.process_result_value")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Receive a literal parameter value to be rendered inline within a statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is called during the **SQL compilation** phase of a statement, when
+    rendering a SQL string. Unlike other SQL compilation methods, it is passed a specific
+    Python value to be rendered as a string. However it should not be confused with
+    the [`TypeDecorator.process_bind_param()`](#sqlalchemy.types.TypeDecorator.process_bind_param
+    "sqlalchemy.types.TypeDecorator.process_bind_param") method, which is the more
+    typical method that processes the actual value passed to a particular parameter
+    at statement execution time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    should override this method to provide custom behaviors for incoming data values
+    that are in the special case of being rendered as literals.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The returned string will be rendered into the output string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Receive a result-row column value to be converted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    should override this method to provide custom behaviors for data values being
+    received in result rows coming from the database. This method is called at **result
+    fetching time** and is passed the literal Python data value that’s extracted from
+    a database result row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The operation could be anything desired to perform custom behavior, such as
+    transforming or deserializing data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`value` – Data to operate upon, of any type expected by this method in the
+    subclass. Can be `None`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`dialect` – the [`Dialect`](internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Augmenting Existing Types](#types-typedecorator)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`TypeDecorator.process_bind_param()`](#sqlalchemy.types.TypeDecorator.process_bind_param
+    "sqlalchemy.types.TypeDecorator.process_bind_param")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a result value processing function for the given [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the method that fulfills the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") contract for bound value conversion which normally
+    occurs via the [`TypeEngine.result_processor()`](type_api.html#sqlalchemy.types.TypeEngine.result_processor
+    "sqlalchemy.types.TypeEngine.result_processor") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") should **not** implement this method, and should
+    instead implement [`TypeDecorator.process_result_value()`](#sqlalchemy.types.TypeDecorator.process_result_value
+    "sqlalchemy.types.TypeDecorator.process_result_value") so that the “inner” processing
+    provided by the implementing type is maintained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`dialect` – Dialect instance in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`coltype` – A SQLAlchemy data type'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: A sorting function that can be passed as the key to sorted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The default value of `None` indicates that the values stored by this type are
+    self-sorting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a dialect-specific [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") instance for this [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: In most cases this returns a dialect-adapted form of the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") type represented by `self.impl`. Makes usage of
+    `dialect_impl()`. Behavior can be customized here by overriding [`load_dialect_impl()`](#sqlalchemy.types.TypeDecorator.load_dialect_impl
+    "sqlalchemy.types.TypeDecorator.load_dialect_impl").
+  prefs: []
+  type: TYPE_NORMAL
+- en: TypeDecorator Recipes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A few key [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    recipes follow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Coercing Encoded Strings to Unicode'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A common source of confusion regarding the [`Unicode`](type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") type is that it is intended to deal *only* with Python
+    `unicode` objects on the Python side, meaning values passed to it as bind parameters
+    must be of the form `u'some string'` if using Python 2 and not 3. The encoding/decoding
+    functions it performs are only to suit what the DBAPI in use requires, and are
+    primarily a private implementation detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The use case of a type that can safely receive Python bytestrings, that is
+    strings that contain non-ASCII characters and are not `u''''` objects in Python
+    2, can be achieved using a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    which coerces as needed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Rounding Numerics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Some database connectors like those of SQL Server choke if a Decimal is passed
+    with too many decimal places. Here’s a recipe that rounds them down:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Store Timezone Aware Timestamps as Timezone Naive UTC
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Timestamps in databases should always be stored in a timezone-agnostic way.
+    For most databases, this means ensuring a timestamp is first in the UTC timezone
+    before it is stored, then storing it as timezone-naive (that is, without any timezone
+    associated with it; UTC is assumed to be the “implicit” timezone). Alternatively,
+    database-specific types like PostgreSQLs “TIMESTAMP WITH TIMEZONE” are often preferred
+    for their richer functionality; however, storing as plain UTC will work on all
+    databases and drivers. When a timezone-intelligent database type is not an option
+    or is not preferred, the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    can be used to create a datatype that convert timezone aware timestamps into timezone
+    naive and back again. Below, Python’s built-in `datetime.timezone.utc` timezone
+    is used to normalize and denormalize:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Backend-agnostic GUID Type'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since version 2.0 the built-in [`Uuid`](type_basics.html#sqlalchemy.types.Uuid
+    "sqlalchemy.types.Uuid") type that behaves similarly should be preferred. This
+    example is presented just as an example of a type decorator that receives and
+    returns python objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Receives and returns Python uuid() objects. Uses the PG UUID type when using
+    PostgreSQL, UNIQUEIDENTIFIER when using MSSQL, CHAR(32) on other backends, storing
+    them in stringified format. The `GUIDHyphens` version stores the value with hyphens
+    instead of just the hex string, using a CHAR(36) type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Linking Python `uuid.UUID` to the Custom Type for ORM mappings
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'When declaring ORM mappings using [Annotated Declarative Table](../orm/declarative_tables.html#orm-declarative-mapped-column)
+    mappings, the custom `GUID` type defined above may be associated with the Python
+    `uuid.UUID` datatype by adding it to the [type annotation map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map),
+    which is typically defined on the [`DeclarativeBase`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above configuration, ORM mapped classes which extend from `Base` may
+    refer to Python `uuid.UUID` in annotations which will make use of `GUID` automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing the Type Map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Marshal JSON Strings
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This type uses `simplejson` to marshal Python data structures to/from JSON.
+    Can be modified to use Python’s builtin json encoder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Adding Mutability
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The ORM by default will not detect “mutability” on such a type as above - meaning,
+    in-place changes to values will not be detected and will not be flushed. Without
+    further steps, you instead would need to replace the existing value with a new
+    one on each parent object to detect changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above limitation may be fine, as many applications may not require that
+    the values are ever mutated once created. For those which do have this requirement,
+    support for mutability is best applied using the `sqlalchemy.ext.mutable` extension.
+    For a dictionary-oriented JSON structure, we can apply this as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dealing with Comparison Operations
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The default behavior of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    is to coerce the “right hand side” of any expression into the same type. For a
+    type like JSON, this means that any operator used must make sense in terms of
+    JSON. For some cases, users may wish for the type to behave like JSON in some
+    circumstances, and as plain text in others. One example is if one wanted to handle
+    the LIKE operator for the JSON type. LIKE makes no sense against a JSON structure,
+    but it does make sense against the underlying textual representation. To get at
+    this with a type like `JSONEncodedDict`, we need to **coerce** the column to a
+    textual form using [`cast()`](sqlelement.html#sqlalchemy.sql.expression.cast "sqlalchemy.sql.expression.cast")
+    or [`type_coerce()`](sqlelement.html#sqlalchemy.sql.expression.type_coerce "sqlalchemy.sql.expression.type_coerce")
+    before attempting to use this operator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    provides a built-in system for working up type translations like these based on
+    operators. If we wanted to frequently use the LIKE operator with our JSON object
+    interpreted as a string, we can build it into the type by overriding the [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above is just one approach to handling an operator like “LIKE”. Other applications
+    may wish to raise `NotImplementedError` for operators that have no meaning with
+    a JSON object such as “LIKE”, rather than automatically coercing to text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Applying SQL-level Bind/Result Processing'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As seen in the section [Augmenting Existing Types](#types-typedecorator), SQLAlchemy
+    allows Python functions to be invoked both when parameters are sent to a statement,
+    as well as when result rows are loaded from the database, to apply transformations
+    to the values as they are sent to or from the database. It is also possible to
+    define SQL-level transformations as well. The rationale here is when only the
+    relational database contains a particular series of functions that are necessary
+    to coerce incoming and outgoing data between an application and persistence format.
+    Examples include using database-defined encryption/decryption functions, as well
+    as stored procedures that handle geographic data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Any [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine "sqlalchemy.types.TypeEngine"),
+    [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    or [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    subclass can include implementations of [`TypeEngine.bind_expression()`](type_api.html#sqlalchemy.types.TypeEngine.bind_expression
+    "sqlalchemy.types.TypeEngine.bind_expression") and/or [`TypeEngine.column_expression()`](type_api.html#sqlalchemy.types.TypeEngine.column_expression
+    "sqlalchemy.types.TypeEngine.column_expression"), which when defined to return
+    a non-`None` value should return a [`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement
+    "sqlalchemy.sql.expression.ColumnElement") expression to be injected into the
+    SQL statement, either surrounding bound parameters or a column expression. For
+    example, to build a `Geometry` type which will apply the PostGIS function `ST_GeomFromText`
+    to all outgoing values and the function `ST_AsText` to all incoming data, we can
+    create our own subclass of [`UserDefinedType`](#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") which provides these methods in conjunction
+    with [`func`](sqlelement.html#sqlalchemy.sql.expression.func "sqlalchemy.sql.expression.func"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can apply the `Geometry` type into [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata and use it in a [`select()`](selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The resulting SQL embeds both functions as appropriate. `ST_AsText` is applied
+    to the columns clause so that the return value is run through the function before
+    passing into a result set, and `ST_GeomFromText` is run on the bound parameter
+    so that the passed-in value is converted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`TypeEngine.column_expression()`](type_api.html#sqlalchemy.types.TypeEngine.column_expression
+    "sqlalchemy.types.TypeEngine.column_expression") method interacts with the mechanics
+    of the compiler such that the SQL expression does not interfere with the labeling
+    of the wrapped expression. Such as, if we rendered a [`select()`](selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") against a [`label()`](sqlelement.html#sqlalchemy.sql.expression.label
+    "sqlalchemy.sql.expression.label") of our expression, the string label is moved
+    to the outside of the wrapped expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another example is we decorate [`BYTEA`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.BYTEA
+    "sqlalchemy.dialects.postgresql.BYTEA") to provide a `PGPString`, which will make
+    use of the PostgreSQL `pgcrypto` extension to encrypt/decrypt values transparently:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `pgp_sym_encrypt` and `pgp_sym_decrypt` functions are applied to the INSERT
+    and SELECT statements:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]  ## Redefining and Creating New Operators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy Core defines a fixed set of expression operators available to all
+    column expressions. Some of these operations have the effect of overloading Python’s
+    built-in operators; examples of such operators include [`ColumnOperators.__eq__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__eq__
+    "sqlalchemy.sql.expression.ColumnOperators.__eq__") (`table.c.somecolumn == 'foo'`),
+    [`ColumnOperators.__invert__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__invert__
+    "sqlalchemy.sql.expression.ColumnOperators.__invert__") (`~table.c.flag`), and
+    [`ColumnOperators.__add__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__add__
+    "sqlalchemy.sql.expression.ColumnOperators.__add__") (`table.c.x + table.c.y`).
+    Other operators are exposed as explicit methods on column expressions, such as
+    [`ColumnOperators.in_()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") (`table.c.value.in_(['x', 'y'])`)
+    and [`ColumnOperators.like()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.like
+    "sqlalchemy.sql.expression.ColumnOperators.like") (`table.c.value.like('%ed%')`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When the need arises for a SQL operator that isn’t directly supported by the
+    already supplied methods above, the most expedient way to produce this operator
+    is to use the [`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op") method on any SQL expression object;
+    this method is given a string representing the SQL operator to render, and the
+    return value is a Python callable that accepts any arbitrary right-hand side expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: When making use of custom SQL types, there is also a means of implementing custom
+    operators as above that are automatically present upon any column expression that
+    makes use of that column type, without the need to directly call [`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op") each time the operator is to be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To achieve this, a SQL expression construct consults the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") object associated with the construct in order to
+    determine the behavior of the built-in operators as well as to look for new methods
+    that may have been invoked. [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") defines a “comparison” object implemented by the
+    [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator "sqlalchemy.types.TypeEngine.Comparator")
+    class to provide the base behavior for SQL operators, and many specific types
+    provide their own sub-implementations of this class. User-defined [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") implementations can be built directly
+    into a simple subclass of a particular type in order to override or define new
+    operations. Below, we create a [`Integer`](type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") subclass which overrides the [`ColumnOperators.__add__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__add__
+    "sqlalchemy.sql.expression.ColumnOperators.__add__") operator, which in turn uses
+    [`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op "sqlalchemy.sql.expression.Operators.op")
+    to produce the custom SQL itself:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above configuration creates a new class `MyInt`, which establishes the [`TypeEngine.comparator_factory`](type_api.html#sqlalchemy.types.TypeEngine.comparator_factory
+    "sqlalchemy.types.TypeEngine.comparator_factory") attribute as referring to a
+    new class, subclassing the [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") class associated with the [`Integer`](type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The implementation for [`ColumnOperators.__add__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__add__
+    "sqlalchemy.sql.expression.ColumnOperators.__add__") is consulted by an owning
+    SQL expression, by instantiating the [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") with itself as the `expr` attribute.
+    This attribute may be used when the implementation needs to refer to the originating
+    [`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement "sqlalchemy.sql.expression.ColumnElement")
+    object directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New methods added to a [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") are exposed on an owning SQL expression
+    object using a dynamic lookup scheme, which exposes methods added to [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") onto the owning [`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement
+    "sqlalchemy.sql.expression.ColumnElement") expression construct. For example,
+    to add a `log()` function to integers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using [`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op") for comparison operations that return
+    a boolean result, the [`Operators.op.is_comparison`](sqlelement.html#sqlalchemy.sql.expression.Operators.op.params.is_comparison
+    "sqlalchemy.sql.expression.Operators.op") flag should be set to `True`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Unary operations are also possible. For example, to add an implementation of
+    the PostgreSQL factorial operator, we combine the [`UnaryExpression`](sqlelement.html#sqlalchemy.sql.expression.UnaryExpression
+    "sqlalchemy.sql.expression.UnaryExpression") construct along with a [`custom_op`](sqlelement.html#sqlalchemy.sql.expression.custom_op
+    "sqlalchemy.sql.expression.custom_op") to produce the factorial expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op "sqlalchemy.sql.expression.Operators.op")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`TypeEngine.comparator_factory`](type_api.html#sqlalchemy.types.TypeEngine.comparator_factory
+    "sqlalchemy.types.TypeEngine.comparator_factory")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating New Types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    class is provided as a simple base class for defining entirely new database types.
+    Use this to represent native database types not known by SQLAlchemy. If only Python
+    translation behavior is needed, use [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [UserDefinedType](#sqlalchemy.types.UserDefinedType) | Base for user defined
+    types. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base for user defined types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This should be the base of new types. Note that for most cases, [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is probably more appropriate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the type is made, it’s immediately usable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `get_col_spec()` method will in most cases receive a keyword argument `type_expression`
+    which refers to the owning expression of the type as being compiled, such as a
+    [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    or [`cast()`](sqlelement.html#sqlalchemy.sql.expression.cast "sqlalchemy.sql.expression.cast")
+    construct. This keyword is only sent if the method accepts keyword arguments (e.g.
+    `**kw`) in its argument signature; introspection is used to check for this in
+    order to support legacy forms of this function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`UserDefinedType.cache_ok`](#sqlalchemy.types.UserDefinedType.cache_ok
+    "sqlalchemy.types.UserDefinedType.cache_ok") class-level flag indicates if this
+    custom [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    is safe to be used as part of a cache key. This flag defaults to `None` which
+    will initially generate a warning when the SQL compiler attempts to generate a
+    cache key for a statement that uses this type. If the [`UserDefinedType`](#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") is not guaranteed to produce the same bind/result
+    behavior and SQL generation every time, this flag should be set to `False`; otherwise
+    if the class produces the same behavior each time, it may be set to `True`. See
+    [`UserDefinedType.cache_ok`](#sqlalchemy.types.UserDefinedType.cache_ok "sqlalchemy.types.UserDefinedType.cache_ok")
+    for further notes on how this works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4.28: Generalized the [`ExternalType.cache_ok`](type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") flag so that it is available for both
+    [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    as well as [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cache_ok](#sqlalchemy.types.UserDefinedType.cache_ok), [coerce_compared_value()](#sqlalchemy.types.UserDefinedType.coerce_compared_value),
+    [ensure_kwarg](#sqlalchemy.types.UserDefinedType.ensure_kwarg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.types.UserDefinedType`](#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") ([`sqlalchemy.types.ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType"), `sqlalchemy.types.TypeEngineMixin`, [`sqlalchemy.types.TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine"), `sqlalchemy.util.langhelpers.EnsureKWArg`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* [`ExternalType.cache_ok`](type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") *attribute of* [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Indicate if statements using this [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType") are “safe to cache”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default value `None` will emit a warning and then not allow caching of
+    a statement which includes this type. Set to `False` to disable statements using
+    this type from being cached at all without a warning. When set to `True`, the
+    object’s class and selected elements from its state will be used as part of the
+    cache key. For example, using a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cache key for the above type would be equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: The caching scheme will extract attributes from the type that correspond to
+    the names of parameters in the `__init__()` method. Above, the “choices” attribute
+    becomes part of the cache key but “internal_only” does not, because there is no
+    parameter named “internal_only”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The requirements for cacheable elements is that they are hashable and also that
+    they indicate the same SQL rendered for expressions using this type every time
+    for a given cache value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To accommodate for datatypes that refer to unhashable structures such as dictionaries,
+    sets and lists, these objects can be made “cacheable” by assigning hashable structures
+    to the attributes whose names correspond with the names of the arguments. For
+    example, a datatype which accepts a dictionary of lookup values may publish this
+    as a sorted series of tuples. Given a previously un-cacheable type as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where “lookup” is a dictionary. The type will not be able to generate a cache
+    key:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we **did** set up such a cache key, it wouldn’t be usable. We would get
+    a tuple structure that contains a dictionary inside of it, which cannot itself
+    be used as a key in a “cache dictionary” such as SQLAlchemy’s statement cache,
+    since Python dictionaries aren’t hashable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The type may be made cacheable by assigning a sorted tuple of tuples to the
+    “.lookup” attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the cache key for `LookupType({"a": 10, "b": 20})` will be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.14: - added the `cache_ok` flag to allow some configurability
+    of caching for [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    classes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4.28: - added the [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType") mixin which generalizes the `cache_ok` flag to
+    both the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    and [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    classes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[SQL Compilation Caching](connections.html#sql-caching)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: Suggest a type for a ‘coerced’ Python value in an expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Default behavior for [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    is the same as that of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator");
+    by default it returns `self`, assuming the compared value should be coerced into
+    the same type as this one. See [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") for more detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: a regular expression that indicates method names for which the method should
+    accept `**kw` arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The class will scan for methods matching the name template and decorate them
+    if necessary to ensure `**kw` parameters are accepted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Working with Custom Types and Reflection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to note that database types which are modified to have additional
+    in-Python behaviors, including types based on [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") as well as other user-defined subclasses of
+    datatypes, do not have any representation within a database schema. When using
+    database the introspection features described at [Reflecting Database Objects](reflection.html#metadata-reflection),
+    SQLAlchemy makes use of a fixed mapping which links the datatype information reported
+    by a database server to a SQLAlchemy datatype object. For example, if we look
+    inside of a PostgreSQL schema at the definition for a particular database column,
+    we might receive back the string `"VARCHAR"`. SQLAlchemy’s PostgreSQL dialect
+    has a hardcoded mapping which links the string name `"VARCHAR"` to the SQLAlchemy
+    [`VARCHAR`](type_basics.html#sqlalchemy.types.VARCHAR "sqlalchemy.types.VARCHAR")
+    class, and that’s how when we emit a statement like `Table('my_table', m, autoload_with=engine)`,
+    the [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    object within it would have an instance of [`VARCHAR`](type_basics.html#sqlalchemy.types.VARCHAR
+    "sqlalchemy.types.VARCHAR") present inside of it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The implication of this is that if a [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object makes use of type objects that don’t correspond
+    directly to the database-native type name, if we create a new [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object against a new [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection for this database table elsewhere using
+    reflection, it will not have this datatype. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we made use of [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType"), which is a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") that works on top of the [`LargeBinary`](type_basics.html#sqlalchemy.types.LargeBinary
+    "sqlalchemy.types.LargeBinary") datatype, which on SQLite corresponds to the database
+    type `BLOB`. In the CREATE TABLE, we see that the `BLOB` datatype is used. The
+    SQLite database knows nothing about the [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType") we’ve used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we look at the datatype of `my_table.c.data.type`, as this is a Python object
+    that was created by us directly, it is [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, if we create another instance of [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") using reflection, the use of [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType") is not represented in the SQLite database we’ve
+    created; we instead get back [`BLOB`](type_basics.html#sqlalchemy.types.BLOB "sqlalchemy.types.BLOB"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: Typically, when an application defines explicit [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata with custom types, there is no need to use
+    table reflection because the necessary [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata is already present. However, for the case
+    where an application, or a combination of them, need to make use of both explicit
+    [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table") metadata
+    which includes custom, Python-level datatypes, as well as [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects which set up their [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects as reflected from the database, which nevertheless
+    still need to exhibit the additional Python behaviors of the custom datatypes,
+    additional steps must be taken to allow this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most straightforward is to override specific columns as described at [Overriding
+    Reflected Columns](reflection.html#reflection-overriding-columns). In this technique,
+    we simply use reflection in combination with explicit [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects for those columns for which we want to use
+    a custom or decorated datatype:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `my_reflected_table` object above is reflected, and will load the definition
+    of the “id” column from the SQLite database. But for the “data” column, we’ve
+    overridden the reflected object with an explicit [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") definition that includes our desired in-Python datatype,
+    the [`PickleType`](type_basics.html#sqlalchemy.types.PickleType "sqlalchemy.types.PickleType").
+    The reflection process will leave this [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object intact:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A more elaborate way to convert from database-native type objects to custom
+    datatypes is to use the [`DDLEvents.column_reflect()`](events.html#sqlalchemy.events.DDLEvents.column_reflect
+    "sqlalchemy.events.DDLEvents.column_reflect") event handler. If for example we
+    knew that we wanted all [`BLOB`](type_basics.html#sqlalchemy.types.BLOB "sqlalchemy.types.BLOB")
+    datatypes to in fact be [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType"), we could set up a rule across the board:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: When the above code is invoked *before* any table reflection occurs (note also
+    it should be invoked **only once** in the application, as it is a global rule),
+    upon reflecting any [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that includes a column with a [`BLOB`](type_basics.html#sqlalchemy.types.BLOB
+    "sqlalchemy.types.BLOB") datatype, the resulting datatype will be stored in the
+    [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    object as [`PickleType`](type_basics.html#sqlalchemy.types.PickleType "sqlalchemy.types.PickleType").
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, the above event-based approach would likely have additional rules
+    in order to affect only those columns where the datatype is important, such as
+    a lookup table of table names and possibly column names, or other heuristics in
+    order to accurately determine which columns should be established with an in Python
+    datatype.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overriding Type Compilation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A frequent need is to force the “string” version of a type, that is the one
+    rendered in a CREATE TABLE statement or other SQL function like CAST, to be changed.
+    For example, an application may want to force the rendering of `BINARY` for all
+    platforms except for one, in which is wants `BLOB` to be rendered. Usage of an
+    existing generic type, in this case [`LargeBinary`](type_basics.html#sqlalchemy.types.LargeBinary
+    "sqlalchemy.types.LargeBinary"), is preferred for most use cases. But to control
+    types more accurately, a compilation directive that is per-dialect can be associated
+    with any type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above code allows the usage of [`BINARY`](type_basics.html#sqlalchemy.types.BINARY
+    "sqlalchemy.types.BINARY"), which will produce the string `BINARY` against all
+    backends except SQLite, in which case it will produce `BLOB`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the section [Changing Compilation of Types](compiler.html#type-compilation-extension),
+    a subsection of [Custom SQL Constructs and Compilation Extension](compiler.html),
+    for additional examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Augmenting Existing Types'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    allows the creation of custom types which add bind-parameter and result-processing
+    behavior to an existing type object. It is used when additional in-Python [marshalling](../glossary.html#term-marshalling)
+    of data to and/or from the database is required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The bind- and result-processing of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is **in addition** to the processing already
+    performed by the hosted type, which is customized by SQLAlchemy on a per-DBAPI
+    basis to perform processing specific to that DBAPI. While it is possible to replace
+    this handling for a given type through direct subclassing, it is never needed
+    in practice and SQLAlchemy no longer supports this as a public use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [TypeDecorator](#sqlalchemy.types.TypeDecorator) | Allows the creation of
+    types which add additional functionality to an existing type. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: Allows the creation of types which add additional functionality to an existing
+    type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is preferred to direct subclassing of SQLAlchemy’s built-in types
+    as it ensures that all required functionality of the underlying type is kept in
+    place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Typical usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: The class-level `impl` attribute is required, and can reference any [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") class. Alternatively, the [`load_dialect_impl()`](#sqlalchemy.types.TypeDecorator.load_dialect_impl
+    "sqlalchemy.types.TypeDecorator.load_dialect_impl") method can be used to provide
+    different type classes based on the dialect given; in this case, the `impl` variable
+    can reference `TypeEngine` as a placeholder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`TypeDecorator.cache_ok`](#sqlalchemy.types.TypeDecorator.cache_ok "sqlalchemy.types.TypeDecorator.cache_ok")
+    class-level flag indicates if this custom [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is safe to be used as part of a cache key. This
+    flag defaults to `None` which will initially generate a warning when the SQL compiler
+    attempts to generate a cache key for a statement that uses this type. If the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is not guaranteed to produce the same bind/result
+    behavior and SQL generation every time, this flag should be set to `False`; otherwise
+    if the class produces the same behavior each time, it may be set to `True`. See
+    [`TypeDecorator.cache_ok`](#sqlalchemy.types.TypeDecorator.cache_ok "sqlalchemy.types.TypeDecorator.cache_ok")
+    for further notes on how this works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Types that receive a Python type that isn’t similar to the ultimate type used
+    may want to define the [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") method. This is used to
+    give the expression system a hint when coercing Python objects into bind parameters
+    within expressions. Consider this expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, if “somecol” is an `Integer` variant, it makes sense that we’re doing
+    date arithmetic, where above is usually interpreted by databases as adding a number
+    of days to the given date. The expression system does the right thing by not attempting
+    to coerce the “date()” value into an integer-oriented bind parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, in the case of `TypeDecorator`, we are usually changing an incoming
+    Python type to something new - `TypeDecorator` by default will “coerce” the non-typed
+    side to be the same type as itself. Such as below, we define an “epoch” type that
+    stores a date value as an integer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our expression of `somecol + date` with the above type will coerce the “date”
+    on the right side to also be treated as `MyEpochType`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This behavior can be overridden via the [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") method, which returns
+    a type that should be used for the value of the expression. Below we set it such
+    that an integer value will be treated as an `Integer`, and any other value is
+    assumed to be a date and will be treated as a `MyEpochType`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that the **behavior of coerce_compared_value is not inherited by default
+    from that of the base type**. If the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is augmenting a type that requires special logic
+    for certain types of operators, this method **must** be overridden. A key example
+    is when decorating the [`JSON`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.JSON
+    "sqlalchemy.dialects.postgresql.JSON") and [`JSONB`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.JSONB
+    "sqlalchemy.dialects.postgresql.JSONB") types; the default rules of [`TypeEngine.coerce_compared_value()`](type_api.html#sqlalchemy.types.TypeEngine.coerce_compared_value
+    "sqlalchemy.types.TypeEngine.coerce_compared_value") should be used in order to
+    deal with operators like index operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: Without the above step, index operations such as `mycol['foo']` will cause the
+    index value `'foo'` to be JSON encoded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similarly, when working with the [`ARRAY`](type_basics.html#sqlalchemy.types.ARRAY
+    "sqlalchemy.types.ARRAY") datatype, the type coercion for index operations (e.g.
+    `mycol[5]`) is also handled by [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value"), where again a simple
+    override is sufficient unless special rules are needed for particular operators:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cache_ok](#sqlalchemy.types.TypeDecorator.cache_ok), [operate()](#sqlalchemy.types.TypeDecorator.Comparator.operate),
+    [reverse_operate()](#sqlalchemy.types.TypeDecorator.Comparator.reverse_operate),
+    [__init__()](#sqlalchemy.types.TypeDecorator.__init__), [bind_expression()](#sqlalchemy.types.TypeDecorator.bind_expression),
+    [bind_processor()](#sqlalchemy.types.TypeDecorator.bind_processor), [coerce_compared_value()](#sqlalchemy.types.TypeDecorator.coerce_compared_value),
+    [coerce_to_is_types](#sqlalchemy.types.TypeDecorator.coerce_to_is_types), [column_expression()](#sqlalchemy.types.TypeDecorator.column_expression),
+    [comparator_factory](#sqlalchemy.types.TypeDecorator.comparator_factory), [compare_values()](#sqlalchemy.types.TypeDecorator.compare_values),
+    [copy()](#sqlalchemy.types.TypeDecorator.copy), [get_dbapi_type()](#sqlalchemy.types.TypeDecorator.get_dbapi_type),
+    [literal_processor()](#sqlalchemy.types.TypeDecorator.literal_processor), [load_dialect_impl()](#sqlalchemy.types.TypeDecorator.load_dialect_impl),
+    [process_bind_param()](#sqlalchemy.types.TypeDecorator.process_bind_param), [process_literal_param()](#sqlalchemy.types.TypeDecorator.process_literal_param),
+    [process_result_value()](#sqlalchemy.types.TypeDecorator.process_result_value),
+    [result_processor()](#sqlalchemy.types.TypeDecorator.result_processor), [sort_key_function](#sqlalchemy.types.TypeDecorator.sort_key_function),
+    [type_engine()](#sqlalchemy.types.TypeDecorator.type_engine)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.types.TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    (`sqlalchemy.sql.expression.SchemaEventTarget`, [`sqlalchemy.types.ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType"), [`sqlalchemy.types.TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* [`ExternalType.cache_ok`](type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") *attribute of* [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Indicate if statements using this [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType") are “safe to cache”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default value `None` will emit a warning and then not allow caching of
+    a statement which includes this type. Set to `False` to disable statements using
+    this type from being cached at all without a warning. When set to `True`, the
+    object’s class and selected elements from its state will be used as part of the
+    cache key. For example, using a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cache key for the above type would be equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: The caching scheme will extract attributes from the type that correspond to
+    the names of parameters in the `__init__()` method. Above, the “choices” attribute
+    becomes part of the cache key but “internal_only” does not, because there is no
+    parameter named “internal_only”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The requirements for cacheable elements is that they are hashable and also that
+    they indicate the same SQL rendered for expressions using this type every time
+    for a given cache value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To accommodate for datatypes that refer to unhashable structures such as dictionaries,
+    sets and lists, these objects can be made “cacheable” by assigning hashable structures
+    to the attributes whose names correspond with the names of the arguments. For
+    example, a datatype which accepts a dictionary of lookup values may publish this
+    as a sorted series of tuples. Given a previously un-cacheable type as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where “lookup” is a dictionary. The type will not be able to generate a cache
+    key:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we **did** set up such a cache key, it wouldn’t be usable. We would get
+    a tuple structure that contains a dictionary inside of it, which cannot itself
+    be used as a key in a “cache dictionary” such as SQLAlchemy’s statement cache,
+    since Python dictionaries aren’t hashable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The type may be made cacheable by assigning a sorted tuple of tuples to the
+    “.lookup” attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the cache key for `LookupType({"a": 10, "b": 20})` will be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.14: - added the `cache_ok` flag to allow some configurability
+    of caching for [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    classes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4.28: - added the [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType") mixin which generalizes the `cache_ok` flag to
+    both the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    and [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    classes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[SQL Compilation Caching](connections.html#sql-caching)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: A [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator "sqlalchemy.types.TypeEngine.Comparator")
+    that is specific to [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    classes should not typically need to modify this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.types.TypeDecorator.Comparator`](#sqlalchemy.types.TypeDecorator.Comparator
+    "sqlalchemy.types.TypeDecorator.Comparator") (`sqlalchemy.types.Comparator`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: Operate on an argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the lowest level of operation, raises `NotImplementedError` by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Overriding this on a subclass can allow common behavior to be applied to all
+    operations. For example, overriding [`ColumnOperators`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators
+    "sqlalchemy.sql.expression.ColumnOperators") to apply `func.lower()` to the left
+    and right side:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`op` – Operator callable.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`*other` – the ‘other’ side of the operation. Will be a single scalar for most
+    operations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`**kwargs` – modifiers. These may be passed by special operators such as `ColumnOperators.contains()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: Reverse operate on an argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Usage is the same as [`operate()`](#sqlalchemy.types.TypeDecorator.Comparator.operate
+    "sqlalchemy.types.TypeDecorator.Comparator.operate").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Arguments sent here are passed to the constructor of the class assigned to the
+    `impl` class level attribute, assuming the `impl` is a callable, and the resulting
+    object is assigned to the `self.impl` instance attribute (thus overriding the
+    class attribute of the same name).
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the class level `impl` is not a callable (the unusual case), it will be assigned
+    to the same instance attribute ‘as-is’, ignoring those arguments passed to the
+    constructor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subclasses can override this to customize the generation of `self.impl` entirely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given a bind value (i.e. a [`BindParameter`](sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") instance), return a SQL expression
+    which will typically wrap the given parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is called during the **SQL compilation** phase of a statement, when
+    rendering a SQL string. It is **not** necessarily called against specific values,
+    and should not be confused with the [`TypeDecorator.process_bind_param()`](#sqlalchemy.types.TypeDecorator.process_bind_param
+    "sqlalchemy.types.TypeDecorator.process_bind_param") method, which is the more
+    typical method that processes the actual value passed to a particular parameter
+    at statement execution time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    can override this method to provide custom bind expression behavior for the type.
+    This implementation will **replace** that of the underlying implementation type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a bound value processing function for the given [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the method that fulfills the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") contract for bound value conversion which normally
+    occurs via the [`TypeEngine.bind_processor()`](type_api.html#sqlalchemy.types.TypeEngine.bind_processor
+    "sqlalchemy.types.TypeEngine.bind_processor") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") should **not** implement this method, and should
+    instead implement [`TypeDecorator.process_bind_param()`](#sqlalchemy.types.TypeDecorator.process_bind_param
+    "sqlalchemy.types.TypeDecorator.process_bind_param") so that the “inner” processing
+    provided by the implementing type is maintained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**dialect** – Dialect instance in use.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: Suggest a type for a ‘coerced’ Python value in an expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By default, returns self. This method is called by the expression system when
+    an object using this type is on the left or right side of an expression against
+    a plain Python object which does not yet have a SQLAlchemy type assigned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, if `somecolumn` uses this type, this method will be called with
+    the value `operator.add` and `35`. The return value is whatever SQLAlchemy type
+    should be used for `35` for this particular operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: Specify those Python types which should be coerced at the expression level to
+    “IS <constant>” when compared using `==` (and same for `IS NOT` in conjunction
+    with `!=`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: For most SQLAlchemy types, this includes `NoneType`, as well as `bool`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    modifies this list to only include `NoneType`, as typedecorator implementations
+    that deal with boolean types are common.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    classes can override this attribute to return an empty tuple, in which case no
+    values will be coerced to constants.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given a SELECT column expression, return a wrapping SQL expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is called during the **SQL compilation** phase of a statement, when
+    rendering a SQL string. It is **not** called against specific values, and should
+    not be confused with the [`TypeDecorator.process_result_value()`](#sqlalchemy.types.TypeDecorator.process_result_value
+    "sqlalchemy.types.TypeDecorator.process_result_value") method, which is the more
+    typical method that processes the actual value returned in a result row subsequent
+    to statement execution time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    can override this method to provide custom column expression behavior for the
+    type. This implementation will **replace** that of the underlying implementation
+    type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the description of [`TypeEngine.column_expression()`](type_api.html#sqlalchemy.types.TypeEngine.column_expression
+    "sqlalchemy.types.TypeEngine.column_expression") for a complete description of
+    the method’s use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: A [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator "sqlalchemy.types.TypeEngine.Comparator")
+    class which will apply to operations performed by owning [`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement
+    "sqlalchemy.sql.expression.ColumnElement") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`comparator_factory`](#sqlalchemy.types.TypeDecorator.comparator_factory
+    "sqlalchemy.types.TypeDecorator.comparator_factory") attribute is a hook consulted
+    by the core expression system when column and SQL expression operations are performed.
+    When a [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator "sqlalchemy.types.TypeEngine.Comparator")
+    class is associated with this attribute, it allows custom re-definition of all
+    existing operators, as well as definition of new operators. Existing operators
+    include those provided by Python operator overloading such as `ColumnOperators.__add__()`
+    and `ColumnOperators.__eq__()`, those provided as standard attributes of [`ColumnOperators`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators
+    "sqlalchemy.sql.operators.ColumnOperators") such as `ColumnOperators.like()` and
+    `ColumnOperators.in_()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rudimentary usage of this hook is allowed through simple subclassing of existing
+    types, or alternatively by using [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator"). See the documentation section [Redefining and
+    Creating New Operators](#types-operators) for examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given two values, compare them for equality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default this calls upon [`TypeEngine.compare_values()`](type_api.html#sqlalchemy.types.TypeEngine.compare_values
+    "sqlalchemy.types.TypeEngine.compare_values") of the underlying “impl”, which
+    in turn usually uses the Python equals operator `==`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function is used by the ORM to compare an original-loaded value with an
+    intercepted “changed” value, to determine if a net change has occurred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: Produce a copy of this [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a shallow copy and is provided to fulfill part of the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") contract. It usually does not need to be overridden
+    unless the user-defined [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    has local state that should be deep-copied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the DBAPI type object represented by this [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default this calls upon [`TypeEngine.get_dbapi_type()`](type_api.html#sqlalchemy.types.TypeEngine.get_dbapi_type
+    "sqlalchemy.types.TypeEngine.get_dbapi_type") of the underlying “impl”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a literal processing function for the given [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the method that fulfills the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") contract for literal value conversion which normally
+    occurs via the [`TypeEngine.literal_processor()`](type_api.html#sqlalchemy.types.TypeEngine.literal_processor
+    "sqlalchemy.types.TypeEngine.literal_processor") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") should **not** implement this method, and should
+    instead implement [`TypeDecorator.process_literal_param()`](#sqlalchemy.types.TypeDecorator.process_literal_param
+    "sqlalchemy.types.TypeDecorator.process_literal_param") so that the “inner” processing
+    provided by the implementing type is maintained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine "sqlalchemy.types.TypeEngine")
+    object corresponding to a dialect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is an end-user override hook that can be used to provide differing types
+    depending on the given dialect. It is used by the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") implementation of [`type_engine()`](#sqlalchemy.types.TypeDecorator.type_engine
+    "sqlalchemy.types.TypeDecorator.type_engine") to help determine what type should
+    ultimately be returned for a given [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default returns `self.impl`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: Receive a bound parameter value to be converted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    should override this method to provide custom behaviors for incoming data values.
+    This method is called at **statement execution time** and is passed the literal
+    Python data value which is to be associated with a bound parameter in the statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The operation could be anything desired to perform custom behavior, such as
+    transforming or serializing data. This could also be used as a hook for validating
+    logic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`value` – Data to operate upon, of any type expected by this method in the
+    subclass. Can be `None`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`dialect` – the [`Dialect`](internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Augmenting Existing Types](#types-typedecorator)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`TypeDecorator.process_result_value()`](#sqlalchemy.types.TypeDecorator.process_result_value
+    "sqlalchemy.types.TypeDecorator.process_result_value")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: Receive a literal parameter value to be rendered inline within a statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is called during the **SQL compilation** phase of a statement, when
+    rendering a SQL string. Unlike other SQL compilation methods, it is passed a specific
+    Python value to be rendered as a string. However it should not be confused with
+    the [`TypeDecorator.process_bind_param()`](#sqlalchemy.types.TypeDecorator.process_bind_param
+    "sqlalchemy.types.TypeDecorator.process_bind_param") method, which is the more
+    typical method that processes the actual value passed to a particular parameter
+    at statement execution time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    should override this method to provide custom behaviors for incoming data values
+    that are in the special case of being rendered as literals.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The returned string will be rendered into the output string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: Receive a result-row column value to be converted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    should override this method to provide custom behaviors for data values being
+    received in result rows coming from the database. This method is called at **result
+    fetching time** and is passed the literal Python data value that’s extracted from
+    a database result row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The operation could be anything desired to perform custom behavior, such as
+    transforming or deserializing data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`value` – Data to operate upon, of any type expected by this method in the
+    subclass. Can be `None`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`dialect` – the [`Dialect`](internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Augmenting Existing Types](#types-typedecorator)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`TypeDecorator.process_bind_param()`](#sqlalchemy.types.TypeDecorator.process_bind_param
+    "sqlalchemy.types.TypeDecorator.process_bind_param")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide a result value processing function for the given [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the method that fulfills the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") contract for bound value conversion which normally
+    occurs via the [`TypeEngine.result_processor()`](type_api.html#sqlalchemy.types.TypeEngine.result_processor
+    "sqlalchemy.types.TypeEngine.result_processor") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined subclasses of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") should **not** implement this method, and should
+    instead implement [`TypeDecorator.process_result_value()`](#sqlalchemy.types.TypeDecorator.process_result_value
+    "sqlalchemy.types.TypeDecorator.process_result_value") so that the “inner” processing
+    provided by the implementing type is maintained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`dialect` – Dialect instance in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`coltype` – A SQLAlchemy data type'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: A sorting function that can be passed as the key to sorted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The default value of `None` indicates that the values stored by this type are
+    self-sorting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a dialect-specific [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") instance for this [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator").
+  prefs: []
+  type: TYPE_NORMAL
+- en: In most cases this returns a dialect-adapted form of the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") type represented by `self.impl`. Makes usage of
+    `dialect_impl()`. Behavior can be customized here by overriding [`load_dialect_impl()`](#sqlalchemy.types.TypeDecorator.load_dialect_impl
+    "sqlalchemy.types.TypeDecorator.load_dialect_impl").
+  prefs: []
+  type: TYPE_NORMAL
+- en: TypeDecorator Recipes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A few key [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    recipes follow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Coercing Encoded Strings to Unicode'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A common source of confusion regarding the [`Unicode`](type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") type is that it is intended to deal *only* with Python
+    `unicode` objects on the Python side, meaning values passed to it as bind parameters
+    must be of the form `u'some string'` if using Python 2 and not 3. The encoding/decoding
+    functions it performs are only to suit what the DBAPI in use requires, and are
+    primarily a private implementation detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The use case of a type that can safely receive Python bytestrings, that is
+    strings that contain non-ASCII characters and are not `u''''` objects in Python
+    2, can be achieved using a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    which coerces as needed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: Rounding Numerics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Some database connectors like those of SQL Server choke if a Decimal is passed
+    with too many decimal places. Here’s a recipe that rounds them down:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: Store Timezone Aware Timestamps as Timezone Naive UTC
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Timestamps in databases should always be stored in a timezone-agnostic way.
+    For most databases, this means ensuring a timestamp is first in the UTC timezone
+    before it is stored, then storing it as timezone-naive (that is, without any timezone
+    associated with it; UTC is assumed to be the “implicit” timezone). Alternatively,
+    database-specific types like PostgreSQLs “TIMESTAMP WITH TIMEZONE” are often preferred
+    for their richer functionality; however, storing as plain UTC will work on all
+    databases and drivers. When a timezone-intelligent database type is not an option
+    or is not preferred, the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    can be used to create a datatype that convert timezone aware timestamps into timezone
+    naive and back again. Below, Python’s built-in `datetime.timezone.utc` timezone
+    is used to normalize and denormalize:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Backend-agnostic GUID Type'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since version 2.0 the built-in [`Uuid`](type_basics.html#sqlalchemy.types.Uuid
+    "sqlalchemy.types.Uuid") type that behaves similarly should be preferred. This
+    example is presented just as an example of a type decorator that receives and
+    returns python objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Receives and returns Python uuid() objects. Uses the PG UUID type when using
+    PostgreSQL, UNIQUEIDENTIFIER when using MSSQL, CHAR(32) on other backends, storing
+    them in stringified format. The `GUIDHyphens` version stores the value with hyphens
+    instead of just the hex string, using a CHAR(36) type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: Linking Python `uuid.UUID` to the Custom Type for ORM mappings
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'When declaring ORM mappings using [Annotated Declarative Table](../orm/declarative_tables.html#orm-declarative-mapped-column)
+    mappings, the custom `GUID` type defined above may be associated with the Python
+    `uuid.UUID` datatype by adding it to the [type annotation map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map),
+    which is typically defined on the [`DeclarativeBase`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above configuration, ORM mapped classes which extend from `Base` may
+    refer to Python `uuid.UUID` in annotations which will make use of `GUID` automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE129]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing the Type Map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Marshal JSON Strings
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This type uses `simplejson` to marshal Python data structures to/from JSON.
+    Can be modified to use Python’s builtin json encoder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE130]'
+  prefs: []
+  type: TYPE_PRE
+- en: Adding Mutability
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The ORM by default will not detect “mutability” on such a type as above - meaning,
+    in-place changes to values will not be detected and will not be flushed. Without
+    further steps, you instead would need to replace the existing value with a new
+    one on each parent object to detect changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE131]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above limitation may be fine, as many applications may not require that
+    the values are ever mutated once created. For those which do have this requirement,
+    support for mutability is best applied using the `sqlalchemy.ext.mutable` extension.
+    For a dictionary-oriented JSON structure, we can apply this as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE132]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dealing with Comparison Operations
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The default behavior of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    is to coerce the “right hand side” of any expression into the same type. For a
+    type like JSON, this means that any operator used must make sense in terms of
+    JSON. For some cases, users may wish for the type to behave like JSON in some
+    circumstances, and as plain text in others. One example is if one wanted to handle
+    the LIKE operator for the JSON type. LIKE makes no sense against a JSON structure,
+    but it does make sense against the underlying textual representation. To get at
+    this with a type like `JSONEncodedDict`, we need to **coerce** the column to a
+    textual form using [`cast()`](sqlelement.html#sqlalchemy.sql.expression.cast "sqlalchemy.sql.expression.cast")
+    or [`type_coerce()`](sqlelement.html#sqlalchemy.sql.expression.type_coerce "sqlalchemy.sql.expression.type_coerce")
+    before attempting to use this operator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE133]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    provides a built-in system for working up type translations like these based on
+    operators. If we wanted to frequently use the LIKE operator with our JSON object
+    interpreted as a string, we can build it into the type by overriding the [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE134]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above is just one approach to handling an operator like “LIKE”. Other applications
+    may wish to raise `NotImplementedError` for operators that have no meaning with
+    a JSON object such as “LIKE”, rather than automatically coercing to text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Coercing Encoded Strings to Unicode'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A common source of confusion regarding the [`Unicode`](type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") type is that it is intended to deal *only* with Python
+    `unicode` objects on the Python side, meaning values passed to it as bind parameters
+    must be of the form `u'some string'` if using Python 2 and not 3. The encoding/decoding
+    functions it performs are only to suit what the DBAPI in use requires, and are
+    primarily a private implementation detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The use case of a type that can safely receive Python bytestrings, that is
+    strings that contain non-ASCII characters and are not `u''''` objects in Python
+    2, can be achieved using a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    which coerces as needed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE135]'
+  prefs: []
+  type: TYPE_PRE
+- en: Rounding Numerics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Some database connectors like those of SQL Server choke if a Decimal is passed
+    with too many decimal places. Here’s a recipe that rounds them down:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE136]'
+  prefs: []
+  type: TYPE_PRE
+- en: Store Timezone Aware Timestamps as Timezone Naive UTC
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Timestamps in databases should always be stored in a timezone-agnostic way.
+    For most databases, this means ensuring a timestamp is first in the UTC timezone
+    before it is stored, then storing it as timezone-naive (that is, without any timezone
+    associated with it; UTC is assumed to be the “implicit” timezone). Alternatively,
+    database-specific types like PostgreSQLs “TIMESTAMP WITH TIMEZONE” are often preferred
+    for their richer functionality; however, storing as plain UTC will work on all
+    databases and drivers. When a timezone-intelligent database type is not an option
+    or is not preferred, the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    can be used to create a datatype that convert timezone aware timestamps into timezone
+    naive and back again. Below, Python’s built-in `datetime.timezone.utc` timezone
+    is used to normalize and denormalize:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE137]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Backend-agnostic GUID Type'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since version 2.0 the built-in [`Uuid`](type_basics.html#sqlalchemy.types.Uuid
+    "sqlalchemy.types.Uuid") type that behaves similarly should be preferred. This
+    example is presented just as an example of a type decorator that receives and
+    returns python objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Receives and returns Python uuid() objects. Uses the PG UUID type when using
+    PostgreSQL, UNIQUEIDENTIFIER when using MSSQL, CHAR(32) on other backends, storing
+    them in stringified format. The `GUIDHyphens` version stores the value with hyphens
+    instead of just the hex string, using a CHAR(36) type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE138]'
+  prefs: []
+  type: TYPE_PRE
+- en: Linking Python `uuid.UUID` to the Custom Type for ORM mappings
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'When declaring ORM mappings using [Annotated Declarative Table](../orm/declarative_tables.html#orm-declarative-mapped-column)
+    mappings, the custom `GUID` type defined above may be associated with the Python
+    `uuid.UUID` datatype by adding it to the [type annotation map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map),
+    which is typically defined on the [`DeclarativeBase`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE139]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above configuration, ORM mapped classes which extend from `Base` may
+    refer to Python `uuid.UUID` in annotations which will make use of `GUID` automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE140]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing the Type Map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Linking Python `uuid.UUID` to the Custom Type for ORM mappings
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'When declaring ORM mappings using [Annotated Declarative Table](../orm/declarative_tables.html#orm-declarative-mapped-column)
+    mappings, the custom `GUID` type defined above may be associated with the Python
+    `uuid.UUID` datatype by adding it to the [type annotation map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map),
+    which is typically defined on the [`DeclarativeBase`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE141]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above configuration, ORM mapped classes which extend from `Base` may
+    refer to Python `uuid.UUID` in annotations which will make use of `GUID` automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE142]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing the Type Map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Marshal JSON Strings
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This type uses `simplejson` to marshal Python data structures to/from JSON.
+    Can be modified to use Python’s builtin json encoder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE143]'
+  prefs: []
+  type: TYPE_PRE
+- en: Adding Mutability
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The ORM by default will not detect “mutability” on such a type as above - meaning,
+    in-place changes to values will not be detected and will not be flushed. Without
+    further steps, you instead would need to replace the existing value with a new
+    one on each parent object to detect changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE144]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above limitation may be fine, as many applications may not require that
+    the values are ever mutated once created. For those which do have this requirement,
+    support for mutability is best applied using the `sqlalchemy.ext.mutable` extension.
+    For a dictionary-oriented JSON structure, we can apply this as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE145]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dealing with Comparison Operations
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The default behavior of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    is to coerce the “right hand side” of any expression into the same type. For a
+    type like JSON, this means that any operator used must make sense in terms of
+    JSON. For some cases, users may wish for the type to behave like JSON in some
+    circumstances, and as plain text in others. One example is if one wanted to handle
+    the LIKE operator for the JSON type. LIKE makes no sense against a JSON structure,
+    but it does make sense against the underlying textual representation. To get at
+    this with a type like `JSONEncodedDict`, we need to **coerce** the column to a
+    textual form using [`cast()`](sqlelement.html#sqlalchemy.sql.expression.cast "sqlalchemy.sql.expression.cast")
+    or [`type_coerce()`](sqlelement.html#sqlalchemy.sql.expression.type_coerce "sqlalchemy.sql.expression.type_coerce")
+    before attempting to use this operator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE146]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    provides a built-in system for working up type translations like these based on
+    operators. If we wanted to frequently use the LIKE operator with our JSON object
+    interpreted as a string, we can build it into the type by overriding the [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE147]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above is just one approach to handling an operator like “LIKE”. Other applications
+    may wish to raise `NotImplementedError` for operators that have no meaning with
+    a JSON object such as “LIKE”, rather than automatically coercing to text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding Mutability
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The ORM by default will not detect “mutability” on such a type as above - meaning,
+    in-place changes to values will not be detected and will not be flushed. Without
+    further steps, you instead would need to replace the existing value with a new
+    one on each parent object to detect changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE148]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above limitation may be fine, as many applications may not require that
+    the values are ever mutated once created. For those which do have this requirement,
+    support for mutability is best applied using the `sqlalchemy.ext.mutable` extension.
+    For a dictionary-oriented JSON structure, we can apply this as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE149]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Mutation Tracking](../orm/extensions/mutable.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dealing with Comparison Operations
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The default behavior of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    is to coerce the “right hand side” of any expression into the same type. For a
+    type like JSON, this means that any operator used must make sense in terms of
+    JSON. For some cases, users may wish for the type to behave like JSON in some
+    circumstances, and as plain text in others. One example is if one wanted to handle
+    the LIKE operator for the JSON type. LIKE makes no sense against a JSON structure,
+    but it does make sense against the underlying textual representation. To get at
+    this with a type like `JSONEncodedDict`, we need to **coerce** the column to a
+    textual form using [`cast()`](sqlelement.html#sqlalchemy.sql.expression.cast "sqlalchemy.sql.expression.cast")
+    or [`type_coerce()`](sqlelement.html#sqlalchemy.sql.expression.type_coerce "sqlalchemy.sql.expression.type_coerce")
+    before attempting to use this operator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE150]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    provides a built-in system for working up type translations like these based on
+    operators. If we wanted to frequently use the LIKE operator with our JSON object
+    interpreted as a string, we can build it into the type by overriding the [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE151]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above is just one approach to handling an operator like “LIKE”. Other applications
+    may wish to raise `NotImplementedError` for operators that have no meaning with
+    a JSON object such as “LIKE”, rather than automatically coercing to text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Applying SQL-level Bind/Result Processing'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As seen in the section [Augmenting Existing Types](#types-typedecorator), SQLAlchemy
+    allows Python functions to be invoked both when parameters are sent to a statement,
+    as well as when result rows are loaded from the database, to apply transformations
+    to the values as they are sent to or from the database. It is also possible to
+    define SQL-level transformations as well. The rationale here is when only the
+    relational database contains a particular series of functions that are necessary
+    to coerce incoming and outgoing data between an application and persistence format.
+    Examples include using database-defined encryption/decryption functions, as well
+    as stored procedures that handle geographic data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Any [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine "sqlalchemy.types.TypeEngine"),
+    [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    or [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    subclass can include implementations of [`TypeEngine.bind_expression()`](type_api.html#sqlalchemy.types.TypeEngine.bind_expression
+    "sqlalchemy.types.TypeEngine.bind_expression") and/or [`TypeEngine.column_expression()`](type_api.html#sqlalchemy.types.TypeEngine.column_expression
+    "sqlalchemy.types.TypeEngine.column_expression"), which when defined to return
+    a non-`None` value should return a [`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement
+    "sqlalchemy.sql.expression.ColumnElement") expression to be injected into the
+    SQL statement, either surrounding bound parameters or a column expression. For
+    example, to build a `Geometry` type which will apply the PostGIS function `ST_GeomFromText`
+    to all outgoing values and the function `ST_AsText` to all incoming data, we can
+    create our own subclass of [`UserDefinedType`](#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") which provides these methods in conjunction
+    with [`func`](sqlelement.html#sqlalchemy.sql.expression.func "sqlalchemy.sql.expression.func"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE152]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can apply the `Geometry` type into [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata and use it in a [`select()`](selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE153]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The resulting SQL embeds both functions as appropriate. `ST_AsText` is applied
+    to the columns clause so that the return value is run through the function before
+    passing into a result set, and `ST_GeomFromText` is run on the bound parameter
+    so that the passed-in value is converted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE154]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`TypeEngine.column_expression()`](type_api.html#sqlalchemy.types.TypeEngine.column_expression
+    "sqlalchemy.types.TypeEngine.column_expression") method interacts with the mechanics
+    of the compiler such that the SQL expression does not interfere with the labeling
+    of the wrapped expression. Such as, if we rendered a [`select()`](selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") against a [`label()`](sqlelement.html#sqlalchemy.sql.expression.label
+    "sqlalchemy.sql.expression.label") of our expression, the string label is moved
+    to the outside of the wrapped expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE155]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE156]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another example is we decorate [`BYTEA`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.BYTEA
+    "sqlalchemy.dialects.postgresql.BYTEA") to provide a `PGPString`, which will make
+    use of the PostgreSQL `pgcrypto` extension to encrypt/decrypt values transparently:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE157]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `pgp_sym_encrypt` and `pgp_sym_decrypt` functions are applied to the INSERT
+    and SELECT statements:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE158]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Redefining and Creating New Operators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy Core defines a fixed set of expression operators available to all
+    column expressions. Some of these operations have the effect of overloading Python’s
+    built-in operators; examples of such operators include [`ColumnOperators.__eq__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__eq__
+    "sqlalchemy.sql.expression.ColumnOperators.__eq__") (`table.c.somecolumn == 'foo'`),
+    [`ColumnOperators.__invert__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__invert__
+    "sqlalchemy.sql.expression.ColumnOperators.__invert__") (`~table.c.flag`), and
+    [`ColumnOperators.__add__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__add__
+    "sqlalchemy.sql.expression.ColumnOperators.__add__") (`table.c.x + table.c.y`).
+    Other operators are exposed as explicit methods on column expressions, such as
+    [`ColumnOperators.in_()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") (`table.c.value.in_(['x', 'y'])`)
+    and [`ColumnOperators.like()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.like
+    "sqlalchemy.sql.expression.ColumnOperators.like") (`table.c.value.like('%ed%')`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When the need arises for a SQL operator that isn’t directly supported by the
+    already supplied methods above, the most expedient way to produce this operator
+    is to use the [`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op") method on any SQL expression object;
+    this method is given a string representing the SQL operator to render, and the
+    return value is a Python callable that accepts any arbitrary right-hand side expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE159]'
+  prefs: []
+  type: TYPE_PRE
+- en: When making use of custom SQL types, there is also a means of implementing custom
+    operators as above that are automatically present upon any column expression that
+    makes use of that column type, without the need to directly call [`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op") each time the operator is to be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To achieve this, a SQL expression construct consults the [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") object associated with the construct in order to
+    determine the behavior of the built-in operators as well as to look for new methods
+    that may have been invoked. [`TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") defines a “comparison” object implemented by the
+    [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator "sqlalchemy.types.TypeEngine.Comparator")
+    class to provide the base behavior for SQL operators, and many specific types
+    provide their own sub-implementations of this class. User-defined [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") implementations can be built directly
+    into a simple subclass of a particular type in order to override or define new
+    operations. Below, we create a [`Integer`](type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") subclass which overrides the [`ColumnOperators.__add__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__add__
+    "sqlalchemy.sql.expression.ColumnOperators.__add__") operator, which in turn uses
+    [`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op "sqlalchemy.sql.expression.Operators.op")
+    to produce the custom SQL itself:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE160]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above configuration creates a new class `MyInt`, which establishes the [`TypeEngine.comparator_factory`](type_api.html#sqlalchemy.types.TypeEngine.comparator_factory
+    "sqlalchemy.types.TypeEngine.comparator_factory") attribute as referring to a
+    new class, subclassing the [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") class associated with the [`Integer`](type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE161]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The implementation for [`ColumnOperators.__add__()`](sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__add__
+    "sqlalchemy.sql.expression.ColumnOperators.__add__") is consulted by an owning
+    SQL expression, by instantiating the [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") with itself as the `expr` attribute.
+    This attribute may be used when the implementation needs to refer to the originating
+    [`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement "sqlalchemy.sql.expression.ColumnElement")
+    object directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE162]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New methods added to a [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") are exposed on an owning SQL expression
+    object using a dynamic lookup scheme, which exposes methods added to [`Comparator`](type_api.html#sqlalchemy.types.TypeEngine.Comparator
+    "sqlalchemy.types.TypeEngine.Comparator") onto the owning [`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement
+    "sqlalchemy.sql.expression.ColumnElement") expression construct. For example,
+    to add a `log()` function to integers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE163]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE164]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using [`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op
+    "sqlalchemy.sql.expression.Operators.op") for comparison operations that return
+    a boolean result, the [`Operators.op.is_comparison`](sqlelement.html#sqlalchemy.sql.expression.Operators.op.params.is_comparison
+    "sqlalchemy.sql.expression.Operators.op") flag should be set to `True`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE165]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Unary operations are also possible. For example, to add an implementation of
+    the PostgreSQL factorial operator, we combine the [`UnaryExpression`](sqlelement.html#sqlalchemy.sql.expression.UnaryExpression
+    "sqlalchemy.sql.expression.UnaryExpression") construct along with a [`custom_op`](sqlelement.html#sqlalchemy.sql.expression.custom_op
+    "sqlalchemy.sql.expression.custom_op") to produce the factorial expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE166]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the above type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE167]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Operators.op()`](sqlelement.html#sqlalchemy.sql.expression.Operators.op "sqlalchemy.sql.expression.Operators.op")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`TypeEngine.comparator_factory`](type_api.html#sqlalchemy.types.TypeEngine.comparator_factory
+    "sqlalchemy.types.TypeEngine.comparator_factory")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating New Types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    class is provided as a simple base class for defining entirely new database types.
+    Use this to represent native database types not known by SQLAlchemy. If only Python
+    translation behavior is needed, use [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [UserDefinedType](#sqlalchemy.types.UserDefinedType) | Base for user defined
+    types. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE168]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base for user defined types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This should be the base of new types. Note that for most cases, [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") is probably more appropriate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE169]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the type is made, it’s immediately usable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE170]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `get_col_spec()` method will in most cases receive a keyword argument `type_expression`
+    which refers to the owning expression of the type as being compiled, such as a
+    [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    or [`cast()`](sqlelement.html#sqlalchemy.sql.expression.cast "sqlalchemy.sql.expression.cast")
+    construct. This keyword is only sent if the method accepts keyword arguments (e.g.
+    `**kw`) in its argument signature; introspection is used to check for this in
+    order to support legacy forms of this function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`UserDefinedType.cache_ok`](#sqlalchemy.types.UserDefinedType.cache_ok
+    "sqlalchemy.types.UserDefinedType.cache_ok") class-level flag indicates if this
+    custom [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    is safe to be used as part of a cache key. This flag defaults to `None` which
+    will initially generate a warning when the SQL compiler attempts to generate a
+    cache key for a statement that uses this type. If the [`UserDefinedType`](#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") is not guaranteed to produce the same bind/result
+    behavior and SQL generation every time, this flag should be set to `False`; otherwise
+    if the class produces the same behavior each time, it may be set to `True`. See
+    [`UserDefinedType.cache_ok`](#sqlalchemy.types.UserDefinedType.cache_ok "sqlalchemy.types.UserDefinedType.cache_ok")
+    for further notes on how this works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4.28: Generalized the [`ExternalType.cache_ok`](type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") flag so that it is available for both
+    [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    as well as [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cache_ok](#sqlalchemy.types.UserDefinedType.cache_ok), [coerce_compared_value()](#sqlalchemy.types.UserDefinedType.coerce_compared_value),
+    [ensure_kwarg](#sqlalchemy.types.UserDefinedType.ensure_kwarg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.types.UserDefinedType`](#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") ([`sqlalchemy.types.ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType"), `sqlalchemy.types.TypeEngineMixin`, [`sqlalchemy.types.TypeEngine`](type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine"), `sqlalchemy.util.langhelpers.EnsureKWArg`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE171]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* [`ExternalType.cache_ok`](type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") *attribute of* [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Indicate if statements using this [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType") are “safe to cache”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default value `None` will emit a warning and then not allow caching of
+    a statement which includes this type. Set to `False` to disable statements using
+    this type from being cached at all without a warning. When set to `True`, the
+    object’s class and selected elements from its state will be used as part of the
+    cache key. For example, using a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE172]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cache key for the above type would be equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE173]'
+  prefs: []
+  type: TYPE_PRE
+- en: The caching scheme will extract attributes from the type that correspond to
+    the names of parameters in the `__init__()` method. Above, the “choices” attribute
+    becomes part of the cache key but “internal_only” does not, because there is no
+    parameter named “internal_only”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The requirements for cacheable elements is that they are hashable and also that
+    they indicate the same SQL rendered for expressions using this type every time
+    for a given cache value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To accommodate for datatypes that refer to unhashable structures such as dictionaries,
+    sets and lists, these objects can be made “cacheable” by assigning hashable structures
+    to the attributes whose names correspond with the names of the arguments. For
+    example, a datatype which accepts a dictionary of lookup values may publish this
+    as a sorted series of tuples. Given a previously un-cacheable type as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE174]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where “lookup” is a dictionary. The type will not be able to generate a cache
+    key:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE175]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we **did** set up such a cache key, it wouldn’t be usable. We would get
+    a tuple structure that contains a dictionary inside of it, which cannot itself
+    be used as a key in a “cache dictionary” such as SQLAlchemy’s statement cache,
+    since Python dictionaries aren’t hashable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE176]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The type may be made cacheable by assigning a sorted tuple of tuples to the
+    “.lookup” attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE177]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the cache key for `LookupType({"a": 10, "b": 20})` will be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE178]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.14: - added the `cache_ok` flag to allow some configurability
+    of caching for [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    classes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4.28: - added the [`ExternalType`](type_api.html#sqlalchemy.types.ExternalType
+    "sqlalchemy.types.ExternalType") mixin which generalizes the `cache_ok` flag to
+    both the [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator")
+    and [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    classes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[SQL Compilation Caching](connections.html#sql-caching)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE179]'
+  prefs: []
+  type: TYPE_PRE
+- en: Suggest a type for a ‘coerced’ Python value in an expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Default behavior for [`UserDefinedType`](#sqlalchemy.types.UserDefinedType "sqlalchemy.types.UserDefinedType")
+    is the same as that of [`TypeDecorator`](#sqlalchemy.types.TypeDecorator "sqlalchemy.types.TypeDecorator");
+    by default it returns `self`, assuming the compared value should be coerced into
+    the same type as this one. See [`TypeDecorator.coerce_compared_value()`](#sqlalchemy.types.TypeDecorator.coerce_compared_value
+    "sqlalchemy.types.TypeDecorator.coerce_compared_value") for more detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE180]'
+  prefs: []
+  type: TYPE_PRE
+- en: a regular expression that indicates method names for which the method should
+    accept `**kw` arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The class will scan for methods matching the name template and decorate them
+    if necessary to ensure `**kw` parameters are accepted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Working with Custom Types and Reflection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to note that database types which are modified to have additional
+    in-Python behaviors, including types based on [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") as well as other user-defined subclasses of
+    datatypes, do not have any representation within a database schema. When using
+    database the introspection features described at [Reflecting Database Objects](reflection.html#metadata-reflection),
+    SQLAlchemy makes use of a fixed mapping which links the datatype information reported
+    by a database server to a SQLAlchemy datatype object. For example, if we look
+    inside of a PostgreSQL schema at the definition for a particular database column,
+    we might receive back the string `"VARCHAR"`. SQLAlchemy’s PostgreSQL dialect
+    has a hardcoded mapping which links the string name `"VARCHAR"` to the SQLAlchemy
+    [`VARCHAR`](type_basics.html#sqlalchemy.types.VARCHAR "sqlalchemy.types.VARCHAR")
+    class, and that’s how when we emit a statement like `Table('my_table', m, autoload_with=engine)`,
+    the [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    object within it would have an instance of [`VARCHAR`](type_basics.html#sqlalchemy.types.VARCHAR
+    "sqlalchemy.types.VARCHAR") present inside of it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The implication of this is that if a [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object makes use of type objects that don’t correspond
+    directly to the database-native type name, if we create a new [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object against a new [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection for this database table elsewhere using
+    reflection, it will not have this datatype. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE181]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we made use of [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType"), which is a [`TypeDecorator`](#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") that works on top of the [`LargeBinary`](type_basics.html#sqlalchemy.types.LargeBinary
+    "sqlalchemy.types.LargeBinary") datatype, which on SQLite corresponds to the database
+    type `BLOB`. In the CREATE TABLE, we see that the `BLOB` datatype is used. The
+    SQLite database knows nothing about the [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType") we’ve used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we look at the datatype of `my_table.c.data.type`, as this is a Python object
+    that was created by us directly, it is [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE182]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, if we create another instance of [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") using reflection, the use of [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType") is not represented in the SQLite database we’ve
+    created; we instead get back [`BLOB`](type_basics.html#sqlalchemy.types.BLOB "sqlalchemy.types.BLOB"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE183]'
+  prefs: []
+  type: TYPE_PRE
+- en: Typically, when an application defines explicit [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata with custom types, there is no need to use
+    table reflection because the necessary [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata is already present. However, for the case
+    where an application, or a combination of them, need to make use of both explicit
+    [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table") metadata
+    which includes custom, Python-level datatypes, as well as [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects which set up their [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects as reflected from the database, which nevertheless
+    still need to exhibit the additional Python behaviors of the custom datatypes,
+    additional steps must be taken to allow this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most straightforward is to override specific columns as described at [Overriding
+    Reflected Columns](reflection.html#reflection-overriding-columns). In this technique,
+    we simply use reflection in combination with explicit [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects for those columns for which we want to use
+    a custom or decorated datatype:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE184]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `my_reflected_table` object above is reflected, and will load the definition
+    of the “id” column from the SQLite database. But for the “data” column, we’ve
+    overridden the reflected object with an explicit [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") definition that includes our desired in-Python datatype,
+    the [`PickleType`](type_basics.html#sqlalchemy.types.PickleType "sqlalchemy.types.PickleType").
+    The reflection process will leave this [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object intact:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE185]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A more elaborate way to convert from database-native type objects to custom
+    datatypes is to use the [`DDLEvents.column_reflect()`](events.html#sqlalchemy.events.DDLEvents.column_reflect
+    "sqlalchemy.events.DDLEvents.column_reflect") event handler. If for example we
+    knew that we wanted all [`BLOB`](type_basics.html#sqlalchemy.types.BLOB "sqlalchemy.types.BLOB")
+    datatypes to in fact be [`PickleType`](type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType"), we could set up a rule across the board:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE186]'
+  prefs: []
+  type: TYPE_PRE
+- en: When the above code is invoked *before* any table reflection occurs (note also
+    it should be invoked **only once** in the application, as it is a global rule),
+    upon reflecting any [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that includes a column with a [`BLOB`](type_basics.html#sqlalchemy.types.BLOB
+    "sqlalchemy.types.BLOB") datatype, the resulting datatype will be stored in the
+    [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    object as [`PickleType`](type_basics.html#sqlalchemy.types.PickleType "sqlalchemy.types.PickleType").
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, the above event-based approach would likely have additional rules
+    in order to affect only those columns where the datatype is important, such as
+    a lookup table of table names and possibly column names, or other heuristics in
+    order to accurately determine which columns should be established with an in Python
+    datatype.
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,792 @@
+- en: Changing Attribute Behavior
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/mapped_attributes.html](https://docs.sqlalchemy.org/en/20/orm/mapped_attributes.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This section will discuss features and techniques used to modify the behavior
+    of ORM mapped attributes, including those mapped with [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), and others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Simple Validators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A quick way to add a “validation” routine to an attribute is to use the [`validates()`](#sqlalchemy.orm.validates
+    "sqlalchemy.orm.validates") decorator. An attribute validator can raise an exception,
+    halting the process of mutating the attribute’s value, or can change the given
+    value into something different. Validators, like all attribute extensions, are
+    only called by normal userland code; they are not issued when the ORM is populating
+    the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Validators also receive collection append events, when items are added to a
+    collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The validation function by default does not get emitted for collection remove
+    events, as the typical expectation is that a value being discarded doesn’t require
+    validation. However, [`validates()`](#sqlalchemy.orm.validates "sqlalchemy.orm.validates")
+    supports reception of these events by specifying `include_removes=True` to the
+    decorator. When this flag is set, the validation function must receive an additional
+    boolean argument which if `True` indicates that the operation is a removal:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The case where mutually dependent validators are linked via a backref can also
+    be tailored, using the `include_backrefs=False` option; this option, when set
+    to `False`, prevents a validation function from emitting if the event occurs as
+    a result of a backref:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, if we were to assign to `Address.user` as in `some_address.user = some_user`,
+    the `validate_address()` function would *not* be emitted, even though an append
+    occurs to `some_user.addresses` - the event is caused by a backref.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the [`validates()`](#sqlalchemy.orm.validates "sqlalchemy.orm.validates")
+    decorator is a convenience function built on top of attribute events. An application
+    that requires more control over configuration of attribute change behavior can
+    make use of this system, described at [`AttributeEvents`](events.html#sqlalchemy.orm.AttributeEvents
+    "sqlalchemy.orm.AttributeEvents").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [validates](#sqlalchemy.orm.validates)(*names, [include_removes, include_backrefs])
+    | Decorate a method as a ‘validator’ for one or more named properties. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Decorate a method as a ‘validator’ for one or more named properties.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Designates a method as a validator, a method which receives the name of the
+    attribute as well as a value to be assigned, or in the case of a collection, the
+    value to be added to the collection. The function can then raise validation exceptions
+    to halt the process from continuing (where Python’s built-in `ValueError` and
+    `AssertionError` exceptions are reasonable choices), or can modify or replace
+    the value before proceeding. The function should otherwise return the given value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that a validator for a collection **cannot** issue a load of that collection
+    within the validation routine - this usage raises an assertion to avoid recursion
+    overflows. This is a reentrant condition which is not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`*names` – list of attribute names to be validated.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`include_removes` – if True, “remove” events will be sent as well - the validation
+    function must accept an additional argument “is_remove” which will be a boolean.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`include_backrefs` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: defaults to `True`; if `False`, the validation function will not emit if the
+    originator is an attribute event related via a backref. This can be used for bi-directional
+    [`validates()`](#sqlalchemy.orm.validates "sqlalchemy.orm.validates") usage where
+    only one validator should emit per attribute operation.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0.16: This paramter inadvertently defaulted to `False`
+    for releases 2.0.0 through 2.0.15\. Its correct default of `True` is restored
+    in 2.0.16.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Simple Validators](#simple-validators) - usage examples for [`validates()`](#sqlalchemy.orm.validates
+    "sqlalchemy.orm.validates")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Custom Datatypes at the Core Level
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A non-ORM means of affecting the value of a column in a way that suits converting
+    data between how it is represented in Python, vs. how it is represented in the
+    database, can be achieved by using a custom datatype that is applied to the mapped
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    metadata. This is more common in the case of some style of encoding / decoding
+    that occurs both as data goes to the database and as it is returned; read more
+    about this in the Core documentation at [Augmenting Existing Types](../core/custom_types.html#types-typedecorator).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Using Descriptors and Hybrids'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A more comprehensive way to produce modified behavior for an attribute is to
+    use [descriptors](../glossary.html#term-descriptors). These are commonly used
+    in Python using the `property()` function. The standard SQLAlchemy technique for
+    descriptors is to create a plain descriptor, and to have it read/write from a
+    mapped attribute with a different name. Below we illustrate this using Python
+    2.6-style properties:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The approach above will work, but there’s more we can add. While our `EmailAddress`
+    object will shuttle the value through the `email` descriptor and into the `_email`
+    mapped attribute, the class level `EmailAddress.email` attribute does not have
+    the usual expression semantics usable with [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select"). To provide these, we instead use the [`hybrid`](extensions/hybrid.html#module-sqlalchemy.ext.hybrid
+    "sqlalchemy.ext.hybrid") extension as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `.email` attribute, in addition to providing getter/setter behavior when
+    we have an instance of `EmailAddress`, also provides a SQL expression when used
+    at the class level, that is, from the `EmailAddress` class directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`hybrid_property`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") also allows us to change the behavior
+    of the attribute, including defining separate behaviors when the attribute is
+    accessed at the instance level versus at the class/expression level, using the
+    [`hybrid_property.expression()`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") modifier. Such as, if we wanted
+    to add a host name automatically, we might define two sets of string manipulation
+    logic:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, accessing the `email` property of an instance of `EmailAddress` will
+    return the value of the `_email` attribute, removing or adding the hostname `@example.com`
+    from the value. When we query against the `email` attribute, a SQL function is
+    rendered which produces the same effect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Read more about Hybrids at [Hybrid Attributes](extensions/hybrid.html).  ##
+    Synonyms'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Synonyms are a mapper-level construct that allow any attribute on a class to
+    “mirror” another attribute that is mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the most basic sense, the synonym is an easy way to make a certain attribute
+    available by an additional name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above class `MyClass` has two attributes, `.job_status` and `.status` that
+    will behave as one attribute, both at the expression level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and at the instance level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`synonym()`](#sqlalchemy.orm.synonym "sqlalchemy.orm.synonym") can be used
+    for any kind of mapped attribute that subclasses [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty"), including mapped columns and relationships,
+    as well as synonyms themselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Beyond a simple mirror, [`synonym()`](#sqlalchemy.orm.synonym "sqlalchemy.orm.synonym")
+    can also be made to reference a user-defined [descriptor](../glossary.html#term-descriptor).
+    We can supply our `status` synonym with a `@property`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using Declarative, the above pattern can be expressed more succinctly
+    using the [`synonym_for()`](mapping_api.html#sqlalchemy.orm.synonym_for "sqlalchemy.orm.synonym_for")
+    decorator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: While the [`synonym()`](#sqlalchemy.orm.synonym "sqlalchemy.orm.synonym") is
+    useful for simple mirroring, the use case of augmenting attribute behavior with
+    descriptors is better handled in modern usage using the [hybrid attribute](#mapper-hybrids)
+    feature, which is more oriented towards Python descriptors. Technically, a [`synonym()`](#sqlalchemy.orm.synonym
+    "sqlalchemy.orm.synonym") can do everything that a [`hybrid_property`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") can do, as it also supports injection
+    of custom SQL capabilities, but the hybrid is more straightforward to use in more
+    complex situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [synonym](#sqlalchemy.orm.synonym)(name, *, [map_column, descriptor, comparator_factory,
+    init, repr, default, default_factory, compare, kw_only, info, doc]) | Denote an
+    attribute name as a synonym to a mapped property, in that the attribute will mirror
+    the value and expression behavior of another attribute. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Denote an attribute name as a synonym to a mapped property, in that the attribute
+    will mirror the value and expression behavior of another attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`name` – the name of the existing mapped property. This can refer to the string
+    name ORM-mapped attribute configured on the class, including column-bound attributes
+    and relationships.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`descriptor` – a Python [descriptor](../glossary.html#term-descriptor) that
+    will be used as a getter (and potentially a setter) when this attribute is accessed
+    at the instance level.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`map_column` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**For classical mappings and mappings against an existing Table object only**.
+    if `True`, the [`synonym()`](#sqlalchemy.orm.synonym "sqlalchemy.orm.synonym")
+    construct will locate the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object upon the mapped table that would normally be
+    associated with the attribute name of this synonym, and produce a new [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") that instead maps this [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") to the alternate name given as the “name” argument
+    of the synonym; in this way, the usual step of redefining the mapping of the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") to be under a different name is unnecessary. This
+    is usually intended to be used when a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") is to be replaced with an attribute that also uses
+    a descriptor, that is, in conjunction with the [`synonym.descriptor`](#sqlalchemy.orm.synonym.params.descriptor
+    "sqlalchemy.orm.synonym") parameter:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Above, the attribute named `_job_status` is automatically mapped to the `job_status`
+    column:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: When using Declarative, in order to provide a descriptor in conjunction with
+    a synonym, use the `sqlalchemy.ext.declarative.synonym_for()` helper. However,
+    note that the [hybrid properties](#mapper-hybrids) feature should usually be preferred,
+    particularly when redefining attribute behavior.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`info` – Optional data dictionary which will be populated into the `InspectionAttr.info`
+    attribute of this object.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`comparator_factory` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A subclass of [`PropComparator`](internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.PropComparator") that will provide custom comparison behavior
+    at the SQL expression level.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For the use case of providing an attribute which redefines both Python-level
+    and SQL-expression level behavior of an attribute, please refer to the Hybrid
+    attribute introduced at [Using Descriptors and Hybrids](#mapper-hybrids) for a
+    more effective technique.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Synonyms](#synonyms) - Overview of synonyms'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`synonym_for()`](mapping_api.html#sqlalchemy.orm.synonym_for "sqlalchemy.orm.synonym_for")
+    - a helper oriented towards Declarative'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using Descriptors and Hybrids](#mapper-hybrids) - The Hybrid Attribute extension
+    provides an updated approach to augmenting attribute behavior more flexibly than
+    can be achieved with synonyms.  ## Operator Customization'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “operators” used by the SQLAlchemy ORM and Core expression language are
+    fully customizable. For example, the comparison expression `User.name == 'ed'`
+    makes usage of an operator built into Python itself called `operator.eq` - the
+    actual SQL construct which SQLAlchemy associates with such an operator can be
+    modified. New operations can be associated with column expressions as well. The
+    operators which take place for column expressions are most directly redefined
+    at the type level - see the section [Redefining and Creating New Operators](../core/custom_types.html#types-operators)
+    for a description.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'ORM level functions like [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property"), [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), and [`composite()`](composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") also provide for operator redefinition at the ORM
+    level, by passing a [`PropComparator`](internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.PropComparator") subclass to the `comparator_factory` argument
+    of each function. Customization of operators at this level is a rare use case.
+    See the documentation at [`PropComparator`](internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.PropComparator") for an overview.  ## Simple Validators'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A quick way to add a “validation” routine to an attribute is to use the [`validates()`](#sqlalchemy.orm.validates
+    "sqlalchemy.orm.validates") decorator. An attribute validator can raise an exception,
+    halting the process of mutating the attribute’s value, or can change the given
+    value into something different. Validators, like all attribute extensions, are
+    only called by normal userland code; they are not issued when the ORM is populating
+    the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Validators also receive collection append events, when items are added to a
+    collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The validation function by default does not get emitted for collection remove
+    events, as the typical expectation is that a value being discarded doesn’t require
+    validation. However, [`validates()`](#sqlalchemy.orm.validates "sqlalchemy.orm.validates")
+    supports reception of these events by specifying `include_removes=True` to the
+    decorator. When this flag is set, the validation function must receive an additional
+    boolean argument which if `True` indicates that the operation is a removal:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The case where mutually dependent validators are linked via a backref can also
+    be tailored, using the `include_backrefs=False` option; this option, when set
+    to `False`, prevents a validation function from emitting if the event occurs as
+    a result of a backref:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, if we were to assign to `Address.user` as in `some_address.user = some_user`,
+    the `validate_address()` function would *not* be emitted, even though an append
+    occurs to `some_user.addresses` - the event is caused by a backref.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the [`validates()`](#sqlalchemy.orm.validates "sqlalchemy.orm.validates")
+    decorator is a convenience function built on top of attribute events. An application
+    that requires more control over configuration of attribute change behavior can
+    make use of this system, described at [`AttributeEvents`](events.html#sqlalchemy.orm.AttributeEvents
+    "sqlalchemy.orm.AttributeEvents").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [validates](#sqlalchemy.orm.validates)(*names, [include_removes, include_backrefs])
+    | Decorate a method as a ‘validator’ for one or more named properties. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Decorate a method as a ‘validator’ for one or more named properties.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Designates a method as a validator, a method which receives the name of the
+    attribute as well as a value to be assigned, or in the case of a collection, the
+    value to be added to the collection. The function can then raise validation exceptions
+    to halt the process from continuing (where Python’s built-in `ValueError` and
+    `AssertionError` exceptions are reasonable choices), or can modify or replace
+    the value before proceeding. The function should otherwise return the given value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that a validator for a collection **cannot** issue a load of that collection
+    within the validation routine - this usage raises an assertion to avoid recursion
+    overflows. This is a reentrant condition which is not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`*names` – list of attribute names to be validated.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`include_removes` – if True, “remove” events will be sent as well - the validation
+    function must accept an additional argument “is_remove” which will be a boolean.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`include_backrefs` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: defaults to `True`; if `False`, the validation function will not emit if the
+    originator is an attribute event related via a backref. This can be used for bi-directional
+    [`validates()`](#sqlalchemy.orm.validates "sqlalchemy.orm.validates") usage where
+    only one validator should emit per attribute operation.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0.16: This paramter inadvertently defaulted to `False`
+    for releases 2.0.0 through 2.0.15\. Its correct default of `True` is restored
+    in 2.0.16.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Simple Validators](#simple-validators) - usage examples for [`validates()`](#sqlalchemy.orm.validates
+    "sqlalchemy.orm.validates")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Custom Datatypes at the Core Level
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A non-ORM means of affecting the value of a column in a way that suits converting
+    data between how it is represented in Python, vs. how it is represented in the
+    database, can be achieved by using a custom datatype that is applied to the mapped
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    metadata. This is more common in the case of some style of encoding / decoding
+    that occurs both as data goes to the database and as it is returned; read more
+    about this in the Core documentation at [Augmenting Existing Types](../core/custom_types.html#types-typedecorator).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Using Descriptors and Hybrids'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A more comprehensive way to produce modified behavior for an attribute is to
+    use [descriptors](../glossary.html#term-descriptors). These are commonly used
+    in Python using the `property()` function. The standard SQLAlchemy technique for
+    descriptors is to create a plain descriptor, and to have it read/write from a
+    mapped attribute with a different name. Below we illustrate this using Python
+    2.6-style properties:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The approach above will work, but there’s more we can add. While our `EmailAddress`
+    object will shuttle the value through the `email` descriptor and into the `_email`
+    mapped attribute, the class level `EmailAddress.email` attribute does not have
+    the usual expression semantics usable with [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select"). To provide these, we instead use the [`hybrid`](extensions/hybrid.html#module-sqlalchemy.ext.hybrid
+    "sqlalchemy.ext.hybrid") extension as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `.email` attribute, in addition to providing getter/setter behavior when
+    we have an instance of `EmailAddress`, also provides a SQL expression when used
+    at the class level, that is, from the `EmailAddress` class directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`hybrid_property`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") also allows us to change the behavior
+    of the attribute, including defining separate behaviors when the attribute is
+    accessed at the instance level versus at the class/expression level, using the
+    [`hybrid_property.expression()`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression") modifier. Such as, if we wanted
+    to add a host name automatically, we might define two sets of string manipulation
+    logic:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, accessing the `email` property of an instance of `EmailAddress` will
+    return the value of the `_email` attribute, removing or adding the hostname `@example.com`
+    from the value. When we query against the `email` attribute, a SQL function is
+    rendered which produces the same effect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Read more about Hybrids at [Hybrid Attributes](extensions/hybrid.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Synonyms'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Synonyms are a mapper-level construct that allow any attribute on a class to
+    “mirror” another attribute that is mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the most basic sense, the synonym is an easy way to make a certain attribute
+    available by an additional name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above class `MyClass` has two attributes, `.job_status` and `.status` that
+    will behave as one attribute, both at the expression level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and at the instance level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`synonym()`](#sqlalchemy.orm.synonym "sqlalchemy.orm.synonym") can be used
+    for any kind of mapped attribute that subclasses [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty"), including mapped columns and relationships,
+    as well as synonyms themselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Beyond a simple mirror, [`synonym()`](#sqlalchemy.orm.synonym "sqlalchemy.orm.synonym")
+    can also be made to reference a user-defined [descriptor](../glossary.html#term-descriptor).
+    We can supply our `status` synonym with a `@property`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using Declarative, the above pattern can be expressed more succinctly
+    using the [`synonym_for()`](mapping_api.html#sqlalchemy.orm.synonym_for "sqlalchemy.orm.synonym_for")
+    decorator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: While the [`synonym()`](#sqlalchemy.orm.synonym "sqlalchemy.orm.synonym") is
+    useful for simple mirroring, the use case of augmenting attribute behavior with
+    descriptors is better handled in modern usage using the [hybrid attribute](#mapper-hybrids)
+    feature, which is more oriented towards Python descriptors. Technically, a [`synonym()`](#sqlalchemy.orm.synonym
+    "sqlalchemy.orm.synonym") can do everything that a [`hybrid_property`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") can do, as it also supports injection
+    of custom SQL capabilities, but the hybrid is more straightforward to use in more
+    complex situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [synonym](#sqlalchemy.orm.synonym)(name, *, [map_column, descriptor, comparator_factory,
+    init, repr, default, default_factory, compare, kw_only, info, doc]) | Denote an
+    attribute name as a synonym to a mapped property, in that the attribute will mirror
+    the value and expression behavior of another attribute. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Denote an attribute name as a synonym to a mapped property, in that the attribute
+    will mirror the value and expression behavior of another attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`name` – the name of the existing mapped property. This can refer to the string
+    name ORM-mapped attribute configured on the class, including column-bound attributes
+    and relationships.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`descriptor` – a Python [descriptor](../glossary.html#term-descriptor) that
+    will be used as a getter (and potentially a setter) when this attribute is accessed
+    at the instance level.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`map_column` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**For classical mappings and mappings against an existing Table object only**.
+    if `True`, the [`synonym()`](#sqlalchemy.orm.synonym "sqlalchemy.orm.synonym")
+    construct will locate the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object upon the mapped table that would normally be
+    associated with the attribute name of this synonym, and produce a new [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") that instead maps this [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") to the alternate name given as the “name” argument
+    of the synonym; in this way, the usual step of redefining the mapping of the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") to be under a different name is unnecessary. This
+    is usually intended to be used when a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") is to be replaced with an attribute that also uses
+    a descriptor, that is, in conjunction with the [`synonym.descriptor`](#sqlalchemy.orm.synonym.params.descriptor
+    "sqlalchemy.orm.synonym") parameter:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Above, the attribute named `_job_status` is automatically mapped to the `job_status`
+    column:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: When using Declarative, in order to provide a descriptor in conjunction with
+    a synonym, use the `sqlalchemy.ext.declarative.synonym_for()` helper. However,
+    note that the [hybrid properties](#mapper-hybrids) feature should usually be preferred,
+    particularly when redefining attribute behavior.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`info` – Optional data dictionary which will be populated into the `InspectionAttr.info`
+    attribute of this object.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`comparator_factory` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A subclass of [`PropComparator`](internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.PropComparator") that will provide custom comparison behavior
+    at the SQL expression level.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For the use case of providing an attribute which redefines both Python-level
+    and SQL-expression level behavior of an attribute, please refer to the Hybrid
+    attribute introduced at [Using Descriptors and Hybrids](#mapper-hybrids) for a
+    more effective technique.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Synonyms](#synonyms) - Overview of synonyms'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`synonym_for()`](mapping_api.html#sqlalchemy.orm.synonym_for "sqlalchemy.orm.synonym_for")
+    - a helper oriented towards Declarative'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using Descriptors and Hybrids](#mapper-hybrids) - The Hybrid Attribute extension
+    provides an updated approach to augmenting attribute behavior more flexibly than
+    can be achieved with synonyms.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Operator Customization'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “operators” used by the SQLAlchemy ORM and Core expression language are
+    fully customizable. For example, the comparison expression `User.name == 'ed'`
+    makes usage of an operator built into Python itself called `operator.eq` - the
+    actual SQL construct which SQLAlchemy associates with such an operator can be
+    modified. New operations can be associated with column expressions as well. The
+    operators which take place for column expressions are most directly redefined
+    at the type level - see the section [Redefining and Creating New Operators](../core/custom_types.html#types-operators)
+    for a description.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ORM level functions like [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property"), [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), and [`composite()`](composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") also provide for operator redefinition at the ORM
+    level, by passing a [`PropComparator`](internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.PropComparator") subclass to the `comparator_factory` argument
+    of each function. Customization of operators at this level is a rare use case.
+    See the documentation at [`PropComparator`](internals.html#sqlalchemy.orm.PropComparator
+    "sqlalchemy.orm.PropComparator") for an overview.
+  prefs: []
+  type: TYPE_NORMAL

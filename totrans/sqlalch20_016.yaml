@@ -1,0 +1,2057 @@
+- en: ORM Mapped Class Overview
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/mapping_styles.html](https://docs.sqlalchemy.org/en/20/orm/mapping_styles.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Overview of ORM class mapping configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For readers new to the SQLAlchemy ORM and/or new to Python in general, it’s
+    recommended to browse through the [ORM Quick Start](quickstart.html#orm-quickstart)
+    and preferably to work through the [SQLAlchemy Unified Tutorial](../tutorial/index.html#unified-tutorial),
+    where ORM configuration is first introduced at [Using ORM Declarative Forms to
+    Define Table Metadata](../tutorial/metadata.html#tutorial-orm-table-metadata).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## ORM Mapping Styles'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy features two distinct styles of mapper configuration, which then
+    feature further sub-options for how they are set up. The variability in mapper
+    styles is present to suit a varied list of developer preferences, including the
+    degree of abstraction of a user-defined class from how it is to be mapped to relational
+    schema tables and columns, what kinds of class hierarchies are in use, including
+    whether or not custom metaclass schemes are present, and finally if there are
+    other class-instrumentation approaches present such as if Python [dataclasses](https://docs.python.org/3/library/dataclasses.html)
+    are in use simultaneously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In modern SQLAlchemy, the difference between these styles is mostly superficial;
+    when a particular SQLAlchemy configurational style is used to express the intent
+    to map a class, the internal process of mapping the class proceeds in mostly the
+    same way for each, where the end result is always a user-defined class that has
+    a [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper") configured
+    against a selectable unit, typically represented by a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object, and the class itself has been [instrumented](../glossary.html#term-instrumented)
+    to include behaviors linked to relational operations both at the level of the
+    class as well as on instances of that class. As the process is basically the same
+    in all cases, classes mapped from different styles are always fully interoperable
+    with each other. The protocol [`MappedClassProtocol`](mapping_api.html#sqlalchemy.orm.MappedClassProtocol
+    "sqlalchemy.orm.MappedClassProtocol") can be used to indicate a mapped class when
+    using type checkers such as mypy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The original mapping API is commonly referred to as “classical” style, whereas
+    the more automated style of mapping is known as “declarative” style. SQLAlchemy
+    now refers to these two mapping styles as **imperative mapping** and **declarative
+    mapping**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of what style of mapping used, all ORM mappings as of SQLAlchemy
+    1.4 originate from a single object known as [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry"), which is a registry of mapped classes. Using this
+    registry, a set of mapper configurations can be finalized as a group, and classes
+    within a particular registry may refer to each other by name within the configurational
+    process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: Declarative and classical mapping are now referred
+    to as “declarative” and “imperative” mapping, and are unified internally, all
+    originating from the [`registry`](mapping_api.html#sqlalchemy.orm.registry "sqlalchemy.orm.registry")
+    construct that represents a collection of related mappings.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Declarative Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The **Declarative Mapping** is the typical way that mappings are constructed
+    in modern SQLAlchemy. The most common pattern is to first construct a base class
+    using the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") superclass. The resulting base class, when subclassed
+    will apply the declarative mapping process to all subclasses that derive from
+    it, relative to a particular [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") that is local to the new base by default. The example
+    below illustrates the use of a declarative base which is then used in a declarative
+    table mapping:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class is used to generate a new base class (within
+    SQLAlchemy’s documentation it’s typically referred to as `Base`, however can have
+    any desired name) from which new classes to be mapped may inherit from, as above
+    a new mapped class `User` is constructed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") superclass supersedes the use of the [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base
+    "sqlalchemy.orm.declarative_base") function and [`registry.generate_base()`](mapping_api.html#sqlalchemy.orm.registry.generate_base
+    "sqlalchemy.orm.registry.generate_base") methods; the superclass approach integrates
+    with [**PEP 484**](https://peps.python.org/pep-0484/) tools without the use of
+    plugins. See [ORM Declarative Models](../changelog/whatsnew_20.html#whatsnew-20-orm-declarative-typing)
+    for migration notes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The base class refers to a [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") object that maintains a collection of related mapped
+    classes. as well as to a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object that retains a collection of [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects to which the classes are mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The major Declarative mapping styles are further detailed in the following
+    sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using a Declarative Base Class](declarative_styles.html#orm-declarative-generated-base-class)
+    - declarative mapping using a base class.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Declarative Mapping using a Decorator (no declarative base)](declarative_styles.html#orm-declarative-decorator)
+    - declarative mapping using a decorator, rather than a base class.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Within the scope of a Declarative mapped class, there are also two varieties
+    of how the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    metadata may be declared. These include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Declarative Table with mapped_column()](declarative_tables.html#orm-declarative-table)
+    - table columns are declared inline within the mapped class using the [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") directive (or in legacy form, using the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object directly). The [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") directive may also be optionally combined with
+    type annotations using the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    class which can provide some details about the mapped columns directly. The column
+    directives, in combination with the `__tablename__` and optional `__table_args__`
+    class level directives will allow the Declarative mapping process to construct
+    a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object to be mapped.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Declarative with Imperative Table (a.k.a. Hybrid Declarative)](declarative_tables.html#orm-imperative-table-configuration)
+    - Instead of specifying table name and attributes separately, an explicitly constructed
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object is associated with a class that is otherwise mapped declaratively. This
+    style of mapping is a hybrid of “declarative” and “imperative” mapping, and applies
+    to techniques such as mapping classes to [reflected](../glossary.html#term-reflected)
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects, as well as mapping classes to existing Core constructs such as joins
+    and subqueries.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Documentation for Declarative mapping continues at [Mapping Classes with Declarative](declarative_mapping.html).  ###
+    Imperative Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An **imperative** or **classical** mapping refers to the configuration of a
+    mapped class using the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method, where the target class does
+    not include any declarative class attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The imperative mapping form is a lesser-used form of mapping that originates
+    from the very first releases of SQLAlchemy in 2006\. It’s essentially a means
+    of bypassing the Declarative system to provide a more “barebones” system of mapping,
+    and does not offer modern features such as [**PEP 484**](https://peps.python.org/pep-0484/)
+    support. As such, most documentation examples use Declarative forms, and it’s
+    recommended that new users start with [Declarative Table](declarative_tables.html)
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method is now used to create classical
+    mappings. The `sqlalchemy.orm.mapper()` standalone function is effectively removed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In “classical” form, the table metadata is created separately with the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") construct, then associated with the `User` class via
+    the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method, after establishing a [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") instance. Normally, a single instance of [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") shared for all mapped classes that are related to each
+    other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information about mapped attributes, such as relationships to other classes,
+    are provided via the `properties` dictionary. The example below illustrates a
+    second [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object, mapped to a class called `Address`, then linked to `User` via [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that classes which are mapped with the Imperative approach are **fully
+    interchangeable** with those mapped with the Declarative approach. Both systems
+    ultimately create the same configuration, consisting of a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), user-defined class, linked together with a [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object. When we talk about “the behavior of [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")”, this includes when using the Declarative system as
+    well - it’s still used, just behind the scenes.  ## Mapped Class Essential Components'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With all mapping forms, the mapping of the class can be configured in many ways
+    by passing construction arguments that ultimately become part of the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object via its constructor. The parameters that are delivered
+    to [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    originate from the given mapping form, including parameters passed to [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") for an Imperative mapping, or when
+    using the Declarative system, from a combination of the table columns, SQL expressions
+    and relationships being mapped along with that of attributes such as [__mapper_args__](declarative_config.html#orm-declarative-mapper-options).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are four general classes of configuration information that the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") class looks for:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The class to be mapped
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is a class that we construct in our application. There are generally no
+    restrictions on the structure of this class. [[1]](#id4) When a Python class is
+    mapped, there can only be **one** [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object for the class. [[2]](#id5)
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    the class to be mapped is either a subclass of the declarative base class, or
+    is handled by a decorator or function such as [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped").
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, the class
+    is passed directly as the [`map_imperatively.class_`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively.params.class_
+    "sqlalchemy.orm.registry.map_imperatively") argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The table, or other from clause object
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the vast majority of common cases this is an instance of [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"). For more advanced use cases, it may also refer to
+    any kind of [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") object, the most common alternative objects
+    being the [`Subquery`](../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") and [`Join`](../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    the subject table is either generated by the declarative system based on the `__tablename__`
+    attribute and the [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects presented, or it is established via the `__table__` attribute. These two
+    styles of configuration are presented at [Declarative Table with mapped_column()](declarative_tables.html#orm-declarative-table)
+    and [Declarative with Imperative Table (a.k.a. Hybrid Declarative)](declarative_tables.html#orm-imperative-table-configuration).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, the subject
+    table is passed positionally as the [`map_imperatively.local_table`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively.params.local_table
+    "sqlalchemy.orm.registry.map_imperatively") argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In contrast to the “one mapper per class” requirement of a mapped class, the
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    or other [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") object that is the subject of the mapping
+    may be associated with any number of mappings. The [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") applies modifications directly to the user-defined class,
+    but does not modify the given [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") or other [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") in any way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### The properties dictionary'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a dictionary of all of the attributes that will be associated with the
+    mapped class. By default, the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") generates entries for this dictionary derived from the
+    given [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table"),
+    in the form of [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") objects which each refer to an individual [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") of the mapped table. The properties dictionary will
+    also contain all the other kinds of [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") objects to be configured, most commonly instances
+    generated by the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    the properties dictionary is generated by the declarative system by scanning the
+    class to be mapped for appropriate attributes. See the section [Defining Mapped
+    Properties with Declarative](declarative_config.html#orm-declarative-properties)
+    for notes on this process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, the properties
+    dictionary is passed directly as the `properties` parameter to [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively"), which will pass it along to the [`Mapper.properties`](mapping_api.html#sqlalchemy.orm.Mapper.params.properties
+    "sqlalchemy.orm.Mapper") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other mapper configuration parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    additional mapper configuration arguments are configured via the `__mapper_args__`
+    class attribute. Examples of use are available at [Mapper Configuration Options
+    with Declarative](declarative_config.html#orm-declarative-mapper-options).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, keyword arguments
+    are passed to the to [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method which passes them along to
+    the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The full range of parameters accepted are documented at [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper").  ## Mapped Class Behavior'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Across all styles of mapping using the [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") object, the following behaviors are common:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Default Constructor'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`registry`](mapping_api.html#sqlalchemy.orm.registry "sqlalchemy.orm.registry")
+    applies a default constructor, i.e. `__init__` method, to all mapped classes that
+    don’t explicitly have their own `__init__` method. The behavior of this method
+    is such that it provides a convenient keyword constructor that will accept as
+    optional keyword arguments all the attributes that are named. E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An object of type `User` above will have a constructor which allows `User`
+    objects to be created as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses)
+    feature provides an alternate means of generating a default `__init__()` method
+    by using Python dataclasses, and allows for a highly configurable constructor
+    form.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `__init__()` method of the class is called only when the object is constructed
+    in Python code, and **not when an object is loaded or refreshed from the database**.
+    See the next section [Maintaining Non-Mapped State Across Loads](#mapped-class-load-events)
+    for a primer on how to invoke special logic when objects are loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A class that includes an explicit `__init__()` method will maintain that method,
+    and no default constructor will be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To change the default constructor used, a user-defined Python callable may be
+    provided to the [`registry.constructor`](mapping_api.html#sqlalchemy.orm.registry.params.constructor
+    "sqlalchemy.orm.registry") parameter which will be used as the default constructor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The constructor also applies to imperative mappings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above class, mapped imperatively as described at [Imperative Mapping](#orm-imperative-mapping),
+    will also feature the default constructor associated with the [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4: classical mappings now support a standard configuration-level
+    constructor when they are mapped via the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method.  ### Maintaining Non-Mapped
+    State Across Loads'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `__init__()` method of the mapped class is invoked when the object is constructed
+    directly in Python code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, when an object is loaded using the ORM [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), the `__init__()` method is **not** called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The reason for this is that when loaded from the database, the operation used
+    to construct the object, in the above example the `User`, is more analogous to
+    **deserialization**, such as unpickling, rather than initial construction. The
+    majority of the object’s important state is not being assembled for the first
+    time, it’s being re-loaded from database rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore to maintain state within the object that is not part of the data that’s
+    stored to the database, such that this state is present when objects are loaded
+    as well as constructed, there are two general approaches detailed below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use Python descriptors like `@property`, rather than state, to dynamically compute
+    attributes as needed.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For simple attributes, this is the simplest approach and the least error prone.
+    For example if an object `Point` with `Point.x` and `Point.y` wanted an attribute
+    with the sum of these attributes:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: An advantage of using dynamic descriptors is that the value is computed every
+    time, meaning it maintains the correct value as the underlying attributes (`x`
+    and `y` in this case) might change.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Other forms of the above pattern include Python standard library [cached_property](https://docs.python.org/3/library/functools.html#functools.cached_property)
+    decorator (which is cached, and not re-computed each time), as well as SQLAlchemy’s
+    [`hybrid_property`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") decorator which allows for attributes
+    that can work for SQL querying as well.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Establish state on-load using [`InstanceEvents.load()`](events.html#sqlalchemy.orm.InstanceEvents.load
+    "sqlalchemy.orm.InstanceEvents.load"), and optionally supplemental methods [`InstanceEvents.refresh()`](events.html#sqlalchemy.orm.InstanceEvents.refresh
+    "sqlalchemy.orm.InstanceEvents.refresh") and [`InstanceEvents.refresh_flush()`](events.html#sqlalchemy.orm.InstanceEvents.refresh_flush
+    "sqlalchemy.orm.InstanceEvents.refresh_flush").
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'These are event hooks that are invoked whenever the object is loaded from the
+    database, or when it is refreshed after being expired. Typically only the [`InstanceEvents.load()`](events.html#sqlalchemy.orm.InstanceEvents.load
+    "sqlalchemy.orm.InstanceEvents.load") is needed, since non-mapped local object
+    state is not affected by expiration operations. To revise the `Point` example
+    above looks like:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If using the refresh events as well, the event hooks can be stacked on top
+    of one callable if needed, as:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Above, the `attrs` attribute will be present for the `refresh` and `refresh_flush`
+    events and indicate a list of attribute names that are being refreshed.  ### Runtime
+    Introspection of Mapped classes, Instances and Mappers'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'A class that is mapped using [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") will also feature a few attributes that are common
+    to all mappings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `__mapper__` attribute will refer to the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") that is associated with the class:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    is also what’s returned when using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function against the mapped class:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `__table__` attribute will refer to the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), or more generically to the [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") object, to which the class is mapped:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") is also what’s returned when using the
+    [`Mapper.local_table`](mapping_api.html#sqlalchemy.orm.Mapper.local_table "sqlalchemy.orm.Mapper.local_table")
+    attribute of the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper"):'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For a single-table inheritance mapping, where the class is a subclass that
+    does not have a table of its own, the [`Mapper.local_table`](mapping_api.html#sqlalchemy.orm.Mapper.local_table
+    "sqlalchemy.orm.Mapper.local_table") attribute as well as the `.__table__` attribute
+    will be `None`. To retrieve the “selectable” that is actually selected from during
+    a query for this class, this is available via the [`Mapper.selectable`](mapping_api.html#sqlalchemy.orm.Mapper.selectable
+    "sqlalchemy.orm.Mapper.selectable") attribute:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '#### Inspection of Mapper objects'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As illustrated in the previous section, the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object is available from any mapped class, regardless
+    of method, using the [Runtime Inspection API](../core/inspection.html) system.
+    Using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function, one can acquire the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") from a mapped class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Detailed information is available including [`Mapper.columns`](mapping_api.html#sqlalchemy.orm.Mapper.columns
+    "sqlalchemy.orm.Mapper.columns"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is a namespace that can be viewed in a list format or via individual names:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other namespaces include [`Mapper.all_orm_descriptors`](mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors"), which includes all mapped attributes
+    as well as hybrids, association proxies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As well as [`Mapper.column_attrs`](mapping_api.html#sqlalchemy.orm.Mapper.column_attrs
+    "sqlalchemy.orm.Mapper.column_attrs"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")  ####
+    Inspection of Mapped Instances'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function also provides information about instances of a mapped class. When applied
+    to an instance of a mapped class, rather than the class itself, the object returned
+    is known as [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState"),
+    which will provide links to not only the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") in use by the class, but also a detailed interface that
+    provides information on the state of individual attributes within the instance
+    including their current value and how this relates to what their database-loaded
+    value is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given an instance of the `User` class loaded from the database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function will return to us an [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With this object we can see elements such as the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to which the object is [attached](../glossary.html#term-attached), if any:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information about the current [persistence state](session_state_management.html#session-object-states)
+    for the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Attribute state information such as attributes that have not been loaded or
+    [lazy loaded](../glossary.html#term-lazy-loaded) (assume `addresses` refers to
+    a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    on the mapped class to a related class):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information regarding the current in-Python status of attributes, such as attributes
+    that have not been modified since the last flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'as well as specific history on modifications to attributes since the last flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState.attrs`](internals.html#sqlalchemy.orm.InstanceState.attrs "sqlalchemy.orm.InstanceState.attrs")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AttributeState`](internals.html#sqlalchemy.orm.AttributeState "sqlalchemy.orm.AttributeState")  ##
+    ORM Mapping Styles'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy features two distinct styles of mapper configuration, which then
+    feature further sub-options for how they are set up. The variability in mapper
+    styles is present to suit a varied list of developer preferences, including the
+    degree of abstraction of a user-defined class from how it is to be mapped to relational
+    schema tables and columns, what kinds of class hierarchies are in use, including
+    whether or not custom metaclass schemes are present, and finally if there are
+    other class-instrumentation approaches present such as if Python [dataclasses](https://docs.python.org/3/library/dataclasses.html)
+    are in use simultaneously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In modern SQLAlchemy, the difference between these styles is mostly superficial;
+    when a particular SQLAlchemy configurational style is used to express the intent
+    to map a class, the internal process of mapping the class proceeds in mostly the
+    same way for each, where the end result is always a user-defined class that has
+    a [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper") configured
+    against a selectable unit, typically represented by a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object, and the class itself has been [instrumented](../glossary.html#term-instrumented)
+    to include behaviors linked to relational operations both at the level of the
+    class as well as on instances of that class. As the process is basically the same
+    in all cases, classes mapped from different styles are always fully interoperable
+    with each other. The protocol [`MappedClassProtocol`](mapping_api.html#sqlalchemy.orm.MappedClassProtocol
+    "sqlalchemy.orm.MappedClassProtocol") can be used to indicate a mapped class when
+    using type checkers such as mypy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The original mapping API is commonly referred to as “classical” style, whereas
+    the more automated style of mapping is known as “declarative” style. SQLAlchemy
+    now refers to these two mapping styles as **imperative mapping** and **declarative
+    mapping**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of what style of mapping used, all ORM mappings as of SQLAlchemy
+    1.4 originate from a single object known as [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry"), which is a registry of mapped classes. Using this
+    registry, a set of mapper configurations can be finalized as a group, and classes
+    within a particular registry may refer to each other by name within the configurational
+    process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: Declarative and classical mapping are now referred
+    to as “declarative” and “imperative” mapping, and are unified internally, all
+    originating from the [`registry`](mapping_api.html#sqlalchemy.orm.registry "sqlalchemy.orm.registry")
+    construct that represents a collection of related mappings.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Declarative Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The **Declarative Mapping** is the typical way that mappings are constructed
+    in modern SQLAlchemy. The most common pattern is to first construct a base class
+    using the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") superclass. The resulting base class, when subclassed
+    will apply the declarative mapping process to all subclasses that derive from
+    it, relative to a particular [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") that is local to the new base by default. The example
+    below illustrates the use of a declarative base which is then used in a declarative
+    table mapping:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class is used to generate a new base class (within
+    SQLAlchemy’s documentation it’s typically referred to as `Base`, however can have
+    any desired name) from which new classes to be mapped may inherit from, as above
+    a new mapped class `User` is constructed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") superclass supersedes the use of the [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base
+    "sqlalchemy.orm.declarative_base") function and [`registry.generate_base()`](mapping_api.html#sqlalchemy.orm.registry.generate_base
+    "sqlalchemy.orm.registry.generate_base") methods; the superclass approach integrates
+    with [**PEP 484**](https://peps.python.org/pep-0484/) tools without the use of
+    plugins. See [ORM Declarative Models](../changelog/whatsnew_20.html#whatsnew-20-orm-declarative-typing)
+    for migration notes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The base class refers to a [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") object that maintains a collection of related mapped
+    classes. as well as to a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object that retains a collection of [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects to which the classes are mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The major Declarative mapping styles are further detailed in the following
+    sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using a Declarative Base Class](declarative_styles.html#orm-declarative-generated-base-class)
+    - declarative mapping using a base class.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Declarative Mapping using a Decorator (no declarative base)](declarative_styles.html#orm-declarative-decorator)
+    - declarative mapping using a decorator, rather than a base class.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Within the scope of a Declarative mapped class, there are also two varieties
+    of how the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    metadata may be declared. These include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Declarative Table with mapped_column()](declarative_tables.html#orm-declarative-table)
+    - table columns are declared inline within the mapped class using the [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") directive (or in legacy form, using the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object directly). The [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") directive may also be optionally combined with
+    type annotations using the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    class which can provide some details about the mapped columns directly. The column
+    directives, in combination with the `__tablename__` and optional `__table_args__`
+    class level directives will allow the Declarative mapping process to construct
+    a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object to be mapped.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Declarative with Imperative Table (a.k.a. Hybrid Declarative)](declarative_tables.html#orm-imperative-table-configuration)
+    - Instead of specifying table name and attributes separately, an explicitly constructed
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object is associated with a class that is otherwise mapped declaratively. This
+    style of mapping is a hybrid of “declarative” and “imperative” mapping, and applies
+    to techniques such as mapping classes to [reflected](../glossary.html#term-reflected)
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects, as well as mapping classes to existing Core constructs such as joins
+    and subqueries.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Documentation for Declarative mapping continues at [Mapping Classes with Declarative](declarative_mapping.html).  ###
+    Imperative Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An **imperative** or **classical** mapping refers to the configuration of a
+    mapped class using the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method, where the target class does
+    not include any declarative class attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The imperative mapping form is a lesser-used form of mapping that originates
+    from the very first releases of SQLAlchemy in 2006\. It’s essentially a means
+    of bypassing the Declarative system to provide a more “barebones” system of mapping,
+    and does not offer modern features such as [**PEP 484**](https://peps.python.org/pep-0484/)
+    support. As such, most documentation examples use Declarative forms, and it’s
+    recommended that new users start with [Declarative Table](declarative_tables.html)
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method is now used to create classical
+    mappings. The `sqlalchemy.orm.mapper()` standalone function is effectively removed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In “classical” form, the table metadata is created separately with the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") construct, then associated with the `User` class via
+    the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method, after establishing a [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") instance. Normally, a single instance of [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") shared for all mapped classes that are related to each
+    other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information about mapped attributes, such as relationships to other classes,
+    are provided via the `properties` dictionary. The example below illustrates a
+    second [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object, mapped to a class called `Address`, then linked to `User` via [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that classes which are mapped with the Imperative approach are **fully
+    interchangeable** with those mapped with the Declarative approach. Both systems
+    ultimately create the same configuration, consisting of a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), user-defined class, linked together with a [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object. When we talk about “the behavior of [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")”, this includes when using the Declarative system as
+    well - it’s still used, just behind the scenes.  ### Declarative Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The **Declarative Mapping** is the typical way that mappings are constructed
+    in modern SQLAlchemy. The most common pattern is to first construct a base class
+    using the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") superclass. The resulting base class, when subclassed
+    will apply the declarative mapping process to all subclasses that derive from
+    it, relative to a particular [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") that is local to the new base by default. The example
+    below illustrates the use of a declarative base which is then used in a declarative
+    table mapping:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class is used to generate a new base class (within
+    SQLAlchemy’s documentation it’s typically referred to as `Base`, however can have
+    any desired name) from which new classes to be mapped may inherit from, as above
+    a new mapped class `User` is constructed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") superclass supersedes the use of the [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base
+    "sqlalchemy.orm.declarative_base") function and [`registry.generate_base()`](mapping_api.html#sqlalchemy.orm.registry.generate_base
+    "sqlalchemy.orm.registry.generate_base") methods; the superclass approach integrates
+    with [**PEP 484**](https://peps.python.org/pep-0484/) tools without the use of
+    plugins. See [ORM Declarative Models](../changelog/whatsnew_20.html#whatsnew-20-orm-declarative-typing)
+    for migration notes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The base class refers to a [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") object that maintains a collection of related mapped
+    classes. as well as to a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object that retains a collection of [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects to which the classes are mapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The major Declarative mapping styles are further detailed in the following
+    sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using a Declarative Base Class](declarative_styles.html#orm-declarative-generated-base-class)
+    - declarative mapping using a base class.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Declarative Mapping using a Decorator (no declarative base)](declarative_styles.html#orm-declarative-decorator)
+    - declarative mapping using a decorator, rather than a base class.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Within the scope of a Declarative mapped class, there are also two varieties
+    of how the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    metadata may be declared. These include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Declarative Table with mapped_column()](declarative_tables.html#orm-declarative-table)
+    - table columns are declared inline within the mapped class using the [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") directive (or in legacy form, using the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object directly). The [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") directive may also be optionally combined with
+    type annotations using the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    class which can provide some details about the mapped columns directly. The column
+    directives, in combination with the `__tablename__` and optional `__table_args__`
+    class level directives will allow the Declarative mapping process to construct
+    a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object to be mapped.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Declarative with Imperative Table (a.k.a. Hybrid Declarative)](declarative_tables.html#orm-imperative-table-configuration)
+    - Instead of specifying table name and attributes separately, an explicitly constructed
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object is associated with a class that is otherwise mapped declaratively. This
+    style of mapping is a hybrid of “declarative” and “imperative” mapping, and applies
+    to techniques such as mapping classes to [reflected](../glossary.html#term-reflected)
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects, as well as mapping classes to existing Core constructs such as joins
+    and subqueries.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Documentation for Declarative mapping continues at [Mapping Classes with Declarative](declarative_mapping.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Imperative Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An **imperative** or **classical** mapping refers to the configuration of a
+    mapped class using the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method, where the target class does
+    not include any declarative class attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The imperative mapping form is a lesser-used form of mapping that originates
+    from the very first releases of SQLAlchemy in 2006\. It’s essentially a means
+    of bypassing the Declarative system to provide a more “barebones” system of mapping,
+    and does not offer modern features such as [**PEP 484**](https://peps.python.org/pep-0484/)
+    support. As such, most documentation examples use Declarative forms, and it’s
+    recommended that new users start with [Declarative Table](declarative_tables.html)
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method is now used to create classical
+    mappings. The `sqlalchemy.orm.mapper()` standalone function is effectively removed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In “classical” form, the table metadata is created separately with the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") construct, then associated with the `User` class via
+    the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method, after establishing a [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") instance. Normally, a single instance of [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") shared for all mapped classes that are related to each
+    other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information about mapped attributes, such as relationships to other classes,
+    are provided via the `properties` dictionary. The example below illustrates a
+    second [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object, mapped to a class called `Address`, then linked to `User` via [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that classes which are mapped with the Imperative approach are **fully
+    interchangeable** with those mapped with the Declarative approach. Both systems
+    ultimately create the same configuration, consisting of a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), user-defined class, linked together with a [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object. When we talk about “the behavior of [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")”, this includes when using the Declarative system as
+    well - it’s still used, just behind the scenes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Mapped Class Essential Components'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With all mapping forms, the mapping of the class can be configured in many ways
+    by passing construction arguments that ultimately become part of the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object via its constructor. The parameters that are delivered
+    to [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    originate from the given mapping form, including parameters passed to [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") for an Imperative mapping, or when
+    using the Declarative system, from a combination of the table columns, SQL expressions
+    and relationships being mapped along with that of attributes such as [__mapper_args__](declarative_config.html#orm-declarative-mapper-options).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are four general classes of configuration information that the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") class looks for:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The class to be mapped
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is a class that we construct in our application. There are generally no
+    restrictions on the structure of this class. [[1]](#id4) When a Python class is
+    mapped, there can only be **one** [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object for the class. [[2]](#id5)
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    the class to be mapped is either a subclass of the declarative base class, or
+    is handled by a decorator or function such as [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped").
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, the class
+    is passed directly as the [`map_imperatively.class_`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively.params.class_
+    "sqlalchemy.orm.registry.map_imperatively") argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The table, or other from clause object
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the vast majority of common cases this is an instance of [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"). For more advanced use cases, it may also refer to
+    any kind of [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") object, the most common alternative objects
+    being the [`Subquery`](../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") and [`Join`](../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    the subject table is either generated by the declarative system based on the `__tablename__`
+    attribute and the [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects presented, or it is established via the `__table__` attribute. These two
+    styles of configuration are presented at [Declarative Table with mapped_column()](declarative_tables.html#orm-declarative-table)
+    and [Declarative with Imperative Table (a.k.a. Hybrid Declarative)](declarative_tables.html#orm-imperative-table-configuration).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, the subject
+    table is passed positionally as the [`map_imperatively.local_table`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively.params.local_table
+    "sqlalchemy.orm.registry.map_imperatively") argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In contrast to the “one mapper per class” requirement of a mapped class, the
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    or other [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") object that is the subject of the mapping
+    may be associated with any number of mappings. The [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") applies modifications directly to the user-defined class,
+    but does not modify the given [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") or other [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") in any way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### The properties dictionary'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a dictionary of all of the attributes that will be associated with the
+    mapped class. By default, the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") generates entries for this dictionary derived from the
+    given [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table"),
+    in the form of [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") objects which each refer to an individual [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") of the mapped table. The properties dictionary will
+    also contain all the other kinds of [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") objects to be configured, most commonly instances
+    generated by the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    the properties dictionary is generated by the declarative system by scanning the
+    class to be mapped for appropriate attributes. See the section [Defining Mapped
+    Properties with Declarative](declarative_config.html#orm-declarative-properties)
+    for notes on this process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, the properties
+    dictionary is passed directly as the `properties` parameter to [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively"), which will pass it along to the [`Mapper.properties`](mapping_api.html#sqlalchemy.orm.Mapper.params.properties
+    "sqlalchemy.orm.Mapper") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other mapper configuration parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    additional mapper configuration arguments are configured via the `__mapper_args__`
+    class attribute. Examples of use are available at [Mapper Configuration Options
+    with Declarative](declarative_config.html#orm-declarative-mapper-options).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, keyword arguments
+    are passed to the to [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method which passes them along to
+    the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The full range of parameters accepted are documented at [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper").
+  prefs: []
+  type: TYPE_NORMAL
+- en: The class to be mapped
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is a class that we construct in our application. There are generally no
+    restrictions on the structure of this class. [[1]](#id4) When a Python class is
+    mapped, there can only be **one** [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object for the class. [[2]](#id5)
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    the class to be mapped is either a subclass of the declarative base class, or
+    is handled by a decorator or function such as [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped").
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, the class
+    is passed directly as the [`map_imperatively.class_`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively.params.class_
+    "sqlalchemy.orm.registry.map_imperatively") argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The table, or other from clause object
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the vast majority of common cases this is an instance of [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"). For more advanced use cases, it may also refer to
+    any kind of [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") object, the most common alternative objects
+    being the [`Subquery`](../core/selectable.html#sqlalchemy.sql.expression.Subquery
+    "sqlalchemy.sql.expression.Subquery") and [`Join`](../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    the subject table is either generated by the declarative system based on the `__tablename__`
+    attribute and the [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects presented, or it is established via the `__table__` attribute. These two
+    styles of configuration are presented at [Declarative Table with mapped_column()](declarative_tables.html#orm-declarative-table)
+    and [Declarative with Imperative Table (a.k.a. Hybrid Declarative)](declarative_tables.html#orm-imperative-table-configuration).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, the subject
+    table is passed positionally as the [`map_imperatively.local_table`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively.params.local_table
+    "sqlalchemy.orm.registry.map_imperatively") argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In contrast to the “one mapper per class” requirement of a mapped class, the
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    or other [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") object that is the subject of the mapping
+    may be associated with any number of mappings. The [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") applies modifications directly to the user-defined class,
+    but does not modify the given [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") or other [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") in any way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### The properties dictionary'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a dictionary of all of the attributes that will be associated with the
+    mapped class. By default, the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") generates entries for this dictionary derived from the
+    given [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table"),
+    in the form of [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") objects which each refer to an individual [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") of the mapped table. The properties dictionary will
+    also contain all the other kinds of [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") objects to be configured, most commonly instances
+    generated by the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    the properties dictionary is generated by the declarative system by scanning the
+    class to be mapped for appropriate attributes. See the section [Defining Mapped
+    Properties with Declarative](declarative_config.html#orm-declarative-properties)
+    for notes on this process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, the properties
+    dictionary is passed directly as the `properties` parameter to [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively"), which will pass it along to the [`Mapper.properties`](mapping_api.html#sqlalchemy.orm.Mapper.params.properties
+    "sqlalchemy.orm.Mapper") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other mapper configuration parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When mapping with the [declarative](#orm-declarative-mapping) mapping style,
+    additional mapper configuration arguments are configured via the `__mapper_args__`
+    class attribute. Examples of use are available at [Mapper Configuration Options
+    with Declarative](declarative_config.html#orm-declarative-mapper-options).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mapping with the [imperative](#orm-imperative-mapping) style, keyword arguments
+    are passed to the to [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method which passes them along to
+    the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The full range of parameters accepted are documented at [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Mapped Class Behavior'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Across all styles of mapping using the [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") object, the following behaviors are common:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Default Constructor'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`registry`](mapping_api.html#sqlalchemy.orm.registry "sqlalchemy.orm.registry")
+    applies a default constructor, i.e. `__init__` method, to all mapped classes that
+    don’t explicitly have their own `__init__` method. The behavior of this method
+    is such that it provides a convenient keyword constructor that will accept as
+    optional keyword arguments all the attributes that are named. E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An object of type `User` above will have a constructor which allows `User`
+    objects to be created as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses)
+    feature provides an alternate means of generating a default `__init__()` method
+    by using Python dataclasses, and allows for a highly configurable constructor
+    form.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `__init__()` method of the class is called only when the object is constructed
+    in Python code, and **not when an object is loaded or refreshed from the database**.
+    See the next section [Maintaining Non-Mapped State Across Loads](#mapped-class-load-events)
+    for a primer on how to invoke special logic when objects are loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A class that includes an explicit `__init__()` method will maintain that method,
+    and no default constructor will be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To change the default constructor used, a user-defined Python callable may be
+    provided to the [`registry.constructor`](mapping_api.html#sqlalchemy.orm.registry.params.constructor
+    "sqlalchemy.orm.registry") parameter which will be used as the default constructor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The constructor also applies to imperative mappings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above class, mapped imperatively as described at [Imperative Mapping](#orm-imperative-mapping),
+    will also feature the default constructor associated with the [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4: classical mappings now support a standard configuration-level
+    constructor when they are mapped via the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method.  ### Maintaining Non-Mapped
+    State Across Loads'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `__init__()` method of the mapped class is invoked when the object is constructed
+    directly in Python code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, when an object is loaded using the ORM [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), the `__init__()` method is **not** called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: The reason for this is that when loaded from the database, the operation used
+    to construct the object, in the above example the `User`, is more analogous to
+    **deserialization**, such as unpickling, rather than initial construction. The
+    majority of the object’s important state is not being assembled for the first
+    time, it’s being re-loaded from database rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore to maintain state within the object that is not part of the data that’s
+    stored to the database, such that this state is present when objects are loaded
+    as well as constructed, there are two general approaches detailed below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use Python descriptors like `@property`, rather than state, to dynamically compute
+    attributes as needed.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For simple attributes, this is the simplest approach and the least error prone.
+    For example if an object `Point` with `Point.x` and `Point.y` wanted an attribute
+    with the sum of these attributes:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: An advantage of using dynamic descriptors is that the value is computed every
+    time, meaning it maintains the correct value as the underlying attributes (`x`
+    and `y` in this case) might change.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Other forms of the above pattern include Python standard library [cached_property](https://docs.python.org/3/library/functools.html#functools.cached_property)
+    decorator (which is cached, and not re-computed each time), as well as SQLAlchemy’s
+    [`hybrid_property`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") decorator which allows for attributes
+    that can work for SQL querying as well.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Establish state on-load using [`InstanceEvents.load()`](events.html#sqlalchemy.orm.InstanceEvents.load
+    "sqlalchemy.orm.InstanceEvents.load"), and optionally supplemental methods [`InstanceEvents.refresh()`](events.html#sqlalchemy.orm.InstanceEvents.refresh
+    "sqlalchemy.orm.InstanceEvents.refresh") and [`InstanceEvents.refresh_flush()`](events.html#sqlalchemy.orm.InstanceEvents.refresh_flush
+    "sqlalchemy.orm.InstanceEvents.refresh_flush").
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'These are event hooks that are invoked whenever the object is loaded from the
+    database, or when it is refreshed after being expired. Typically only the [`InstanceEvents.load()`](events.html#sqlalchemy.orm.InstanceEvents.load
+    "sqlalchemy.orm.InstanceEvents.load") is needed, since non-mapped local object
+    state is not affected by expiration operations. To revise the `Point` example
+    above looks like:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If using the refresh events as well, the event hooks can be stacked on top
+    of one callable if needed, as:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Above, the `attrs` attribute will be present for the `refresh` and `refresh_flush`
+    events and indicate a list of attribute names that are being refreshed.  ### Runtime
+    Introspection of Mapped classes, Instances and Mappers'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'A class that is mapped using [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") will also feature a few attributes that are common
+    to all mappings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `__mapper__` attribute will refer to the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") that is associated with the class:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    is also what’s returned when using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function against the mapped class:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `__table__` attribute will refer to the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), or more generically to the [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") object, to which the class is mapped:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") is also what’s returned when using the
+    [`Mapper.local_table`](mapping_api.html#sqlalchemy.orm.Mapper.local_table "sqlalchemy.orm.Mapper.local_table")
+    attribute of the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper"):'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For a single-table inheritance mapping, where the class is a subclass that
+    does not have a table of its own, the [`Mapper.local_table`](mapping_api.html#sqlalchemy.orm.Mapper.local_table
+    "sqlalchemy.orm.Mapper.local_table") attribute as well as the `.__table__` attribute
+    will be `None`. To retrieve the “selectable” that is actually selected from during
+    a query for this class, this is available via the [`Mapper.selectable`](mapping_api.html#sqlalchemy.orm.Mapper.selectable
+    "sqlalchemy.orm.Mapper.selectable") attribute:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '#### Inspection of Mapper objects'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As illustrated in the previous section, the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object is available from any mapped class, regardless
+    of method, using the [Runtime Inspection API](../core/inspection.html) system.
+    Using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function, one can acquire the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") from a mapped class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Detailed information is available including [`Mapper.columns`](mapping_api.html#sqlalchemy.orm.Mapper.columns
+    "sqlalchemy.orm.Mapper.columns"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is a namespace that can be viewed in a list format or via individual names:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other namespaces include [`Mapper.all_orm_descriptors`](mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors"), which includes all mapped attributes
+    as well as hybrids, association proxies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As well as [`Mapper.column_attrs`](mapping_api.html#sqlalchemy.orm.Mapper.column_attrs
+    "sqlalchemy.orm.Mapper.column_attrs"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")  ####
+    Inspection of Mapped Instances'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function also provides information about instances of a mapped class. When applied
+    to an instance of a mapped class, rather than the class itself, the object returned
+    is known as [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState"),
+    which will provide links to not only the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") in use by the class, but also a detailed interface that
+    provides information on the state of individual attributes within the instance
+    including their current value and how this relates to what their database-loaded
+    value is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given an instance of the `User` class loaded from the database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function will return to us an [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With this object we can see elements such as the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to which the object is [attached](../glossary.html#term-attached), if any:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information about the current [persistence state](session_state_management.html#session-object-states)
+    for the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Attribute state information such as attributes that have not been loaded or
+    [lazy loaded](../glossary.html#term-lazy-loaded) (assume `addresses` refers to
+    a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    on the mapped class to a related class):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information regarding the current in-Python status of attributes, such as attributes
+    that have not been modified since the last flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'as well as specific history on modifications to attributes since the last flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState.attrs`](internals.html#sqlalchemy.orm.InstanceState.attrs "sqlalchemy.orm.InstanceState.attrs")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AttributeState`](internals.html#sqlalchemy.orm.AttributeState "sqlalchemy.orm.AttributeState")  ###
+    Default Constructor'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`registry`](mapping_api.html#sqlalchemy.orm.registry "sqlalchemy.orm.registry")
+    applies a default constructor, i.e. `__init__` method, to all mapped classes that
+    don’t explicitly have their own `__init__` method. The behavior of this method
+    is such that it provides a convenient keyword constructor that will accept as
+    optional keyword arguments all the attributes that are named. E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An object of type `User` above will have a constructor which allows `User`
+    objects to be created as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses)
+    feature provides an alternate means of generating a default `__init__()` method
+    by using Python dataclasses, and allows for a highly configurable constructor
+    form.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `__init__()` method of the class is called only when the object is constructed
+    in Python code, and **not when an object is loaded or refreshed from the database**.
+    See the next section [Maintaining Non-Mapped State Across Loads](#mapped-class-load-events)
+    for a primer on how to invoke special logic when objects are loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A class that includes an explicit `__init__()` method will maintain that method,
+    and no default constructor will be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To change the default constructor used, a user-defined Python callable may be
+    provided to the [`registry.constructor`](mapping_api.html#sqlalchemy.orm.registry.params.constructor
+    "sqlalchemy.orm.registry") parameter which will be used as the default constructor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The constructor also applies to imperative mappings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above class, mapped imperatively as described at [Imperative Mapping](#orm-imperative-mapping),
+    will also feature the default constructor associated with the [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4: classical mappings now support a standard configuration-level
+    constructor when they are mapped via the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Maintaining Non-Mapped State Across Loads'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `__init__()` method of the mapped class is invoked when the object is constructed
+    directly in Python code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, when an object is loaded using the ORM [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), the `__init__()` method is **not** called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: The reason for this is that when loaded from the database, the operation used
+    to construct the object, in the above example the `User`, is more analogous to
+    **deserialization**, such as unpickling, rather than initial construction. The
+    majority of the object’s important state is not being assembled for the first
+    time, it’s being re-loaded from database rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore to maintain state within the object that is not part of the data that’s
+    stored to the database, such that this state is present when objects are loaded
+    as well as constructed, there are two general approaches detailed below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use Python descriptors like `@property`, rather than state, to dynamically compute
+    attributes as needed.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For simple attributes, this is the simplest approach and the least error prone.
+    For example if an object `Point` with `Point.x` and `Point.y` wanted an attribute
+    with the sum of these attributes:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: An advantage of using dynamic descriptors is that the value is computed every
+    time, meaning it maintains the correct value as the underlying attributes (`x`
+    and `y` in this case) might change.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Other forms of the above pattern include Python standard library [cached_property](https://docs.python.org/3/library/functools.html#functools.cached_property)
+    decorator (which is cached, and not re-computed each time), as well as SQLAlchemy’s
+    [`hybrid_property`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") decorator which allows for attributes
+    that can work for SQL querying as well.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Establish state on-load using [`InstanceEvents.load()`](events.html#sqlalchemy.orm.InstanceEvents.load
+    "sqlalchemy.orm.InstanceEvents.load"), and optionally supplemental methods [`InstanceEvents.refresh()`](events.html#sqlalchemy.orm.InstanceEvents.refresh
+    "sqlalchemy.orm.InstanceEvents.refresh") and [`InstanceEvents.refresh_flush()`](events.html#sqlalchemy.orm.InstanceEvents.refresh_flush
+    "sqlalchemy.orm.InstanceEvents.refresh_flush").
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'These are event hooks that are invoked whenever the object is loaded from the
+    database, or when it is refreshed after being expired. Typically only the [`InstanceEvents.load()`](events.html#sqlalchemy.orm.InstanceEvents.load
+    "sqlalchemy.orm.InstanceEvents.load") is needed, since non-mapped local object
+    state is not affected by expiration operations. To revise the `Point` example
+    above looks like:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If using the refresh events as well, the event hooks can be stacked on top
+    of one callable if needed, as:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Above, the `attrs` attribute will be present for the `refresh` and `refresh_flush`
+    events and indicate a list of attribute names that are being refreshed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '### Runtime Introspection of Mapped classes, Instances and Mappers'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A class that is mapped using [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") will also feature a few attributes that are common
+    to all mappings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `__mapper__` attribute will refer to the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") that is associated with the class:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    is also what’s returned when using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function against the mapped class:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `__table__` attribute will refer to the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), or more generically to the [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") object, to which the class is mapped:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This [`FromClause`](../core/selectable.html#sqlalchemy.sql.expression.FromClause
+    "sqlalchemy.sql.expression.FromClause") is also what’s returned when using the
+    [`Mapper.local_table`](mapping_api.html#sqlalchemy.orm.Mapper.local_table "sqlalchemy.orm.Mapper.local_table")
+    attribute of the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper"):'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For a single-table inheritance mapping, where the class is a subclass that
+    does not have a table of its own, the [`Mapper.local_table`](mapping_api.html#sqlalchemy.orm.Mapper.local_table
+    "sqlalchemy.orm.Mapper.local_table") attribute as well as the `.__table__` attribute
+    will be `None`. To retrieve the “selectable” that is actually selected from during
+    a query for this class, this is available via the [`Mapper.selectable`](mapping_api.html#sqlalchemy.orm.Mapper.selectable
+    "sqlalchemy.orm.Mapper.selectable") attribute:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '#### Inspection of Mapper objects'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As illustrated in the previous section, the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object is available from any mapped class, regardless
+    of method, using the [Runtime Inspection API](../core/inspection.html) system.
+    Using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function, one can acquire the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") from a mapped class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Detailed information is available including [`Mapper.columns`](mapping_api.html#sqlalchemy.orm.Mapper.columns
+    "sqlalchemy.orm.Mapper.columns"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is a namespace that can be viewed in a list format or via individual names:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other namespaces include [`Mapper.all_orm_descriptors`](mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors"), which includes all mapped attributes
+    as well as hybrids, association proxies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As well as [`Mapper.column_attrs`](mapping_api.html#sqlalchemy.orm.Mapper.column_attrs
+    "sqlalchemy.orm.Mapper.column_attrs"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")  ####
+    Inspection of Mapped Instances'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function also provides information about instances of a mapped class. When applied
+    to an instance of a mapped class, rather than the class itself, the object returned
+    is known as [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState"),
+    which will provide links to not only the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") in use by the class, but also a detailed interface that
+    provides information on the state of individual attributes within the instance
+    including their current value and how this relates to what their database-loaded
+    value is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given an instance of the `User` class loaded from the database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function will return to us an [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With this object we can see elements such as the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to which the object is [attached](../glossary.html#term-attached), if any:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information about the current [persistence state](session_state_management.html#session-object-states)
+    for the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Attribute state information such as attributes that have not been loaded or
+    [lazy loaded](../glossary.html#term-lazy-loaded) (assume `addresses` refers to
+    a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    on the mapped class to a related class):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information regarding the current in-Python status of attributes, such as attributes
+    that have not been modified since the last flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'as well as specific history on modifications to attributes since the last flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState.attrs`](internals.html#sqlalchemy.orm.InstanceState.attrs "sqlalchemy.orm.InstanceState.attrs")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AttributeState`](internals.html#sqlalchemy.orm.AttributeState "sqlalchemy.orm.AttributeState")  ####
+    Inspection of Mapper objects'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As illustrated in the previous section, the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object is available from any mapped class, regardless
+    of method, using the [Runtime Inspection API](../core/inspection.html) system.
+    Using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function, one can acquire the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") from a mapped class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Detailed information is available including [`Mapper.columns`](mapping_api.html#sqlalchemy.orm.Mapper.columns
+    "sqlalchemy.orm.Mapper.columns"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is a namespace that can be viewed in a list format or via individual names:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other namespaces include [`Mapper.all_orm_descriptors`](mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors"), which includes all mapped attributes
+    as well as hybrids, association proxies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As well as [`Mapper.column_attrs`](mapping_api.html#sqlalchemy.orm.Mapper.column_attrs
+    "sqlalchemy.orm.Mapper.column_attrs"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Inspection of Mapped Instances'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function also provides information about instances of a mapped class. When applied
+    to an instance of a mapped class, rather than the class itself, the object returned
+    is known as [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState"),
+    which will provide links to not only the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") in use by the class, but also a detailed interface that
+    provides information on the state of individual attributes within the instance
+    including their current value and how this relates to what their database-loaded
+    value is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given an instance of the `User` class loaded from the database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")
+    function will return to us an [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With this object we can see elements such as the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to which the object is [attached](../glossary.html#term-attached), if any:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information about the current [persistence state](session_state_management.html#session-object-states)
+    for the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Attribute state information such as attributes that have not been loaded or
+    [lazy loaded](../glossary.html#term-lazy-loaded) (assume `addresses` refers to
+    a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    on the mapped class to a related class):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Information regarding the current in-Python status of attributes, such as attributes
+    that have not been modified since the last flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'as well as specific history on modifications to attributes since the last flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState.attrs`](internals.html#sqlalchemy.orm.InstanceState.attrs "sqlalchemy.orm.InstanceState.attrs")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AttributeState`](internals.html#sqlalchemy.orm.AttributeState "sqlalchemy.orm.AttributeState")'
+  prefs: []
+  type: TYPE_NORMAL

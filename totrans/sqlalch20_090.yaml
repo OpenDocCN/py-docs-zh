@@ -1,0 +1,3124 @@
+- en: Column INSERT/UPDATE Defaults
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/core/defaults.html](https://docs.sqlalchemy.org/en/20/core/defaults.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Column INSERT and UPDATE defaults refer to functions that create a **default
+    value** for a particular column in a row as an INSERT or UPDATE statement is proceeding
+    against that row, in the case where **no value was provided to the INSERT or UPDATE
+    statement for that column**. That is, if a table has a column called “timestamp”,
+    and an INSERT statement proceeds which does not include a value for this column,
+    an INSERT default would create a new value, such as the current time, that is
+    used as the value to be INSERTed into the “timestamp” column. If the statement
+    *does* include a value for this column, then the default does *not* take place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Column defaults can be server-side functions or constant values which are defined
+    in the database along with the schema in [DDL](../glossary.html#term-DDL), or
+    as SQL expressions which are rendered directly within an INSERT or UPDATE statement
+    emitted by SQLAlchemy; they may also be client-side Python functions or constant
+    values which are invoked by SQLAlchemy before data is passed to the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: A column default handler should not be confused with a construct that intercepts
+    and modifies incoming values for INSERT and UPDATE statements which *are* provided
+    to the statement as it is invoked. This is known as [data marshalling](../glossary.html#term-data-marshalling),
+    where a column value is modified in some way by the application before being sent
+    to the database. SQLAlchemy provides a few means of achieving this which include
+    using [custom datatypes](custom_types.html#types-typedecorator), [SQL execution
+    events](events.html#core-sql-events) and in the ORM [custom validators](../orm/mapped_attributes.html#simple-validators)
+    as well as [attribute events](../orm/events.html#orm-attribute-events). Column
+    defaults are only invoked when there is **no value present** for a column in a
+    SQL [DML](../glossary.html#term-DML) statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy provides an array of features regarding default generation functions
+    which take place for non-present values during INSERT and UPDATE statements. Options
+    include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Scalar values used as defaults during INSERT and UPDATE operations
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Python functions which execute upon INSERT and UPDATE operations
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SQL expressions which are embedded in INSERT statements (or in some cases execute
+    beforehand)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SQL expressions which are embedded in UPDATE statements
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Server side default values used during INSERT
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Markers for server-side triggers used during UPDATE
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The general rule for all insert/update defaults is that they only take effect
+    if no value for a particular column is passed as an `execute()` parameter; otherwise,
+    the given value is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Scalar Defaults
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The simplest kind of default is a scalar value used as the default value of
+    a column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the value “12” will be bound as the column value during an INSERT if
+    no other value is supplied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A scalar value may also be associated with an UPDATE statement, though this
+    is not very common (as UPDATE statements are usually looking for dynamic defaults):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Python-Executed Functions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") and [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") keyword arguments also accept Python functions. These
+    functions are invoked at the time of insert or update if no other value for that
+    column is supplied, and the value returned is used for the column’s value. Below
+    illustrates a crude “sequence” that assigns an incrementing counter to a primary
+    key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: It should be noted that for real “incrementing sequence” behavior, the built-in
+    capabilities of the database should normally be used, which may include sequence
+    objects or other autoincrementing capabilities. For primary key columns, SQLAlchemy
+    will in most cases use these capabilities automatically. See the API documentation
+    for [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    including the [`Column.autoincrement`](metadata.html#sqlalchemy.schema.Column.params.autoincrement
+    "sqlalchemy.schema.Column") flag, as well as the section on [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") later in this chapter for background on standard
+    primary key generation techniques.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate onupdate, we assign the Python `datetime` function `now` to the
+    [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate "sqlalchemy.schema.Column")
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: When an update statement executes and no value is passed for `last_updated`,
+    the `datetime.datetime.now()` Python function is executed and its return value
+    used as the value for `last_updated`. Notice that we provide `now` as the function
+    itself without calling it (i.e. there are no parenthesis following) - SQLAlchemy
+    will execute the function at the time the statement executes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Context-Sensitive Default Functions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Python functions used by [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") and [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") may also make use of the current statement’s context
+    in order to determine a value. The context of a statement is an internal SQLAlchemy
+    object which contains all information about the statement being executed, including
+    its source expression, the parameters associated with it and the cursor. The typical
+    use case for this context with regards to default generation is to have access
+    to the other values being inserted or updated on the row. To access the context,
+    provide a function that accepts a single `context` argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above default generation function is applied so that it will execute for
+    all INSERT and UPDATE statements where a value for `counter_plus_twelve` was otherwise
+    not provided, and the value will be that of whatever value is present in the execution
+    for the `counter` column, plus the number 12.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a single statement that is being executed using “executemany” style, e.g.
+    with multiple parameter sets passed to [`Connection.execute()`](connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute"), the user-defined function is called once
+    for each set of parameters. For the use case of a multi-valued [`Insert`](dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") construct (e.g. with more than one VALUES
+    clause set up via the [`Insert.values()`](dml.html#sqlalchemy.sql.expression.Insert.values
+    "sqlalchemy.sql.expression.Insert.values") method), the user-defined function
+    is also called once for each set of parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the function is invoked, the special method [`DefaultExecutionContext.get_current_parameters()`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters
+    "sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters") is
+    available from the context object (an subclass of [`DefaultExecutionContext`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext
+    "sqlalchemy.engine.default.DefaultExecutionContext")). This method returns a dictionary
+    of column-key to values that represents the full set of values for the INSERT
+    or UPDATE statement. In the case of a multi-valued INSERT construct, the subset
+    of parameters that corresponds to the individual VALUES clause is isolated from
+    the full parameter dictionary and returned alone.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.2: Added [`DefaultExecutionContext.get_current_parameters()`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters
+    "sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters") method,
+    which improves upon the still-present [`DefaultExecutionContext.current_parameters`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext.current_parameters
+    "sqlalchemy.engine.default.DefaultExecutionContext.current_parameters") attribute
+    by offering the service of organizing multiple VALUES clauses into individual
+    parameter dictionaries.  ## Client-Invoked SQL Expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") and [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") keywords may also be passed SQL expressions, which
+    are in most cases rendered inline within the INSERT or UPDATE statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the `create_date` column will be populated with the result of the `now()`
+    SQL function (which, depending on backend, compiles into `NOW()` or `CURRENT_TIMESTAMP`
+    in most cases) during an INSERT statement, and the `key` column with the result
+    of a SELECT subquery from another table. The `last_modified` column will be populated
+    with the value of the SQL `UTC_TIMESTAMP()` MySQL function when an UPDATE statement
+    is emitted for this table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using SQL functions with the `func` construct, we “call” the named function,
+    e.g. with parenthesis as in `func.now()`. This differs from when we specify a
+    Python callable as a default such as `datetime.datetime`, where we pass the function
+    itself, but we don’t invoke it ourselves. In the case of a SQL function, invoking
+    `func.now()` returns the SQL expression object that will render the “NOW” function
+    into the SQL being emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Default and update SQL expressions specified by [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") and [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") are invoked explicitly by SQLAlchemy when an INSERT
+    or UPDATE statement occurs, typically rendered inline within the DML statement
+    except in certain cases listed below. This is different than a “server side” default,
+    which is part of the table’s DDL definition, e.g. as part of the “CREATE TABLE”
+    statement, which are likely more common. For server side defaults, see the next
+    section [Server-invoked DDL-Explicit Default Expressions](#server-defaults).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a SQL expression indicated by [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") is used with primary key columns, there are some cases
+    where SQLAlchemy must “pre-execute” the default generation SQL function, meaning
+    it is invoked in a separate SELECT statement, and the resulting value is passed
+    as a parameter to the INSERT. This only occurs for primary key columns for an
+    INSERT statement that is being asked to return this primary key value, where RETURNING
+    or `cursor.lastrowid` may not be used. An [`Insert`](dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") construct that specifies the [`insert.inline`](dml.html#sqlalchemy.sql.expression.insert.params.inline
+    "sqlalchemy.sql.expression.insert") flag will always render default expressions
+    inline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When the statement is executed with a single set of parameters (that is, it
+    is not an “executemany” style execution), the returned [`CursorResult`](connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult") will contain a collection accessible via [`CursorResult.postfetch_cols()`](connections.html#sqlalchemy.engine.CursorResult.postfetch_cols
+    "sqlalchemy.engine.CursorResult.postfetch_cols") which contains a list of all
+    [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects which had an inline-executed default. Similarly, all parameters which
+    were bound to the statement, including all Python and SQL expressions which were
+    pre-executed, are present in the [`CursorResult.last_inserted_params()`](connections.html#sqlalchemy.engine.CursorResult.last_inserted_params
+    "sqlalchemy.engine.CursorResult.last_inserted_params") or [`CursorResult.last_updated_params()`](connections.html#sqlalchemy.engine.CursorResult.last_updated_params
+    "sqlalchemy.engine.CursorResult.last_updated_params") collections on [`CursorResult`](connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult"). The [`CursorResult.inserted_primary_key`](connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") collection contains a list
+    of primary key values for the row inserted (a list so that single-column and composite-column
+    primary keys are represented in the same format).  ## Server-invoked DDL-Explicit
+    Default Expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A variant on the SQL expression default is the [`Column.server_default`](metadata.html#sqlalchemy.schema.Column.params.server_default
+    "sqlalchemy.schema.Column"), which gets placed in the CREATE TABLE statement during
+    a [`Table.create()`](metadata.html#sqlalchemy.schema.Table.create "sqlalchemy.schema.Table.create")
+    operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A create call for the above table will produce:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example illustrates the two typical use cases for [`Column.server_default`](metadata.html#sqlalchemy.schema.Column.params.server_default
+    "sqlalchemy.schema.Column"), that of the SQL function (SYSDATE in the above example)
+    as well as a server-side constant value (the integer “0” in the above example).
+    It is advisable to use the [`text()`](sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct for any literal SQL values as opposed
+    to passing the raw value, as SQLAlchemy does not typically perform any quoting
+    or escaping on these values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Like client-generated expressions, [`Column.server_default`](metadata.html#sqlalchemy.schema.Column.params.server_default
+    "sqlalchemy.schema.Column") can accommodate SQL expressions in general, however
+    it is expected that these will usually be simple functions and expressions, and
+    not the more complex cases like an embedded SELECT.  ## Marking Implicitly Generated
+    Values, timestamps, and Triggered Columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Columns which generate a new value on INSERT or UPDATE based on other server-side
+    database mechanisms, such as database-specific auto-generating behaviors such
+    as seen with TIMESTAMP columns on some platforms, as well as custom triggers that
+    invoke upon INSERT or UPDATE to generate a new value, may be called out using
+    [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    as a marker:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    indicator does not affect the rendered DDL for the CREATE TABLE. Instead, it marks
+    the column as one that will have a new value populated by the database during
+    the process of an INSERT or UPDATE statement, and for supporting databases may
+    be used to indicate that the column should be part of a RETURNING or OUTPUT clause
+    for the statement. Tools such as the SQLAlchemy ORM then make use of this marker
+    in order to know how to get at the value of the column after such an operation.
+    In particular, the `ValuesBase.return_defaults()` method can be used with an [`Insert`](dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") or [`Update`](dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update") construct to indicate that these values should
+    be returned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For details on using [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    with the ORM, see [Fetching Server-Generated Defaults](../orm/persistence_techniques.html#orm-server-defaults).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Column.server_onupdate`](metadata.html#sqlalchemy.schema.Column.params.server_onupdate
+    "sqlalchemy.schema.Column") directive **does not** currently produce MySQL’s “ON
+    UPDATE CURRENT_TIMESTAMP()” clause. See [Rendering ON UPDATE CURRENT TIMESTAMP
+    for MySQL / MariaDB’s explicit_defaults_for_timestamp](../dialects/mysql.html#mysql-timestamp-onupdate)
+    for background on how to produce this clause.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Fetching Server-Generated Defaults](../orm/persistence_techniques.html#orm-server-defaults)  ##
+    Defining Sequences'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy represents database sequences using the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") object, which is considered to be a special case
+    of “column default”. It only has an effect on databases which have explicit support
+    for sequences, which among SQLAlchemy’s included dialects includes PostgreSQL,
+    Oracle, MS SQL Server, and MariaDB. The [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") object is otherwise ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: In newer database engines, the [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    construct should likely be preferred vs. [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") for generation of integer primary key values. See
+    the section [Identity Columns (GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY)](#identity-ddl)
+    for background on this construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    may be placed on any column as a “default” generator to be used during INSERT
+    operations, and can also be configured to fire off during UPDATE operations if
+    desired. It is most commonly used in conjunction with a single integer primary
+    key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the table `cartitems` is associated with a sequence named `cart_id_seq`.
+    Emitting [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") for the above table will include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using tables with explicit schema names (detailed at [Specifying the Schema
+    Name](metadata.html#schema-table-schema-name)), the configured schema of the [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") is **not** automatically shared by an embedded [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence"), instead, specify [`Sequence.schema`](#sqlalchemy.schema.Sequence.params.schema
+    "sqlalchemy.schema.Sequence"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") may
+    also be made to automatically make use of the [`MetaData.schema`](metadata.html#sqlalchemy.schema.MetaData.params.schema
+    "sqlalchemy.schema.MetaData") setting on the [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") in use; see [Associating a Sequence with the MetaData](#sequence-metadata)
+    for background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When [`Insert`](dml.html#sqlalchemy.sql.expression.Insert "sqlalchemy.sql.expression.Insert")
+    DML constructs are invoked against the `cartitems` table, without an explicit
+    value passed for the `cart_id` column, the `cart_id_seq` sequence will be used
+    to generate a value on participating backends. Typically, the sequence function
+    is embedded in the INSERT statement, which is combined with RETURNING so that
+    the newly generated value can be returned to the Python process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using [`Connection.execute()`](connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") to invoke an [`Insert`](dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") construct, newly generated primary key identifiers,
+    including but not limited to those generated using [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence"), are available from the [`CursorResult`](connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult") construct using the [`CursorResult.inserted_primary_key`](connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    is associated with a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    as its **Python-side** default generator, the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") will also be subject to “CREATE SEQUENCE” and “DROP
+    SEQUENCE” DDL when similar DDL is emitted for the owning [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), such as when using [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") to generate DDL for a series of tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") may
+    also be associated with a [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") construct directly. This allows the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") to be used in more than one [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") at a time and also allows the [`MetaData.schema`](metadata.html#sqlalchemy.schema.MetaData.params.schema
+    "sqlalchemy.schema.MetaData") parameter to be inherited. See the section [Associating
+    a Sequence with the MetaData](#sequence-metadata) for background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Associating a Sequence on a SERIAL column
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'PostgreSQL’s SERIAL datatype is an auto-incrementing type that implies the
+    implicit creation of a PostgreSQL sequence when CREATE TABLE is emitted. The [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") construct, when indicated for a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), may indicate that it should not be used in this specific
+    case by specifying a value of `True` for the [`Sequence.optional`](#sqlalchemy.schema.Sequence.params.optional
+    "sqlalchemy.schema.Sequence") parameter. This allows the given [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") to be used for backends that have no alternative
+    primary key generation system but to ignore it for backends such as PostgreSQL
+    which will automatically generate a sequence for a particular column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, `CREATE TABLE` for PostgreSQL will make use of the `SERIAL`
+    datatype for the `cart_id` column, and the `cart_id_seq` sequence will be ignored.
+    However on Oracle, the `cart_id_seq` sequence will be created explicitly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: This particular interaction of SERIAL and SEQUENCE is fairly legacy, and as
+    in other cases, using [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    instead will simplify the operation to simply use `IDENTITY` on all supported
+    backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing a Sequence Standalone
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A SEQUENCE is a first class schema object in SQL and can be used to generate
+    values independently in the database. If you have a [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") object, it can be invoked with its “next value”
+    instruction by passing it directly to a SQL execution method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to embed the “next value” function of a [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") inside of a SQL statement like a SELECT or INSERT,
+    use the [`Sequence.next_value()`](#sqlalchemy.schema.Sequence.next_value "sqlalchemy.schema.Sequence.next_value")
+    method, which will render at statement compilation time a SQL function that is
+    appropriate for the target backend:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Associating a Sequence with the MetaData'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    that is to be associated with arbitrary [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects, the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") may be associated with a particular [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), using the [`Sequence.metadata`](#sqlalchemy.schema.Sequence.params.metadata
+    "sqlalchemy.schema.Sequence") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Such a sequence can then be associated with columns in the usual way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    object is treated as an independent schema construct that can exist on its own
+    or be shared among tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Explicitly associating the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    with [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    allows for the following behaviors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") will
+    inherit the [`MetaData.schema`](metadata.html#sqlalchemy.schema.MetaData.params.schema
+    "sqlalchemy.schema.MetaData") parameter specified to the target [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), which affects the production of CREATE / DROP DDL
+    as well as how the [`Sequence.next_value()`](#sqlalchemy.schema.Sequence.next_value
+    "sqlalchemy.schema.Sequence.next_value") function is rendered in SQL statements.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") and [`MetaData.drop_all()`](metadata.html#sqlalchemy.schema.MetaData.drop_all
+    "sqlalchemy.schema.MetaData.drop_all") methods will emit CREATE / DROP for this
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence"), even if
+    the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") is
+    not associated with any [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    / [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    that’s a member of this [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Associating a Sequence as the Server Side Default
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following technique is known to work only with the PostgreSQL database.
+    It does not work with Oracle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The preceding sections illustrate how to associate a [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") with a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") as the **Python side default generator**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above case, the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    will automatically be subject to CREATE SEQUENCE / DROP SEQUENCE DDL when the
+    related [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    is subject to CREATE / DROP. However, the sequence will **not** be present as
+    the server-side default for the column when CREATE TABLE is emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we want the sequence to be used as a server-side default, meaning it takes
+    place even if we emit INSERT commands to the table from the SQL command line,
+    we can use the [`Column.server_default`](metadata.html#sqlalchemy.schema.Column.params.server_default
+    "sqlalchemy.schema.Column") parameter in conjunction with the value-generation
+    function of the sequence, available from the [`Sequence.next_value()`](#sqlalchemy.schema.Sequence.next_value
+    "sqlalchemy.schema.Sequence.next_value") method. Below we illustrate the same
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") being associated
+    with the [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    both as the Python-side default generator as well as the server-side default generator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'or with the ORM:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the “CREATE TABLE” statement is emitted, on PostgreSQL it would be emitted
+    as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Placement of the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    in both the Python-side and server-side default generation contexts ensures that
+    the “primary key fetch” logic works in all cases. Typically, sequence-enabled
+    databases also support RETURNING for INSERT statements, which is used automatically
+    by SQLAlchemy when emitting this statement. However if RETURNING is not used for
+    a particular insert, then SQLAlchemy would prefer to “pre-execute” the sequence
+    outside of the INSERT statement itself, which only works if the sequence is included
+    as the Python-side default generator function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The example also associates the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    with the enclosing [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    directly, which again ensures that the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") is fully associated with the parameters of the [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection including the default schema, if any.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Sequences/SERIAL/IDENTITY](../dialects/postgresql.html#postgresql-sequences)
+    - in the PostgreSQL dialect documentation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[RETURNING Support](../dialects/oracle.html#oracle-returning) - in the Oracle
+    dialect documentation  ## Computed Columns (GENERATED ALWAYS AS)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.11.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed") construct
+    allows a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    to be declared in DDL as a “GENERATED ALWAYS AS” column, that is, one which has
+    a value that is computed by the database server. The construct accepts a SQL expression
+    typically declared textually using a string or the [`text()`](sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct, in a similar manner as that of [`CheckConstraint`](constraints.html#sqlalchemy.schema.CheckConstraint
+    "sqlalchemy.schema.CheckConstraint"). The SQL expression is then interpreted by
+    the database server in order to determine the value for the column within a row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The DDL for the `square` table when run on a PostgreSQL 12 backend will look
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Whether the value is persisted upon INSERT and UPDATE, or if it is calculated
+    on fetch, is an implementation detail of the database; the former is known as
+    “stored” and the latter is known as “virtual”. Some database implementations support
+    both, but some only support one or the other. The optional [`Computed.persisted`](#sqlalchemy.schema.Computed.params.persisted
+    "sqlalchemy.schema.Computed") flag may be specified as `True` or `False` to indicate
+    if the “STORED” or “VIRTUAL” keyword should be rendered in DDL, however this will
+    raise an error if the keyword is not supported by the target backend; leaving
+    it unset will use a working default for the target backend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed") construct
+    is a subclass of the [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    object, and will set itself up as both the “server default” and “server onupdate”
+    generator for the target [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column"),
+    meaning it will be treated as a default generating column when INSERT and UPDATE
+    statements are generated, as well as that it will be fetched as a generating column
+    when using the ORM. This includes that it will be part of the RETURNING clause
+    of the database for databases which support RETURNING and the generated values
+    are to be eagerly fetched.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: A [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    that is defined with the [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    construct may not store any value outside of that which the server applies to
+    it; SQLAlchemy’s behavior when a value is passed for such a column to be written
+    in INSERT or UPDATE is currently that the value will be ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '“GENERATED ALWAYS AS” is currently known to be supported by:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: MySQL version 5.7 and onwards
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: MariaDB 10.x series and onwards
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PostgreSQL as of version 12
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Oracle - with the caveat that RETURNING does not work correctly with UPDATE
+    (a warning will be emitted to this effect when the UPDATE..RETURNING that includes
+    a computed column is rendered)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Microsoft SQL Server
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SQLite as of version 3.31
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    is used with an unsupported backend, if the target dialect does not support it,
+    a [`CompileError`](exceptions.html#sqlalchemy.exc.CompileError "sqlalchemy.exc.CompileError")
+    is raised when attempting to render the construct. Otherwise, if the dialect supports
+    it but the particular database server version in use does not, then a subclass
+    of [`DBAPIError`](exceptions.html#sqlalchemy.exc.DBAPIError "sqlalchemy.exc.DBAPIError"),
+    usually [`OperationalError`](exceptions.html#sqlalchemy.exc.OperationalError "sqlalchemy.exc.OperationalError"),
+    is raised when the DDL is emitted to the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")  ##
+    Identity Columns (GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity") construct
+    allows a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    to be declared as an identity column and rendered in DDL as “GENERATED { ALWAYS
+    | BY DEFAULT } AS IDENTITY”. An identity column has its value automatically generated
+    by the database server using an incrementing (or decrementing) sequence. The construct
+    shares most of its option to control the database behaviour with [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The DDL for the `data` table when run on a PostgreSQL 12 backend will look
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The database will generate a value for the `id` column upon insert, starting
+    from `42`, if the statement did not already contain a value for the `id` column.
+    An identity column can also require that the database generates the value of the
+    column, ignoring the value passed with the statement or raising an error, depending
+    on the backend. To activate this mode, set the parameter [`Identity.always`](#sqlalchemy.schema.Identity.params.always
+    "sqlalchemy.schema.Identity") to `True` in the [`Identity`](#sqlalchemy.schema.Identity
+    "sqlalchemy.schema.Identity") construct. Updating the previous example to include
+    this parameter will generate the following DDL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity") construct
+    is a subclass of the [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    object, and will set itself up as the “server default” generator for the target
+    [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column"),
+    meaning it will be treated as a default generating column when INSERT statements
+    are generated, as well as that it will be fetched as a generating column when
+    using the ORM. This includes that it will be part of the RETURNING clause of the
+    database for databases which support RETURNING and the generated values are to
+    be eagerly fetched.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    construct is currently known to be supported by:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: PostgreSQL as of version 10.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Oracle as of version 12\. It also supports passing `always=None` to enable the
+    default generated mode and the parameter `on_null=True` to specify “ON NULL” in
+    conjunction with a “BY DEFAULT” identity column.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Microsoft SQL Server. MSSQL uses a custom syntax that only supports the `start`
+    and `increment` parameters, and ignores all other.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    is used with an unsupported backend, it is ignored, and the default SQLAlchemy
+    logic for autoincrementing columns is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An error is raised when a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") specifies both an [`Identity`](#sqlalchemy.schema.Identity
+    "sqlalchemy.schema.Identity") and also sets [`Column.autoincrement`](metadata.html#sqlalchemy.schema.Column.params.autoincrement
+    "sqlalchemy.schema.Column") to `False`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Default Objects API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ColumnDefault](#sqlalchemy.schema.ColumnDefault) | A plain default value
+    on a column. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Computed](#sqlalchemy.schema.Computed) | Defines a generated column, i.e.
+    “GENERATED ALWAYS AS” syntax. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DefaultClause](#sqlalchemy.schema.DefaultClause) | A DDL-specified DEFAULT
+    column value. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DefaultGenerator](#sqlalchemy.schema.DefaultGenerator) | Base class for
+    column *default* values. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [FetchedValue](#sqlalchemy.schema.FetchedValue) | A marker for a transparent
+    database-side default. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Identity](#sqlalchemy.schema.Identity) | Defines an identity column, i.e.
+    “GENERATED { ALWAYS &#124; BY DEFAULT } AS IDENTITY” syntax. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Sequence](#sqlalchemy.schema.Sequence) | Represents a named database sequence.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Defines a generated column, i.e. “GENERATED ALWAYS AS” syntax.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    construct is an inline construct added to the argument list of a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: See the linked documentation below for complete details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.11.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Computed Columns (GENERATED ALWAYS AS)](#computed-ddl)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.Computed.__init__), [copy()](#sqlalchemy.schema.Computed.copy)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    ([`sqlalchemy.schema.FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue"),
+    [`sqlalchemy.schema.SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem "sqlalchemy.schema.SchemaItem"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a GENERATED ALWAYS AS DDL construct to accompany a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`sqltext` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A string containing the column generation expression, which will be used verbatim,
+    or a SQL expression construct, such as a [`text()`](sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") object. If given as a string, the object is
+    converted to a [`text()`](sqlelement.html#sqlalchemy.sql.expression.text "sqlalchemy.sql.expression.text")
+    object.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Warning
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`Computed.sqltext`](#sqlalchemy.schema.Computed.params.sqltext "sqlalchemy.schema.Computed")
+    argument to [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    can be passed as a Python string argument, which will be treated as **trusted
+    SQL text** and rendered as given. **DO NOT PASS UNTRUSTED INPUT TO THIS PARAMETER**.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`persisted` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Optional, controls how this column should be persisted by the database. Possible
+    values are:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`None`, the default, it will use the default persistence defined by the database.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`True`, will render `GENERATED ALWAYS AS ... STORED`, or the equivalent for
+    the target database if supported.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`False`, will render `GENERATED ALWAYS AS ... VIRTUAL`, or the equivalent for
+    the target database if supported.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Specifying `True` or `False` may raise an error when the DDL is emitted to the
+    target database if the database does not support that persistence option. Leaving
+    this parameter at its default of `None` is guaranteed to succeed for all databases
+    that support `GENERATED ALWAYS AS`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Deprecated since version 1.4: The [`Computed.copy()`](#sqlalchemy.schema.Computed.copy
+    "sqlalchemy.schema.Computed.copy") method is deprecated and will be removed in
+    a future release.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: A plain default value on a column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This could correspond to a constant, a callable function, or a SQL clause.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ColumnDefault`](#sqlalchemy.schema.ColumnDefault "sqlalchemy.schema.ColumnDefault")
+    is generated automatically whenever the `default`, `onupdate` arguments of [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") are used. A [`ColumnDefault`](#sqlalchemy.schema.ColumnDefault
+    "sqlalchemy.schema.ColumnDefault") can be passed positionally as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Is equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.ColumnDefault`](#sqlalchemy.schema.ColumnDefault "sqlalchemy.schema.ColumnDefault")
+    ([`sqlalchemy.schema.DefaultGenerator`](#sqlalchemy.schema.DefaultGenerator "sqlalchemy.schema.DefaultGenerator"),
+    `abc.ABC`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: A DDL-specified DEFAULT column value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DefaultClause`](#sqlalchemy.schema.DefaultClause "sqlalchemy.schema.DefaultClause")
+    is a [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    that also generates a “DEFAULT” clause when “CREATE TABLE” is emitted.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DefaultClause`](#sqlalchemy.schema.DefaultClause "sqlalchemy.schema.DefaultClause")
+    is generated automatically whenever the `server_default`, `server_onupdate` arguments
+    of [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    are used. A [`DefaultClause`](#sqlalchemy.schema.DefaultClause "sqlalchemy.schema.DefaultClause")
+    can be passed positionally as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Is equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DefaultClause`](#sqlalchemy.schema.DefaultClause "sqlalchemy.schema.DefaultClause")
+    ([`sqlalchemy.schema.FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base class for column *default* values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This object is only present on column.default or column.onupdate. It’s not valid
+    as a server default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DefaultGenerator`](#sqlalchemy.schema.DefaultGenerator
+    "sqlalchemy.schema.DefaultGenerator") ([`sqlalchemy.sql.expression.Executable`](selectable.html#sqlalchemy.sql.expression.Executable
+    "sqlalchemy.sql.expression.Executable"), [`sqlalchemy.schema.SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem
+    "sqlalchemy.schema.SchemaItem"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: A marker for a transparent database-side default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    when the database is configured to provide some automatic default for a column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Would indicate that some trigger or default generator will create a new value
+    for the `foo` column during an INSERT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Marking Implicitly Generated Values, timestamps, and Triggered Columns](#triggered-columns)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    (`sqlalchemy.sql.expression.SchemaEventTarget`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represents a named database sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") object
+    represents the name and configurational parameters of a database sequence. It
+    also represents a construct that can be “executed” by a SQLAlchemy [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or [`Connection`](connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), rendering the appropriate “next value” function
+    for the target database and returning a result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    is typically associated with a primary key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: When CREATE TABLE is emitted for the above [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), if the target platform supports sequences, a CREATE
+    SEQUENCE statement will be emitted as well. For platforms that don’t support sequences,
+    the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") construct
+    is ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Defining Sequences](#defaults-sequences)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`CreateSequence`](ddl.html#sqlalchemy.schema.CreateSequence "sqlalchemy.schema.CreateSequence")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DropSequence`](ddl.html#sqlalchemy.schema.DropSequence "sqlalchemy.schema.DropSequence")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.Sequence.__init__), [create()](#sqlalchemy.schema.Sequence.create),
+    [drop()](#sqlalchemy.schema.Sequence.drop), [next_value()](#sqlalchemy.schema.Sequence.next_value)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    (`sqlalchemy.schema.HasSchemaAttr`, `sqlalchemy.schema.IdentityOptions`, [`sqlalchemy.schema.DefaultGenerator`](#sqlalchemy.schema.DefaultGenerator
+    "sqlalchemy.schema.DefaultGenerator"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`name` – the name of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`start` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the starting index of the sequence. This value is used when the CREATE SEQUENCE
+    command is emitted to the database as the value of the “START WITH” clause. If
+    `None`, the clause is omitted, which on most platforms indicates a starting value
+    of 1.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`Sequence.start`](#sqlalchemy.schema.Sequence.params.start
+    "sqlalchemy.schema.Sequence") parameter is required in order to have DDL emit
+    “START WITH”. This is a reversal of a change made in version 1.4 which would implicitly
+    render “START WITH 1” if the [`Sequence.start`](#sqlalchemy.schema.Sequence.params.start
+    "sqlalchemy.schema.Sequence") were not included. See [The Sequence construct reverts
+    to not having any explicit default “start” value; impacts MS SQL Server](../changelog/whatsnew_20.html#change-7211)
+    for more detail.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`increment` – the increment value of the sequence. This value is used when
+    the CREATE SEQUENCE command is emitted to the database as the value of the “INCREMENT
+    BY” clause. If `None`, the clause is omitted, which on most platforms indicates
+    an increment of 1.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`minvalue` – the minimum value of the sequence. This value is used when the
+    CREATE SEQUENCE command is emitted to the database as the value of the “MINVALUE”
+    clause. If `None`, the clause is omitted, which on most platforms indicates a
+    minvalue of 1 and -2^63-1 for ascending and descending sequences, respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`maxvalue` – the maximum value of the sequence. This value is used when the
+    CREATE SEQUENCE command is emitted to the database as the value of the “MAXVALUE”
+    clause. If `None`, the clause is omitted, which on most platforms indicates a
+    maxvalue of 2^63-1 and -1 for ascending and descending sequences, respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nominvalue` – no minimum value of the sequence. This value is used when the
+    CREATE SEQUENCE command is emitted to the database as the value of the “NO MINVALUE”
+    clause. If `None`, the clause is omitted, which on most platforms indicates a
+    minvalue of 1 and -2^63-1 for ascending and descending sequences, respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nomaxvalue` – no maximum value of the sequence. This value is used when the
+    CREATE SEQUENCE command is emitted to the database as the value of the “NO MAXVALUE”
+    clause. If `None`, the clause is omitted, which on most platforms indicates a
+    maxvalue of 2^63-1 and -1 for ascending and descending sequences, respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cycle` – allows the sequence to wrap around when the maxvalue or minvalue
+    has been reached by an ascending or descending sequence respectively. This value
+    is used when the CREATE SEQUENCE command is emitted to the database as the “CYCLE”
+    clause. If the limit is reached, the next number generated will be the minvalue
+    or maxvalue, respectively. If cycle=False (the default) any calls to nextval after
+    the sequence has reached its maximum value will return an error.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`schema` – optional schema name for the sequence, if located in a schema other
+    than the default. The rules for selecting the schema name when a [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") is also present are the same as that of [`Table.schema`](metadata.html#sqlalchemy.schema.Table.params.schema
+    "sqlalchemy.schema.Table").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cache` – optional integer value; number of future values in the sequence which
+    are calculated in advance. Renders the CACHE keyword understood by Oracle and
+    PostgreSQL.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`order` – optional boolean value; if `True`, renders the ORDER keyword, understood
+    by Oracle, indicating the sequence is definitively ordered. May be necessary to
+    provide deterministic ordering using Oracle RAC.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`data_type` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The type to be returned by the sequence, for dialects that allow us to choose
+    between INTEGER, BIGINT, etc. (e.g., mssql).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`optional` – boolean value, when `True`, indicates that this [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") object only needs to be explicitly generated on
+    backends that don’t provide another way to generate primary key identifiers. Currently,
+    it essentially means, “don’t create this sequence on the PostgreSQL backend, where
+    the SERIAL keyword creates a sequence for us automatically”.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`quote` – boolean value, when `True` or `False`, explicitly forces quoting
+    of the [`Sequence.name`](#sqlalchemy.schema.Sequence.params.name "sqlalchemy.schema.Sequence")
+    on or off. When left at its default of `None`, normal quoting rules based on casing
+    and reserved words take place.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`quote_schema` – Set the quoting preferences for the `schema` name.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`metadata` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'optional [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    object which this [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    will be associated with. A [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    that is associated with a [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") gains the following capabilities:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") will
+    inherit the [`MetaData.schema`](metadata.html#sqlalchemy.schema.MetaData.params.schema
+    "sqlalchemy.schema.MetaData") parameter specified to the target [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), which affects the production of CREATE / DROP DDL,
+    if any.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The [`Sequence.create()`](#sqlalchemy.schema.Sequence.create "sqlalchemy.schema.Sequence.create")
+    and [`Sequence.drop()`](#sqlalchemy.schema.Sequence.drop "sqlalchemy.schema.Sequence.drop")
+    methods automatically use the engine bound to the [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object, if any.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") and [`MetaData.drop_all()`](metadata.html#sqlalchemy.schema.MetaData.drop_all
+    "sqlalchemy.schema.MetaData.drop_all") methods will emit CREATE / DROP for this
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence"), even if
+    the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") is
+    not associated with any [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    / [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    that’s a member of this [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData").
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The above behaviors can only occur if the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") is explicitly associated with the [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") via this parameter.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Associating a Sequence with the MetaData](#sequence-metadata) - full discussion
+    of the [`Sequence.metadata`](#sqlalchemy.schema.Sequence.params.metadata "sqlalchemy.schema.Sequence")
+    parameter.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`for_update` – Indicates this [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence"),
+    when associated with a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column"),
+    should be invoked for UPDATE statements on that column’s table, rather than for
+    INSERT statements, when no value is otherwise present for that column in the statement.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Creates this sequence in the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Drops this sequence from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a [`next_value`](functions.html#sqlalchemy.sql.functions.next_value "sqlalchemy.sql.functions.next_value")
+    function element which will render the appropriate increment function for this
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") within
+    any SQL expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Defines an identity column, i.e. “GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY”
+    syntax.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    construct is an inline construct added to the argument list of a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: See the linked documentation below for complete details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Identity Columns (GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY)](#identity-ddl)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.Identity.__init__), [copy()](#sqlalchemy.schema.Identity.copy)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    (`sqlalchemy.schema.IdentityOptions`, [`sqlalchemy.schema.FetchedValue`](#sqlalchemy.schema.FetchedValue
+    "sqlalchemy.schema.FetchedValue"), [`sqlalchemy.schema.SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem
+    "sqlalchemy.schema.SchemaItem"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY DDL construct to accompany
+    a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column").
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    documentation for a complete description of most parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: MSSQL supports this construct as the preferred alternative to generate an IDENTITY
+    on a column, but it uses non standard syntax that only support [`Identity.start`](#sqlalchemy.schema.Identity.params.start
+    "sqlalchemy.schema.Identity") and [`Identity.increment`](#sqlalchemy.schema.Identity.params.increment
+    "sqlalchemy.schema.Identity"). All other parameters are ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`always` – A boolean, that indicates the type of identity column. If `False`
+    is specified, the default, then the user-specified value takes precedence. If
+    `True` is specified, a user-specified value is not accepted ( on some backends,
+    like PostgreSQL, OVERRIDING SYSTEM VALUE, or similar, may be specified in an INSERT
+    to override the sequence value). Some backends also have a default value for this
+    parameter, `None` can be used to omit rendering this part in the DDL. It will
+    be treated as `False` if a backend does not have a default value.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`on_null` – Set to `True` to specify ON NULL in conjunction with a `always=False`
+    identity column. This option is only supported on some backends, like Oracle.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`start` – the starting index of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`increment` – the increment value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`minvalue` – the minimum value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`maxvalue` – the maximum value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nominvalue` – no minimum value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nomaxvalue` – no maximum value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cycle` – allows the sequence to wrap around when the maxvalue or minvalue
+    has been reached.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cache` – optional integer value; number of future values in the sequence which
+    are calculated in advance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`order` – optional boolean value; if true, renders the ORDER keyword.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Deprecated since version 1.4: The [`Identity.copy()`](#sqlalchemy.schema.Identity.copy
+    "sqlalchemy.schema.Identity.copy") method is deprecated and will be removed in
+    a future release.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Scalar Defaults
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The simplest kind of default is a scalar value used as the default value of
+    a column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the value “12” will be bound as the column value during an INSERT if
+    no other value is supplied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A scalar value may also be associated with an UPDATE statement, though this
+    is not very common (as UPDATE statements are usually looking for dynamic defaults):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Python-Executed Functions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") and [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") keyword arguments also accept Python functions. These
+    functions are invoked at the time of insert or update if no other value for that
+    column is supplied, and the value returned is used for the column’s value. Below
+    illustrates a crude “sequence” that assigns an incrementing counter to a primary
+    key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: It should be noted that for real “incrementing sequence” behavior, the built-in
+    capabilities of the database should normally be used, which may include sequence
+    objects or other autoincrementing capabilities. For primary key columns, SQLAlchemy
+    will in most cases use these capabilities automatically. See the API documentation
+    for [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    including the [`Column.autoincrement`](metadata.html#sqlalchemy.schema.Column.params.autoincrement
+    "sqlalchemy.schema.Column") flag, as well as the section on [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") later in this chapter for background on standard
+    primary key generation techniques.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate onupdate, we assign the Python `datetime` function `now` to the
+    [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate "sqlalchemy.schema.Column")
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: When an update statement executes and no value is passed for `last_updated`,
+    the `datetime.datetime.now()` Python function is executed and its return value
+    used as the value for `last_updated`. Notice that we provide `now` as the function
+    itself without calling it (i.e. there are no parenthesis following) - SQLAlchemy
+    will execute the function at the time the statement executes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Context-Sensitive Default Functions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Python functions used by [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") and [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") may also make use of the current statement’s context
+    in order to determine a value. The context of a statement is an internal SQLAlchemy
+    object which contains all information about the statement being executed, including
+    its source expression, the parameters associated with it and the cursor. The typical
+    use case for this context with regards to default generation is to have access
+    to the other values being inserted or updated on the row. To access the context,
+    provide a function that accepts a single `context` argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above default generation function is applied so that it will execute for
+    all INSERT and UPDATE statements where a value for `counter_plus_twelve` was otherwise
+    not provided, and the value will be that of whatever value is present in the execution
+    for the `counter` column, plus the number 12.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a single statement that is being executed using “executemany” style, e.g.
+    with multiple parameter sets passed to [`Connection.execute()`](connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute"), the user-defined function is called once
+    for each set of parameters. For the use case of a multi-valued [`Insert`](dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") construct (e.g. with more than one VALUES
+    clause set up via the [`Insert.values()`](dml.html#sqlalchemy.sql.expression.Insert.values
+    "sqlalchemy.sql.expression.Insert.values") method), the user-defined function
+    is also called once for each set of parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the function is invoked, the special method [`DefaultExecutionContext.get_current_parameters()`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters
+    "sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters") is
+    available from the context object (an subclass of [`DefaultExecutionContext`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext
+    "sqlalchemy.engine.default.DefaultExecutionContext")). This method returns a dictionary
+    of column-key to values that represents the full set of values for the INSERT
+    or UPDATE statement. In the case of a multi-valued INSERT construct, the subset
+    of parameters that corresponds to the individual VALUES clause is isolated from
+    the full parameter dictionary and returned alone.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.2: Added [`DefaultExecutionContext.get_current_parameters()`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters
+    "sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters") method,
+    which improves upon the still-present [`DefaultExecutionContext.current_parameters`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext.current_parameters
+    "sqlalchemy.engine.default.DefaultExecutionContext.current_parameters") attribute
+    by offering the service of organizing multiple VALUES clauses into individual
+    parameter dictionaries.  ### Context-Sensitive Default Functions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Python functions used by [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") and [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") may also make use of the current statement’s context
+    in order to determine a value. The context of a statement is an internal SQLAlchemy
+    object which contains all information about the statement being executed, including
+    its source expression, the parameters associated with it and the cursor. The typical
+    use case for this context with regards to default generation is to have access
+    to the other values being inserted or updated on the row. To access the context,
+    provide a function that accepts a single `context` argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above default generation function is applied so that it will execute for
+    all INSERT and UPDATE statements where a value for `counter_plus_twelve` was otherwise
+    not provided, and the value will be that of whatever value is present in the execution
+    for the `counter` column, plus the number 12.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a single statement that is being executed using “executemany” style, e.g.
+    with multiple parameter sets passed to [`Connection.execute()`](connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute"), the user-defined function is called once
+    for each set of parameters. For the use case of a multi-valued [`Insert`](dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") construct (e.g. with more than one VALUES
+    clause set up via the [`Insert.values()`](dml.html#sqlalchemy.sql.expression.Insert.values
+    "sqlalchemy.sql.expression.Insert.values") method), the user-defined function
+    is also called once for each set of parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the function is invoked, the special method [`DefaultExecutionContext.get_current_parameters()`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters
+    "sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters") is
+    available from the context object (an subclass of [`DefaultExecutionContext`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext
+    "sqlalchemy.engine.default.DefaultExecutionContext")). This method returns a dictionary
+    of column-key to values that represents the full set of values for the INSERT
+    or UPDATE statement. In the case of a multi-valued INSERT construct, the subset
+    of parameters that corresponds to the individual VALUES clause is isolated from
+    the full parameter dictionary and returned alone.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.2: Added [`DefaultExecutionContext.get_current_parameters()`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters
+    "sqlalchemy.engine.default.DefaultExecutionContext.get_current_parameters") method,
+    which improves upon the still-present [`DefaultExecutionContext.current_parameters`](internals.html#sqlalchemy.engine.default.DefaultExecutionContext.current_parameters
+    "sqlalchemy.engine.default.DefaultExecutionContext.current_parameters") attribute
+    by offering the service of organizing multiple VALUES clauses into individual
+    parameter dictionaries.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Client-Invoked SQL Expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") and [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") keywords may also be passed SQL expressions, which
+    are in most cases rendered inline within the INSERT or UPDATE statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the `create_date` column will be populated with the result of the `now()`
+    SQL function (which, depending on backend, compiles into `NOW()` or `CURRENT_TIMESTAMP`
+    in most cases) during an INSERT statement, and the `key` column with the result
+    of a SELECT subquery from another table. The `last_modified` column will be populated
+    with the value of the SQL `UTC_TIMESTAMP()` MySQL function when an UPDATE statement
+    is emitted for this table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using SQL functions with the `func` construct, we “call” the named function,
+    e.g. with parenthesis as in `func.now()`. This differs from when we specify a
+    Python callable as a default such as `datetime.datetime`, where we pass the function
+    itself, but we don’t invoke it ourselves. In the case of a SQL function, invoking
+    `func.now()` returns the SQL expression object that will render the “NOW” function
+    into the SQL being emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Default and update SQL expressions specified by [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") and [`Column.onupdate`](metadata.html#sqlalchemy.schema.Column.params.onupdate
+    "sqlalchemy.schema.Column") are invoked explicitly by SQLAlchemy when an INSERT
+    or UPDATE statement occurs, typically rendered inline within the DML statement
+    except in certain cases listed below. This is different than a “server side” default,
+    which is part of the table’s DDL definition, e.g. as part of the “CREATE TABLE”
+    statement, which are likely more common. For server side defaults, see the next
+    section [Server-invoked DDL-Explicit Default Expressions](#server-defaults).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a SQL expression indicated by [`Column.default`](metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") is used with primary key columns, there are some cases
+    where SQLAlchemy must “pre-execute” the default generation SQL function, meaning
+    it is invoked in a separate SELECT statement, and the resulting value is passed
+    as a parameter to the INSERT. This only occurs for primary key columns for an
+    INSERT statement that is being asked to return this primary key value, where RETURNING
+    or `cursor.lastrowid` may not be used. An [`Insert`](dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") construct that specifies the [`insert.inline`](dml.html#sqlalchemy.sql.expression.insert.params.inline
+    "sqlalchemy.sql.expression.insert") flag will always render default expressions
+    inline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the statement is executed with a single set of parameters (that is, it
+    is not an “executemany” style execution), the returned [`CursorResult`](connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult") will contain a collection accessible via [`CursorResult.postfetch_cols()`](connections.html#sqlalchemy.engine.CursorResult.postfetch_cols
+    "sqlalchemy.engine.CursorResult.postfetch_cols") which contains a list of all
+    [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects which had an inline-executed default. Similarly, all parameters which
+    were bound to the statement, including all Python and SQL expressions which were
+    pre-executed, are present in the [`CursorResult.last_inserted_params()`](connections.html#sqlalchemy.engine.CursorResult.last_inserted_params
+    "sqlalchemy.engine.CursorResult.last_inserted_params") or [`CursorResult.last_updated_params()`](connections.html#sqlalchemy.engine.CursorResult.last_updated_params
+    "sqlalchemy.engine.CursorResult.last_updated_params") collections on [`CursorResult`](connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult"). The [`CursorResult.inserted_primary_key`](connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") collection contains a list
+    of primary key values for the row inserted (a list so that single-column and composite-column
+    primary keys are represented in the same format).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Server-invoked DDL-Explicit Default Expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A variant on the SQL expression default is the [`Column.server_default`](metadata.html#sqlalchemy.schema.Column.params.server_default
+    "sqlalchemy.schema.Column"), which gets placed in the CREATE TABLE statement during
+    a [`Table.create()`](metadata.html#sqlalchemy.schema.Table.create "sqlalchemy.schema.Table.create")
+    operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A create call for the above table will produce:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example illustrates the two typical use cases for [`Column.server_default`](metadata.html#sqlalchemy.schema.Column.params.server_default
+    "sqlalchemy.schema.Column"), that of the SQL function (SYSDATE in the above example)
+    as well as a server-side constant value (the integer “0” in the above example).
+    It is advisable to use the [`text()`](sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct for any literal SQL values as opposed
+    to passing the raw value, as SQLAlchemy does not typically perform any quoting
+    or escaping on these values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Like client-generated expressions, [`Column.server_default`](metadata.html#sqlalchemy.schema.Column.params.server_default
+    "sqlalchemy.schema.Column") can accommodate SQL expressions in general, however
+    it is expected that these will usually be simple functions and expressions, and
+    not the more complex cases like an embedded SELECT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Marking Implicitly Generated Values, timestamps, and Triggered Columns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Columns which generate a new value on INSERT or UPDATE based on other server-side
+    database mechanisms, such as database-specific auto-generating behaviors such
+    as seen with TIMESTAMP columns on some platforms, as well as custom triggers that
+    invoke upon INSERT or UPDATE to generate a new value, may be called out using
+    [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    as a marker:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    indicator does not affect the rendered DDL for the CREATE TABLE. Instead, it marks
+    the column as one that will have a new value populated by the database during
+    the process of an INSERT or UPDATE statement, and for supporting databases may
+    be used to indicate that the column should be part of a RETURNING or OUTPUT clause
+    for the statement. Tools such as the SQLAlchemy ORM then make use of this marker
+    in order to know how to get at the value of the column after such an operation.
+    In particular, the `ValuesBase.return_defaults()` method can be used with an [`Insert`](dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") or [`Update`](dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update") construct to indicate that these values should
+    be returned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For details on using [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    with the ORM, see [Fetching Server-Generated Defaults](../orm/persistence_techniques.html#orm-server-defaults).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Column.server_onupdate`](metadata.html#sqlalchemy.schema.Column.params.server_onupdate
+    "sqlalchemy.schema.Column") directive **does not** currently produce MySQL’s “ON
+    UPDATE CURRENT_TIMESTAMP()” clause. See [Rendering ON UPDATE CURRENT TIMESTAMP
+    for MySQL / MariaDB’s explicit_defaults_for_timestamp](../dialects/mysql.html#mysql-timestamp-onupdate)
+    for background on how to produce this clause.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Fetching Server-Generated Defaults](../orm/persistence_techniques.html#orm-server-defaults)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Defining Sequences'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy represents database sequences using the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") object, which is considered to be a special case
+    of “column default”. It only has an effect on databases which have explicit support
+    for sequences, which among SQLAlchemy’s included dialects includes PostgreSQL,
+    Oracle, MS SQL Server, and MariaDB. The [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") object is otherwise ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: In newer database engines, the [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    construct should likely be preferred vs. [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") for generation of integer primary key values. See
+    the section [Identity Columns (GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY)](#identity-ddl)
+    for background on this construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    may be placed on any column as a “default” generator to be used during INSERT
+    operations, and can also be configured to fire off during UPDATE operations if
+    desired. It is most commonly used in conjunction with a single integer primary
+    key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the table `cartitems` is associated with a sequence named `cart_id_seq`.
+    Emitting [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") for the above table will include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using tables with explicit schema names (detailed at [Specifying the Schema
+    Name](metadata.html#schema-table-schema-name)), the configured schema of the [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") is **not** automatically shared by an embedded [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence"), instead, specify [`Sequence.schema`](#sqlalchemy.schema.Sequence.params.schema
+    "sqlalchemy.schema.Sequence"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") may
+    also be made to automatically make use of the [`MetaData.schema`](metadata.html#sqlalchemy.schema.MetaData.params.schema
+    "sqlalchemy.schema.MetaData") setting on the [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") in use; see [Associating a Sequence with the MetaData](#sequence-metadata)
+    for background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When [`Insert`](dml.html#sqlalchemy.sql.expression.Insert "sqlalchemy.sql.expression.Insert")
+    DML constructs are invoked against the `cartitems` table, without an explicit
+    value passed for the `cart_id` column, the `cart_id_seq` sequence will be used
+    to generate a value on participating backends. Typically, the sequence function
+    is embedded in the INSERT statement, which is combined with RETURNING so that
+    the newly generated value can be returned to the Python process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using [`Connection.execute()`](connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") to invoke an [`Insert`](dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") construct, newly generated primary key identifiers,
+    including but not limited to those generated using [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence"), are available from the [`CursorResult`](connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult") construct using the [`CursorResult.inserted_primary_key`](connections.html#sqlalchemy.engine.CursorResult.inserted_primary_key
+    "sqlalchemy.engine.CursorResult.inserted_primary_key") attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    is associated with a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    as its **Python-side** default generator, the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") will also be subject to “CREATE SEQUENCE” and “DROP
+    SEQUENCE” DDL when similar DDL is emitted for the owning [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), such as when using [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") to generate DDL for a series of tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") may
+    also be associated with a [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") construct directly. This allows the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") to be used in more than one [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") at a time and also allows the [`MetaData.schema`](metadata.html#sqlalchemy.schema.MetaData.params.schema
+    "sqlalchemy.schema.MetaData") parameter to be inherited. See the section [Associating
+    a Sequence with the MetaData](#sequence-metadata) for background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Associating a Sequence on a SERIAL column
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'PostgreSQL’s SERIAL datatype is an auto-incrementing type that implies the
+    implicit creation of a PostgreSQL sequence when CREATE TABLE is emitted. The [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") construct, when indicated for a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), may indicate that it should not be used in this specific
+    case by specifying a value of `True` for the [`Sequence.optional`](#sqlalchemy.schema.Sequence.params.optional
+    "sqlalchemy.schema.Sequence") parameter. This allows the given [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") to be used for backends that have no alternative
+    primary key generation system but to ignore it for backends such as PostgreSQL
+    which will automatically generate a sequence for a particular column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, `CREATE TABLE` for PostgreSQL will make use of the `SERIAL`
+    datatype for the `cart_id` column, and the `cart_id_seq` sequence will be ignored.
+    However on Oracle, the `cart_id_seq` sequence will be created explicitly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: This particular interaction of SERIAL and SEQUENCE is fairly legacy, and as
+    in other cases, using [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    instead will simplify the operation to simply use `IDENTITY` on all supported
+    backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing a Sequence Standalone
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A SEQUENCE is a first class schema object in SQL and can be used to generate
+    values independently in the database. If you have a [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") object, it can be invoked with its “next value”
+    instruction by passing it directly to a SQL execution method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to embed the “next value” function of a [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") inside of a SQL statement like a SELECT or INSERT,
+    use the [`Sequence.next_value()`](#sqlalchemy.schema.Sequence.next_value "sqlalchemy.schema.Sequence.next_value")
+    method, which will render at statement compilation time a SQL function that is
+    appropriate for the target backend:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Associating a Sequence with the MetaData'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    that is to be associated with arbitrary [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects, the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") may be associated with a particular [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), using the [`Sequence.metadata`](#sqlalchemy.schema.Sequence.params.metadata
+    "sqlalchemy.schema.Sequence") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Such a sequence can then be associated with columns in the usual way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    object is treated as an independent schema construct that can exist on its own
+    or be shared among tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Explicitly associating the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    with [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    allows for the following behaviors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") will
+    inherit the [`MetaData.schema`](metadata.html#sqlalchemy.schema.MetaData.params.schema
+    "sqlalchemy.schema.MetaData") parameter specified to the target [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), which affects the production of CREATE / DROP DDL
+    as well as how the [`Sequence.next_value()`](#sqlalchemy.schema.Sequence.next_value
+    "sqlalchemy.schema.Sequence.next_value") function is rendered in SQL statements.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") and [`MetaData.drop_all()`](metadata.html#sqlalchemy.schema.MetaData.drop_all
+    "sqlalchemy.schema.MetaData.drop_all") methods will emit CREATE / DROP for this
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence"), even if
+    the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") is
+    not associated with any [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    / [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    that’s a member of this [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Associating a Sequence as the Server Side Default
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following technique is known to work only with the PostgreSQL database.
+    It does not work with Oracle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The preceding sections illustrate how to associate a [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") with a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") as the **Python side default generator**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above case, the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    will automatically be subject to CREATE SEQUENCE / DROP SEQUENCE DDL when the
+    related [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    is subject to CREATE / DROP. However, the sequence will **not** be present as
+    the server-side default for the column when CREATE TABLE is emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we want the sequence to be used as a server-side default, meaning it takes
+    place even if we emit INSERT commands to the table from the SQL command line,
+    we can use the [`Column.server_default`](metadata.html#sqlalchemy.schema.Column.params.server_default
+    "sqlalchemy.schema.Column") parameter in conjunction with the value-generation
+    function of the sequence, available from the [`Sequence.next_value()`](#sqlalchemy.schema.Sequence.next_value
+    "sqlalchemy.schema.Sequence.next_value") method. Below we illustrate the same
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") being associated
+    with the [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    both as the Python-side default generator as well as the server-side default generator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'or with the ORM:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the “CREATE TABLE” statement is emitted, on PostgreSQL it would be emitted
+    as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: Placement of the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    in both the Python-side and server-side default generation contexts ensures that
+    the “primary key fetch” logic works in all cases. Typically, sequence-enabled
+    databases also support RETURNING for INSERT statements, which is used automatically
+    by SQLAlchemy when emitting this statement. However if RETURNING is not used for
+    a particular insert, then SQLAlchemy would prefer to “pre-execute” the sequence
+    outside of the INSERT statement itself, which only works if the sequence is included
+    as the Python-side default generator function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The example also associates the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    with the enclosing [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    directly, which again ensures that the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") is fully associated with the parameters of the [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection including the default schema, if any.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Sequences/SERIAL/IDENTITY](../dialects/postgresql.html#postgresql-sequences)
+    - in the PostgreSQL dialect documentation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[RETURNING Support](../dialects/oracle.html#oracle-returning) - in the Oracle
+    dialect documentation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Associating a Sequence on a SERIAL column
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'PostgreSQL’s SERIAL datatype is an auto-incrementing type that implies the
+    implicit creation of a PostgreSQL sequence when CREATE TABLE is emitted. The [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") construct, when indicated for a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), may indicate that it should not be used in this specific
+    case by specifying a value of `True` for the [`Sequence.optional`](#sqlalchemy.schema.Sequence.params.optional
+    "sqlalchemy.schema.Sequence") parameter. This allows the given [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") to be used for backends that have no alternative
+    primary key generation system but to ignore it for backends such as PostgreSQL
+    which will automatically generate a sequence for a particular column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, `CREATE TABLE` for PostgreSQL will make use of the `SERIAL`
+    datatype for the `cart_id` column, and the `cart_id_seq` sequence will be ignored.
+    However on Oracle, the `cart_id_seq` sequence will be created explicitly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: This particular interaction of SERIAL and SEQUENCE is fairly legacy, and as
+    in other cases, using [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    instead will simplify the operation to simply use `IDENTITY` on all supported
+    backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing a Sequence Standalone
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A SEQUENCE is a first class schema object in SQL and can be used to generate
+    values independently in the database. If you have a [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") object, it can be invoked with its “next value”
+    instruction by passing it directly to a SQL execution method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to embed the “next value” function of a [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") inside of a SQL statement like a SELECT or INSERT,
+    use the [`Sequence.next_value()`](#sqlalchemy.schema.Sequence.next_value "sqlalchemy.schema.Sequence.next_value")
+    method, which will render at statement compilation time a SQL function that is
+    appropriate for the target backend:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Associating a Sequence with the MetaData'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    that is to be associated with arbitrary [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects, the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") may be associated with a particular [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), using the [`Sequence.metadata`](#sqlalchemy.schema.Sequence.params.metadata
+    "sqlalchemy.schema.Sequence") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Such a sequence can then be associated with columns in the usual way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    object is treated as an independent schema construct that can exist on its own
+    or be shared among tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Explicitly associating the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    with [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    allows for the following behaviors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") will
+    inherit the [`MetaData.schema`](metadata.html#sqlalchemy.schema.MetaData.params.schema
+    "sqlalchemy.schema.MetaData") parameter specified to the target [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), which affects the production of CREATE / DROP DDL
+    as well as how the [`Sequence.next_value()`](#sqlalchemy.schema.Sequence.next_value
+    "sqlalchemy.schema.Sequence.next_value") function is rendered in SQL statements.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") and [`MetaData.drop_all()`](metadata.html#sqlalchemy.schema.MetaData.drop_all
+    "sqlalchemy.schema.MetaData.drop_all") methods will emit CREATE / DROP for this
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence"), even if
+    the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") is
+    not associated with any [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    / [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    that’s a member of this [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Associating a Sequence as the Server Side Default
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following technique is known to work only with the PostgreSQL database.
+    It does not work with Oracle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The preceding sections illustrate how to associate a [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") with a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") as the **Python side default generator**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above case, the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    will automatically be subject to CREATE SEQUENCE / DROP SEQUENCE DDL when the
+    related [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    is subject to CREATE / DROP. However, the sequence will **not** be present as
+    the server-side default for the column when CREATE TABLE is emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we want the sequence to be used as a server-side default, meaning it takes
+    place even if we emit INSERT commands to the table from the SQL command line,
+    we can use the [`Column.server_default`](metadata.html#sqlalchemy.schema.Column.params.server_default
+    "sqlalchemy.schema.Column") parameter in conjunction with the value-generation
+    function of the sequence, available from the [`Sequence.next_value()`](#sqlalchemy.schema.Sequence.next_value
+    "sqlalchemy.schema.Sequence.next_value") method. Below we illustrate the same
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") being associated
+    with the [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    both as the Python-side default generator as well as the server-side default generator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'or with the ORM:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the “CREATE TABLE” statement is emitted, on PostgreSQL it would be emitted
+    as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: Placement of the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    in both the Python-side and server-side default generation contexts ensures that
+    the “primary key fetch” logic works in all cases. Typically, sequence-enabled
+    databases also support RETURNING for INSERT statements, which is used automatically
+    by SQLAlchemy when emitting this statement. However if RETURNING is not used for
+    a particular insert, then SQLAlchemy would prefer to “pre-execute” the sequence
+    outside of the INSERT statement itself, which only works if the sequence is included
+    as the Python-side default generator function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The example also associates the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    with the enclosing [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    directly, which again ensures that the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") is fully associated with the parameters of the [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection including the default schema, if any.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Sequences/SERIAL/IDENTITY](../dialects/postgresql.html#postgresql-sequences)
+    - in the PostgreSQL dialect documentation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[RETURNING Support](../dialects/oracle.html#oracle-returning) - in the Oracle
+    dialect documentation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Computed Columns (GENERATED ALWAYS AS)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.11.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed") construct
+    allows a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    to be declared in DDL as a “GENERATED ALWAYS AS” column, that is, one which has
+    a value that is computed by the database server. The construct accepts a SQL expression
+    typically declared textually using a string or the [`text()`](sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct, in a similar manner as that of [`CheckConstraint`](constraints.html#sqlalchemy.schema.CheckConstraint
+    "sqlalchemy.schema.CheckConstraint"). The SQL expression is then interpreted by
+    the database server in order to determine the value for the column within a row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The DDL for the `square` table when run on a PostgreSQL 12 backend will look
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: Whether the value is persisted upon INSERT and UPDATE, or if it is calculated
+    on fetch, is an implementation detail of the database; the former is known as
+    “stored” and the latter is known as “virtual”. Some database implementations support
+    both, but some only support one or the other. The optional [`Computed.persisted`](#sqlalchemy.schema.Computed.params.persisted
+    "sqlalchemy.schema.Computed") flag may be specified as `True` or `False` to indicate
+    if the “STORED” or “VIRTUAL” keyword should be rendered in DDL, however this will
+    raise an error if the keyword is not supported by the target backend; leaving
+    it unset will use a working default for the target backend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed") construct
+    is a subclass of the [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    object, and will set itself up as both the “server default” and “server onupdate”
+    generator for the target [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column"),
+    meaning it will be treated as a default generating column when INSERT and UPDATE
+    statements are generated, as well as that it will be fetched as a generating column
+    when using the ORM. This includes that it will be part of the RETURNING clause
+    of the database for databases which support RETURNING and the generated values
+    are to be eagerly fetched.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: A [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    that is defined with the [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    construct may not store any value outside of that which the server applies to
+    it; SQLAlchemy’s behavior when a value is passed for such a column to be written
+    in INSERT or UPDATE is currently that the value will be ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '“GENERATED ALWAYS AS” is currently known to be supported by:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: MySQL version 5.7 and onwards
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: MariaDB 10.x series and onwards
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PostgreSQL as of version 12
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Oracle - with the caveat that RETURNING does not work correctly with UPDATE
+    (a warning will be emitted to this effect when the UPDATE..RETURNING that includes
+    a computed column is rendered)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Microsoft SQL Server
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SQLite as of version 3.31
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    is used with an unsupported backend, if the target dialect does not support it,
+    a [`CompileError`](exceptions.html#sqlalchemy.exc.CompileError "sqlalchemy.exc.CompileError")
+    is raised when attempting to render the construct. Otherwise, if the dialect supports
+    it but the particular database server version in use does not, then a subclass
+    of [`DBAPIError`](exceptions.html#sqlalchemy.exc.DBAPIError "sqlalchemy.exc.DBAPIError"),
+    usually [`OperationalError`](exceptions.html#sqlalchemy.exc.OperationalError "sqlalchemy.exc.OperationalError"),
+    is raised when the DDL is emitted to the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Identity Columns (GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity") construct
+    allows a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    to be declared as an identity column and rendered in DDL as “GENERATED { ALWAYS
+    | BY DEFAULT } AS IDENTITY”. An identity column has its value automatically generated
+    by the database server using an incrementing (or decrementing) sequence. The construct
+    shares most of its option to control the database behaviour with [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The DDL for the `data` table when run on a PostgreSQL 12 backend will look
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The database will generate a value for the `id` column upon insert, starting
+    from `42`, if the statement did not already contain a value for the `id` column.
+    An identity column can also require that the database generates the value of the
+    column, ignoring the value passed with the statement or raising an error, depending
+    on the backend. To activate this mode, set the parameter [`Identity.always`](#sqlalchemy.schema.Identity.params.always
+    "sqlalchemy.schema.Identity") to `True` in the [`Identity`](#sqlalchemy.schema.Identity
+    "sqlalchemy.schema.Identity") construct. Updating the previous example to include
+    this parameter will generate the following DDL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity") construct
+    is a subclass of the [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    object, and will set itself up as the “server default” generator for the target
+    [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column"),
+    meaning it will be treated as a default generating column when INSERT statements
+    are generated, as well as that it will be fetched as a generating column when
+    using the ORM. This includes that it will be part of the RETURNING clause of the
+    database for databases which support RETURNING and the generated values are to
+    be eagerly fetched.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    construct is currently known to be supported by:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: PostgreSQL as of version 10.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Oracle as of version 12\. It also supports passing `always=None` to enable the
+    default generated mode and the parameter `on_null=True` to specify “ON NULL” in
+    conjunction with a “BY DEFAULT” identity column.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Microsoft SQL Server. MSSQL uses a custom syntax that only supports the `start`
+    and `increment` parameters, and ignores all other.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    is used with an unsupported backend, it is ignored, and the default SQLAlchemy
+    logic for autoincrementing columns is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An error is raised when a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") specifies both an [`Identity`](#sqlalchemy.schema.Identity
+    "sqlalchemy.schema.Identity") and also sets [`Column.autoincrement`](metadata.html#sqlalchemy.schema.Column.params.autoincrement
+    "sqlalchemy.schema.Column") to `False`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Default Objects API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ColumnDefault](#sqlalchemy.schema.ColumnDefault) | A plain default value
+    on a column. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Computed](#sqlalchemy.schema.Computed) | Defines a generated column, i.e.
+    “GENERATED ALWAYS AS” syntax. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DefaultClause](#sqlalchemy.schema.DefaultClause) | A DDL-specified DEFAULT
+    column value. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DefaultGenerator](#sqlalchemy.schema.DefaultGenerator) | Base class for
+    column *default* values. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [FetchedValue](#sqlalchemy.schema.FetchedValue) | A marker for a transparent
+    database-side default. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Identity](#sqlalchemy.schema.Identity) | Defines an identity column, i.e.
+    “GENERATED { ALWAYS &#124; BY DEFAULT } AS IDENTITY” syntax. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Sequence](#sqlalchemy.schema.Sequence) | Represents a named database sequence.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: Defines a generated column, i.e. “GENERATED ALWAYS AS” syntax.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    construct is an inline construct added to the argument list of a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: See the linked documentation below for complete details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.11.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Computed Columns (GENERATED ALWAYS AS)](#computed-ddl)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.Computed.__init__), [copy()](#sqlalchemy.schema.Computed.copy)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    ([`sqlalchemy.schema.FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue"),
+    [`sqlalchemy.schema.SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem "sqlalchemy.schema.SchemaItem"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a GENERATED ALWAYS AS DDL construct to accompany a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`sqltext` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A string containing the column generation expression, which will be used verbatim,
+    or a SQL expression construct, such as a [`text()`](sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") object. If given as a string, the object is
+    converted to a [`text()`](sqlelement.html#sqlalchemy.sql.expression.text "sqlalchemy.sql.expression.text")
+    object.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Warning
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`Computed.sqltext`](#sqlalchemy.schema.Computed.params.sqltext "sqlalchemy.schema.Computed")
+    argument to [`Computed`](#sqlalchemy.schema.Computed "sqlalchemy.schema.Computed")
+    can be passed as a Python string argument, which will be treated as **trusted
+    SQL text** and rendered as given. **DO NOT PASS UNTRUSTED INPUT TO THIS PARAMETER**.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`persisted` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Optional, controls how this column should be persisted by the database. Possible
+    values are:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`None`, the default, it will use the default persistence defined by the database.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`True`, will render `GENERATED ALWAYS AS ... STORED`, or the equivalent for
+    the target database if supported.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`False`, will render `GENERATED ALWAYS AS ... VIRTUAL`, or the equivalent for
+    the target database if supported.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Specifying `True` or `False` may raise an error when the DDL is emitted to the
+    target database if the database does not support that persistence option. Leaving
+    this parameter at its default of `None` is guaranteed to succeed for all databases
+    that support `GENERATED ALWAYS AS`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Deprecated since version 1.4: The [`Computed.copy()`](#sqlalchemy.schema.Computed.copy
+    "sqlalchemy.schema.Computed.copy") method is deprecated and will be removed in
+    a future release.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: A plain default value on a column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This could correspond to a constant, a callable function, or a SQL clause.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ColumnDefault`](#sqlalchemy.schema.ColumnDefault "sqlalchemy.schema.ColumnDefault")
+    is generated automatically whenever the `default`, `onupdate` arguments of [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") are used. A [`ColumnDefault`](#sqlalchemy.schema.ColumnDefault
+    "sqlalchemy.schema.ColumnDefault") can be passed positionally as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Is equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.ColumnDefault`](#sqlalchemy.schema.ColumnDefault "sqlalchemy.schema.ColumnDefault")
+    ([`sqlalchemy.schema.DefaultGenerator`](#sqlalchemy.schema.DefaultGenerator "sqlalchemy.schema.DefaultGenerator"),
+    `abc.ABC`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: A DDL-specified DEFAULT column value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DefaultClause`](#sqlalchemy.schema.DefaultClause "sqlalchemy.schema.DefaultClause")
+    is a [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    that also generates a “DEFAULT” clause when “CREATE TABLE” is emitted.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DefaultClause`](#sqlalchemy.schema.DefaultClause "sqlalchemy.schema.DefaultClause")
+    is generated automatically whenever the `server_default`, `server_onupdate` arguments
+    of [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    are used. A [`DefaultClause`](#sqlalchemy.schema.DefaultClause "sqlalchemy.schema.DefaultClause")
+    can be passed positionally as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Is equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DefaultClause`](#sqlalchemy.schema.DefaultClause "sqlalchemy.schema.DefaultClause")
+    ([`sqlalchemy.schema.FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base class for column *default* values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This object is only present on column.default or column.onupdate. It’s not valid
+    as a server default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DefaultGenerator`](#sqlalchemy.schema.DefaultGenerator
+    "sqlalchemy.schema.DefaultGenerator") ([`sqlalchemy.sql.expression.Executable`](selectable.html#sqlalchemy.sql.expression.Executable
+    "sqlalchemy.sql.expression.Executable"), [`sqlalchemy.schema.SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem
+    "sqlalchemy.schema.SchemaItem"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: A marker for a transparent database-side default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use [`FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    when the database is configured to provide some automatic default for a column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: Would indicate that some trigger or default generator will create a new value
+    for the `foo` column during an INSERT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Marking Implicitly Generated Values, timestamps, and Triggered Columns](#triggered-columns)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.FetchedValue`](#sqlalchemy.schema.FetchedValue "sqlalchemy.schema.FetchedValue")
+    (`sqlalchemy.sql.expression.SchemaEventTarget`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represents a named database sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") object
+    represents the name and configurational parameters of a database sequence. It
+    also represents a construct that can be “executed” by a SQLAlchemy [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or [`Connection`](connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), rendering the appropriate “next value” function
+    for the target database and returning a result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    is typically associated with a primary key column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: When CREATE TABLE is emitted for the above [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), if the target platform supports sequences, a CREATE
+    SEQUENCE statement will be emitted as well. For platforms that don’t support sequences,
+    the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") construct
+    is ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Defining Sequences](#defaults-sequences)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`CreateSequence`](ddl.html#sqlalchemy.schema.CreateSequence "sqlalchemy.schema.CreateSequence")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DropSequence`](ddl.html#sqlalchemy.schema.DropSequence "sqlalchemy.schema.DropSequence")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.Sequence.__init__), [create()](#sqlalchemy.schema.Sequence.create),
+    [drop()](#sqlalchemy.schema.Sequence.drop), [next_value()](#sqlalchemy.schema.Sequence.next_value)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    (`sqlalchemy.schema.HasSchemaAttr`, `sqlalchemy.schema.IdentityOptions`, [`sqlalchemy.schema.DefaultGenerator`](#sqlalchemy.schema.DefaultGenerator
+    "sqlalchemy.schema.DefaultGenerator"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`name` – the name of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`start` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the starting index of the sequence. This value is used when the CREATE SEQUENCE
+    command is emitted to the database as the value of the “START WITH” clause. If
+    `None`, the clause is omitted, which on most platforms indicates a starting value
+    of 1.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`Sequence.start`](#sqlalchemy.schema.Sequence.params.start
+    "sqlalchemy.schema.Sequence") parameter is required in order to have DDL emit
+    “START WITH”. This is a reversal of a change made in version 1.4 which would implicitly
+    render “START WITH 1” if the [`Sequence.start`](#sqlalchemy.schema.Sequence.params.start
+    "sqlalchemy.schema.Sequence") were not included. See [The Sequence construct reverts
+    to not having any explicit default “start” value; impacts MS SQL Server](../changelog/whatsnew_20.html#change-7211)
+    for more detail.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`increment` – the increment value of the sequence. This value is used when
+    the CREATE SEQUENCE command is emitted to the database as the value of the “INCREMENT
+    BY” clause. If `None`, the clause is omitted, which on most platforms indicates
+    an increment of 1.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`minvalue` – the minimum value of the sequence. This value is used when the
+    CREATE SEQUENCE command is emitted to the database as the value of the “MINVALUE”
+    clause. If `None`, the clause is omitted, which on most platforms indicates a
+    minvalue of 1 and -2^63-1 for ascending and descending sequences, respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`maxvalue` – the maximum value of the sequence. This value is used when the
+    CREATE SEQUENCE command is emitted to the database as the value of the “MAXVALUE”
+    clause. If `None`, the clause is omitted, which on most platforms indicates a
+    maxvalue of 2^63-1 and -1 for ascending and descending sequences, respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nominvalue` – no minimum value of the sequence. This value is used when the
+    CREATE SEQUENCE command is emitted to the database as the value of the “NO MINVALUE”
+    clause. If `None`, the clause is omitted, which on most platforms indicates a
+    minvalue of 1 and -2^63-1 for ascending and descending sequences, respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nomaxvalue` – no maximum value of the sequence. This value is used when the
+    CREATE SEQUENCE command is emitted to the database as the value of the “NO MAXVALUE”
+    clause. If `None`, the clause is omitted, which on most platforms indicates a
+    maxvalue of 2^63-1 and -1 for ascending and descending sequences, respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cycle` – allows the sequence to wrap around when the maxvalue or minvalue
+    has been reached by an ascending or descending sequence respectively. This value
+    is used when the CREATE SEQUENCE command is emitted to the database as the “CYCLE”
+    clause. If the limit is reached, the next number generated will be the minvalue
+    or maxvalue, respectively. If cycle=False (the default) any calls to nextval after
+    the sequence has reached its maximum value will return an error.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`schema` – optional schema name for the sequence, if located in a schema other
+    than the default. The rules for selecting the schema name when a [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") is also present are the same as that of [`Table.schema`](metadata.html#sqlalchemy.schema.Table.params.schema
+    "sqlalchemy.schema.Table").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cache` – optional integer value; number of future values in the sequence which
+    are calculated in advance. Renders the CACHE keyword understood by Oracle and
+    PostgreSQL.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`order` – optional boolean value; if `True`, renders the ORDER keyword, understood
+    by Oracle, indicating the sequence is definitively ordered. May be necessary to
+    provide deterministic ordering using Oracle RAC.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`data_type` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The type to be returned by the sequence, for dialects that allow us to choose
+    between INTEGER, BIGINT, etc. (e.g., mssql).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`optional` – boolean value, when `True`, indicates that this [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") object only needs to be explicitly generated on
+    backends that don’t provide another way to generate primary key identifiers. Currently,
+    it essentially means, “don’t create this sequence on the PostgreSQL backend, where
+    the SERIAL keyword creates a sequence for us automatically”.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`quote` – boolean value, when `True` or `False`, explicitly forces quoting
+    of the [`Sequence.name`](#sqlalchemy.schema.Sequence.params.name "sqlalchemy.schema.Sequence")
+    on or off. When left at its default of `None`, normal quoting rules based on casing
+    and reserved words take place.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`quote_schema` – Set the quoting preferences for the `schema` name.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`metadata` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'optional [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    object which this [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    will be associated with. A [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    that is associated with a [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") gains the following capabilities:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") will
+    inherit the [`MetaData.schema`](metadata.html#sqlalchemy.schema.MetaData.params.schema
+    "sqlalchemy.schema.MetaData") parameter specified to the target [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), which affects the production of CREATE / DROP DDL,
+    if any.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The [`Sequence.create()`](#sqlalchemy.schema.Sequence.create "sqlalchemy.schema.Sequence.create")
+    and [`Sequence.drop()`](#sqlalchemy.schema.Sequence.drop "sqlalchemy.schema.Sequence.drop")
+    methods automatically use the engine bound to the [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object, if any.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") and [`MetaData.drop_all()`](metadata.html#sqlalchemy.schema.MetaData.drop_all
+    "sqlalchemy.schema.MetaData.drop_all") methods will emit CREATE / DROP for this
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence"), even if
+    the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") is
+    not associated with any [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    / [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    that’s a member of this [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData").
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The above behaviors can only occur if the [`Sequence`](#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence") is explicitly associated with the [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") via this parameter.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Associating a Sequence with the MetaData](#sequence-metadata) - full discussion
+    of the [`Sequence.metadata`](#sqlalchemy.schema.Sequence.params.metadata "sqlalchemy.schema.Sequence")
+    parameter.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`for_update` – Indicates this [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence"),
+    when associated with a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column"),
+    should be invoked for UPDATE statements on that column’s table, rather than for
+    INSERT statements, when no value is otherwise present for that column in the statement.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: Creates this sequence in the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: Drops this sequence from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a [`next_value`](functions.html#sqlalchemy.sql.functions.next_value "sqlalchemy.sql.functions.next_value")
+    function element which will render the appropriate increment function for this
+    [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence") within
+    any SQL expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: Defines an identity column, i.e. “GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY”
+    syntax.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    construct is an inline construct added to the argument list of a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: See the linked documentation below for complete details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Identity Columns (GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY)](#identity-ddl)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.Identity.__init__), [copy()](#sqlalchemy.schema.Identity.copy)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.Identity`](#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    (`sqlalchemy.schema.IdentityOptions`, [`sqlalchemy.schema.FetchedValue`](#sqlalchemy.schema.FetchedValue
+    "sqlalchemy.schema.FetchedValue"), [`sqlalchemy.schema.SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem
+    "sqlalchemy.schema.SchemaItem"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY DDL construct to accompany
+    a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column").
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the [`Sequence`](#sqlalchemy.schema.Sequence "sqlalchemy.schema.Sequence")
+    documentation for a complete description of most parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: MSSQL supports this construct as the preferred alternative to generate an IDENTITY
+    on a column, but it uses non standard syntax that only support [`Identity.start`](#sqlalchemy.schema.Identity.params.start
+    "sqlalchemy.schema.Identity") and [`Identity.increment`](#sqlalchemy.schema.Identity.params.increment
+    "sqlalchemy.schema.Identity"). All other parameters are ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`always` – A boolean, that indicates the type of identity column. If `False`
+    is specified, the default, then the user-specified value takes precedence. If
+    `True` is specified, a user-specified value is not accepted ( on some backends,
+    like PostgreSQL, OVERRIDING SYSTEM VALUE, or similar, may be specified in an INSERT
+    to override the sequence value). Some backends also have a default value for this
+    parameter, `None` can be used to omit rendering this part in the DDL. It will
+    be treated as `False` if a backend does not have a default value.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`on_null` – Set to `True` to specify ON NULL in conjunction with a `always=False`
+    identity column. This option is only supported on some backends, like Oracle.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`start` – the starting index of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`increment` – the increment value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`minvalue` – the minimum value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`maxvalue` – the maximum value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nominvalue` – no minimum value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nomaxvalue` – no maximum value of the sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cycle` – allows the sequence to wrap around when the maxvalue or minvalue
+    has been reached.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cache` – optional integer value; number of future values in the sequence which
+    are calculated in advance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`order` – optional boolean value; if true, renders the ORDER keyword.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Deprecated since version 1.4: The [`Identity.copy()`](#sqlalchemy.schema.Identity.copy
+    "sqlalchemy.schema.Identity.copy") method is deprecated and will be removed in
+    a future release.'
+  prefs: []
+  type: TYPE_NORMAL

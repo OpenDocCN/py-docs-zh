@@ -1,0 +1,1852 @@
+- en: Integration with dataclasses and attrs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/dataclasses.html](https://docs.sqlalchemy.org/en/20/orm/dataclasses.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: SQLAlchemy as of version 2.0 features “native dataclass” integration where an
+    [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
+    mapping may be turned into a Python [dataclass](https://docs.python.org/3/library/dataclasses.html)
+    by adding a single mixin or decorator to mapped classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: Integrated dataclass creation with ORM Declarative classes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are also patterns available that allow existing dataclasses to be mapped,
+    as well as to map classes instrumented by the [attrs](https://pypi.org/project/attrs/)
+    third party integration library.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Declarative Dataclass Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
+    mappings may be augmented with an additional mixin class or decorator directive,
+    which will add an additional step to the Declarative process after the mapping
+    is complete that will convert the mapped class **in-place** into a Python [dataclass](https://docs.python.org/3/library/dataclasses.html),
+    before completing the mapping process which applies ORM-specific [instrumentation](../glossary.html#term-instrumentation)
+    to the class. The most prominent behavioral addition this provides is generation
+    of an `__init__()` method with fine-grained control over positional and keyword
+    arguments with or without defaults, as well as generation of methods like `__repr__()`
+    and `__eq__()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a [**PEP 484**](https://peps.python.org/pep-0484/) typing perspective,
+    the class is recognized as having Dataclass-specific behaviors, most notably by
+    taking advantage of [**PEP 681**](https://peps.python.org/pep-0681/) “Dataclass
+    Transforms”, which allows typing tools to consider the class as though it were
+    explicitly decorated using the `@dataclasses.dataclass` decorator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Support for [**PEP 681**](https://peps.python.org/pep-0681/) in typing tools
+    as of **April 4, 2023** is limited and is currently known to be supported by [Pyright](https://github.com/microsoft/pyright)
+    as well as [Mypy](https://mypy.readthedocs.io/en/stable/) as of **version 1.2**.
+    Note that Mypy 1.1.1 introduced [**PEP 681**](https://peps.python.org/pep-0681/)
+    support but did not correctly accommodate Python descriptors which will lead to
+    errors when using SQLAlchemy’s ORM mapping scheme.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://peps.python.org/pep-0681/#the-dataclass-transform-decorator](https://peps.python.org/pep-0681/#the-dataclass-transform-decorator)
+    - background on how libraries like SQLAlchemy enable [**PEP 681**](https://peps.python.org/pep-0681/)
+    support'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dataclass conversion may be added to any Declarative class either by adding
+    the [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass "sqlalchemy.orm.MappedAsDataclass")
+    mixin to a [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class hierarchy, or for decorator mapping by
+    using the [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") class decorator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") mixin may be applied either to the Declarative
+    `Base` class or any superclass, as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or may be applied directly to classes that extend from the Declarative base:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using the decorator form, only the [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") decorator is supported:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Class level feature configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Support for dataclasses features is partial. Currently **supported** are the
+    `init`, `repr`, `eq`, `order` and `unsafe_hash` features, `match_args` and `kw_only`
+    are supported on Python 3.10+. Currently **not supported** are the `frozen` and
+    `slots` features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using the mixin class form with [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass"), class configuration arguments are passed
+    as class-level parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using the decorator form with [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass"), class configuration arguments
+    are passed to the decorator directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: For background on dataclass class options, see the [dataclasses](https://docs.python.org/3/library/dataclasses.html)
+    documentation at [@dataclasses.dataclass](https://docs.python.org/3/library/dataclasses.html#dataclasses.dataclass).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Attribute Configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQLAlchemy native dataclasses differ from normal dataclasses in that attributes
+    to be mapped are described using the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") generic annotation container in all cases. Mappings follow
+    the same forms as those documented at [Declarative Table with mapped_column()](declarative_tables.html#orm-declarative-table),
+    and all features of [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") and [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") are supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Additionally, ORM attribute configuration constructs including [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and [`composite()`](composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") support **per-attribute field options**, including
+    `init`, `default`, `default_factory` and `repr`. The names of these arguments
+    is fixed as specified in [**PEP 681**](https://peps.python.org/pep-0681/). Functionality
+    is equivalent to dataclasses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`init`, as in [`mapped_column.init`](mapping_api.html#sqlalchemy.orm.mapped_column.params.init
+    "sqlalchemy.orm.mapped_column"), [`relationship.init`](relationship_api.html#sqlalchemy.orm.relationship.params.init
+    "sqlalchemy.orm.relationship"), if False indicates the field should not be part
+    of the `__init__()` method'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default`, as in [`mapped_column.default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default
+    "sqlalchemy.orm.mapped_column"), [`relationship.default`](relationship_api.html#sqlalchemy.orm.relationship.params.default
+    "sqlalchemy.orm.relationship") indicates a default value for the field as given
+    as a keyword argument in the `__init__()` method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default_factory`, as in [`mapped_column.default_factory`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default_factory
+    "sqlalchemy.orm.mapped_column"), [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship"), indicates a callable function that will be invoked
+    to generate a new default value for a parameter if not passed explicitly to the
+    `__init__()` method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`repr` True by default, indicates the field should be part of the generated
+    `__repr__()` method'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another key difference from dataclasses is that default values for attributes
+    **must** be configured using the `default` parameter of the ORM construct, such
+    as `mapped_column(default=None)`. A syntax that resembles dataclass syntax which
+    accepts simple Python values as defaults without using `@dataclases.field()` is
+    not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example using [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), the mapping below will produce an `__init__()`
+    method that accepts only the fields `name` and `fullname`, where `name` is required
+    and may be passed positionally, and `fullname` is optional. The `id` field, which
+    we expect to be database-generated, is not part of the constructor at all:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Column Defaults
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'In order to accommodate the name overlap of the `default` argument with the
+    existing [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") parameter of the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") construct, the [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct disambiguates the two names by adding
+    a new parameter [`mapped_column.insert_default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.insert_default
+    "sqlalchemy.orm.mapped_column"), which will be populated directly into the [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") parameter of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), independently of what may be set on [`mapped_column.default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default
+    "sqlalchemy.orm.mapped_column"), which is always used for the dataclasses configuration.
+    For example, to configure a datetime column with a [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") set to the `func.utc_timestamp()` SQL function, but
+    where the parameter is optional in the constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, an `INSERT` for a new `User` object where no parameter
+    for `created_at` were passed proceeds as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Integration with Annotated
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The approach introduced at [Mapping Whole Column Declarations to Python Types](declarative_tables.html#orm-declarative-mapped-column-pep593)
+    illustrates how to use [**PEP 593**](https://peps.python.org/pep-0593/) `Annotated`
+    objects to package whole [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") constructs for re-use. This feature is supported
+    with the dataclasses feature. One aspect of the feature however requires a workaround
+    when working with typing tools, which is that the [**PEP 681**](https://peps.python.org/pep-0681/)-specific
+    arguments `init`, `default`, `repr`, and `default_factory` **must** be on the
+    right hand side, packaged into an explicit [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct, in order for the typing tool to interpret
+    the attribute correctly. As an example, the approach below will work perfectly
+    fine at runtime, however typing tools will consider the `User()` construction
+    to be invalid, as they do not see the `init=False` parameter present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instead, [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") must be present on the right side as well with
+    an explicit setting for [`mapped_column.init`](mapping_api.html#sqlalchemy.orm.mapped_column.params.init
+    "sqlalchemy.orm.mapped_column"); the other arguments can remain within the `Annotated`
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using mixins and abstract superclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Any mixins or base classes that are used in a [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") mapped class which include [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") attributes must themselves be part of a [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") hierarchy, such as in the example below using
+    a mixin:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Python type checkers which support [**PEP 681**](https://peps.python.org/pep-0681/)
+    will otherwise not consider attributes from non-dataclass mixins to be part of
+    the dataclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 2.0.8: Using mixins and abstract bases within [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") or [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") hierarchies which are not themselves
+    dataclasses is deprecated, as these fields are not supported by [**PEP 681**](https://peps.python.org/pep-0681/)
+    as belonging to the dataclass. A warning is emitted for this case which will later
+    be an error.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[When transforming <cls> to a dataclass, attribute(s) originate from superclass
+    <cls> which is not a dataclass.](../errors.html#error-dcmx) - background on rationale'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Relationship Configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    annotation in combination with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is used in the same way as described at [Basic
+    Relationship Patterns](basic_relationships.html#relationship-patterns). When specifying
+    a collection-based [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") as an optional keyword argument, the [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship") parameter must be passed and it must refer to the
+    collection class that’s to be used. Many-to-one and scalar object references may
+    make use of [`relationship.default`](relationship_api.html#sqlalchemy.orm.relationship.params.default
+    "sqlalchemy.orm.relationship") if the default value is to be `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above mapping will generate an empty list for `Parent.children` when a new
+    `Parent()` object is constructed without passing `children`, and similarly a `None`
+    value for `Child.parent` when a new `Child()` object is constructed without passing
+    `parent`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship") can be automatically derived from the given collection
+    class of the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") itself, this would break compatibility with dataclasses,
+    as the presence of [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship") or [`relationship.default`](relationship_api.html#sqlalchemy.orm.relationship.params.default
+    "sqlalchemy.orm.relationship") is what determines if the parameter is to be required
+    or optional when rendered into the `__init__()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using Non-Mapped Dataclass Fields'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using Declarative dataclasses, non-mapped fields may be used on the class
+    as well, which will be part of the dataclass construction process but will not
+    be mapped. Any field that does not use [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") will be ignored by the mapping process. In the example
+    below, the fields `ctrl_one` and `ctrl_two` will be part of the instance-level
+    state of the object, but will not be persisted by the ORM:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instance of `Data` above can be created as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A more real world example might be to make use of the Dataclasses `InitVar`
+    feature in conjunction with the `__post_init__()` feature to receive init-only
+    fields that can be used to compose persisted data. In the example below, the `User`
+    class is declared using `id`, `name` and `password_hash` as mapped features, but
+    makes use of init-only `password` and `repeat_password` fields to represent the
+    user creation process (note: to run this example, replace the function `your_crypt_function_here()`
+    with a third party crypt function, such as [bcrypt](https://pypi.org/project/bcrypt/)
+    or [argon2-cffi](https://pypi.org/project/argon2-cffi/)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above object is created with parameters `password` and `repeat_password`,
+    which are consumed up front so that the `password_hash` variable may be generated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 2.0.0rc1: When using [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") or [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass"), fields that do not include the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation may be included, which will be treated as
+    part of the resulting dataclass but not be mapped, without the need to also indicate
+    the `__allow_unmapped__` class attribute. Previous 2.0 beta releases would require
+    this attribute to be explicitly present, even though the purpose of this attribute
+    was only to allow legacy ORM typed mappings to continue to function.  ### Integrating
+    with Alternate Dataclass Providers such as Pydantic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dataclass layer of Pydantic is **not fully compatible** with SQLAlchemy’s
+    class instrumentation without additional internal changes, and many features such
+    as related collections may not work correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For Pydantic compatibility, please consider the [SQLModel](https://sqlmodel.tiangolo.com)
+    ORM which is built with Pydantic on top of SQLAlchemy ORM, which includes special
+    implementation details which **explicitly resolve** these incompatibilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy’s [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") class and [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") method call directly into the Python
+    standard library `dataclasses.dataclass` class decorator, after the declarative
+    mapping process has been applied to the class. This function call may be swapped
+    out for alternateive dataclasses providers, such as that of Pydantic, using the
+    `dataclass_callable` parameter accepted by [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") as a class keyword argument as well as by
+    [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above `User` class will be applied as a dataclass, using Pydantic’s `pydantic.dataclasses.dataclasses`
+    callable. The process is available both for mapped classes as well as mixins that
+    extend from [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") or which have [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") applied directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0.4: Added the `dataclass_callable` class and method parameters
+    for [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass "sqlalchemy.orm.MappedAsDataclass")
+    and [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass"), and adjusted some of the dataclass
+    internals to accommodate more strict dataclass functions such as that of Pydantic.  ##
+    Applying ORM Mappings to an existing dataclass (legacy dataclass use)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Legacy Feature
+  prefs: []
+  type: TYPE_NORMAL
+- en: The approaches described here are superseded by the [Declarative Dataclass Mapping](#orm-declarative-native-dataclasses)
+    feature new in the 2.0 series of SQLAlchemy. This newer version of the feature
+    builds upon the dataclass support first added in version 1.4, which is described
+    in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To map an existing dataclass, SQLAlchemy’s “inline” declarative directives
+    cannot be used directly; ORM directives are assigned using one of three techniques:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using “Declarative with Imperative Table”, the table / column to be mapped is
+    defined using a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object assigned to the `__table__` attribute of the class; relationships are defined
+    within `__mapper_args__` dictionary. The class is mapped using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator. An example is below at [Mapping pre-existing
+    dataclasses using Declarative With Imperative Table](#orm-declarative-dataclasses-imperative-table).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using full “Declarative”, the Declarative-interpreted directives such as [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") are added to the `.metadata` dictionary of the
+    `dataclasses.field()` construct, where they are consumed by the declarative process.
+    The class is again mapped using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator. See the example below at [Mapping
+    pre-existing dataclasses using Declarative-style fields](#orm-declarative-dataclasses-declarative-table).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An “Imperative” mapping can be applied to an existing dataclass using the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method to produce the mapping in exactly
+    the same way as described at [Imperative Mapping](mapping_styles.html#orm-imperative-mapping).
+    This is illustrated below at [Mapping pre-existing dataclasses using Imperative
+    Mapping](#orm-imperative-dataclasses).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The general process by which SQLAlchemy applies mappings to a dataclass is the
+    same as that of an ordinary class, but also includes that SQLAlchemy will detect
+    class-level attributes that were part of the dataclasses declaration process and
+    replace them at runtime with the usual SQLAlchemy ORM mapped attributes. The `__init__`
+    method that would have been generated by dataclasses is left intact, as is the
+    same for all the other methods that dataclasses generates such as `__eq__()`,
+    `__repr__()`, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mapping pre-existing dataclasses using Declarative With Imperative Table'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of a mapping using `@dataclass` using [Declarative with Imperative
+    Table (a.k.a. Hybrid Declarative)](declarative_tables.html#orm-imperative-table-configuration)
+    is below. A complete [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object is constructed explicitly and assigned to the `__table__` attribute. Instance
+    fields are defined using normal dataclass syntaxes. Additional [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") definitions such as [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), are placed in the [__mapper_args__](declarative_config.html#orm-declarative-mapper-options)
+    class-level dictionary underneath the `properties` key, corresponding to the [`Mapper.properties`](mapping_api.html#sqlalchemy.orm.Mapper.params.properties
+    "sqlalchemy.orm.Mapper") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the `User.id`, `Address.id`, and `Address.user_id` attributes
+    are defined as `field(init=False)`. This means that parameters for these won’t
+    be added to `__init__()` methods, but [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will still be able to set them after getting their values
+    during flush from autoincrement or other default value generator. To allow them
+    to be specified in the constructor explicitly, they would instead be given a default
+    value of `None`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    to be declared separately, it needs to be specified directly within the [`Mapper.properties`](mapping_api.html#sqlalchemy.orm.Mapper.params.properties
+    "sqlalchemy.orm.Mapper") dictionary which itself is specified within the `__mapper_args__`
+    dictionary, so that it is passed to the constructor for [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper"). An alternative to this approach is in the next example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Declaring a dataclass `field()` setting a `default` together with `init=False`
+    will not work as would be expected with a totally plain dataclass, since the SQLAlchemy
+    class instrumentation will replace the default value set on the class by the dataclass
+    creation process. Use `default_factory` instead. This adaptation is done automatically
+    when making use of [Declarative Dataclass Mapping](#orm-declarative-native-dataclasses).  ###
+    Mapping pre-existing dataclasses using Declarative-style fields'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Legacy Feature
+  prefs: []
+  type: TYPE_NORMAL
+- en: This approach to Declarative mapping with dataclasses should be considered as
+    legacy. It will remain supported however is unlikely to offer any advantages against
+    the new approach detailed at [Declarative Dataclass Mapping](#orm-declarative-native-dataclasses).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that **mapped_column() is not supported with this use**; the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") construct should continue to be used to declare table
+    metadata within the `metadata` field of `dataclasses.field()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The fully declarative approach requires that [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects are declared as class attributes, which when
+    using dataclasses would conflict with the dataclass-level attributes. An approach
+    to combine these together is to make use of the `metadata` attribute on the `dataclass.field`
+    object, where SQLAlchemy-specific mapping information may be supplied. Declarative
+    supports extraction of these parameters when the class specifies the attribute
+    `__sa_dataclass_metadata_key__`. This also provides a more succinct method of
+    indicating the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") association:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Using Declarative Mixins with pre-existing dataclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the section [Composing Mapped Hierarchies with Mixins](declarative_mixins.html),
+    Declarative Mixin classes are introduced. One requirement of declarative mixins
+    is that certain constructs that can’t be easily duplicated must be given as callables,
+    using the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    decorator, such as in the example at [Mixing in Relationships](declarative_mixins.html#orm-declarative-mixins-relationships):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This form is supported within the Dataclasses `field()` object by using a lambda
+    to indicate the SQLAlchemy construct inside the `field()`. Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") to surround the lambda is optional. If we wanted
+    to produce our `User` class above where the ORM fields came from a mixin that
+    is itself a dataclass, the form would be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.2: Added support for “declared attr” style mixin attributes,
+    namely [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    constructs as well as [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects with foreign key declarations, to be used
+    within “Dataclasses with Declarative Table” style mappings.  ### Mapping pre-existing
+    dataclasses using Imperative Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As described previously, a class which is set up as a dataclass using the `@dataclass`
+    decorator can then be further decorated using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator in order to apply declarative-style
+    mapping to the class. As an alternative to using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator, we may also pass the class through
+    the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method instead, so that we may pass
+    all [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    and [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    configuration imperatively to the function rather than having them defined on
+    the class itself as class variables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same warning mentioned in [Mapping pre-existing dataclasses using Declarative
+    With Imperative Table](#orm-declarative-dataclasses-imperative-table) applies
+    when using this mapping style.  ## Applying ORM mappings to an existing attrs
+    class'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [attrs](https://pypi.org/project/attrs/) library is a popular third party
+    library that provides similar features as dataclasses, with many additional features
+    provided not found in ordinary dataclasses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A class augmented with [attrs](https://pypi.org/project/attrs/) uses the `@define`
+    decorator. This decorator initiates a process to scan the class for attributes
+    that define the class’ behavior, which are then used to generate methods, documentation,
+    and annotations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SQLAlchemy ORM supports mapping an [attrs](https://pypi.org/project/attrs/)
+    class using **Declarative with Imperative Table** or **Imperative** mapping. The
+    general form of these two styles is fully equivalent to the [Mapping pre-existing
+    dataclasses using Declarative-style fields](#orm-declarative-dataclasses-declarative-table)
+    and [Mapping pre-existing dataclasses using Declarative With Imperative Table](#orm-declarative-dataclasses-imperative-table)
+    mapping forms used with dataclasses, where the inline attribute directives used
+    by dataclasses or attrs are unchanged, and SQLAlchemy’s table-oriented instrumentation
+    is applied at runtime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `@define` decorator of [attrs](https://pypi.org/project/attrs/) by default
+    replaces the annotated class with a new __slots__ based class, which is not supported.
+    When using the old style annotation `@attr.s` or using `define(slots=False)`,
+    the class does not get replaced. Furthermore attrs removes its own class-bound
+    attributes after the decorator runs, so that SQLAlchemy’s mapping process takes
+    over these attributes without any issue. Both decorators, `@attr.s` and `@define(slots=False)`
+    work with SQLAlchemy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapping attrs with Declarative “Imperative Table”
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the “Declarative with Imperative Table” style, a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object is declared inline with the declarative class.
+    The `@define` decorator is applied to the class first, then the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator second:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `attrs` `slots=True` option, which enables `__slots__` on a mapped class,
+    cannot be used with SQLAlchemy mappings without fully implementing alternative
+    [attribute instrumentation](examples.html#examples-instrumentation), as mapped
+    classes normally rely upon direct access to `__dict__` for state storage. Behavior
+    is undefined when this option is present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapping attrs with Imperative Mapping
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Just as is the case with dataclasses, we can make use of [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") to map an existing `attrs` class as
+    well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above form is equivalent to the previous example using Declarative with
+    Imperative Table.  ## Declarative Dataclass Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
+    mappings may be augmented with an additional mixin class or decorator directive,
+    which will add an additional step to the Declarative process after the mapping
+    is complete that will convert the mapped class **in-place** into a Python [dataclass](https://docs.python.org/3/library/dataclasses.html),
+    before completing the mapping process which applies ORM-specific [instrumentation](../glossary.html#term-instrumentation)
+    to the class. The most prominent behavioral addition this provides is generation
+    of an `__init__()` method with fine-grained control over positional and keyword
+    arguments with or without defaults, as well as generation of methods like `__repr__()`
+    and `__eq__()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a [**PEP 484**](https://peps.python.org/pep-0484/) typing perspective,
+    the class is recognized as having Dataclass-specific behaviors, most notably by
+    taking advantage of [**PEP 681**](https://peps.python.org/pep-0681/) “Dataclass
+    Transforms”, which allows typing tools to consider the class as though it were
+    explicitly decorated using the `@dataclasses.dataclass` decorator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Support for [**PEP 681**](https://peps.python.org/pep-0681/) in typing tools
+    as of **April 4, 2023** is limited and is currently known to be supported by [Pyright](https://github.com/microsoft/pyright)
+    as well as [Mypy](https://mypy.readthedocs.io/en/stable/) as of **version 1.2**.
+    Note that Mypy 1.1.1 introduced [**PEP 681**](https://peps.python.org/pep-0681/)
+    support but did not correctly accommodate Python descriptors which will lead to
+    errors when using SQLAlchemy’s ORM mapping scheme.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://peps.python.org/pep-0681/#the-dataclass-transform-decorator](https://peps.python.org/pep-0681/#the-dataclass-transform-decorator)
+    - background on how libraries like SQLAlchemy enable [**PEP 681**](https://peps.python.org/pep-0681/)
+    support'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dataclass conversion may be added to any Declarative class either by adding
+    the [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass "sqlalchemy.orm.MappedAsDataclass")
+    mixin to a [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class hierarchy, or for decorator mapping by
+    using the [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") class decorator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") mixin may be applied either to the Declarative
+    `Base` class or any superclass, as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or may be applied directly to classes that extend from the Declarative base:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using the decorator form, only the [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") decorator is supported:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Class level feature configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Support for dataclasses features is partial. Currently **supported** are the
+    `init`, `repr`, `eq`, `order` and `unsafe_hash` features, `match_args` and `kw_only`
+    are supported on Python 3.10+. Currently **not supported** are the `frozen` and
+    `slots` features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using the mixin class form with [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass"), class configuration arguments are passed
+    as class-level parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using the decorator form with [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass"), class configuration arguments
+    are passed to the decorator directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: For background on dataclass class options, see the [dataclasses](https://docs.python.org/3/library/dataclasses.html)
+    documentation at [@dataclasses.dataclass](https://docs.python.org/3/library/dataclasses.html#dataclasses.dataclass).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Attribute Configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQLAlchemy native dataclasses differ from normal dataclasses in that attributes
+    to be mapped are described using the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") generic annotation container in all cases. Mappings follow
+    the same forms as those documented at [Declarative Table with mapped_column()](declarative_tables.html#orm-declarative-table),
+    and all features of [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") and [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") are supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Additionally, ORM attribute configuration constructs including [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and [`composite()`](composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") support **per-attribute field options**, including
+    `init`, `default`, `default_factory` and `repr`. The names of these arguments
+    is fixed as specified in [**PEP 681**](https://peps.python.org/pep-0681/). Functionality
+    is equivalent to dataclasses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`init`, as in [`mapped_column.init`](mapping_api.html#sqlalchemy.orm.mapped_column.params.init
+    "sqlalchemy.orm.mapped_column"), [`relationship.init`](relationship_api.html#sqlalchemy.orm.relationship.params.init
+    "sqlalchemy.orm.relationship"), if False indicates the field should not be part
+    of the `__init__()` method'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default`, as in [`mapped_column.default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default
+    "sqlalchemy.orm.mapped_column"), [`relationship.default`](relationship_api.html#sqlalchemy.orm.relationship.params.default
+    "sqlalchemy.orm.relationship") indicates a default value for the field as given
+    as a keyword argument in the `__init__()` method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default_factory`, as in [`mapped_column.default_factory`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default_factory
+    "sqlalchemy.orm.mapped_column"), [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship"), indicates a callable function that will be invoked
+    to generate a new default value for a parameter if not passed explicitly to the
+    `__init__()` method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`repr` True by default, indicates the field should be part of the generated
+    `__repr__()` method'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another key difference from dataclasses is that default values for attributes
+    **must** be configured using the `default` parameter of the ORM construct, such
+    as `mapped_column(default=None)`. A syntax that resembles dataclass syntax which
+    accepts simple Python values as defaults without using `@dataclases.field()` is
+    not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example using [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), the mapping below will produce an `__init__()`
+    method that accepts only the fields `name` and `fullname`, where `name` is required
+    and may be passed positionally, and `fullname` is optional. The `id` field, which
+    we expect to be database-generated, is not part of the constructor at all:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Column Defaults
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'In order to accommodate the name overlap of the `default` argument with the
+    existing [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") parameter of the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") construct, the [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct disambiguates the two names by adding
+    a new parameter [`mapped_column.insert_default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.insert_default
+    "sqlalchemy.orm.mapped_column"), which will be populated directly into the [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") parameter of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), independently of what may be set on [`mapped_column.default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default
+    "sqlalchemy.orm.mapped_column"), which is always used for the dataclasses configuration.
+    For example, to configure a datetime column with a [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") set to the `func.utc_timestamp()` SQL function, but
+    where the parameter is optional in the constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, an `INSERT` for a new `User` object where no parameter
+    for `created_at` were passed proceeds as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Integration with Annotated
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The approach introduced at [Mapping Whole Column Declarations to Python Types](declarative_tables.html#orm-declarative-mapped-column-pep593)
+    illustrates how to use [**PEP 593**](https://peps.python.org/pep-0593/) `Annotated`
+    objects to package whole [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") constructs for re-use. This feature is supported
+    with the dataclasses feature. One aspect of the feature however requires a workaround
+    when working with typing tools, which is that the [**PEP 681**](https://peps.python.org/pep-0681/)-specific
+    arguments `init`, `default`, `repr`, and `default_factory` **must** be on the
+    right hand side, packaged into an explicit [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct, in order for the typing tool to interpret
+    the attribute correctly. As an example, the approach below will work perfectly
+    fine at runtime, however typing tools will consider the `User()` construction
+    to be invalid, as they do not see the `init=False` parameter present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instead, [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") must be present on the right side as well with
+    an explicit setting for [`mapped_column.init`](mapping_api.html#sqlalchemy.orm.mapped_column.params.init
+    "sqlalchemy.orm.mapped_column"); the other arguments can remain within the `Annotated`
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using mixins and abstract superclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Any mixins or base classes that are used in a [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") mapped class which include [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") attributes must themselves be part of a [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") hierarchy, such as in the example below using
+    a mixin:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Python type checkers which support [**PEP 681**](https://peps.python.org/pep-0681/)
+    will otherwise not consider attributes from non-dataclass mixins to be part of
+    the dataclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 2.0.8: Using mixins and abstract bases within [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") or [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") hierarchies which are not themselves
+    dataclasses is deprecated, as these fields are not supported by [**PEP 681**](https://peps.python.org/pep-0681/)
+    as belonging to the dataclass. A warning is emitted for this case which will later
+    be an error.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[When transforming <cls> to a dataclass, attribute(s) originate from superclass
+    <cls> which is not a dataclass.](../errors.html#error-dcmx) - background on rationale'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Relationship Configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    annotation in combination with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is used in the same way as described at [Basic
+    Relationship Patterns](basic_relationships.html#relationship-patterns). When specifying
+    a collection-based [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") as an optional keyword argument, the [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship") parameter must be passed and it must refer to the
+    collection class that’s to be used. Many-to-one and scalar object references may
+    make use of [`relationship.default`](relationship_api.html#sqlalchemy.orm.relationship.params.default
+    "sqlalchemy.orm.relationship") if the default value is to be `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above mapping will generate an empty list for `Parent.children` when a new
+    `Parent()` object is constructed without passing `children`, and similarly a `None`
+    value for `Child.parent` when a new `Child()` object is constructed without passing
+    `parent`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship") can be automatically derived from the given collection
+    class of the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") itself, this would break compatibility with dataclasses,
+    as the presence of [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship") or [`relationship.default`](relationship_api.html#sqlalchemy.orm.relationship.params.default
+    "sqlalchemy.orm.relationship") is what determines if the parameter is to be required
+    or optional when rendered into the `__init__()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using Non-Mapped Dataclass Fields'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using Declarative dataclasses, non-mapped fields may be used on the class
+    as well, which will be part of the dataclass construction process but will not
+    be mapped. Any field that does not use [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") will be ignored by the mapping process. In the example
+    below, the fields `ctrl_one` and `ctrl_two` will be part of the instance-level
+    state of the object, but will not be persisted by the ORM:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instance of `Data` above can be created as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A more real world example might be to make use of the Dataclasses `InitVar`
+    feature in conjunction with the `__post_init__()` feature to receive init-only
+    fields that can be used to compose persisted data. In the example below, the `User`
+    class is declared using `id`, `name` and `password_hash` as mapped features, but
+    makes use of init-only `password` and `repeat_password` fields to represent the
+    user creation process (note: to run this example, replace the function `your_crypt_function_here()`
+    with a third party crypt function, such as [bcrypt](https://pypi.org/project/bcrypt/)
+    or [argon2-cffi](https://pypi.org/project/argon2-cffi/)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above object is created with parameters `password` and `repeat_password`,
+    which are consumed up front so that the `password_hash` variable may be generated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 2.0.0rc1: When using [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") or [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass"), fields that do not include the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation may be included, which will be treated as
+    part of the resulting dataclass but not be mapped, without the need to also indicate
+    the `__allow_unmapped__` class attribute. Previous 2.0 beta releases would require
+    this attribute to be explicitly present, even though the purpose of this attribute
+    was only to allow legacy ORM typed mappings to continue to function.  ### Integrating
+    with Alternate Dataclass Providers such as Pydantic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dataclass layer of Pydantic is **not fully compatible** with SQLAlchemy’s
+    class instrumentation without additional internal changes, and many features such
+    as related collections may not work correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For Pydantic compatibility, please consider the [SQLModel](https://sqlmodel.tiangolo.com)
+    ORM which is built with Pydantic on top of SQLAlchemy ORM, which includes special
+    implementation details which **explicitly resolve** these incompatibilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy’s [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") class and [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") method call directly into the Python
+    standard library `dataclasses.dataclass` class decorator, after the declarative
+    mapping process has been applied to the class. This function call may be swapped
+    out for alternateive dataclasses providers, such as that of Pydantic, using the
+    `dataclass_callable` parameter accepted by [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") as a class keyword argument as well as by
+    [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above `User` class will be applied as a dataclass, using Pydantic’s `pydantic.dataclasses.dataclasses`
+    callable. The process is available both for mapped classes as well as mixins that
+    extend from [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") or which have [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") applied directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0.4: Added the `dataclass_callable` class and method parameters
+    for [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass "sqlalchemy.orm.MappedAsDataclass")
+    and [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass"), and adjusted some of the dataclass
+    internals to accommodate more strict dataclass functions such as that of Pydantic.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Class level feature configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Support for dataclasses features is partial. Currently **supported** are the
+    `init`, `repr`, `eq`, `order` and `unsafe_hash` features, `match_args` and `kw_only`
+    are supported on Python 3.10+. Currently **not supported** are the `frozen` and
+    `slots` features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using the mixin class form with [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass"), class configuration arguments are passed
+    as class-level parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using the decorator form with [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass"), class configuration arguments
+    are passed to the decorator directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: For background on dataclass class options, see the [dataclasses](https://docs.python.org/3/library/dataclasses.html)
+    documentation at [@dataclasses.dataclass](https://docs.python.org/3/library/dataclasses.html#dataclasses.dataclass).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Attribute Configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQLAlchemy native dataclasses differ from normal dataclasses in that attributes
+    to be mapped are described using the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") generic annotation container in all cases. Mappings follow
+    the same forms as those documented at [Declarative Table with mapped_column()](declarative_tables.html#orm-declarative-table),
+    and all features of [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") and [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") are supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Additionally, ORM attribute configuration constructs including [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and [`composite()`](composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") support **per-attribute field options**, including
+    `init`, `default`, `default_factory` and `repr`. The names of these arguments
+    is fixed as specified in [**PEP 681**](https://peps.python.org/pep-0681/). Functionality
+    is equivalent to dataclasses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`init`, as in [`mapped_column.init`](mapping_api.html#sqlalchemy.orm.mapped_column.params.init
+    "sqlalchemy.orm.mapped_column"), [`relationship.init`](relationship_api.html#sqlalchemy.orm.relationship.params.init
+    "sqlalchemy.orm.relationship"), if False indicates the field should not be part
+    of the `__init__()` method'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default`, as in [`mapped_column.default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default
+    "sqlalchemy.orm.mapped_column"), [`relationship.default`](relationship_api.html#sqlalchemy.orm.relationship.params.default
+    "sqlalchemy.orm.relationship") indicates a default value for the field as given
+    as a keyword argument in the `__init__()` method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default_factory`, as in [`mapped_column.default_factory`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default_factory
+    "sqlalchemy.orm.mapped_column"), [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship"), indicates a callable function that will be invoked
+    to generate a new default value for a parameter if not passed explicitly to the
+    `__init__()` method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`repr` True by default, indicates the field should be part of the generated
+    `__repr__()` method'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another key difference from dataclasses is that default values for attributes
+    **must** be configured using the `default` parameter of the ORM construct, such
+    as `mapped_column(default=None)`. A syntax that resembles dataclass syntax which
+    accepts simple Python values as defaults without using `@dataclases.field()` is
+    not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example using [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column"), the mapping below will produce an `__init__()`
+    method that accepts only the fields `name` and `fullname`, where `name` is required
+    and may be passed positionally, and `fullname` is optional. The `id` field, which
+    we expect to be database-generated, is not part of the constructor at all:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Column Defaults
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'In order to accommodate the name overlap of the `default` argument with the
+    existing [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") parameter of the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") construct, the [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct disambiguates the two names by adding
+    a new parameter [`mapped_column.insert_default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.insert_default
+    "sqlalchemy.orm.mapped_column"), which will be populated directly into the [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") parameter of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), independently of what may be set on [`mapped_column.default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default
+    "sqlalchemy.orm.mapped_column"), which is always used for the dataclasses configuration.
+    For example, to configure a datetime column with a [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") set to the `func.utc_timestamp()` SQL function, but
+    where the parameter is optional in the constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, an `INSERT` for a new `User` object where no parameter
+    for `created_at` were passed proceeds as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Integration with Annotated
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The approach introduced at [Mapping Whole Column Declarations to Python Types](declarative_tables.html#orm-declarative-mapped-column-pep593)
+    illustrates how to use [**PEP 593**](https://peps.python.org/pep-0593/) `Annotated`
+    objects to package whole [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") constructs for re-use. This feature is supported
+    with the dataclasses feature. One aspect of the feature however requires a workaround
+    when working with typing tools, which is that the [**PEP 681**](https://peps.python.org/pep-0681/)-specific
+    arguments `init`, `default`, `repr`, and `default_factory` **must** be on the
+    right hand side, packaged into an explicit [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct, in order for the typing tool to interpret
+    the attribute correctly. As an example, the approach below will work perfectly
+    fine at runtime, however typing tools will consider the `User()` construction
+    to be invalid, as they do not see the `init=False` parameter present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instead, [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") must be present on the right side as well with
+    an explicit setting for [`mapped_column.init`](mapping_api.html#sqlalchemy.orm.mapped_column.params.init
+    "sqlalchemy.orm.mapped_column"); the other arguments can remain within the `Annotated`
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: Column Defaults
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'In order to accommodate the name overlap of the `default` argument with the
+    existing [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") parameter of the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") construct, the [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct disambiguates the two names by adding
+    a new parameter [`mapped_column.insert_default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.insert_default
+    "sqlalchemy.orm.mapped_column"), which will be populated directly into the [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") parameter of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), independently of what may be set on [`mapped_column.default`](mapping_api.html#sqlalchemy.orm.mapped_column.params.default
+    "sqlalchemy.orm.mapped_column"), which is always used for the dataclasses configuration.
+    For example, to configure a datetime column with a [`Column.default`](../core/metadata.html#sqlalchemy.schema.Column.params.default
+    "sqlalchemy.schema.Column") set to the `func.utc_timestamp()` SQL function, but
+    where the parameter is optional in the constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, an `INSERT` for a new `User` object where no parameter
+    for `created_at` were passed proceeds as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Integration with Annotated
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The approach introduced at [Mapping Whole Column Declarations to Python Types](declarative_tables.html#orm-declarative-mapped-column-pep593)
+    illustrates how to use [**PEP 593**](https://peps.python.org/pep-0593/) `Annotated`
+    objects to package whole [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") constructs for re-use. This feature is supported
+    with the dataclasses feature. One aspect of the feature however requires a workaround
+    when working with typing tools, which is that the [**PEP 681**](https://peps.python.org/pep-0681/)-specific
+    arguments `init`, `default`, `repr`, and `default_factory` **must** be on the
+    right hand side, packaged into an explicit [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct, in order for the typing tool to interpret
+    the attribute correctly. As an example, the approach below will work perfectly
+    fine at runtime, however typing tools will consider the `User()` construction
+    to be invalid, as they do not see the `init=False` parameter present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instead, [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") must be present on the right side as well with
+    an explicit setting for [`mapped_column.init`](mapping_api.html#sqlalchemy.orm.mapped_column.params.init
+    "sqlalchemy.orm.mapped_column"); the other arguments can remain within the `Annotated`
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using mixins and abstract superclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Any mixins or base classes that are used in a [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") mapped class which include [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") attributes must themselves be part of a [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") hierarchy, such as in the example below using
+    a mixin:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: Python type checkers which support [**PEP 681**](https://peps.python.org/pep-0681/)
+    will otherwise not consider attributes from non-dataclass mixins to be part of
+    the dataclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 2.0.8: Using mixins and abstract bases within [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") or [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") hierarchies which are not themselves
+    dataclasses is deprecated, as these fields are not supported by [**PEP 681**](https://peps.python.org/pep-0681/)
+    as belonging to the dataclass. A warning is emitted for this case which will later
+    be an error.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[When transforming <cls> to a dataclass, attribute(s) originate from superclass
+    <cls> which is not a dataclass.](../errors.html#error-dcmx) - background on rationale'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Relationship Configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    annotation in combination with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is used in the same way as described at [Basic
+    Relationship Patterns](basic_relationships.html#relationship-patterns). When specifying
+    a collection-based [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") as an optional keyword argument, the [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship") parameter must be passed and it must refer to the
+    collection class that’s to be used. Many-to-one and scalar object references may
+    make use of [`relationship.default`](relationship_api.html#sqlalchemy.orm.relationship.params.default
+    "sqlalchemy.orm.relationship") if the default value is to be `None`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above mapping will generate an empty list for `Parent.children` when a new
+    `Parent()` object is constructed without passing `children`, and similarly a `None`
+    value for `Child.parent` when a new `Child()` object is constructed without passing
+    `parent`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship") can be automatically derived from the given collection
+    class of the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") itself, this would break compatibility with dataclasses,
+    as the presence of [`relationship.default_factory`](relationship_api.html#sqlalchemy.orm.relationship.params.default_factory
+    "sqlalchemy.orm.relationship") or [`relationship.default`](relationship_api.html#sqlalchemy.orm.relationship.params.default
+    "sqlalchemy.orm.relationship") is what determines if the parameter is to be required
+    or optional when rendered into the `__init__()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using Non-Mapped Dataclass Fields'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using Declarative dataclasses, non-mapped fields may be used on the class
+    as well, which will be part of the dataclass construction process but will not
+    be mapped. Any field that does not use [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") will be ignored by the mapping process. In the example
+    below, the fields `ctrl_one` and `ctrl_two` will be part of the instance-level
+    state of the object, but will not be persisted by the ORM:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instance of `Data` above can be created as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A more real world example might be to make use of the Dataclasses `InitVar`
+    feature in conjunction with the `__post_init__()` feature to receive init-only
+    fields that can be used to compose persisted data. In the example below, the `User`
+    class is declared using `id`, `name` and `password_hash` as mapped features, but
+    makes use of init-only `password` and `repeat_password` fields to represent the
+    user creation process (note: to run this example, replace the function `your_crypt_function_here()`
+    with a third party crypt function, such as [bcrypt](https://pypi.org/project/bcrypt/)
+    or [argon2-cffi](https://pypi.org/project/argon2-cffi/)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above object is created with parameters `password` and `repeat_password`,
+    which are consumed up front so that the `password_hash` variable may be generated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 2.0.0rc1: When using [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") or [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass"), fields that do not include the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation may be included, which will be treated as
+    part of the resulting dataclass but not be mapped, without the need to also indicate
+    the `__allow_unmapped__` class attribute. Previous 2.0 beta releases would require
+    this attribute to be explicitly present, even though the purpose of this attribute
+    was only to allow legacy ORM typed mappings to continue to function.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Integrating with Alternate Dataclass Providers such as Pydantic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dataclass layer of Pydantic is **not fully compatible** with SQLAlchemy’s
+    class instrumentation without additional internal changes, and many features such
+    as related collections may not work correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For Pydantic compatibility, please consider the [SQLModel](https://sqlmodel.tiangolo.com)
+    ORM which is built with Pydantic on top of SQLAlchemy ORM, which includes special
+    implementation details which **explicitly resolve** these incompatibilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy’s [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") class and [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") method call directly into the Python
+    standard library `dataclasses.dataclass` class decorator, after the declarative
+    mapping process has been applied to the class. This function call may be swapped
+    out for alternateive dataclasses providers, such as that of Pydantic, using the
+    `dataclass_callable` parameter accepted by [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") as a class keyword argument as well as by
+    [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above `User` class will be applied as a dataclass, using Pydantic’s `pydantic.dataclasses.dataclasses`
+    callable. The process is available both for mapped classes as well as mixins that
+    extend from [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass
+    "sqlalchemy.orm.MappedAsDataclass") or which have [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass") applied directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0.4: Added the `dataclass_callable` class and method parameters
+    for [`MappedAsDataclass`](mapping_api.html#sqlalchemy.orm.MappedAsDataclass "sqlalchemy.orm.MappedAsDataclass")
+    and [`registry.mapped_as_dataclass()`](mapping_api.html#sqlalchemy.orm.registry.mapped_as_dataclass
+    "sqlalchemy.orm.registry.mapped_as_dataclass"), and adjusted some of the dataclass
+    internals to accommodate more strict dataclass functions such as that of Pydantic.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Applying ORM Mappings to an existing dataclass (legacy dataclass use)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Legacy Feature
+  prefs: []
+  type: TYPE_NORMAL
+- en: The approaches described here are superseded by the [Declarative Dataclass Mapping](#orm-declarative-native-dataclasses)
+    feature new in the 2.0 series of SQLAlchemy. This newer version of the feature
+    builds upon the dataclass support first added in version 1.4, which is described
+    in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To map an existing dataclass, SQLAlchemy’s “inline” declarative directives
+    cannot be used directly; ORM directives are assigned using one of three techniques:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using “Declarative with Imperative Table”, the table / column to be mapped is
+    defined using a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object assigned to the `__table__` attribute of the class; relationships are defined
+    within `__mapper_args__` dictionary. The class is mapped using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator. An example is below at [Mapping pre-existing
+    dataclasses using Declarative With Imperative Table](#orm-declarative-dataclasses-imperative-table).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using full “Declarative”, the Declarative-interpreted directives such as [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") are added to the `.metadata` dictionary of the
+    `dataclasses.field()` construct, where they are consumed by the declarative process.
+    The class is again mapped using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator. See the example below at [Mapping
+    pre-existing dataclasses using Declarative-style fields](#orm-declarative-dataclasses-declarative-table).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An “Imperative” mapping can be applied to an existing dataclass using the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method to produce the mapping in exactly
+    the same way as described at [Imperative Mapping](mapping_styles.html#orm-imperative-mapping).
+    This is illustrated below at [Mapping pre-existing dataclasses using Imperative
+    Mapping](#orm-imperative-dataclasses).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The general process by which SQLAlchemy applies mappings to a dataclass is the
+    same as that of an ordinary class, but also includes that SQLAlchemy will detect
+    class-level attributes that were part of the dataclasses declaration process and
+    replace them at runtime with the usual SQLAlchemy ORM mapped attributes. The `__init__`
+    method that would have been generated by dataclasses is left intact, as is the
+    same for all the other methods that dataclasses generates such as `__eq__()`,
+    `__repr__()`, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mapping pre-existing dataclasses using Declarative With Imperative Table'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of a mapping using `@dataclass` using [Declarative with Imperative
+    Table (a.k.a. Hybrid Declarative)](declarative_tables.html#orm-imperative-table-configuration)
+    is below. A complete [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object is constructed explicitly and assigned to the `__table__` attribute. Instance
+    fields are defined using normal dataclass syntaxes. Additional [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") definitions such as [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), are placed in the [__mapper_args__](declarative_config.html#orm-declarative-mapper-options)
+    class-level dictionary underneath the `properties` key, corresponding to the [`Mapper.properties`](mapping_api.html#sqlalchemy.orm.Mapper.params.properties
+    "sqlalchemy.orm.Mapper") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the `User.id`, `Address.id`, and `Address.user_id` attributes
+    are defined as `field(init=False)`. This means that parameters for these won’t
+    be added to `__init__()` methods, but [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will still be able to set them after getting their values
+    during flush from autoincrement or other default value generator. To allow them
+    to be specified in the constructor explicitly, they would instead be given a default
+    value of `None`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    to be declared separately, it needs to be specified directly within the [`Mapper.properties`](mapping_api.html#sqlalchemy.orm.Mapper.params.properties
+    "sqlalchemy.orm.Mapper") dictionary which itself is specified within the `__mapper_args__`
+    dictionary, so that it is passed to the constructor for [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper"). An alternative to this approach is in the next example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Declaring a dataclass `field()` setting a `default` together with `init=False`
+    will not work as would be expected with a totally plain dataclass, since the SQLAlchemy
+    class instrumentation will replace the default value set on the class by the dataclass
+    creation process. Use `default_factory` instead. This adaptation is done automatically
+    when making use of [Declarative Dataclass Mapping](#orm-declarative-native-dataclasses).  ###
+    Mapping pre-existing dataclasses using Declarative-style fields'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Legacy Feature
+  prefs: []
+  type: TYPE_NORMAL
+- en: This approach to Declarative mapping with dataclasses should be considered as
+    legacy. It will remain supported however is unlikely to offer any advantages against
+    the new approach detailed at [Declarative Dataclass Mapping](#orm-declarative-native-dataclasses).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that **mapped_column() is not supported with this use**; the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") construct should continue to be used to declare table
+    metadata within the `metadata` field of `dataclasses.field()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The fully declarative approach requires that [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects are declared as class attributes, which when
+    using dataclasses would conflict with the dataclass-level attributes. An approach
+    to combine these together is to make use of the `metadata` attribute on the `dataclass.field`
+    object, where SQLAlchemy-specific mapping information may be supplied. Declarative
+    supports extraction of these parameters when the class specifies the attribute
+    `__sa_dataclass_metadata_key__`. This also provides a more succinct method of
+    indicating the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") association:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Using Declarative Mixins with pre-existing dataclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the section [Composing Mapped Hierarchies with Mixins](declarative_mixins.html),
+    Declarative Mixin classes are introduced. One requirement of declarative mixins
+    is that certain constructs that can’t be easily duplicated must be given as callables,
+    using the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    decorator, such as in the example at [Mixing in Relationships](declarative_mixins.html#orm-declarative-mixins-relationships):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This form is supported within the Dataclasses `field()` object by using a lambda
+    to indicate the SQLAlchemy construct inside the `field()`. Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") to surround the lambda is optional. If we wanted
+    to produce our `User` class above where the ORM fields came from a mixin that
+    is itself a dataclass, the form would be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.2: Added support for “declared attr” style mixin attributes,
+    namely [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    constructs as well as [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects with foreign key declarations, to be used
+    within “Dataclasses with Declarative Table” style mappings.  ### Mapping pre-existing
+    dataclasses using Imperative Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As described previously, a class which is set up as a dataclass using the `@dataclass`
+    decorator can then be further decorated using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator in order to apply declarative-style
+    mapping to the class. As an alternative to using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator, we may also pass the class through
+    the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method instead, so that we may pass
+    all [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    and [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    configuration imperatively to the function rather than having them defined on
+    the class itself as class variables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same warning mentioned in [Mapping pre-existing dataclasses using Declarative
+    With Imperative Table](#orm-declarative-dataclasses-imperative-table) applies
+    when using this mapping style.  ### Mapping pre-existing dataclasses using Declarative
+    With Imperative Table'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of a mapping using `@dataclass` using [Declarative with Imperative
+    Table (a.k.a. Hybrid Declarative)](declarative_tables.html#orm-imperative-table-configuration)
+    is below. A complete [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object is constructed explicitly and assigned to the `__table__` attribute. Instance
+    fields are defined using normal dataclass syntaxes. Additional [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty
+    "sqlalchemy.orm.MapperProperty") definitions such as [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), are placed in the [__mapper_args__](declarative_config.html#orm-declarative-mapper-options)
+    class-level dictionary underneath the `properties` key, corresponding to the [`Mapper.properties`](mapping_api.html#sqlalchemy.orm.Mapper.params.properties
+    "sqlalchemy.orm.Mapper") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the `User.id`, `Address.id`, and `Address.user_id` attributes
+    are defined as `field(init=False)`. This means that parameters for these won’t
+    be added to `__init__()` methods, but [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will still be able to set them after getting their values
+    during flush from autoincrement or other default value generator. To allow them
+    to be specified in the constructor explicitly, they would instead be given a default
+    value of `None`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    to be declared separately, it needs to be specified directly within the [`Mapper.properties`](mapping_api.html#sqlalchemy.orm.Mapper.params.properties
+    "sqlalchemy.orm.Mapper") dictionary which itself is specified within the `__mapper_args__`
+    dictionary, so that it is passed to the constructor for [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper"). An alternative to this approach is in the next example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declaring a dataclass `field()` setting a `default` together with `init=False`
+    will not work as would be expected with a totally plain dataclass, since the SQLAlchemy
+    class instrumentation will replace the default value set on the class by the dataclass
+    creation process. Use `default_factory` instead. This adaptation is done automatically
+    when making use of [Declarative Dataclass Mapping](#orm-declarative-native-dataclasses).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mapping pre-existing dataclasses using Declarative-style fields'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Legacy Feature
+  prefs: []
+  type: TYPE_NORMAL
+- en: This approach to Declarative mapping with dataclasses should be considered as
+    legacy. It will remain supported however is unlikely to offer any advantages against
+    the new approach detailed at [Declarative Dataclass Mapping](#orm-declarative-native-dataclasses).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that **mapped_column() is not supported with this use**; the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") construct should continue to be used to declare table
+    metadata within the `metadata` field of `dataclasses.field()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The fully declarative approach requires that [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects are declared as class attributes, which when
+    using dataclasses would conflict with the dataclass-level attributes. An approach
+    to combine these together is to make use of the `metadata` attribute on the `dataclass.field`
+    object, where SQLAlchemy-specific mapping information may be supplied. Declarative
+    supports extraction of these parameters when the class specifies the attribute
+    `__sa_dataclass_metadata_key__`. This also provides a more succinct method of
+    indicating the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") association:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Using Declarative Mixins with pre-existing dataclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the section [Composing Mapped Hierarchies with Mixins](declarative_mixins.html),
+    Declarative Mixin classes are introduced. One requirement of declarative mixins
+    is that certain constructs that can’t be easily duplicated must be given as callables,
+    using the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    decorator, such as in the example at [Mixing in Relationships](declarative_mixins.html#orm-declarative-mixins-relationships):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This form is supported within the Dataclasses `field()` object by using a lambda
+    to indicate the SQLAlchemy construct inside the `field()`. Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") to surround the lambda is optional. If we wanted
+    to produce our `User` class above where the ORM fields came from a mixin that
+    is itself a dataclass, the form would be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.2: Added support for “declared attr” style mixin attributes,
+    namely [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    constructs as well as [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects with foreign key declarations, to be used
+    within “Dataclasses with Declarative Table” style mappings.  #### Using Declarative
+    Mixins with pre-existing dataclasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the section [Composing Mapped Hierarchies with Mixins](declarative_mixins.html),
+    Declarative Mixin classes are introduced. One requirement of declarative mixins
+    is that certain constructs that can’t be easily duplicated must be given as callables,
+    using the [`declared_attr`](mapping_api.html#sqlalchemy.orm.declared_attr "sqlalchemy.orm.declared_attr")
+    decorator, such as in the example at [Mixing in Relationships](declarative_mixins.html#orm-declarative-mixins-relationships):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This form is supported within the Dataclasses `field()` object by using a lambda
+    to indicate the SQLAlchemy construct inside the `field()`. Using [`declared_attr()`](mapping_api.html#sqlalchemy.orm.declared_attr
+    "sqlalchemy.orm.declared_attr") to surround the lambda is optional. If we wanted
+    to produce our `User` class above where the ORM fields came from a mixin that
+    is itself a dataclass, the form would be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.2: Added support for “declared attr” style mixin attributes,
+    namely [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    constructs as well as [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects with foreign key declarations, to be used
+    within “Dataclasses with Declarative Table” style mappings.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mapping pre-existing dataclasses using Imperative Mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As described previously, a class which is set up as a dataclass using the `@dataclass`
+    decorator can then be further decorated using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator in order to apply declarative-style
+    mapping to the class. As an alternative to using the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator, we may also pass the class through
+    the [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") method instead, so that we may pass
+    all [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    and [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    configuration imperatively to the function rather than having them defined on
+    the class itself as class variables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: The same warning mentioned in [Mapping pre-existing dataclasses using Declarative
+    With Imperative Table](#orm-declarative-dataclasses-imperative-table) applies
+    when using this mapping style.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Applying ORM mappings to an existing attrs class'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [attrs](https://pypi.org/project/attrs/) library is a popular third party
+    library that provides similar features as dataclasses, with many additional features
+    provided not found in ordinary dataclasses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A class augmented with [attrs](https://pypi.org/project/attrs/) uses the `@define`
+    decorator. This decorator initiates a process to scan the class for attributes
+    that define the class’ behavior, which are then used to generate methods, documentation,
+    and annotations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SQLAlchemy ORM supports mapping an [attrs](https://pypi.org/project/attrs/)
+    class using **Declarative with Imperative Table** or **Imperative** mapping. The
+    general form of these two styles is fully equivalent to the [Mapping pre-existing
+    dataclasses using Declarative-style fields](#orm-declarative-dataclasses-declarative-table)
+    and [Mapping pre-existing dataclasses using Declarative With Imperative Table](#orm-declarative-dataclasses-imperative-table)
+    mapping forms used with dataclasses, where the inline attribute directives used
+    by dataclasses or attrs are unchanged, and SQLAlchemy’s table-oriented instrumentation
+    is applied at runtime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `@define` decorator of [attrs](https://pypi.org/project/attrs/) by default
+    replaces the annotated class with a new __slots__ based class, which is not supported.
+    When using the old style annotation `@attr.s` or using `define(slots=False)`,
+    the class does not get replaced. Furthermore attrs removes its own class-bound
+    attributes after the decorator runs, so that SQLAlchemy’s mapping process takes
+    over these attributes without any issue. Both decorators, `@attr.s` and `@define(slots=False)`
+    work with SQLAlchemy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapping attrs with Declarative “Imperative Table”
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the “Declarative with Imperative Table” style, a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object is declared inline with the declarative class.
+    The `@define` decorator is applied to the class first, then the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator second:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `attrs` `slots=True` option, which enables `__slots__` on a mapped class,
+    cannot be used with SQLAlchemy mappings without fully implementing alternative
+    [attribute instrumentation](examples.html#examples-instrumentation), as mapped
+    classes normally rely upon direct access to `__dict__` for state storage. Behavior
+    is undefined when this option is present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapping attrs with Imperative Mapping
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Just as is the case with dataclasses, we can make use of [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") to map an existing `attrs` class as
+    well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above form is equivalent to the previous example using Declarative with
+    Imperative Table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapping attrs with Declarative “Imperative Table”
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the “Declarative with Imperative Table” style, a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object is declared inline with the declarative class.
+    The `@define` decorator is applied to the class first, then the [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") decorator second:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `attrs` `slots=True` option, which enables `__slots__` on a mapped class,
+    cannot be used with SQLAlchemy mappings without fully implementing alternative
+    [attribute instrumentation](examples.html#examples-instrumentation), as mapped
+    classes normally rely upon direct access to `__dict__` for state storage. Behavior
+    is undefined when this option is present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapping attrs with Imperative Mapping
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Just as is the case with dataclasses, we can make use of [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively") to map an existing `attrs` class as
+    well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above form is equivalent to the previous example using Declarative with
+    Imperative Table.
+  prefs: []
+  type: TYPE_NORMAL

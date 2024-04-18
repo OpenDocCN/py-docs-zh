@@ -1,0 +1,551 @@
+- en: Using UPDATE and DELETE Statements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/tutorial/data_update.html](https://docs.sqlalchemy.org/en/20/tutorial/data_update.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: So far we’ve covered [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert"), so that we can get some data into our database,
+    and then spent a lot of time on [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") which handles the broad range of usage patterns
+    used for retrieving data from the database. In this section we will cover the
+    [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
+    and [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
+    constructs, which are used to modify existing rows as well as delete existing
+    rows. This section will cover these constructs from a Core-centric perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**ORM Readers** - As was the case mentioned at [Using INSERT Statements](data_insert.html#tutorial-core-insert),
+    the [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
+    and [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
+    operations when used with the ORM are usually invoked internally from the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object as part of the [unit of work](../glossary.html#term-unit-of-work)
+    process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, unlike [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert"), the [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update") and [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete
+    "sqlalchemy.sql.expression.Delete") constructs can also be used directly with
+    the ORM, using a pattern known as “ORM-enabled update and delete”; for this reason,
+    familiarity with these constructs is useful for ORM use. Both styles of use are
+    discussed in the sections [Updating ORM Objects using the Unit of Work pattern](orm_data_manipulation.html#tutorial-orm-updating)
+    and [Deleting ORM Objects using the Unit of Work pattern](orm_data_manipulation.html#tutorial-orm-deleting).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## The update() SQL Expression Construct'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`update()`](../core/dml.html#sqlalchemy.sql.expression.update "sqlalchemy.sql.expression.update")
+    function generates a new instance of [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update") which represents an UPDATE statement in SQL,
+    that will update existing data in a table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Like the [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert "sqlalchemy.sql.expression.insert")
+    construct, there is a “traditional” form of [`update()`](../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update"), which emits UPDATE against a single table
+    at a time and does not return any rows. However some backends support an UPDATE
+    statement that may modify multiple tables at once, and the UPDATE statement also
+    supports RETURNING such that columns contained in matched rows may be returned
+    in the result set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A basic UPDATE looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Update.values()`](../core/dml.html#sqlalchemy.sql.expression.Update.values
+    "sqlalchemy.sql.expression.Update.values") method controls the contents of the
+    SET elements of the UPDATE statement. This is the same method shared by the [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") construct. Parameters can normally be passed
+    using the column names as keyword arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'UPDATE supports all the major SQL forms of UPDATE, including updates against
+    expressions, where we can make use of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") expressions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To support UPDATE in an “executemany” context, where many parameter sets will
+    be invoked against the same statement, the [`bindparam()`](../core/sqlelement.html#sqlalchemy.sql.expression.bindparam
+    "sqlalchemy.sql.expression.bindparam") construct may be used to set up bound parameters;
+    these replace the places that literal values would normally go:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other techniques which may be applied to UPDATE include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Correlated Updates'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An UPDATE statement can make use of rows in other tables by using a [correlated
+    subquery](data_select.html#tutorial-scalar-subquery). A subquery may be used anywhere
+    a column expression might be placed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]  ### UPDATE..FROM'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some databases such as PostgreSQL and MySQL support a syntax “UPDATE FROM”
+    where additional tables may be stated directly in a special FROM clause. This
+    syntax will be generated implicitly when additional tables are located in the
+    WHERE clause of the statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is also a MySQL specific syntax that can UPDATE multiple tables. This
+    requires we refer to [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects in the VALUES clause in order to refer to additional tables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]  ### Parameter Ordered Updates'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another MySQL-only behavior is that the order of parameters in the SET clause
+    of an UPDATE actually impacts the evaluation of each expression. For this use
+    case, the [`Update.ordered_values()`](../core/dml.html#sqlalchemy.sql.expression.Update.ordered_values
+    "sqlalchemy.sql.expression.Update.ordered_values") method accepts a sequence of
+    tuples so that this order may be controlled [[2]](#id2):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]  ## The delete() SQL Expression Construct'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete "sqlalchemy.sql.expression.delete")
+    function generates a new instance of [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete
+    "sqlalchemy.sql.expression.Delete") which represents a DELETE statement in SQL,
+    that will delete rows from a table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete "sqlalchemy.sql.expression.delete")
+    statement from an API perspective is very similar to that of the [`update()`](../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update") construct, traditionally returning no rows
+    but allowing for a RETURNING variant on some database backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Multiple Table Deletes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Like [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update"),
+    [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
+    supports the use of correlated subqueries in the WHERE clause as well as backend-specific
+    multiple table syntaxes, such as `DELETE FROM..USING` on MySQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]  ## Getting Affected Row Count from UPDATE, DELETE'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Both [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
+    and [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
+    support the ability to return the number of rows matched after the statement proceeds,
+    for statements that are invoked using Core [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), i.e. [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute"). Per the caveats mentioned below, this
+    value is available from the [`CursorResult.rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.rowcount
+    "sqlalchemy.engine.CursorResult.rowcount") attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`CursorResult`](../core/connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult") class is a subclass of [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") which contains additional attributes that are specific
+    to the DBAPI `cursor` object. An instance of this subclass is returned when a
+    statement is invoked via the [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method. When using the ORM, the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method returns an object of this type for all
+    INSERT, UPDATE, and DELETE statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Facts about [`CursorResult.rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.rowcount
+    "sqlalchemy.engine.CursorResult.rowcount"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The value returned is the number of rows **matched** by the WHERE clause of
+    the statement. It does not matter if the row were actually modified or not.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`CursorResult.rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.rowcount
+    "sqlalchemy.engine.CursorResult.rowcount") is not necessarily available for an
+    UPDATE or DELETE statement that uses RETURNING, or for one that uses an [executemany](dbapi_transactions.html#tutorial-multiple-parameters)
+    execution. The availability depends on the DBAPI module in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In any case where the DBAPI does not determine the rowcount for some type of
+    statement, the returned value will be `-1`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SQLAlchemy pre-memoizes the DBAPIs `cursor.rowcount` value before the cursor
+    is closed, as some DBAPIs don’t support accessing this attribute after the fact.
+    In order to pre-memoize `cursor.rowcount` for a statement that is not UPDATE or
+    DELETE, such as INSERT or SELECT, the [`Connection.execution_options.preserve_rowcount`](../core/connections.html#sqlalchemy.engine.Connection.execution_options.params.preserve_rowcount
+    "sqlalchemy.engine.Connection.execution_options") execution option may be used.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some drivers, particularly third party dialects for non-relational databases,
+    may not support [`CursorResult.rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.rowcount
+    "sqlalchemy.engine.CursorResult.rowcount") at all. The [`CursorResult.supports_sane_rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.supports_sane_rowcount
+    "sqlalchemy.engine.CursorResult.supports_sane_rowcount") cursor attribute will
+    indicate this.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: “rowcount” is used by the ORM [unit of work](../glossary.html#term-unit-of-work)
+    process to validate that an UPDATE or DELETE statement matched the expected number
+    of rows, and is also essential for the ORM versioning feature documented at [Configuring
+    a Version Counter](../orm/versioning.html#mapper-version-counter).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using RETURNING with UPDATE, DELETE
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Like the [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert "sqlalchemy.sql.expression.Insert")
+    construct, [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
+    and [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
+    also support the RETURNING clause which is added by using the [`Update.returning()`](../core/dml.html#sqlalchemy.sql.expression.Update.returning
+    "sqlalchemy.sql.expression.Update.returning") and [`Delete.returning()`](../core/dml.html#sqlalchemy.sql.expression.Delete.returning
+    "sqlalchemy.sql.expression.Delete.returning") methods. When these methods are
+    used on a backend that supports RETURNING, selected columns from all rows that
+    match the WHERE criteria of the statement will be returned in the [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object as rows that can be iterated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Further Reading for UPDATE, DELETE
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'API documentation for UPDATE / DELETE:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'ORM-enabled UPDATE and DELETE:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM-Enabled INSERT, UPDATE, and DELETE statements](../orm/queryguide/dml.html#orm-expression-update-delete)
+    - in the [ORM Querying Guide](../orm/queryguide/index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## The update() SQL Expression Construct'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`update()`](../core/dml.html#sqlalchemy.sql.expression.update "sqlalchemy.sql.expression.update")
+    function generates a new instance of [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update") which represents an UPDATE statement in SQL,
+    that will update existing data in a table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Like the [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert "sqlalchemy.sql.expression.insert")
+    construct, there is a “traditional” form of [`update()`](../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update"), which emits UPDATE against a single table
+    at a time and does not return any rows. However some backends support an UPDATE
+    statement that may modify multiple tables at once, and the UPDATE statement also
+    supports RETURNING such that columns contained in matched rows may be returned
+    in the result set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A basic UPDATE looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Update.values()`](../core/dml.html#sqlalchemy.sql.expression.Update.values
+    "sqlalchemy.sql.expression.Update.values") method controls the contents of the
+    SET elements of the UPDATE statement. This is the same method shared by the [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") construct. Parameters can normally be passed
+    using the column names as keyword arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'UPDATE supports all the major SQL forms of UPDATE, including updates against
+    expressions, where we can make use of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") expressions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To support UPDATE in an “executemany” context, where many parameter sets will
+    be invoked against the same statement, the [`bindparam()`](../core/sqlelement.html#sqlalchemy.sql.expression.bindparam
+    "sqlalchemy.sql.expression.bindparam") construct may be used to set up bound parameters;
+    these replace the places that literal values would normally go:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other techniques which may be applied to UPDATE include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Correlated Updates'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An UPDATE statement can make use of rows in other tables by using a [correlated
+    subquery](data_select.html#tutorial-scalar-subquery). A subquery may be used anywhere
+    a column expression might be placed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]  ### UPDATE..FROM'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some databases such as PostgreSQL and MySQL support a syntax “UPDATE FROM”
+    where additional tables may be stated directly in a special FROM clause. This
+    syntax will be generated implicitly when additional tables are located in the
+    WHERE clause of the statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is also a MySQL specific syntax that can UPDATE multiple tables. This
+    requires we refer to [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects in the VALUES clause in order to refer to additional tables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]  ### Parameter Ordered Updates'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another MySQL-only behavior is that the order of parameters in the SET clause
+    of an UPDATE actually impacts the evaluation of each expression. For this use
+    case, the [`Update.ordered_values()`](../core/dml.html#sqlalchemy.sql.expression.Update.ordered_values
+    "sqlalchemy.sql.expression.Update.ordered_values") method accepts a sequence of
+    tuples so that this order may be controlled [[2]](#id2):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]  ### Correlated Updates'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An UPDATE statement can make use of rows in other tables by using a [correlated
+    subquery](data_select.html#tutorial-scalar-subquery). A subquery may be used anywhere
+    a column expression might be placed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### UPDATE..FROM'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some databases such as PostgreSQL and MySQL support a syntax “UPDATE FROM”
+    where additional tables may be stated directly in a special FROM clause. This
+    syntax will be generated implicitly when additional tables are located in the
+    WHERE clause of the statement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is also a MySQL specific syntax that can UPDATE multiple tables. This
+    requires we refer to [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects in the VALUES clause in order to refer to additional tables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Parameter Ordered Updates'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another MySQL-only behavior is that the order of parameters in the SET clause
+    of an UPDATE actually impacts the evaluation of each expression. For this use
+    case, the [`Update.ordered_values()`](../core/dml.html#sqlalchemy.sql.expression.Update.ordered_values
+    "sqlalchemy.sql.expression.Update.ordered_values") method accepts a sequence of
+    tuples so that this order may be controlled [[2]](#id2):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## The delete() SQL Expression Construct'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete "sqlalchemy.sql.expression.delete")
+    function generates a new instance of [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete
+    "sqlalchemy.sql.expression.Delete") which represents a DELETE statement in SQL,
+    that will delete rows from a table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete "sqlalchemy.sql.expression.delete")
+    statement from an API perspective is very similar to that of the [`update()`](../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update") construct, traditionally returning no rows
+    but allowing for a RETURNING variant on some database backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Multiple Table Deletes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Like [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update"),
+    [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
+    supports the use of correlated subqueries in the WHERE clause as well as backend-specific
+    multiple table syntaxes, such as `DELETE FROM..USING` on MySQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]  ### Multiple Table Deletes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Like [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update"),
+    [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
+    supports the use of correlated subqueries in the WHERE clause as well as backend-specific
+    multiple table syntaxes, such as `DELETE FROM..USING` on MySQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Getting Affected Row Count from UPDATE, DELETE'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Both [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
+    and [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
+    support the ability to return the number of rows matched after the statement proceeds,
+    for statements that are invoked using Core [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), i.e. [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute"). Per the caveats mentioned below, this
+    value is available from the [`CursorResult.rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.rowcount
+    "sqlalchemy.engine.CursorResult.rowcount") attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`CursorResult`](../core/connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult") class is a subclass of [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") which contains additional attributes that are specific
+    to the DBAPI `cursor` object. An instance of this subclass is returned when a
+    statement is invoked via the [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method. When using the ORM, the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method returns an object of this type for all
+    INSERT, UPDATE, and DELETE statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Facts about [`CursorResult.rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.rowcount
+    "sqlalchemy.engine.CursorResult.rowcount"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The value returned is the number of rows **matched** by the WHERE clause of
+    the statement. It does not matter if the row were actually modified or not.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`CursorResult.rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.rowcount
+    "sqlalchemy.engine.CursorResult.rowcount") is not necessarily available for an
+    UPDATE or DELETE statement that uses RETURNING, or for one that uses an [executemany](dbapi_transactions.html#tutorial-multiple-parameters)
+    execution. The availability depends on the DBAPI module in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In any case where the DBAPI does not determine the rowcount for some type of
+    statement, the returned value will be `-1`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SQLAlchemy pre-memoizes the DBAPIs `cursor.rowcount` value before the cursor
+    is closed, as some DBAPIs don’t support accessing this attribute after the fact.
+    In order to pre-memoize `cursor.rowcount` for a statement that is not UPDATE or
+    DELETE, such as INSERT or SELECT, the [`Connection.execution_options.preserve_rowcount`](../core/connections.html#sqlalchemy.engine.Connection.execution_options.params.preserve_rowcount
+    "sqlalchemy.engine.Connection.execution_options") execution option may be used.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some drivers, particularly third party dialects for non-relational databases,
+    may not support [`CursorResult.rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.rowcount
+    "sqlalchemy.engine.CursorResult.rowcount") at all. The [`CursorResult.supports_sane_rowcount`](../core/connections.html#sqlalchemy.engine.CursorResult.supports_sane_rowcount
+    "sqlalchemy.engine.CursorResult.supports_sane_rowcount") cursor attribute will
+    indicate this.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: “rowcount” is used by the ORM [unit of work](../glossary.html#term-unit-of-work)
+    process to validate that an UPDATE or DELETE statement matched the expected number
+    of rows, and is also essential for the ORM versioning feature documented at [Configuring
+    a Version Counter](../orm/versioning.html#mapper-version-counter).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using RETURNING with UPDATE, DELETE
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Like the [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert "sqlalchemy.sql.expression.Insert")
+    construct, [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
+    and [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
+    also support the RETURNING clause which is added by using the [`Update.returning()`](../core/dml.html#sqlalchemy.sql.expression.Update.returning
+    "sqlalchemy.sql.expression.Update.returning") and [`Delete.returning()`](../core/dml.html#sqlalchemy.sql.expression.Delete.returning
+    "sqlalchemy.sql.expression.Delete.returning") methods. When these methods are
+    used on a backend that supports RETURNING, selected columns from all rows that
+    match the WHERE criteria of the statement will be returned in the [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object as rows that can be iterated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Further Reading for UPDATE, DELETE
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'API documentation for UPDATE / DELETE:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'ORM-enabled UPDATE and DELETE:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM-Enabled INSERT, UPDATE, and DELETE statements](../orm/queryguide/dml.html#orm-expression-update-delete)
+    - in the [ORM Querying Guide](../orm/queryguide/index.html)'
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,2023 @@
+- en: Tracking queries, object and Session Changes with Events
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/session_events.html](https://docs.sqlalchemy.org/en/20/orm/session_events.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: SQLAlchemy features an extensive [Event Listening](../core/event.html) system
+    used throughout the Core and ORM. Within the ORM, there are a wide variety of
+    event listener hooks, which are documented at an API level at [ORM Events](events.html).
+    This collection of events has grown over the years to include lots of very useful
+    new events as well as some older events that aren’t as relevant as they once were.
+    This section will attempt to introduce the major event hooks and when they might
+    be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Execute Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4: The [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") now features a single comprehensive hook designed to
+    intercept all SELECT statements made on behalf of the ORM as well as bulk UPDATE
+    and DELETE statements. This hook supersedes the previous [`QueryEvents.before_compile()`](events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event as well [`QueryEvents.before_compile_update()`](events.html#sqlalchemy.orm.QueryEvents.before_compile_update
+    "sqlalchemy.orm.QueryEvents.before_compile_update") and [`QueryEvents.before_compile_delete()`](events.html#sqlalchemy.orm.QueryEvents.before_compile_delete
+    "sqlalchemy.orm.QueryEvents.before_compile_delete").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    features a comprehensive system by which all queries invoked via the [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method, which includes all SELECT statements
+    emitted by [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    as well as all SELECT statements emitted on behalf of column and relationship
+    loaders, may be intercepted and modified. The system makes use of the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event hook as well as the [`ORMExecuteState`](session_api.html#sqlalchemy.orm.ORMExecuteState
+    "sqlalchemy.orm.ORMExecuteState") object to represent the event state.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basic Query Interception
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") is firstly useful for any kind
+    of interception of a query, which includes those emitted by [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") with [1.x style](../glossary.html#term-1.x-style) as well
+    as when an ORM-enabled [2.0 style](../glossary.html#term-2.0-style) [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"), [`update()`](../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update") or [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete
+    "sqlalchemy.sql.expression.delete") construct is delivered to [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute"). The [`ORMExecuteState`](session_api.html#sqlalchemy.orm.ORMExecuteState
+    "sqlalchemy.orm.ORMExecuteState") construct provides accessors to allow modifications
+    to statements, parameters, and options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example illustrates some simple modifications to SELECT statements.
+    At this level, the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event hook intends to replace the
+    previous use of the [`QueryEvents.before_compile()`](events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event, which was not fired off consistently
+    for various kinds of loaders; additionally, the [`QueryEvents.before_compile()`](events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") only applies to [1.x style](../glossary.html#term-1.x-style)
+    use with [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    and not with [2.0 style](../glossary.html#term-2.0-style) use of [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Adding global WHERE / ON criteria'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One of the most requested query-extension features is the ability to add WHERE
+    criteria to all occurrences of an entity in all queries. This is achievable by
+    making use of the [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") query option, which may be used on its
+    own, or is ideally suited to be used within the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, an option is added to all SELECT statements that will limit all queries
+    against `MyEntity` to filter on `public == True`. The criteria will be applied
+    to **all** loads of that class within the scope of the immediate query. The [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") option by default will automatically propagate
+    to relationship loaders as well, which will apply to subsequent relationship loads,
+    which includes lazy loads, selectinloads, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a series of classes that all feature some common column structure, if the
+    classes are composed using a [declarative mixin](extensions/declarative/mixins.html#declarative-mixins),
+    the mixin class itself may be used in conjunction with the [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") option by making use of a Python lambda.
+    The Python lambda will be invoked at query compilation time against the specific
+    entities which match the criteria. Given a series of classes based on a mixin
+    called `HasTimestamp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above classes `SomeEntity` and `SomeOtherEntity` will each have a column
+    `timestamp` that defaults to the current date and time. An event may be used to
+    intercept all objects that extend from `HasTimestamp` and filter their `timestamp`
+    column on a date that is no older than one month ago:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The use of a lambda inside of the call to [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") is only invoked **once per unique class**.
+    Custom functions should not be invoked within this lambda. See [Using Lambdas
+    to add significant speed gains to statement production](../core/connections.html#engine-lambda-caching)
+    for an overview of the “lambda SQL” feature, which is for advanced use only.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Query Events](examples.html#examples-session-orm-events) - includes working
+    examples of the above [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") recipes.  ### Re-Executing Statements'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep Alchemy
+  prefs: []
+  type: TYPE_NORMAL
+- en: the statement re-execution feature involves a slightly intricate recursive sequence,
+    and is intended to solve the fairly hard problem of being able to re-route the
+    execution of a SQL statement into various non-SQL contexts. The twin examples
+    of “dogpile caching” and “horizontal sharding”, linked below, should be used as
+    a guide for when this rather advanced feature is appropriate to be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ORMExecuteState`](session_api.html#sqlalchemy.orm.ORMExecuteState "sqlalchemy.orm.ORMExecuteState")
+    is capable of controlling the execution of the given statement; this includes
+    the ability to either not invoke the statement at all, allowing a pre-constructed
+    result set retrieved from a cache to be returned instead, as well as the ability
+    to invoke the same statement repeatedly with different state, such as invoking
+    it against multiple database connections and then merging the results together
+    in memory. Both of these advanced patterns are demonstrated in SQLAlchemy’s example
+    suite as detailed below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When inside the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event hook, the [`ORMExecuteState.invoke_statement()`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") method may be used to invoke
+    the statement using a new nested invocation of [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute"), which will then preempt the subsequent handling
+    of the current execution in progress and instead return the [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") returned by the inner execution. The event handlers
+    thus far invoked for the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") hook within this process will be
+    skipped within this nested call as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ORMExecuteState.invoke_statement()`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") method returns a [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object; this object then features the ability for
+    it to be “frozen” into a cacheable format and “unfrozen” into a new [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object, as well as for its data to be merged with
+    that of other [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g., using [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") to implement a cache:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above hook in place, an example of using the cache would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, a custom execution option is passed to [`Select.execution_options()`](../core/selectable.html#sqlalchemy.sql.expression.Select.execution_options
+    "sqlalchemy.sql.expression.Select.execution_options") in order to establish a
+    “cache key” that will then be intercepted by the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") hook. This cache key is then matched
+    to a [`FrozenResult`](../core/connections.html#sqlalchemy.engine.FrozenResult
+    "sqlalchemy.engine.FrozenResult") object that may be present in the cache, and
+    if present, the object is re-used. The recipe makes use of the [`Result.freeze()`](../core/connections.html#sqlalchemy.engine.Result.freeze
+    "sqlalchemy.engine.Result.freeze") method to “freeze” a [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object, which above will contain ORM results, such
+    that it can be stored in a cache and used multiple times. In order to return a
+    live result from the “frozen” result, the `merge_frozen_result()` function is
+    used to merge the “frozen” data from the result object into the current session.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above example is implemented as a complete example in [Dogpile Caching](examples.html#examples-caching).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ORMExecuteState.invoke_statement()`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") method may also be called multiple
+    times, passing along different information to the [`ORMExecuteState.invoke_statement.bind_arguments`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement.params.bind_arguments
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") parameter such that the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will make use of different [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") objects each time. This will return a different [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object each time; these results can be merged together
+    using the [`Result.merge()`](../core/connections.html#sqlalchemy.engine.Result.merge
+    "sqlalchemy.engine.Result.merge") method. This is the technique employed by the
+    [Horizontal Sharding](extensions/horizontal_shard.html) extension; see the source
+    code to familiarize.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dogpile Caching](examples.html#examples-caching)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Horizontal Sharding](examples.html#examples-sharding)  ## Persistence Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Probably the most widely used series of events are the “persistence” events,
+    which correspond to the [flush process](session_basics.html#session-flushing).
+    The flush is where all the decisions are made about pending changes to objects
+    and are then emitted out to the database in the form of INSERT, UPDATE, and DELETE
+    statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`before_flush()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") hook is by far the most generally
+    useful event to use when an application wants to ensure that additional persistence
+    changes to the database are made when a flush proceeds. Use [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") in order to operate upon objects
+    to validate their state as well as to compose additional objects and references
+    before they are persisted. Within this event, it is **safe to manipulate the Session’s
+    state**, that is, new objects can be attached to it, objects can be deleted, and
+    individual attributes on objects can be changed freely, and these changes will
+    be pulled into the flush process when the event hook completes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The typical [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") hook will be tasked with scanning
+    the collections [`Session.new`](session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"),
+    [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty "sqlalchemy.orm.Session.dirty")
+    and [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted "sqlalchemy.orm.Session.deleted")
+    in order to look for objects where something will be happening.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For illustrations of [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush"), see examples such as [Versioning
+    with a History Table](examples.html#examples-versioned-history) and [Versioning
+    using Temporal Rows](examples.html#examples-versioned-rows).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`after_flush()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`SessionEvents.after_flush()`](events.html#sqlalchemy.orm.SessionEvents.after_flush
+    "sqlalchemy.orm.SessionEvents.after_flush") hook is called after the SQL has been
+    emitted for a flush process, but **before** the state of the objects that were
+    flushed has been altered. That is, you can still inspect the [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
+    "sqlalchemy.orm.Session.new"), [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty
+    "sqlalchemy.orm.Session.dirty") and [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
+    "sqlalchemy.orm.Session.deleted") collections to see what was just flushed, and
+    you can also use history tracking features like the ones provided by [`AttributeState`](internals.html#sqlalchemy.orm.AttributeState
+    "sqlalchemy.orm.AttributeState") to see what changes were just persisted. In the
+    [`SessionEvents.after_flush()`](events.html#sqlalchemy.orm.SessionEvents.after_flush
+    "sqlalchemy.orm.SessionEvents.after_flush") event, additional SQL can be emitted
+    to the database based on what’s observed to have changed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`after_flush_postexec()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.after_flush_postexec()`](events.html#sqlalchemy.orm.SessionEvents.after_flush_postexec
+    "sqlalchemy.orm.SessionEvents.after_flush_postexec") is called soon after [`SessionEvents.after_flush()`](events.html#sqlalchemy.orm.SessionEvents.after_flush
+    "sqlalchemy.orm.SessionEvents.after_flush"), but is invoked **after** the state
+    of the objects has been modified to account for the flush that just took place.
+    The [`Session.new`](session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"),
+    [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty "sqlalchemy.orm.Session.dirty")
+    and [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted "sqlalchemy.orm.Session.deleted")
+    collections are normally completely empty here. Use [`SessionEvents.after_flush_postexec()`](events.html#sqlalchemy.orm.SessionEvents.after_flush_postexec
+    "sqlalchemy.orm.SessionEvents.after_flush_postexec") to inspect the identity map
+    for finalized objects and possibly emit additional SQL. In this hook, there is
+    the ability to make new changes on objects, which means the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will again go into a “dirty” state; the mechanics of
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    here will cause it to flush **again** if new changes are detected in this hook
+    if the flush were invoked in the context of [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"); otherwise, the pending changes will be bundled
+    as part of the next normal flush. When the hook detects new changes within a [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), a counter ensures that an endless loop in this
+    regard is stopped after 100 iterations, in the case that an [`SessionEvents.after_flush_postexec()`](events.html#sqlalchemy.orm.SessionEvents.after_flush_postexec
+    "sqlalchemy.orm.SessionEvents.after_flush_postexec") hook continually adds new
+    state to be flushed each time it is called.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mapper-level Flush Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to the flush-level hooks, there is also a suite of hooks that are
+    more fine-grained, in that they are called on a per-object basis and are broken
+    out based on INSERT, UPDATE or DELETE within the flush process. These are the
+    mapper persistence hooks, and they too are very popular, however these events
+    need to be approached more cautiously, as they proceed within the context of the
+    flush process that is already ongoing; many operations are not safe to proceed
+    here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The events are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.before_insert()`](events.html#sqlalchemy.orm.MapperEvents.before_insert
+    "sqlalchemy.orm.MapperEvents.before_insert")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.after_insert()`](events.html#sqlalchemy.orm.MapperEvents.after_insert
+    "sqlalchemy.orm.MapperEvents.after_insert")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.before_update()`](events.html#sqlalchemy.orm.MapperEvents.before_update
+    "sqlalchemy.orm.MapperEvents.before_update")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.after_update()`](events.html#sqlalchemy.orm.MapperEvents.after_update
+    "sqlalchemy.orm.MapperEvents.after_update")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.before_delete()`](events.html#sqlalchemy.orm.MapperEvents.before_delete
+    "sqlalchemy.orm.MapperEvents.before_delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.after_delete()`](events.html#sqlalchemy.orm.MapperEvents.after_delete
+    "sqlalchemy.orm.MapperEvents.after_delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to note that these events apply **only** to the [session flush
+    operation](session_basics.html#session-flushing) , and **not** to the ORM-level
+    INSERT/UPDATE/DELETE functionality described at [ORM-Enabled INSERT, UPDATE, and
+    DELETE statements](queryguide/dml.html#orm-expression-update-delete). To intercept
+    ORM-level DML, use the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each event is passed the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper"),
+    the mapped object itself, and the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") which is being used to emit an INSERT, UPDATE
+    or DELETE statement. The appeal of these events is clear, in that if an application
+    wants to tie some activity to when a specific type of object is persisted with
+    an INSERT, the hook is very specific; unlike the [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") event, there’s no need to search
+    through collections like [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
+    "sqlalchemy.orm.Session.new") in order to find targets. However, the flush plan
+    which represents the full list of every single INSERT, UPDATE, DELETE statement
+    to be emitted has *already been decided* when these events are called, and no
+    changes may be made at this stage. Therefore the only changes that are even possible
+    to the given objects are upon attributes **local** to the object’s row. Any other
+    change to the object or other objects will impact the state of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), which will fail to function properly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Operations that are not supported within these mapper-level persistence events
+    include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.add()`](session_api.html#sqlalchemy.orm.Session.add "sqlalchemy.orm.Session.add")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete "sqlalchemy.orm.Session.delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mapped collection append, add, remove, delete, discard, etc.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mapped relationship attribute set/del events, i.e. `someobject.related = someotherobject`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The reason the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") is passed is that it is encouraged that **simple
+    SQL operations take place here**, directly on the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), such as incrementing counters or inserting extra
+    rows within log tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are also many per-object operations that don’t need to be handled within
+    a flush event at all. The most common alternative is to simply establish additional
+    state along with an object inside its `__init__()` method, such as creating additional
+    objects that are to be associated with the new object. Using validators as described
+    in [Simple Validators](mapped_attributes.html#simple-validators) is another approach;
+    these functions can intercept changes to attributes and establish additional state
+    changes on the target object in response to the attribute change. With both of
+    these approaches, the object is in the correct state before it ever gets to the
+    flush step.  ## Object Lifecycle Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another use case for events is to track the lifecycle of objects. This refers
+    to the states first introduced at [Quickie Intro to Object States](session_state_management.html#session-object-states).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All the states above can be tracked fully with events. Each event represents
+    a distinct state transition, meaning, the starting state and the destination state
+    are both part of what are tracked. With the exception of the initial transient
+    event, all the events are in terms of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object or class, meaning they can be associated either
+    with a specific [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or with the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    class itself, as well as with a specific [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"), which is likely the most useful form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The listeners can of course be stacked on top of one function, as is likely
+    to be common. For example, to track all objects that are entering the persistent
+    state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transient
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'All mapped objects when first constructed start out as [transient](../glossary.html#term-transient).
+    In this state, the object exists alone and doesn’t have an association with any
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    For this initial state, there’s no specific “transition” event since there is
+    no [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    however if one wanted to intercept when any transient object is created, the [`InstanceEvents.init()`](events.html#sqlalchemy.orm.InstanceEvents.init
+    "sqlalchemy.orm.InstanceEvents.init") method is probably the best event. This
+    event is applied to a specific class or superclass. For example, to intercept
+    all new objects for a particular declarative base:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transient to Pending
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The transient object becomes [pending](../glossary.html#term-pending) when
+    it is first associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") via the [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") or [`Session.add_all()`](session_api.html#sqlalchemy.orm.Session.add_all
+    "sqlalchemy.orm.Session.add_all") method. An object may also become part of a
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    as a result of a [“cascade”](cascades.html#unitofwork-cascades) from a referencing
+    object that was explicitly added. The transient to pending transition is detectable
+    using the [`SessionEvents.transient_to_pending()`](events.html#sqlalchemy.orm.SessionEvents.transient_to_pending
+    "sqlalchemy.orm.SessionEvents.transient_to_pending") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Pending to Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [pending](../glossary.html#term-pending) object becomes [persistent](../glossary.html#term-persistent)
+    when a flush proceeds and an INSERT statement takes place for the instance. The
+    object now has an identity key. Track pending to persistent with the [`SessionEvents.pending_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_persistent
+    "sqlalchemy.orm.SessionEvents.pending_to_persistent") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Pending to Transient
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [pending](../glossary.html#term-pending) object can revert back to [transient](../glossary.html#term-transient)
+    if the [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method is called before the pending object
+    has been flushed, or if the [`Session.expunge()`](session_api.html#sqlalchemy.orm.Session.expunge
+    "sqlalchemy.orm.Session.expunge") method is called for the object before it is
+    flushed. Track pending to transient with the [`SessionEvents.pending_to_transient()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_transient
+    "sqlalchemy.orm.SessionEvents.pending_to_transient") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Loaded as Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Objects can appear in the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") directly in the [persistent](../glossary.html#term-persistent)
+    state when they are loaded from the database. Tracking this state transition is
+    synonymous with tracking objects as they are loaded, and is synonymous with using
+    the [`InstanceEvents.load()`](events.html#sqlalchemy.orm.InstanceEvents.load "sqlalchemy.orm.InstanceEvents.load")
+    instance-level event. However, the [`SessionEvents.loaded_as_persistent()`](events.html#sqlalchemy.orm.SessionEvents.loaded_as_persistent
+    "sqlalchemy.orm.SessionEvents.loaded_as_persistent") event is provided as a session-centric
+    hook for intercepting objects as they enter the persistent state via this particular
+    avenue:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Persistent to Transient
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The persistent object can revert to the transient state if the [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method is called for a transaction where the
+    object was first added as pending. In the case of the ROLLBACK, the INSERT statement
+    that made this object persistent is rolled back, and the object is evicted from
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to again become transient. Track objects that were reverted to transient from
+    persistent using the [`SessionEvents.persistent_to_transient()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_transient
+    "sqlalchemy.orm.SessionEvents.persistent_to_transient") event hook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Persistent to Deleted
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The persistent object enters the [deleted](../glossary.html#term-deleted) state
+    when an object marked for deletion is deleted from the database within the flush
+    process. Note that this is **not the same** as when the [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method is called for a target object. The [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method only **marks** the object for deletion;
+    the actual DELETE statement is not emitted until the flush proceeds. It is subsequent
+    to the flush that the “deleted” state is present for the target object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within the “deleted” state, the object is only marginally associated with the
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    It is not present in the identity map nor is it present in the [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
+    "sqlalchemy.orm.Session.deleted") collection that refers to when it was pending
+    for deletion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the “deleted” state, the object can go either to the detached state when
+    the transaction is committed, or back to the persistent state if the transaction
+    is instead rolled back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Track the persistent to deleted transition with [`SessionEvents.persistent_to_deleted()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_deleted
+    "sqlalchemy.orm.SessionEvents.persistent_to_deleted"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Deleted to Detached
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The deleted object becomes [detached](../glossary.html#term-detached) when
+    the session’s transaction is committed. After the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") method is called, the database transaction is
+    final and the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    now fully discards the deleted object and removes all associations to it. Track
+    the deleted to detached transition using [`SessionEvents.deleted_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_detached
+    "sqlalchemy.orm.SessionEvents.deleted_to_detached"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the object is in the deleted state, the [`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted") attribute, accessible using `inspect(object).deleted`,
+    returns True. However when the object is detached, [`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted") will again return False. To detect that
+    an object was deleted, regardless of whether or not it is detached, use the [`InstanceState.was_deleted`](internals.html#sqlalchemy.orm.InstanceState.was_deleted
+    "sqlalchemy.orm.InstanceState.was_deleted") accessor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Persistent to Detached
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The persistent object becomes [detached](../glossary.html#term-detached) when
+    the object is de-associated with the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), via the [`Session.expunge()`](session_api.html#sqlalchemy.orm.Session.expunge
+    "sqlalchemy.orm.Session.expunge"), [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all"), or [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: An object may also become **implicitly detached** if its owning [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is dereferenced by the application and discarded due
+    to garbage collection. In this case, **no event is emitted**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Track objects as they move from persistent to detached using the [`SessionEvents.persistent_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_detached
+    "sqlalchemy.orm.SessionEvents.persistent_to_detached") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Detached to Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The detached object becomes persistent when it is re-associated with a session
+    using the [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add "sqlalchemy.orm.Session.add")
+    or equivalent method. Track objects moving back to persistent from detached using
+    the [`SessionEvents.detached_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.detached_to_persistent
+    "sqlalchemy.orm.SessionEvents.detached_to_persistent") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Deleted to Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [deleted](../glossary.html#term-deleted) object can be reverted to the
+    [persistent](../glossary.html#term-persistent) state when the transaction in which
+    it was DELETEd was rolled back using the [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method. Track deleted objects moving back to
+    the persistent state using the [`SessionEvents.deleted_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_persistent
+    "sqlalchemy.orm.SessionEvents.deleted_to_persistent") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]  ## Transaction Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transaction events allow an application to be notified when transaction boundaries
+    occur at the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    level as well as when the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") changes the transactional state on [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.after_transaction_create()`](events.html#sqlalchemy.orm.SessionEvents.after_transaction_create
+    "sqlalchemy.orm.SessionEvents.after_transaction_create"), [`SessionEvents.after_transaction_end()`](events.html#sqlalchemy.orm.SessionEvents.after_transaction_end
+    "sqlalchemy.orm.SessionEvents.after_transaction_end") - these events track the
+    logical transaction scopes of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") in a way that is not specific to individual database
+    connections. These events are intended to help with integration of transaction-tracking
+    systems such as `zope.sqlalchemy`. Use these events when the application needs
+    to align some external scope with the transactional scope of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). These hooks mirror the “nested” transactional behavior
+    of the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    in that they track logical “subtransactions” as well as “nested” (e.g. SAVEPOINT)
+    transactions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.before_commit()`](events.html#sqlalchemy.orm.SessionEvents.before_commit
+    "sqlalchemy.orm.SessionEvents.before_commit"), [`SessionEvents.after_commit()`](events.html#sqlalchemy.orm.SessionEvents.after_commit
+    "sqlalchemy.orm.SessionEvents.after_commit"), [`SessionEvents.after_begin()`](events.html#sqlalchemy.orm.SessionEvents.after_begin
+    "sqlalchemy.orm.SessionEvents.after_begin"), [`SessionEvents.after_rollback()`](events.html#sqlalchemy.orm.SessionEvents.after_rollback
+    "sqlalchemy.orm.SessionEvents.after_rollback"), [`SessionEvents.after_soft_rollback()`](events.html#sqlalchemy.orm.SessionEvents.after_soft_rollback
+    "sqlalchemy.orm.SessionEvents.after_soft_rollback") - These events allow tracking
+    of transaction events from the perspective of database connections. [`SessionEvents.after_begin()`](events.html#sqlalchemy.orm.SessionEvents.after_begin
+    "sqlalchemy.orm.SessionEvents.after_begin") in particular is a per-connection
+    event; a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    that maintains more than one connection will emit this event for each connection
+    individually as those connections become used within the current transaction.
+    The rollback and commit events then refer to when the DBAPI connections themselves
+    have received rollback or commit instructions directly.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attribute Change Events
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The attribute change events allow interception of when specific attributes on
+    an object are modified. These events include [`AttributeEvents.set()`](events.html#sqlalchemy.orm.AttributeEvents.set
+    "sqlalchemy.orm.AttributeEvents.set"), [`AttributeEvents.append()`](events.html#sqlalchemy.orm.AttributeEvents.append
+    "sqlalchemy.orm.AttributeEvents.append"), and [`AttributeEvents.remove()`](events.html#sqlalchemy.orm.AttributeEvents.remove
+    "sqlalchemy.orm.AttributeEvents.remove"). These events are extremely useful, particularly
+    for per-object validation operations; however, it is often much more convenient
+    to use a “validator” hook, which uses these hooks behind the scenes; see [Simple
+    Validators](mapped_attributes.html#simple-validators) for background on this.
+    The attribute events are also behind the mechanics of backreferences. An example
+    illustrating use of attribute events is in [Attribute Instrumentation](examples.html#examples-instrumentation).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Execute Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4: The [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") now features a single comprehensive hook designed to
+    intercept all SELECT statements made on behalf of the ORM as well as bulk UPDATE
+    and DELETE statements. This hook supersedes the previous [`QueryEvents.before_compile()`](events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event as well [`QueryEvents.before_compile_update()`](events.html#sqlalchemy.orm.QueryEvents.before_compile_update
+    "sqlalchemy.orm.QueryEvents.before_compile_update") and [`QueryEvents.before_compile_delete()`](events.html#sqlalchemy.orm.QueryEvents.before_compile_delete
+    "sqlalchemy.orm.QueryEvents.before_compile_delete").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    features a comprehensive system by which all queries invoked via the [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method, which includes all SELECT statements
+    emitted by [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    as well as all SELECT statements emitted on behalf of column and relationship
+    loaders, may be intercepted and modified. The system makes use of the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event hook as well as the [`ORMExecuteState`](session_api.html#sqlalchemy.orm.ORMExecuteState
+    "sqlalchemy.orm.ORMExecuteState") object to represent the event state.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basic Query Interception
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") is firstly useful for any kind
+    of interception of a query, which includes those emitted by [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") with [1.x style](../glossary.html#term-1.x-style) as well
+    as when an ORM-enabled [2.0 style](../glossary.html#term-2.0-style) [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"), [`update()`](../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update") or [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete
+    "sqlalchemy.sql.expression.delete") construct is delivered to [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute"). The [`ORMExecuteState`](session_api.html#sqlalchemy.orm.ORMExecuteState
+    "sqlalchemy.orm.ORMExecuteState") construct provides accessors to allow modifications
+    to statements, parameters, and options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example illustrates some simple modifications to SELECT statements.
+    At this level, the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event hook intends to replace the
+    previous use of the [`QueryEvents.before_compile()`](events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event, which was not fired off consistently
+    for various kinds of loaders; additionally, the [`QueryEvents.before_compile()`](events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") only applies to [1.x style](../glossary.html#term-1.x-style)
+    use with [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    and not with [2.0 style](../glossary.html#term-2.0-style) use of [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Adding global WHERE / ON criteria'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One of the most requested query-extension features is the ability to add WHERE
+    criteria to all occurrences of an entity in all queries. This is achievable by
+    making use of the [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") query option, which may be used on its
+    own, or is ideally suited to be used within the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, an option is added to all SELECT statements that will limit all queries
+    against `MyEntity` to filter on `public == True`. The criteria will be applied
+    to **all** loads of that class within the scope of the immediate query. The [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") option by default will automatically propagate
+    to relationship loaders as well, which will apply to subsequent relationship loads,
+    which includes lazy loads, selectinloads, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a series of classes that all feature some common column structure, if the
+    classes are composed using a [declarative mixin](extensions/declarative/mixins.html#declarative-mixins),
+    the mixin class itself may be used in conjunction with the [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") option by making use of a Python lambda.
+    The Python lambda will be invoked at query compilation time against the specific
+    entities which match the criteria. Given a series of classes based on a mixin
+    called `HasTimestamp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above classes `SomeEntity` and `SomeOtherEntity` will each have a column
+    `timestamp` that defaults to the current date and time. An event may be used to
+    intercept all objects that extend from `HasTimestamp` and filter their `timestamp`
+    column on a date that is no older than one month ago:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The use of a lambda inside of the call to [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") is only invoked **once per unique class**.
+    Custom functions should not be invoked within this lambda. See [Using Lambdas
+    to add significant speed gains to statement production](../core/connections.html#engine-lambda-caching)
+    for an overview of the “lambda SQL” feature, which is for advanced use only.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Query Events](examples.html#examples-session-orm-events) - includes working
+    examples of the above [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") recipes.  ### Re-Executing Statements'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep Alchemy
+  prefs: []
+  type: TYPE_NORMAL
+- en: the statement re-execution feature involves a slightly intricate recursive sequence,
+    and is intended to solve the fairly hard problem of being able to re-route the
+    execution of a SQL statement into various non-SQL contexts. The twin examples
+    of “dogpile caching” and “horizontal sharding”, linked below, should be used as
+    a guide for when this rather advanced feature is appropriate to be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ORMExecuteState`](session_api.html#sqlalchemy.orm.ORMExecuteState "sqlalchemy.orm.ORMExecuteState")
+    is capable of controlling the execution of the given statement; this includes
+    the ability to either not invoke the statement at all, allowing a pre-constructed
+    result set retrieved from a cache to be returned instead, as well as the ability
+    to invoke the same statement repeatedly with different state, such as invoking
+    it against multiple database connections and then merging the results together
+    in memory. Both of these advanced patterns are demonstrated in SQLAlchemy’s example
+    suite as detailed below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When inside the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event hook, the [`ORMExecuteState.invoke_statement()`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") method may be used to invoke
+    the statement using a new nested invocation of [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute"), which will then preempt the subsequent handling
+    of the current execution in progress and instead return the [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") returned by the inner execution. The event handlers
+    thus far invoked for the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") hook within this process will be
+    skipped within this nested call as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ORMExecuteState.invoke_statement()`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") method returns a [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object; this object then features the ability for
+    it to be “frozen” into a cacheable format and “unfrozen” into a new [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object, as well as for its data to be merged with
+    that of other [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g., using [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") to implement a cache:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above hook in place, an example of using the cache would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, a custom execution option is passed to [`Select.execution_options()`](../core/selectable.html#sqlalchemy.sql.expression.Select.execution_options
+    "sqlalchemy.sql.expression.Select.execution_options") in order to establish a
+    “cache key” that will then be intercepted by the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") hook. This cache key is then matched
+    to a [`FrozenResult`](../core/connections.html#sqlalchemy.engine.FrozenResult
+    "sqlalchemy.engine.FrozenResult") object that may be present in the cache, and
+    if present, the object is re-used. The recipe makes use of the [`Result.freeze()`](../core/connections.html#sqlalchemy.engine.Result.freeze
+    "sqlalchemy.engine.Result.freeze") method to “freeze” a [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object, which above will contain ORM results, such
+    that it can be stored in a cache and used multiple times. In order to return a
+    live result from the “frozen” result, the `merge_frozen_result()` function is
+    used to merge the “frozen” data from the result object into the current session.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above example is implemented as a complete example in [Dogpile Caching](examples.html#examples-caching).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ORMExecuteState.invoke_statement()`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") method may also be called multiple
+    times, passing along different information to the [`ORMExecuteState.invoke_statement.bind_arguments`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement.params.bind_arguments
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") parameter such that the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will make use of different [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") objects each time. This will return a different [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object each time; these results can be merged together
+    using the [`Result.merge()`](../core/connections.html#sqlalchemy.engine.Result.merge
+    "sqlalchemy.engine.Result.merge") method. This is the technique employed by the
+    [Horizontal Sharding](extensions/horizontal_shard.html) extension; see the source
+    code to familiarize.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dogpile Caching](examples.html#examples-caching)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Horizontal Sharding](examples.html#examples-sharding)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basic Query Interception
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") is firstly useful for any kind
+    of interception of a query, which includes those emitted by [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") with [1.x style](../glossary.html#term-1.x-style) as well
+    as when an ORM-enabled [2.0 style](../glossary.html#term-2.0-style) [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select"), [`update()`](../core/dml.html#sqlalchemy.sql.expression.update
+    "sqlalchemy.sql.expression.update") or [`delete()`](../core/dml.html#sqlalchemy.sql.expression.delete
+    "sqlalchemy.sql.expression.delete") construct is delivered to [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute"). The [`ORMExecuteState`](session_api.html#sqlalchemy.orm.ORMExecuteState
+    "sqlalchemy.orm.ORMExecuteState") construct provides accessors to allow modifications
+    to statements, parameters, and options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example illustrates some simple modifications to SELECT statements.
+    At this level, the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event hook intends to replace the
+    previous use of the [`QueryEvents.before_compile()`](events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event, which was not fired off consistently
+    for various kinds of loaders; additionally, the [`QueryEvents.before_compile()`](events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") only applies to [1.x style](../glossary.html#term-1.x-style)
+    use with [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    and not with [2.0 style](../glossary.html#term-2.0-style) use of [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Adding global WHERE / ON criteria'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One of the most requested query-extension features is the ability to add WHERE
+    criteria to all occurrences of an entity in all queries. This is achievable by
+    making use of the [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") query option, which may be used on its
+    own, or is ideally suited to be used within the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, an option is added to all SELECT statements that will limit all queries
+    against `MyEntity` to filter on `public == True`. The criteria will be applied
+    to **all** loads of that class within the scope of the immediate query. The [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") option by default will automatically propagate
+    to relationship loaders as well, which will apply to subsequent relationship loads,
+    which includes lazy loads, selectinloads, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a series of classes that all feature some common column structure, if the
+    classes are composed using a [declarative mixin](extensions/declarative/mixins.html#declarative-mixins),
+    the mixin class itself may be used in conjunction with the [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") option by making use of a Python lambda.
+    The Python lambda will be invoked at query compilation time against the specific
+    entities which match the criteria. Given a series of classes based on a mixin
+    called `HasTimestamp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above classes `SomeEntity` and `SomeOtherEntity` will each have a column
+    `timestamp` that defaults to the current date and time. An event may be used to
+    intercept all objects that extend from `HasTimestamp` and filter their `timestamp`
+    column on a date that is no older than one month ago:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The use of a lambda inside of the call to [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") is only invoked **once per unique class**.
+    Custom functions should not be invoked within this lambda. See [Using Lambdas
+    to add significant speed gains to statement production](../core/connections.html#engine-lambda-caching)
+    for an overview of the “lambda SQL” feature, which is for advanced use only.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Query Events](examples.html#examples-session-orm-events) - includes working
+    examples of the above [`with_loader_criteria()`](queryguide/api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") recipes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Re-Executing Statements'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep Alchemy
+  prefs: []
+  type: TYPE_NORMAL
+- en: the statement re-execution feature involves a slightly intricate recursive sequence,
+    and is intended to solve the fairly hard problem of being able to re-route the
+    execution of a SQL statement into various non-SQL contexts. The twin examples
+    of “dogpile caching” and “horizontal sharding”, linked below, should be used as
+    a guide for when this rather advanced feature is appropriate to be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ORMExecuteState`](session_api.html#sqlalchemy.orm.ORMExecuteState "sqlalchemy.orm.ORMExecuteState")
+    is capable of controlling the execution of the given statement; this includes
+    the ability to either not invoke the statement at all, allowing a pre-constructed
+    result set retrieved from a cache to be returned instead, as well as the ability
+    to invoke the same statement repeatedly with different state, such as invoking
+    it against multiple database connections and then merging the results together
+    in memory. Both of these advanced patterns are demonstrated in SQLAlchemy’s example
+    suite as detailed below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When inside the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event hook, the [`ORMExecuteState.invoke_statement()`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") method may be used to invoke
+    the statement using a new nested invocation of [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute"), which will then preempt the subsequent handling
+    of the current execution in progress and instead return the [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") returned by the inner execution. The event handlers
+    thus far invoked for the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") hook within this process will be
+    skipped within this nested call as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ORMExecuteState.invoke_statement()`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") method returns a [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object; this object then features the ability for
+    it to be “frozen” into a cacheable format and “unfrozen” into a new [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object, as well as for its data to be merged with
+    that of other [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g., using [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") to implement a cache:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above hook in place, an example of using the cache would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, a custom execution option is passed to [`Select.execution_options()`](../core/selectable.html#sqlalchemy.sql.expression.Select.execution_options
+    "sqlalchemy.sql.expression.Select.execution_options") in order to establish a
+    “cache key” that will then be intercepted by the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") hook. This cache key is then matched
+    to a [`FrozenResult`](../core/connections.html#sqlalchemy.engine.FrozenResult
+    "sqlalchemy.engine.FrozenResult") object that may be present in the cache, and
+    if present, the object is re-used. The recipe makes use of the [`Result.freeze()`](../core/connections.html#sqlalchemy.engine.Result.freeze
+    "sqlalchemy.engine.Result.freeze") method to “freeze” a [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object, which above will contain ORM results, such
+    that it can be stored in a cache and used multiple times. In order to return a
+    live result from the “frozen” result, the `merge_frozen_result()` function is
+    used to merge the “frozen” data from the result object into the current session.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above example is implemented as a complete example in [Dogpile Caching](examples.html#examples-caching).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`ORMExecuteState.invoke_statement()`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") method may also be called multiple
+    times, passing along different information to the [`ORMExecuteState.invoke_statement.bind_arguments`](session_api.html#sqlalchemy.orm.ORMExecuteState.invoke_statement.params.bind_arguments
+    "sqlalchemy.orm.ORMExecuteState.invoke_statement") parameter such that the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will make use of different [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") objects each time. This will return a different [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object each time; these results can be merged together
+    using the [`Result.merge()`](../core/connections.html#sqlalchemy.engine.Result.merge
+    "sqlalchemy.engine.Result.merge") method. This is the technique employed by the
+    [Horizontal Sharding](extensions/horizontal_shard.html) extension; see the source
+    code to familiarize.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dogpile Caching](examples.html#examples-caching)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Horizontal Sharding](examples.html#examples-sharding)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Persistence Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Probably the most widely used series of events are the “persistence” events,
+    which correspond to the [flush process](session_basics.html#session-flushing).
+    The flush is where all the decisions are made about pending changes to objects
+    and are then emitted out to the database in the form of INSERT, UPDATE, and DELETE
+    statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`before_flush()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") hook is by far the most generally
+    useful event to use when an application wants to ensure that additional persistence
+    changes to the database are made when a flush proceeds. Use [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") in order to operate upon objects
+    to validate their state as well as to compose additional objects and references
+    before they are persisted. Within this event, it is **safe to manipulate the Session’s
+    state**, that is, new objects can be attached to it, objects can be deleted, and
+    individual attributes on objects can be changed freely, and these changes will
+    be pulled into the flush process when the event hook completes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The typical [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") hook will be tasked with scanning
+    the collections [`Session.new`](session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"),
+    [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty "sqlalchemy.orm.Session.dirty")
+    and [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted "sqlalchemy.orm.Session.deleted")
+    in order to look for objects where something will be happening.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For illustrations of [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush"), see examples such as [Versioning
+    with a History Table](examples.html#examples-versioned-history) and [Versioning
+    using Temporal Rows](examples.html#examples-versioned-rows).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`after_flush()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`SessionEvents.after_flush()`](events.html#sqlalchemy.orm.SessionEvents.after_flush
+    "sqlalchemy.orm.SessionEvents.after_flush") hook is called after the SQL has been
+    emitted for a flush process, but **before** the state of the objects that were
+    flushed has been altered. That is, you can still inspect the [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
+    "sqlalchemy.orm.Session.new"), [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty
+    "sqlalchemy.orm.Session.dirty") and [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
+    "sqlalchemy.orm.Session.deleted") collections to see what was just flushed, and
+    you can also use history tracking features like the ones provided by [`AttributeState`](internals.html#sqlalchemy.orm.AttributeState
+    "sqlalchemy.orm.AttributeState") to see what changes were just persisted. In the
+    [`SessionEvents.after_flush()`](events.html#sqlalchemy.orm.SessionEvents.after_flush
+    "sqlalchemy.orm.SessionEvents.after_flush") event, additional SQL can be emitted
+    to the database based on what’s observed to have changed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`after_flush_postexec()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.after_flush_postexec()`](events.html#sqlalchemy.orm.SessionEvents.after_flush_postexec
+    "sqlalchemy.orm.SessionEvents.after_flush_postexec") is called soon after [`SessionEvents.after_flush()`](events.html#sqlalchemy.orm.SessionEvents.after_flush
+    "sqlalchemy.orm.SessionEvents.after_flush"), but is invoked **after** the state
+    of the objects has been modified to account for the flush that just took place.
+    The [`Session.new`](session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"),
+    [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty "sqlalchemy.orm.Session.dirty")
+    and [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted "sqlalchemy.orm.Session.deleted")
+    collections are normally completely empty here. Use [`SessionEvents.after_flush_postexec()`](events.html#sqlalchemy.orm.SessionEvents.after_flush_postexec
+    "sqlalchemy.orm.SessionEvents.after_flush_postexec") to inspect the identity map
+    for finalized objects and possibly emit additional SQL. In this hook, there is
+    the ability to make new changes on objects, which means the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will again go into a “dirty” state; the mechanics of
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    here will cause it to flush **again** if new changes are detected in this hook
+    if the flush were invoked in the context of [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"); otherwise, the pending changes will be bundled
+    as part of the next normal flush. When the hook detects new changes within a [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), a counter ensures that an endless loop in this
+    regard is stopped after 100 iterations, in the case that an [`SessionEvents.after_flush_postexec()`](events.html#sqlalchemy.orm.SessionEvents.after_flush_postexec
+    "sqlalchemy.orm.SessionEvents.after_flush_postexec") hook continually adds new
+    state to be flushed each time it is called.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mapper-level Flush Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to the flush-level hooks, there is also a suite of hooks that are
+    more fine-grained, in that they are called on a per-object basis and are broken
+    out based on INSERT, UPDATE or DELETE within the flush process. These are the
+    mapper persistence hooks, and they too are very popular, however these events
+    need to be approached more cautiously, as they proceed within the context of the
+    flush process that is already ongoing; many operations are not safe to proceed
+    here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The events are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.before_insert()`](events.html#sqlalchemy.orm.MapperEvents.before_insert
+    "sqlalchemy.orm.MapperEvents.before_insert")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.after_insert()`](events.html#sqlalchemy.orm.MapperEvents.after_insert
+    "sqlalchemy.orm.MapperEvents.after_insert")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.before_update()`](events.html#sqlalchemy.orm.MapperEvents.before_update
+    "sqlalchemy.orm.MapperEvents.before_update")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.after_update()`](events.html#sqlalchemy.orm.MapperEvents.after_update
+    "sqlalchemy.orm.MapperEvents.after_update")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.before_delete()`](events.html#sqlalchemy.orm.MapperEvents.before_delete
+    "sqlalchemy.orm.MapperEvents.before_delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.after_delete()`](events.html#sqlalchemy.orm.MapperEvents.after_delete
+    "sqlalchemy.orm.MapperEvents.after_delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to note that these events apply **only** to the [session flush
+    operation](session_basics.html#session-flushing) , and **not** to the ORM-level
+    INSERT/UPDATE/DELETE functionality described at [ORM-Enabled INSERT, UPDATE, and
+    DELETE statements](queryguide/dml.html#orm-expression-update-delete). To intercept
+    ORM-level DML, use the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each event is passed the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper"),
+    the mapped object itself, and the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") which is being used to emit an INSERT, UPDATE
+    or DELETE statement. The appeal of these events is clear, in that if an application
+    wants to tie some activity to when a specific type of object is persisted with
+    an INSERT, the hook is very specific; unlike the [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") event, there’s no need to search
+    through collections like [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
+    "sqlalchemy.orm.Session.new") in order to find targets. However, the flush plan
+    which represents the full list of every single INSERT, UPDATE, DELETE statement
+    to be emitted has *already been decided* when these events are called, and no
+    changes may be made at this stage. Therefore the only changes that are even possible
+    to the given objects are upon attributes **local** to the object’s row. Any other
+    change to the object or other objects will impact the state of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), which will fail to function properly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Operations that are not supported within these mapper-level persistence events
+    include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.add()`](session_api.html#sqlalchemy.orm.Session.add "sqlalchemy.orm.Session.add")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete "sqlalchemy.orm.Session.delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mapped collection append, add, remove, delete, discard, etc.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mapped relationship attribute set/del events, i.e. `someobject.related = someotherobject`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The reason the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") is passed is that it is encouraged that **simple
+    SQL operations take place here**, directly on the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), such as incrementing counters or inserting extra
+    rows within log tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are also many per-object operations that don’t need to be handled within
+    a flush event at all. The most common alternative is to simply establish additional
+    state along with an object inside its `__init__()` method, such as creating additional
+    objects that are to be associated with the new object. Using validators as described
+    in [Simple Validators](mapped_attributes.html#simple-validators) is another approach;
+    these functions can intercept changes to attributes and establish additional state
+    changes on the target object in response to the attribute change. With both of
+    these approaches, the object is in the correct state before it ever gets to the
+    flush step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`before_flush()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") hook is by far the most generally
+    useful event to use when an application wants to ensure that additional persistence
+    changes to the database are made when a flush proceeds. Use [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") in order to operate upon objects
+    to validate their state as well as to compose additional objects and references
+    before they are persisted. Within this event, it is **safe to manipulate the Session’s
+    state**, that is, new objects can be attached to it, objects can be deleted, and
+    individual attributes on objects can be changed freely, and these changes will
+    be pulled into the flush process when the event hook completes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The typical [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") hook will be tasked with scanning
+    the collections [`Session.new`](session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"),
+    [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty "sqlalchemy.orm.Session.dirty")
+    and [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted "sqlalchemy.orm.Session.deleted")
+    in order to look for objects where something will be happening.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For illustrations of [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush"), see examples such as [Versioning
+    with a History Table](examples.html#examples-versioned-history) and [Versioning
+    using Temporal Rows](examples.html#examples-versioned-rows).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`after_flush()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`SessionEvents.after_flush()`](events.html#sqlalchemy.orm.SessionEvents.after_flush
+    "sqlalchemy.orm.SessionEvents.after_flush") hook is called after the SQL has been
+    emitted for a flush process, but **before** the state of the objects that were
+    flushed has been altered. That is, you can still inspect the [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
+    "sqlalchemy.orm.Session.new"), [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty
+    "sqlalchemy.orm.Session.dirty") and [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
+    "sqlalchemy.orm.Session.deleted") collections to see what was just flushed, and
+    you can also use history tracking features like the ones provided by [`AttributeState`](internals.html#sqlalchemy.orm.AttributeState
+    "sqlalchemy.orm.AttributeState") to see what changes were just persisted. In the
+    [`SessionEvents.after_flush()`](events.html#sqlalchemy.orm.SessionEvents.after_flush
+    "sqlalchemy.orm.SessionEvents.after_flush") event, additional SQL can be emitted
+    to the database based on what’s observed to have changed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`after_flush_postexec()`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.after_flush_postexec()`](events.html#sqlalchemy.orm.SessionEvents.after_flush_postexec
+    "sqlalchemy.orm.SessionEvents.after_flush_postexec") is called soon after [`SessionEvents.after_flush()`](events.html#sqlalchemy.orm.SessionEvents.after_flush
+    "sqlalchemy.orm.SessionEvents.after_flush"), but is invoked **after** the state
+    of the objects has been modified to account for the flush that just took place.
+    The [`Session.new`](session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"),
+    [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty "sqlalchemy.orm.Session.dirty")
+    and [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted "sqlalchemy.orm.Session.deleted")
+    collections are normally completely empty here. Use [`SessionEvents.after_flush_postexec()`](events.html#sqlalchemy.orm.SessionEvents.after_flush_postexec
+    "sqlalchemy.orm.SessionEvents.after_flush_postexec") to inspect the identity map
+    for finalized objects and possibly emit additional SQL. In this hook, there is
+    the ability to make new changes on objects, which means the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") will again go into a “dirty” state; the mechanics of
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    here will cause it to flush **again** if new changes are detected in this hook
+    if the flush were invoked in the context of [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"); otherwise, the pending changes will be bundled
+    as part of the next normal flush. When the hook detects new changes within a [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), a counter ensures that an endless loop in this
+    regard is stopped after 100 iterations, in the case that an [`SessionEvents.after_flush_postexec()`](events.html#sqlalchemy.orm.SessionEvents.after_flush_postexec
+    "sqlalchemy.orm.SessionEvents.after_flush_postexec") hook continually adds new
+    state to be flushed each time it is called.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Mapper-level Flush Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to the flush-level hooks, there is also a suite of hooks that are
+    more fine-grained, in that they are called on a per-object basis and are broken
+    out based on INSERT, UPDATE or DELETE within the flush process. These are the
+    mapper persistence hooks, and they too are very popular, however these events
+    need to be approached more cautiously, as they proceed within the context of the
+    flush process that is already ongoing; many operations are not safe to proceed
+    here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The events are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.before_insert()`](events.html#sqlalchemy.orm.MapperEvents.before_insert
+    "sqlalchemy.orm.MapperEvents.before_insert")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.after_insert()`](events.html#sqlalchemy.orm.MapperEvents.after_insert
+    "sqlalchemy.orm.MapperEvents.after_insert")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.before_update()`](events.html#sqlalchemy.orm.MapperEvents.before_update
+    "sqlalchemy.orm.MapperEvents.before_update")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.after_update()`](events.html#sqlalchemy.orm.MapperEvents.after_update
+    "sqlalchemy.orm.MapperEvents.after_update")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.before_delete()`](events.html#sqlalchemy.orm.MapperEvents.before_delete
+    "sqlalchemy.orm.MapperEvents.before_delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`MapperEvents.after_delete()`](events.html#sqlalchemy.orm.MapperEvents.after_delete
+    "sqlalchemy.orm.MapperEvents.after_delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to note that these events apply **only** to the [session flush
+    operation](session_basics.html#session-flushing) , and **not** to the ORM-level
+    INSERT/UPDATE/DELETE functionality described at [ORM-Enabled INSERT, UPDATE, and
+    DELETE statements](queryguide/dml.html#orm-expression-update-delete). To intercept
+    ORM-level DML, use the [`SessionEvents.do_orm_execute()`](events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute") event.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each event is passed the [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper"),
+    the mapped object itself, and the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") which is being used to emit an INSERT, UPDATE
+    or DELETE statement. The appeal of these events is clear, in that if an application
+    wants to tie some activity to when a specific type of object is persisted with
+    an INSERT, the hook is very specific; unlike the [`SessionEvents.before_flush()`](events.html#sqlalchemy.orm.SessionEvents.before_flush
+    "sqlalchemy.orm.SessionEvents.before_flush") event, there’s no need to search
+    through collections like [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
+    "sqlalchemy.orm.Session.new") in order to find targets. However, the flush plan
+    which represents the full list of every single INSERT, UPDATE, DELETE statement
+    to be emitted has *already been decided* when these events are called, and no
+    changes may be made at this stage. Therefore the only changes that are even possible
+    to the given objects are upon attributes **local** to the object’s row. Any other
+    change to the object or other objects will impact the state of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), which will fail to function properly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Operations that are not supported within these mapper-level persistence events
+    include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.add()`](session_api.html#sqlalchemy.orm.Session.add "sqlalchemy.orm.Session.add")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete "sqlalchemy.orm.Session.delete")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mapped collection append, add, remove, delete, discard, etc.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mapped relationship attribute set/del events, i.e. `someobject.related = someotherobject`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The reason the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") is passed is that it is encouraged that **simple
+    SQL operations take place here**, directly on the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), such as incrementing counters or inserting extra
+    rows within log tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are also many per-object operations that don’t need to be handled within
+    a flush event at all. The most common alternative is to simply establish additional
+    state along with an object inside its `__init__()` method, such as creating additional
+    objects that are to be associated with the new object. Using validators as described
+    in [Simple Validators](mapped_attributes.html#simple-validators) is another approach;
+    these functions can intercept changes to attributes and establish additional state
+    changes on the target object in response to the attribute change. With both of
+    these approaches, the object is in the correct state before it ever gets to the
+    flush step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Object Lifecycle Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another use case for events is to track the lifecycle of objects. This refers
+    to the states first introduced at [Quickie Intro to Object States](session_state_management.html#session-object-states).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All the states above can be tracked fully with events. Each event represents
+    a distinct state transition, meaning, the starting state and the destination state
+    are both part of what are tracked. With the exception of the initial transient
+    event, all the events are in terms of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object or class, meaning they can be associated either
+    with a specific [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or with the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    class itself, as well as with a specific [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"), which is likely the most useful form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The listeners can of course be stacked on top of one function, as is likely
+    to be common. For example, to track all objects that are entering the persistent
+    state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transient
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'All mapped objects when first constructed start out as [transient](../glossary.html#term-transient).
+    In this state, the object exists alone and doesn’t have an association with any
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    For this initial state, there’s no specific “transition” event since there is
+    no [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    however if one wanted to intercept when any transient object is created, the [`InstanceEvents.init()`](events.html#sqlalchemy.orm.InstanceEvents.init
+    "sqlalchemy.orm.InstanceEvents.init") method is probably the best event. This
+    event is applied to a specific class or superclass. For example, to intercept
+    all new objects for a particular declarative base:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transient to Pending
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The transient object becomes [pending](../glossary.html#term-pending) when
+    it is first associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") via the [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") or [`Session.add_all()`](session_api.html#sqlalchemy.orm.Session.add_all
+    "sqlalchemy.orm.Session.add_all") method. An object may also become part of a
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    as a result of a [“cascade”](cascades.html#unitofwork-cascades) from a referencing
+    object that was explicitly added. The transient to pending transition is detectable
+    using the [`SessionEvents.transient_to_pending()`](events.html#sqlalchemy.orm.SessionEvents.transient_to_pending
+    "sqlalchemy.orm.SessionEvents.transient_to_pending") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Pending to Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [pending](../glossary.html#term-pending) object becomes [persistent](../glossary.html#term-persistent)
+    when a flush proceeds and an INSERT statement takes place for the instance. The
+    object now has an identity key. Track pending to persistent with the [`SessionEvents.pending_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_persistent
+    "sqlalchemy.orm.SessionEvents.pending_to_persistent") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Pending to Transient
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [pending](../glossary.html#term-pending) object can revert back to [transient](../glossary.html#term-transient)
+    if the [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method is called before the pending object
+    has been flushed, or if the [`Session.expunge()`](session_api.html#sqlalchemy.orm.Session.expunge
+    "sqlalchemy.orm.Session.expunge") method is called for the object before it is
+    flushed. Track pending to transient with the [`SessionEvents.pending_to_transient()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_transient
+    "sqlalchemy.orm.SessionEvents.pending_to_transient") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Loaded as Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Objects can appear in the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") directly in the [persistent](../glossary.html#term-persistent)
+    state when they are loaded from the database. Tracking this state transition is
+    synonymous with tracking objects as they are loaded, and is synonymous with using
+    the [`InstanceEvents.load()`](events.html#sqlalchemy.orm.InstanceEvents.load "sqlalchemy.orm.InstanceEvents.load")
+    instance-level event. However, the [`SessionEvents.loaded_as_persistent()`](events.html#sqlalchemy.orm.SessionEvents.loaded_as_persistent
+    "sqlalchemy.orm.SessionEvents.loaded_as_persistent") event is provided as a session-centric
+    hook for intercepting objects as they enter the persistent state via this particular
+    avenue:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Persistent to Transient
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The persistent object can revert to the transient state if the [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method is called for a transaction where the
+    object was first added as pending. In the case of the ROLLBACK, the INSERT statement
+    that made this object persistent is rolled back, and the object is evicted from
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to again become transient. Track objects that were reverted to transient from
+    persistent using the [`SessionEvents.persistent_to_transient()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_transient
+    "sqlalchemy.orm.SessionEvents.persistent_to_transient") event hook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Persistent to Deleted
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The persistent object enters the [deleted](../glossary.html#term-deleted) state
+    when an object marked for deletion is deleted from the database within the flush
+    process. Note that this is **not the same** as when the [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method is called for a target object. The [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method only **marks** the object for deletion;
+    the actual DELETE statement is not emitted until the flush proceeds. It is subsequent
+    to the flush that the “deleted” state is present for the target object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within the “deleted” state, the object is only marginally associated with the
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    It is not present in the identity map nor is it present in the [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
+    "sqlalchemy.orm.Session.deleted") collection that refers to when it was pending
+    for deletion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the “deleted” state, the object can go either to the detached state when
+    the transaction is committed, or back to the persistent state if the transaction
+    is instead rolled back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Track the persistent to deleted transition with [`SessionEvents.persistent_to_deleted()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_deleted
+    "sqlalchemy.orm.SessionEvents.persistent_to_deleted"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Deleted to Detached
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The deleted object becomes [detached](../glossary.html#term-detached) when
+    the session’s transaction is committed. After the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") method is called, the database transaction is
+    final and the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    now fully discards the deleted object and removes all associations to it. Track
+    the deleted to detached transition using [`SessionEvents.deleted_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_detached
+    "sqlalchemy.orm.SessionEvents.deleted_to_detached"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the object is in the deleted state, the [`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted") attribute, accessible using `inspect(object).deleted`,
+    returns True. However when the object is detached, [`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted") will again return False. To detect that
+    an object was deleted, regardless of whether or not it is detached, use the [`InstanceState.was_deleted`](internals.html#sqlalchemy.orm.InstanceState.was_deleted
+    "sqlalchemy.orm.InstanceState.was_deleted") accessor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Persistent to Detached
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The persistent object becomes [detached](../glossary.html#term-detached) when
+    the object is de-associated with the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), via the [`Session.expunge()`](session_api.html#sqlalchemy.orm.Session.expunge
+    "sqlalchemy.orm.Session.expunge"), [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all"), or [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: An object may also become **implicitly detached** if its owning [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is dereferenced by the application and discarded due
+    to garbage collection. In this case, **no event is emitted**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Track objects as they move from persistent to detached using the [`SessionEvents.persistent_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_detached
+    "sqlalchemy.orm.SessionEvents.persistent_to_detached") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Detached to Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The detached object becomes persistent when it is re-associated with a session
+    using the [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add "sqlalchemy.orm.Session.add")
+    or equivalent method. Track objects moving back to persistent from detached using
+    the [`SessionEvents.detached_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.detached_to_persistent
+    "sqlalchemy.orm.SessionEvents.detached_to_persistent") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Deleted to Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [deleted](../glossary.html#term-deleted) object can be reverted to the
+    [persistent](../glossary.html#term-persistent) state when the transaction in which
+    it was DELETEd was rolled back using the [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method. Track deleted objects moving back to
+    the persistent state using the [`SessionEvents.deleted_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_persistent
+    "sqlalchemy.orm.SessionEvents.deleted_to_persistent") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transient
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'All mapped objects when first constructed start out as [transient](../glossary.html#term-transient).
+    In this state, the object exists alone and doesn’t have an association with any
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    For this initial state, there’s no specific “transition” event since there is
+    no [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    however if one wanted to intercept when any transient object is created, the [`InstanceEvents.init()`](events.html#sqlalchemy.orm.InstanceEvents.init
+    "sqlalchemy.orm.InstanceEvents.init") method is probably the best event. This
+    event is applied to a specific class or superclass. For example, to intercept
+    all new objects for a particular declarative base:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transient to Pending
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The transient object becomes [pending](../glossary.html#term-pending) when
+    it is first associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") via the [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") or [`Session.add_all()`](session_api.html#sqlalchemy.orm.Session.add_all
+    "sqlalchemy.orm.Session.add_all") method. An object may also become part of a
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    as a result of a [“cascade”](cascades.html#unitofwork-cascades) from a referencing
+    object that was explicitly added. The transient to pending transition is detectable
+    using the [`SessionEvents.transient_to_pending()`](events.html#sqlalchemy.orm.SessionEvents.transient_to_pending
+    "sqlalchemy.orm.SessionEvents.transient_to_pending") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: Pending to Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [pending](../glossary.html#term-pending) object becomes [persistent](../glossary.html#term-persistent)
+    when a flush proceeds and an INSERT statement takes place for the instance. The
+    object now has an identity key. Track pending to persistent with the [`SessionEvents.pending_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_persistent
+    "sqlalchemy.orm.SessionEvents.pending_to_persistent") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Pending to Transient
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [pending](../glossary.html#term-pending) object can revert back to [transient](../glossary.html#term-transient)
+    if the [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method is called before the pending object
+    has been flushed, or if the [`Session.expunge()`](session_api.html#sqlalchemy.orm.Session.expunge
+    "sqlalchemy.orm.Session.expunge") method is called for the object before it is
+    flushed. Track pending to transient with the [`SessionEvents.pending_to_transient()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_transient
+    "sqlalchemy.orm.SessionEvents.pending_to_transient") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Loaded as Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Objects can appear in the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") directly in the [persistent](../glossary.html#term-persistent)
+    state when they are loaded from the database. Tracking this state transition is
+    synonymous with tracking objects as they are loaded, and is synonymous with using
+    the [`InstanceEvents.load()`](events.html#sqlalchemy.orm.InstanceEvents.load "sqlalchemy.orm.InstanceEvents.load")
+    instance-level event. However, the [`SessionEvents.loaded_as_persistent()`](events.html#sqlalchemy.orm.SessionEvents.loaded_as_persistent
+    "sqlalchemy.orm.SessionEvents.loaded_as_persistent") event is provided as a session-centric
+    hook for intercepting objects as they enter the persistent state via this particular
+    avenue:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Persistent to Transient
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The persistent object can revert to the transient state if the [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method is called for a transaction where the
+    object was first added as pending. In the case of the ROLLBACK, the INSERT statement
+    that made this object persistent is rolled back, and the object is evicted from
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to again become transient. Track objects that were reverted to transient from
+    persistent using the [`SessionEvents.persistent_to_transient()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_transient
+    "sqlalchemy.orm.SessionEvents.persistent_to_transient") event hook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Persistent to Deleted
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The persistent object enters the [deleted](../glossary.html#term-deleted) state
+    when an object marked for deletion is deleted from the database within the flush
+    process. Note that this is **not the same** as when the [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method is called for a target object. The [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method only **marks** the object for deletion;
+    the actual DELETE statement is not emitted until the flush proceeds. It is subsequent
+    to the flush that the “deleted” state is present for the target object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within the “deleted” state, the object is only marginally associated with the
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    It is not present in the identity map nor is it present in the [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
+    "sqlalchemy.orm.Session.deleted") collection that refers to when it was pending
+    for deletion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the “deleted” state, the object can go either to the detached state when
+    the transaction is committed, or back to the persistent state if the transaction
+    is instead rolled back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Track the persistent to deleted transition with [`SessionEvents.persistent_to_deleted()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_deleted
+    "sqlalchemy.orm.SessionEvents.persistent_to_deleted"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: Deleted to Detached
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The deleted object becomes [detached](../glossary.html#term-detached) when
+    the session’s transaction is committed. After the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") method is called, the database transaction is
+    final and the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    now fully discards the deleted object and removes all associations to it. Track
+    the deleted to detached transition using [`SessionEvents.deleted_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_detached
+    "sqlalchemy.orm.SessionEvents.deleted_to_detached"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the object is in the deleted state, the [`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted") attribute, accessible using `inspect(object).deleted`,
+    returns True. However when the object is detached, [`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted") will again return False. To detect that
+    an object was deleted, regardless of whether or not it is detached, use the [`InstanceState.was_deleted`](internals.html#sqlalchemy.orm.InstanceState.was_deleted
+    "sqlalchemy.orm.InstanceState.was_deleted") accessor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Persistent to Detached
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The persistent object becomes [detached](../glossary.html#term-detached) when
+    the object is de-associated with the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), via the [`Session.expunge()`](session_api.html#sqlalchemy.orm.Session.expunge
+    "sqlalchemy.orm.Session.expunge"), [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all"), or [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: An object may also become **implicitly detached** if its owning [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is dereferenced by the application and discarded due
+    to garbage collection. In this case, **no event is emitted**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Track objects as they move from persistent to detached using the [`SessionEvents.persistent_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_detached
+    "sqlalchemy.orm.SessionEvents.persistent_to_detached") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: Detached to Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The detached object becomes persistent when it is re-associated with a session
+    using the [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add "sqlalchemy.orm.Session.add")
+    or equivalent method. Track objects moving back to persistent from detached using
+    the [`SessionEvents.detached_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.detached_to_persistent
+    "sqlalchemy.orm.SessionEvents.detached_to_persistent") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Deleted to Persistent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The [deleted](../glossary.html#term-deleted) object can be reverted to the
+    [persistent](../glossary.html#term-persistent) state when the transaction in which
+    it was DELETEd was rolled back using the [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") method. Track deleted objects moving back to
+    the persistent state using the [`SessionEvents.deleted_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_persistent
+    "sqlalchemy.orm.SessionEvents.deleted_to_persistent") event:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Transaction Events'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transaction events allow an application to be notified when transaction boundaries
+    occur at the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    level as well as when the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") changes the transactional state on [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.after_transaction_create()`](events.html#sqlalchemy.orm.SessionEvents.after_transaction_create
+    "sqlalchemy.orm.SessionEvents.after_transaction_create"), [`SessionEvents.after_transaction_end()`](events.html#sqlalchemy.orm.SessionEvents.after_transaction_end
+    "sqlalchemy.orm.SessionEvents.after_transaction_end") - these events track the
+    logical transaction scopes of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") in a way that is not specific to individual database
+    connections. These events are intended to help with integration of transaction-tracking
+    systems such as `zope.sqlalchemy`. Use these events when the application needs
+    to align some external scope with the transactional scope of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). These hooks mirror the “nested” transactional behavior
+    of the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    in that they track logical “subtransactions” as well as “nested” (e.g. SAVEPOINT)
+    transactions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`SessionEvents.before_commit()`](events.html#sqlalchemy.orm.SessionEvents.before_commit
+    "sqlalchemy.orm.SessionEvents.before_commit"), [`SessionEvents.after_commit()`](events.html#sqlalchemy.orm.SessionEvents.after_commit
+    "sqlalchemy.orm.SessionEvents.after_commit"), [`SessionEvents.after_begin()`](events.html#sqlalchemy.orm.SessionEvents.after_begin
+    "sqlalchemy.orm.SessionEvents.after_begin"), [`SessionEvents.after_rollback()`](events.html#sqlalchemy.orm.SessionEvents.after_rollback
+    "sqlalchemy.orm.SessionEvents.after_rollback"), [`SessionEvents.after_soft_rollback()`](events.html#sqlalchemy.orm.SessionEvents.after_soft_rollback
+    "sqlalchemy.orm.SessionEvents.after_soft_rollback") - These events allow tracking
+    of transaction events from the perspective of database connections. [`SessionEvents.after_begin()`](events.html#sqlalchemy.orm.SessionEvents.after_begin
+    "sqlalchemy.orm.SessionEvents.after_begin") in particular is a per-connection
+    event; a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    that maintains more than one connection will emit this event for each connection
+    individually as those connections become used within the current transaction.
+    The rollback and commit events then refer to when the DBAPI connections themselves
+    have received rollback or commit instructions directly.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attribute Change Events
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The attribute change events allow interception of when specific attributes on
+    an object are modified. These events include [`AttributeEvents.set()`](events.html#sqlalchemy.orm.AttributeEvents.set
+    "sqlalchemy.orm.AttributeEvents.set"), [`AttributeEvents.append()`](events.html#sqlalchemy.orm.AttributeEvents.append
+    "sqlalchemy.orm.AttributeEvents.append"), and [`AttributeEvents.remove()`](events.html#sqlalchemy.orm.AttributeEvents.remove
+    "sqlalchemy.orm.AttributeEvents.remove"). These events are extremely useful, particularly
+    for per-object validation operations; however, it is often much more convenient
+    to use a “validator” hook, which uses these hooks behind the scenes; see [Simple
+    Validators](mapped_attributes.html#simple-validators) for background on this.
+    The attribute events are also behind the mechanics of backreferences. An example
+    illustrating use of attribute events is in [Attribute Instrumentation](examples.html#examples-instrumentation).
+  prefs: []
+  type: TYPE_NORMAL

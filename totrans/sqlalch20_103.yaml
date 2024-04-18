@@ -1,0 +1,722 @@
+- en: Events
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/core/event.html](https://docs.sqlalchemy.org/en/20/core/event.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: SQLAlchemy includes an event API which publishes a wide variety of hooks into
+    the internals of both SQLAlchemy Core and ORM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event Registration
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Subscribing to an event occurs through a single API point, the [`listen()`](#sqlalchemy.event.listen
+    "sqlalchemy.event.listen") function, or alternatively the [`listens_for()`](#sqlalchemy.event.listens_for
+    "sqlalchemy.event.listens_for") decorator. These functions accept a target, a
+    string identifier which identifies the event to be intercepted, and a user-defined
+    listening function. Additional positional and keyword arguments to these two functions
+    may be supported by specific types of events, which may specify alternate interfaces
+    for the given event function, or provide instructions regarding secondary event
+    targets based on the given target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The name of an event and the argument signature of a corresponding listener
+    function is derived from a class bound specification method, which exists bound
+    to a marker class that’s described in the documentation. For example, the documentation
+    for [`PoolEvents.connect()`](events.html#sqlalchemy.events.PoolEvents.connect
+    "sqlalchemy.events.PoolEvents.connect") indicates that the event name is `"connect"`
+    and that a user-defined listener function should receive two positional arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To listen with the [`listens_for()`](#sqlalchemy.event.listens_for "sqlalchemy.event.listens_for")
+    decorator looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Named Argument Styles'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are some varieties of argument styles which can be accepted by listener
+    functions. Taking the example of [`PoolEvents.connect()`](events.html#sqlalchemy.events.PoolEvents.connect
+    "sqlalchemy.events.PoolEvents.connect"), this function is documented as receiving
+    `dbapi_connection` and `connection_record` arguments. We can opt to receive these
+    arguments by name, by establishing a listener function that accepts `**keyword`
+    arguments, by passing `named=True` to either [`listen()`](#sqlalchemy.event.listen
+    "sqlalchemy.event.listen") or [`listens_for()`](#sqlalchemy.event.listens_for
+    "sqlalchemy.event.listens_for"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using named argument passing, the names listed in the function argument
+    specification will be used as keys in the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Named style passes all arguments by name regardless of the function signature,
+    so specific arguments may be listed as well, in any order, as long as the names
+    match up:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the presence of `**kw` tells [`listens_for()`](#sqlalchemy.event.listens_for
+    "sqlalchemy.event.listens_for") that arguments should be passed to the function
+    by name, rather than positionally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Targets
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen") function
+    is very flexible regarding targets. It generally accepts classes, instances of
+    those classes, and related classes or objects from which the appropriate target
+    can be derived. For example, the above mentioned `"connect"` event accepts [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") classes and objects as well as [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool") classes and objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Modifiers'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some listeners allow modifiers to be passed to [`listen()`](#sqlalchemy.event.listen
+    "sqlalchemy.event.listen"). These modifiers sometimes provide alternate calling
+    signatures for listeners. Such as with ORM events, some event listeners can have
+    a return value which modifies the subsequent handling. By default, no listener
+    ever requires a return value, but by passing `retval=True` this value can be supported:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Events and Multiprocessing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLAlchemy’s event hooks are implemented with Python functions and objects,
+    so events propagate via Python function calls. Python multiprocessing follows
+    the same way we think about OS multiprocessing, such as a parent process forking
+    a child process, thus we can describe the SQLAlchemy event system’s behavior using
+    the same model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event hooks registered in a parent process will be present in new child processes
+    that are forked from that parent after the hooks have been registered, since the
+    child process starts with a copy of all existing Python structures from the parent
+    when spawned. Child processes that already exist before the hooks are registered
+    will not receive those new event hooks, as changes made to Python structures in
+    a parent process do not propagate to child processes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the events themselves, these are Python function calls, which do not have
+    any ability to propagate between processes. SQLAlchemy’s event system does not
+    implement any inter-process communication. It is possible to implement event hooks
+    that use Python inter-process messaging within them, however this would need to
+    be implemented by the user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Both SQLAlchemy Core and SQLAlchemy ORM feature a wide variety of event hooks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Core Events** - these are described in [Core Events](events.html) and include
+    event hooks specific to connection pool lifecycle, SQL statement execution, transaction
+    lifecycle, and schema creation and teardown.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**ORM Events** - these are described in [ORM Events](../orm/events.html), and
+    include event hooks specific to class and attribute instrumentation, object initialization
+    hooks, attribute on-change hooks, session state, flush, and commit hooks, mapper
+    initialization, object/result population, and per-instance persistence hooks.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: API Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [contains](#sqlalchemy.event.contains)(target, identifier, fn) | Return True
+    if the given target/ident/fn is set up to listen. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [listen](#sqlalchemy.event.listen)(target, identifier, fn, *args, **kw) |
+    Register a listener function for the given target. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [listens_for](#sqlalchemy.event.listens_for)(target, identifier, *args, **kw)
+    | Decorate a function as a listener for the given target + identifier. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [remove](#sqlalchemy.event.remove)(target, identifier, fn) | Remove an event
+    listener. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Register a listener function for the given target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen") function
+    is part of the primary interface for the SQLAlchemy event system, documented at
+    [Events](#).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`insert` (*bool*) – The default behavior for event handlers is to append the
+    decorated user defined function to an internal list of registered event listeners
+    upon discovery. If a user registers a function with `insert=True`, SQLAlchemy
+    will insert (prepend) the function to the internal list upon discovery. This feature
+    is not typically used or recommended by the SQLAlchemy maintainers, but is provided
+    to ensure certain user defined functions can run before others, such as when [Changing
+    the sql_mode in MySQL](../dialects/mysql.html#mysql-sql-mode).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`named` (*bool*) – When using named argument passing, the names listed in the
+    function argument specification will be used as keys in the dictionary. See [Named
+    Argument Styles](#event-named-argument-styles).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`once` (*bool*) – Private/Internal API usage. Deprecated. This parameter would
+    provide that an event function would run only once per given target. It does not
+    however imply automatic de-registration of the listener function; associating
+    an arbitrarily high number of listeners without explicitly removing them will
+    cause memory to grow unbounded even if `once=True` is specified.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`propagate` (*bool*) – The `propagate` kwarg is available when working with
+    ORM instrumentation and mapping events. See [`MapperEvents`](../orm/events.html#sqlalchemy.orm.MapperEvents
+    "sqlalchemy.orm.MapperEvents") and [`MapperEvents.before_mapper_configured()`](../orm/events.html#sqlalchemy.orm.MapperEvents.before_mapper_configured
+    "sqlalchemy.orm.MapperEvents.before_mapper_configured") for examples.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`retval` (*bool*) –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This flag applies only to specific event listeners, each of which includes documentation
+    explaining when it should be used. By default, no listener ever requires a return
+    value. However, some listeners do support special behaviors for return values,
+    and include in their documentation that the `retval=True` flag is necessary for
+    a return value to be processed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Event listener suites that make use of [`listen.retval`](#sqlalchemy.event.listen.params.retval
+    "sqlalchemy.event.listen") include [`ConnectionEvents`](events.html#sqlalchemy.events.ConnectionEvents
+    "sqlalchemy.events.ConnectionEvents") and [`AttributeEvents`](../orm/events.html#sqlalchemy.orm.AttributeEvents
+    "sqlalchemy.orm.AttributeEvents").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen") function
+    cannot be called at the same time that the target event is being run. This has
+    implications for thread safety, and also means an event cannot be added from inside
+    the listener function for itself. The list of events to be run are present inside
+    of a mutable collection that can’t be changed during iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event registration and removal is not intended to be a “high velocity” operation;
+    it is a configurational operation. For systems that need to quickly associate
+    and deassociate with events at high scale, use a mutable structure that is handled
+    from inside of a single listener.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`listens_for()`](#sqlalchemy.event.listens_for "sqlalchemy.event.listens_for")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`remove()`](#sqlalchemy.event.remove "sqlalchemy.event.remove")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Decorate a function as a listener for the given target + identifier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`listens_for()`](#sqlalchemy.event.listens_for "sqlalchemy.event.listens_for")
+    decorator is part of the primary interface for the SQLAlchemy event system, documented
+    at [Events](#).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function generally shares the same kwargs as `listens()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A given function can also be invoked for only the first invocation of the event
+    using the `once` argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `once` argument does not imply automatic de-registration of the listener
+    function after it has been invoked a first time; a listener entry will remain
+    associated with the target object. Associating an arbitrarily high number of listeners
+    without explicitly removing them will cause memory to grow unbounded even if `once=True`
+    is specified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen") - general
+    description of event listening'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remove an event listener.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The arguments here should match exactly those which were sent to [`listen()`](#sqlalchemy.event.listen
+    "sqlalchemy.event.listen"); all the event registration which proceeded as a result
+    of this call will be reverted by calling [`remove()`](#sqlalchemy.event.remove
+    "sqlalchemy.event.remove") with the same arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the listener function associated with `SomeMappedClass` was also propagated
+    to subclasses of `SomeMappedClass`; the [`remove()`](#sqlalchemy.event.remove
+    "sqlalchemy.event.remove") function will revert all of these operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`remove()`](#sqlalchemy.event.remove "sqlalchemy.event.remove") function
+    cannot be called at the same time that the target event is being run. This has
+    implications for thread safety, and also means an event cannot be removed from
+    inside the listener function for itself. The list of events to be run are present
+    inside of a mutable collection that can’t be changed during iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event registration and removal is not intended to be a “high velocity” operation;
+    it is a configurational operation. For systems that need to quickly associate
+    and deassociate with events at high scale, use a mutable structure that is handled
+    from inside of a single listener.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return True if the given target/ident/fn is set up to listen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event Registration
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Subscribing to an event occurs through a single API point, the [`listen()`](#sqlalchemy.event.listen
+    "sqlalchemy.event.listen") function, or alternatively the [`listens_for()`](#sqlalchemy.event.listens_for
+    "sqlalchemy.event.listens_for") decorator. These functions accept a target, a
+    string identifier which identifies the event to be intercepted, and a user-defined
+    listening function. Additional positional and keyword arguments to these two functions
+    may be supported by specific types of events, which may specify alternate interfaces
+    for the given event function, or provide instructions regarding secondary event
+    targets based on the given target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The name of an event and the argument signature of a corresponding listener
+    function is derived from a class bound specification method, which exists bound
+    to a marker class that’s described in the documentation. For example, the documentation
+    for [`PoolEvents.connect()`](events.html#sqlalchemy.events.PoolEvents.connect
+    "sqlalchemy.events.PoolEvents.connect") indicates that the event name is `"connect"`
+    and that a user-defined listener function should receive two positional arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To listen with the [`listens_for()`](#sqlalchemy.event.listens_for "sqlalchemy.event.listens_for")
+    decorator looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Named Argument Styles'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are some varieties of argument styles which can be accepted by listener
+    functions. Taking the example of [`PoolEvents.connect()`](events.html#sqlalchemy.events.PoolEvents.connect
+    "sqlalchemy.events.PoolEvents.connect"), this function is documented as receiving
+    `dbapi_connection` and `connection_record` arguments. We can opt to receive these
+    arguments by name, by establishing a listener function that accepts `**keyword`
+    arguments, by passing `named=True` to either [`listen()`](#sqlalchemy.event.listen
+    "sqlalchemy.event.listen") or [`listens_for()`](#sqlalchemy.event.listens_for
+    "sqlalchemy.event.listens_for"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using named argument passing, the names listed in the function argument
+    specification will be used as keys in the dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Named style passes all arguments by name regardless of the function signature,
+    so specific arguments may be listed as well, in any order, as long as the names
+    match up:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the presence of `**kw` tells [`listens_for()`](#sqlalchemy.event.listens_for
+    "sqlalchemy.event.listens_for") that arguments should be passed to the function
+    by name, rather than positionally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Targets
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen") function
+    is very flexible regarding targets. It generally accepts classes, instances of
+    those classes, and related classes or objects from which the appropriate target
+    can be derived. For example, the above mentioned `"connect"` event accepts [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") classes and objects as well as [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool") classes and objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Modifiers'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some listeners allow modifiers to be passed to [`listen()`](#sqlalchemy.event.listen
+    "sqlalchemy.event.listen"). These modifiers sometimes provide alternate calling
+    signatures for listeners. Such as with ORM events, some event listeners can have
+    a return value which modifies the subsequent handling. By default, no listener
+    ever requires a return value, but by passing `retval=True` this value can be supported:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Events and Multiprocessing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLAlchemy’s event hooks are implemented with Python functions and objects,
+    so events propagate via Python function calls. Python multiprocessing follows
+    the same way we think about OS multiprocessing, such as a parent process forking
+    a child process, thus we can describe the SQLAlchemy event system’s behavior using
+    the same model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event hooks registered in a parent process will be present in new child processes
+    that are forked from that parent after the hooks have been registered, since the
+    child process starts with a copy of all existing Python structures from the parent
+    when spawned. Child processes that already exist before the hooks are registered
+    will not receive those new event hooks, as changes made to Python structures in
+    a parent process do not propagate to child processes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the events themselves, these are Python function calls, which do not have
+    any ability to propagate between processes. SQLAlchemy’s event system does not
+    implement any inter-process communication. It is possible to implement event hooks
+    that use Python inter-process messaging within them, however this would need to
+    be implemented by the user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Both SQLAlchemy Core and SQLAlchemy ORM feature a wide variety of event hooks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Core Events** - these are described in [Core Events](events.html) and include
+    event hooks specific to connection pool lifecycle, SQL statement execution, transaction
+    lifecycle, and schema creation and teardown.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**ORM Events** - these are described in [ORM Events](../orm/events.html), and
+    include event hooks specific to class and attribute instrumentation, object initialization
+    hooks, attribute on-change hooks, session state, flush, and commit hooks, mapper
+    initialization, object/result population, and per-instance persistence hooks.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: API Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [contains](#sqlalchemy.event.contains)(target, identifier, fn) | Return True
+    if the given target/ident/fn is set up to listen. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [listen](#sqlalchemy.event.listen)(target, identifier, fn, *args, **kw) |
+    Register a listener function for the given target. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [listens_for](#sqlalchemy.event.listens_for)(target, identifier, *args, **kw)
+    | Decorate a function as a listener for the given target + identifier. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [remove](#sqlalchemy.event.remove)(target, identifier, fn) | Remove an event
+    listener. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Register a listener function for the given target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen") function
+    is part of the primary interface for the SQLAlchemy event system, documented at
+    [Events](#).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`insert` (*bool*) – The default behavior for event handlers is to append the
+    decorated user defined function to an internal list of registered event listeners
+    upon discovery. If a user registers a function with `insert=True`, SQLAlchemy
+    will insert (prepend) the function to the internal list upon discovery. This feature
+    is not typically used or recommended by the SQLAlchemy maintainers, but is provided
+    to ensure certain user defined functions can run before others, such as when [Changing
+    the sql_mode in MySQL](../dialects/mysql.html#mysql-sql-mode).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`named` (*bool*) – When using named argument passing, the names listed in the
+    function argument specification will be used as keys in the dictionary. See [Named
+    Argument Styles](#event-named-argument-styles).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`once` (*bool*) – Private/Internal API usage. Deprecated. This parameter would
+    provide that an event function would run only once per given target. It does not
+    however imply automatic de-registration of the listener function; associating
+    an arbitrarily high number of listeners without explicitly removing them will
+    cause memory to grow unbounded even if `once=True` is specified.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`propagate` (*bool*) – The `propagate` kwarg is available when working with
+    ORM instrumentation and mapping events. See [`MapperEvents`](../orm/events.html#sqlalchemy.orm.MapperEvents
+    "sqlalchemy.orm.MapperEvents") and [`MapperEvents.before_mapper_configured()`](../orm/events.html#sqlalchemy.orm.MapperEvents.before_mapper_configured
+    "sqlalchemy.orm.MapperEvents.before_mapper_configured") for examples.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`retval` (*bool*) –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This flag applies only to specific event listeners, each of which includes documentation
+    explaining when it should be used. By default, no listener ever requires a return
+    value. However, some listeners do support special behaviors for return values,
+    and include in their documentation that the `retval=True` flag is necessary for
+    a return value to be processed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Event listener suites that make use of [`listen.retval`](#sqlalchemy.event.listen.params.retval
+    "sqlalchemy.event.listen") include [`ConnectionEvents`](events.html#sqlalchemy.events.ConnectionEvents
+    "sqlalchemy.events.ConnectionEvents") and [`AttributeEvents`](../orm/events.html#sqlalchemy.orm.AttributeEvents
+    "sqlalchemy.orm.AttributeEvents").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen") function
+    cannot be called at the same time that the target event is being run. This has
+    implications for thread safety, and also means an event cannot be added from inside
+    the listener function for itself. The list of events to be run are present inside
+    of a mutable collection that can’t be changed during iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event registration and removal is not intended to be a “high velocity” operation;
+    it is a configurational operation. For systems that need to quickly associate
+    and deassociate with events at high scale, use a mutable structure that is handled
+    from inside of a single listener.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`listens_for()`](#sqlalchemy.event.listens_for "sqlalchemy.event.listens_for")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`remove()`](#sqlalchemy.event.remove "sqlalchemy.event.remove")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Decorate a function as a listener for the given target + identifier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`listens_for()`](#sqlalchemy.event.listens_for "sqlalchemy.event.listens_for")
+    decorator is part of the primary interface for the SQLAlchemy event system, documented
+    at [Events](#).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function generally shares the same kwargs as `listens()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A given function can also be invoked for only the first invocation of the event
+    using the `once` argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `once` argument does not imply automatic de-registration of the listener
+    function after it has been invoked a first time; a listener entry will remain
+    associated with the target object. Associating an arbitrarily high number of listeners
+    without explicitly removing them will cause memory to grow unbounded even if `once=True`
+    is specified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen") - general
+    description of event listening'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remove an event listener.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The arguments here should match exactly those which were sent to [`listen()`](#sqlalchemy.event.listen
+    "sqlalchemy.event.listen"); all the event registration which proceeded as a result
+    of this call will be reverted by calling [`remove()`](#sqlalchemy.event.remove
+    "sqlalchemy.event.remove") with the same arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the listener function associated with `SomeMappedClass` was also propagated
+    to subclasses of `SomeMappedClass`; the [`remove()`](#sqlalchemy.event.remove
+    "sqlalchemy.event.remove") function will revert all of these operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`remove()`](#sqlalchemy.event.remove "sqlalchemy.event.remove") function
+    cannot be called at the same time that the target event is being run. This has
+    implications for thread safety, and also means an event cannot be removed from
+    inside the listener function for itself. The list of events to be run are present
+    inside of a mutable collection that can’t be changed during iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Event registration and removal is not intended to be a “high velocity” operation;
+    it is a configurational operation. For systems that need to quickly associate
+    and deassociate with events at high scale, use a mutable structure that is handled
+    from inside of a single listener.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`listen()`](#sqlalchemy.event.listen "sqlalchemy.event.listen")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return True if the given target/ident/fn is set up to listen.
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,677 @@
+- en: ORM Quick Start
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/quickstart.html](https://docs.sqlalchemy.org/en/20/orm/quickstart.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: For new users who want to quickly see what basic ORM use looks like, here’s
+    an abbreviated form of the mappings and examples used in the [SQLAlchemy Unified
+    Tutorial](../tutorial/index.html#unified-tutorial). The code here is fully runnable
+    from a clean command line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the descriptions in this section are intentionally **very short**, please
+    proceed to the full [SQLAlchemy Unified Tutorial](../tutorial/index.html#unified-tutorial)
+    for a much more in-depth description of each of the concepts being illustrated
+    here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The ORM Quickstart is updated for the latest [**PEP
+    484**](https://peps.python.org/pep-0484/)-aware features using new constructs
+    including [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column").
+    See the section [ORM Declarative Models](../changelog/whatsnew_20.html#whatsnew-20-orm-declarative-typing)
+    for migration information.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declare Models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here, we define module-level constructs that will form the structures which
+    we will be querying from the database. This structure, known as a [Declarative
+    Mapping](mapping_styles.html#orm-declarative-mapping), defines at once both a
+    Python object model, as well as [database metadata](../glossary.html#term-database-metadata)
+    that describes real SQL tables that exist, or will exist, in a particular database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The mapping starts with a base class, which above is called `Base`, and is created
+    by making a simple subclass against the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Individual mapped classes are then created by making subclasses of `Base`. A
+    mapped class typically refers to a single particular database table, the name
+    of which is indicated by using the `__tablename__` class-level attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, columns that are part of the table are declared, by adding attributes
+    that include a special typing annotation called [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"). The name of each attribute corresponds to the column
+    that is to be part of the database table. The datatype of each column is taken
+    first from the Python datatype that’s associated with each [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation; `int` for `INTEGER`, `str` for `VARCHAR`,
+    etc. Nullability derives from whether or not the `Optional[]` type modifier is
+    used. More specific typing information may be indicated using SQLAlchemy type
+    objects in the right side [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") directive, such as the [`String`](../core/type_basics.html#sqlalchemy.types.String
+    "sqlalchemy.types.String") datatype used above in the `User.name` column. The
+    association between Python types and SQL types can be customized using the [type
+    annotation map](declarative_tables.html#orm-declarative-mapped-column-type-map).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column")
+    directive is used for all column-based attributes that require more specific customization.
+    Besides typing information, this directive accepts a wide variety of arguments
+    that indicate specific details about a database column, including server defaults
+    and constraint information, such as membership within the primary key and foreign
+    keys. The [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column")
+    directive accepts a superset of arguments that are accepted by the SQLAlchemy
+    [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    class, which is used by SQLAlchemy Core to represent database columns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All ORM mapped classes require at least one column be declared as part of the
+    primary key, typically by using the [`Column.primary_key`](../core/metadata.html#sqlalchemy.schema.Column.params.primary_key
+    "sqlalchemy.schema.Column") parameter on those [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") objects that should be part of the key. In the
+    above example, the `User.id` and `Address.id` columns are marked as primary key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Taken together, the combination of a string table name as well as a list of
+    column declarations is known in SQLAlchemy as [table metadata](../glossary.html#term-table-metadata).
+    Setting up table metadata using both Core and ORM approaches is introduced in
+    the [SQLAlchemy Unified Tutorial](../tutorial/index.html#unified-tutorial) at
+    [Working with Database Metadata](../tutorial/metadata.html#tutorial-working-with-metadata).
+    The above mapping is an example of what’s known as [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other variants of [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    are available, most commonly the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct indicated above. In contrast to the column-based
+    attributes, [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") denotes a linkage between two ORM classes. In the
+    above example, `User.addresses` links `User` to `Address`, and `Address.user`
+    links `Address` to `User`. The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct is introduced in the [SQLAlchemy Unified
+    Tutorial](../tutorial/index.html#unified-tutorial) at [Working with ORM Related
+    Objects](../tutorial/orm_related_objects.html#tutorial-orm-related-objects).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, the above example classes include a `__repr__()` method, which is not
+    required but is useful for debugging. Mapped classes can be created with methods
+    such as `__repr__()` generated automatically, using dataclasses. More on dataclass
+    mapping at [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create an Engine
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    is a **factory** that can create new database connections for us, which also holds
+    onto connections inside of a [Connection Pool](../core/pooling.html) for fast
+    reuse. For learning purposes, we normally use a [SQLite](../dialects/sqlite.html)
+    memory-only database for convenience:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `echo=True` parameter indicates that SQL emitted by connections will be
+    logged to standard out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A full intro to the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") starts at [Establishing Connectivity - the Engine](../tutorial/engine.html#tutorial-engine).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Emit CREATE TABLE DDL
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Using our table metadata and our engine, we can generate our schema at once
+    in our target SQLite database, using a method called [`MetaData.create_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: A lot just happened from that bit of Python code we wrote. For a complete overview
+    of what’s going on on with Table metadata, proceed in the Tutorial at [Working
+    with Database Metadata](../tutorial/metadata.html#tutorial-working-with-metadata).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create Objects and Persist
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We are now ready to insert data in the database. We accomplish this by creating
+    instances of `User` and `Address` classes, which have an `__init__()` method already
+    as established automatically by the declarative mapping process. We then pass
+    them to the database using an object called a [Session](../tutorial/dbapi_transactions.html#tutorial-executing-orm-session),
+    which makes use of the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") to interact with the database. The [`Session.add_all()`](session_api.html#sqlalchemy.orm.Session.add_all
+    "sqlalchemy.orm.Session.add_all") method is used here to add multiple objects
+    at once, and the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") method will be used to [flush](session_basics.html#session-flushing)
+    any pending changes to the database and then [commit](session_basics.html#session-committing)
+    the current database transaction, which is always in progress whenever the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s recommended that the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") be used in context manager style as above, that is,
+    using the Python `with:` statement. The [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object represents active database resources so it’s
+    good to make sure it’s closed out when a series of operations are completed. In
+    the next section, we’ll keep a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") opened just for illustration purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basics on creating a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    are at [Executing with an ORM Session](../tutorial/dbapi_transactions.html#tutorial-executing-orm-session)
+    and more at [Basics of Using a Session](session_basics.html#id1).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, some varieties of basic persistence operations are introduced at [Inserting
+    Rows using the ORM Unit of Work pattern](../tutorial/orm_data_manipulation.html#tutorial-inserting-orm).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simple SELECT
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With some rows in the database, here’s the simplest form of emitting a SELECT
+    statement to load some objects. To create SELECT statements, we use the [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") function to create a new [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object, which we then invoke using a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). The method that is often useful when querying for ORM
+    objects is the [`Session.scalars()`](session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") method, which will return a [`ScalarResult`](../core/connections.html#sqlalchemy.engine.ScalarResult
+    "sqlalchemy.engine.ScalarResult") object that will iterate through the ORM objects
+    we’ve selected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query also made use of the [`Select.where()`](../core/selectable.html#sqlalchemy.sql.expression.Select.where
+    "sqlalchemy.sql.expression.Select.where") method to add WHERE criteria, and also
+    used the [`ColumnOperators.in_()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") method that’s part of all SQLAlchemy
+    column-like constructs to use the SQL IN operator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More detail on how to select objects and individual columns is at [Selecting
+    ORM Entities and Columns](../tutorial/data_select.html#tutorial-selecting-orm-entities).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SELECT with JOIN
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'It’s very common to query amongst multiple tables at once, and in SQL the JOIN
+    keyword is the primary way this happens. The [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct creates joins using the [`Select.join()`](../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query illustrates multiple WHERE criteria which are automatically
+    chained together using AND, as well as how to use SQLAlchemy column-like objects
+    to create “equality” comparisons, which uses the overridden Python method [`ColumnOperators.__eq__()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__eq__
+    "sqlalchemy.sql.expression.ColumnOperators.__eq__") to produce a SQL criteria
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some more background on the concepts above are at [The WHERE clause](../tutorial/data_select.html#tutorial-select-where-clause)
+    and [Explicit FROM clauses and JOINs](../tutorial/data_select.html#tutorial-select-join).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object, in conjunction with our ORM-mapped classes `User` and `Address`, automatically
+    track changes to the objects as they are made, which result in SQL statements
+    that will be emitted the next time the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") flushes. Below, we change one email address associated
+    with “sandy”, and also add a new email address to “patrick”, after emitting a
+    SELECT to retrieve the row for “patrick”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice when we accessed `patrick.addresses`, a SELECT was emitted. This is called
+    a [lazy load](../glossary.html#term-lazy-load). Background on different ways to
+    access related items using more or less SQL is introduced at [Loader Strategies](../tutorial/orm_related_objects.html#tutorial-orm-loader-strategies).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A detailed walkthrough on ORM data manipulation starts at [Data Manipulation
+    with the ORM](../tutorial/orm_data_manipulation.html#tutorial-orm-data-manipulation).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some Deletes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: All things must come to an end, as is the case for some of our database rows
+    - here’s a quick demonstration of two different forms of deletion, both of which
+    are important based on the specific use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First we will remove one of the `Address` objects from the “sandy” user. When
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    next flushes, this will result in the row being deleted. This behavior is something
+    that we configured in our mapping called the [delete cascade](cascades.html#cascade-delete).
+    We can get a handle to the `sandy` object by primary key using [`Session.get()`](session_api.html#sqlalchemy.orm.Session.get
+    "sqlalchemy.orm.Session.get"), then work with the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The last SELECT above was the [lazy load](../glossary.html#term-lazy-load) operation
+    proceeding so that the `sandy.addresses` collection could be loaded, so that we
+    could remove the `sandy_address` member. There are other ways to go about this
+    series of operations that won’t emit as much SQL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can choose to emit the DELETE SQL for what’s set to be changed so far, without
+    committing the transaction, using the [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we will delete the “patrick” user entirely. For a top-level delete of
+    an object by itself, we use the [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method; this method doesn’t actually perform
+    the deletion, but sets up the object to be deleted on the next flush. The operation
+    will also [cascade](../glossary.html#term-cascade) to related objects based on
+    the cascade options that we configured, in this case, onto the related `Address`
+    objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete "sqlalchemy.orm.Session.delete")
+    method in this particular case emitted two SELECT statements, even though it didn’t
+    emit a DELETE, which might seem surprising. This is because when the method went
+    to inspect the object, it turns out the `patrick` object was [expired](../glossary.html#term-expired),
+    which happened when we last called upon [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), and the SQL emitted was to re-load the rows
+    from the new transaction. This expiration is optional, and in normal use we will
+    often be turning it off for situations where it doesn’t apply well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate the rows being deleted, here’s the commit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Tutorial discusses ORM deletion at [Deleting ORM Objects using the Unit
+    of Work pattern](../tutorial/orm_data_manipulation.html#tutorial-orm-deleting).
+    Background on object expiration is at [Expiring / Refreshing](session_basics.html#session-expiring);
+    cascades are discussed in depth at [Cascades](cascades.html#unitofwork-cascades).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Learn the above concepts in depth
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: For a new user, the above sections were likely a whirlwind tour. There’s a lot
+    of important concepts in each step above that weren’t covered. With a quick overview
+    of what things look like, it’s recommended to work through the [SQLAlchemy Unified
+    Tutorial](../tutorial/index.html#unified-tutorial) to gain a solid working knowledge
+    of what’s really going on above. Good luck!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declare Models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here, we define module-level constructs that will form the structures which
+    we will be querying from the database. This structure, known as a [Declarative
+    Mapping](mapping_styles.html#orm-declarative-mapping), defines at once both a
+    Python object model, as well as [database metadata](../glossary.html#term-database-metadata)
+    that describes real SQL tables that exist, or will exist, in a particular database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The mapping starts with a base class, which above is called `Base`, and is created
+    by making a simple subclass against the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Individual mapped classes are then created by making subclasses of `Base`. A
+    mapped class typically refers to a single particular database table, the name
+    of which is indicated by using the `__tablename__` class-level attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, columns that are part of the table are declared, by adding attributes
+    that include a special typing annotation called [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"). The name of each attribute corresponds to the column
+    that is to be part of the database table. The datatype of each column is taken
+    first from the Python datatype that’s associated with each [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation; `int` for `INTEGER`, `str` for `VARCHAR`,
+    etc. Nullability derives from whether or not the `Optional[]` type modifier is
+    used. More specific typing information may be indicated using SQLAlchemy type
+    objects in the right side [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") directive, such as the [`String`](../core/type_basics.html#sqlalchemy.types.String
+    "sqlalchemy.types.String") datatype used above in the `User.name` column. The
+    association between Python types and SQL types can be customized using the [type
+    annotation map](declarative_tables.html#orm-declarative-mapped-column-type-map).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column")
+    directive is used for all column-based attributes that require more specific customization.
+    Besides typing information, this directive accepts a wide variety of arguments
+    that indicate specific details about a database column, including server defaults
+    and constraint information, such as membership within the primary key and foreign
+    keys. The [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column")
+    directive accepts a superset of arguments that are accepted by the SQLAlchemy
+    [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    class, which is used by SQLAlchemy Core to represent database columns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All ORM mapped classes require at least one column be declared as part of the
+    primary key, typically by using the [`Column.primary_key`](../core/metadata.html#sqlalchemy.schema.Column.params.primary_key
+    "sqlalchemy.schema.Column") parameter on those [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") objects that should be part of the key. In the
+    above example, the `User.id` and `Address.id` columns are marked as primary key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Taken together, the combination of a string table name as well as a list of
+    column declarations is known in SQLAlchemy as [table metadata](../glossary.html#term-table-metadata).
+    Setting up table metadata using both Core and ORM approaches is introduced in
+    the [SQLAlchemy Unified Tutorial](../tutorial/index.html#unified-tutorial) at
+    [Working with Database Metadata](../tutorial/metadata.html#tutorial-working-with-metadata).
+    The above mapping is an example of what’s known as [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other variants of [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    are available, most commonly the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct indicated above. In contrast to the column-based
+    attributes, [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") denotes a linkage between two ORM classes. In the
+    above example, `User.addresses` links `User` to `Address`, and `Address.user`
+    links `Address` to `User`. The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct is introduced in the [SQLAlchemy Unified
+    Tutorial](../tutorial/index.html#unified-tutorial) at [Working with ORM Related
+    Objects](../tutorial/orm_related_objects.html#tutorial-orm-related-objects).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, the above example classes include a `__repr__()` method, which is not
+    required but is useful for debugging. Mapped classes can be created with methods
+    such as `__repr__()` generated automatically, using dataclasses. More on dataclass
+    mapping at [Declarative Dataclass Mapping](dataclasses.html#orm-declarative-native-dataclasses).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create an Engine
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    is a **factory** that can create new database connections for us, which also holds
+    onto connections inside of a [Connection Pool](../core/pooling.html) for fast
+    reuse. For learning purposes, we normally use a [SQLite](../dialects/sqlite.html)
+    memory-only database for convenience:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `echo=True` parameter indicates that SQL emitted by connections will be
+    logged to standard out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A full intro to the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") starts at [Establishing Connectivity - the Engine](../tutorial/engine.html#tutorial-engine).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Emit CREATE TABLE DDL
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Using our table metadata and our engine, we can generate our schema at once
+    in our target SQLite database, using a method called [`MetaData.create_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: A lot just happened from that bit of Python code we wrote. For a complete overview
+    of what’s going on on with Table metadata, proceed in the Tutorial at [Working
+    with Database Metadata](../tutorial/metadata.html#tutorial-working-with-metadata).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create Objects and Persist
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We are now ready to insert data in the database. We accomplish this by creating
+    instances of `User` and `Address` classes, which have an `__init__()` method already
+    as established automatically by the declarative mapping process. We then pass
+    them to the database using an object called a [Session](../tutorial/dbapi_transactions.html#tutorial-executing-orm-session),
+    which makes use of the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") to interact with the database. The [`Session.add_all()`](session_api.html#sqlalchemy.orm.Session.add_all
+    "sqlalchemy.orm.Session.add_all") method is used here to add multiple objects
+    at once, and the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") method will be used to [flush](session_basics.html#session-flushing)
+    any pending changes to the database and then [commit](session_basics.html#session-committing)
+    the current database transaction, which is always in progress whenever the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s recommended that the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") be used in context manager style as above, that is,
+    using the Python `with:` statement. The [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object represents active database resources so it’s
+    good to make sure it’s closed out when a series of operations are completed. In
+    the next section, we’ll keep a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") opened just for illustration purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basics on creating a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    are at [Executing with an ORM Session](../tutorial/dbapi_transactions.html#tutorial-executing-orm-session)
+    and more at [Basics of Using a Session](session_basics.html#id1).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, some varieties of basic persistence operations are introduced at [Inserting
+    Rows using the ORM Unit of Work pattern](../tutorial/orm_data_manipulation.html#tutorial-inserting-orm).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simple SELECT
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With some rows in the database, here’s the simplest form of emitting a SELECT
+    statement to load some objects. To create SELECT statements, we use the [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") function to create a new [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object, which we then invoke using a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). The method that is often useful when querying for ORM
+    objects is the [`Session.scalars()`](session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") method, which will return a [`ScalarResult`](../core/connections.html#sqlalchemy.engine.ScalarResult
+    "sqlalchemy.engine.ScalarResult") object that will iterate through the ORM objects
+    we’ve selected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query also made use of the [`Select.where()`](../core/selectable.html#sqlalchemy.sql.expression.Select.where
+    "sqlalchemy.sql.expression.Select.where") method to add WHERE criteria, and also
+    used the [`ColumnOperators.in_()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") method that’s part of all SQLAlchemy
+    column-like constructs to use the SQL IN operator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More detail on how to select objects and individual columns is at [Selecting
+    ORM Entities and Columns](../tutorial/data_select.html#tutorial-selecting-orm-entities).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SELECT with JOIN
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'It’s very common to query amongst multiple tables at once, and in SQL the JOIN
+    keyword is the primary way this happens. The [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct creates joins using the [`Select.join()`](../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query illustrates multiple WHERE criteria which are automatically
+    chained together using AND, as well as how to use SQLAlchemy column-like objects
+    to create “equality” comparisons, which uses the overridden Python method [`ColumnOperators.__eq__()`](../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.__eq__
+    "sqlalchemy.sql.expression.ColumnOperators.__eq__") to produce a SQL criteria
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some more background on the concepts above are at [The WHERE clause](../tutorial/data_select.html#tutorial-select-where-clause)
+    and [Explicit FROM clauses and JOINs](../tutorial/data_select.html#tutorial-select-join).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object, in conjunction with our ORM-mapped classes `User` and `Address`, automatically
+    track changes to the objects as they are made, which result in SQL statements
+    that will be emitted the next time the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") flushes. Below, we change one email address associated
+    with “sandy”, and also add a new email address to “patrick”, after emitting a
+    SELECT to retrieve the row for “patrick”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice when we accessed `patrick.addresses`, a SELECT was emitted. This is called
+    a [lazy load](../glossary.html#term-lazy-load). Background on different ways to
+    access related items using more or less SQL is introduced at [Loader Strategies](../tutorial/orm_related_objects.html#tutorial-orm-loader-strategies).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A detailed walkthrough on ORM data manipulation starts at [Data Manipulation
+    with the ORM](../tutorial/orm_data_manipulation.html#tutorial-orm-data-manipulation).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some Deletes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: All things must come to an end, as is the case for some of our database rows
+    - here’s a quick demonstration of two different forms of deletion, both of which
+    are important based on the specific use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First we will remove one of the `Address` objects from the “sandy” user. When
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    next flushes, this will result in the row being deleted. This behavior is something
+    that we configured in our mapping called the [delete cascade](cascades.html#cascade-delete).
+    We can get a handle to the `sandy` object by primary key using [`Session.get()`](session_api.html#sqlalchemy.orm.Session.get
+    "sqlalchemy.orm.Session.get"), then work with the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: The last SELECT above was the [lazy load](../glossary.html#term-lazy-load) operation
+    proceeding so that the `sandy.addresses` collection could be loaded, so that we
+    could remove the `sandy_address` member. There are other ways to go about this
+    series of operations that won’t emit as much SQL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can choose to emit the DELETE SQL for what’s set to be changed so far, without
+    committing the transaction, using the [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we will delete the “patrick” user entirely. For a top-level delete of
+    an object by itself, we use the [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete") method; this method doesn’t actually perform
+    the deletion, but sets up the object to be deleted on the next flush. The operation
+    will also [cascade](../glossary.html#term-cascade) to related objects based on
+    the cascade options that we configured, in this case, onto the related `Address`
+    objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete "sqlalchemy.orm.Session.delete")
+    method in this particular case emitted two SELECT statements, even though it didn’t
+    emit a DELETE, which might seem surprising. This is because when the method went
+    to inspect the object, it turns out the `patrick` object was [expired](../glossary.html#term-expired),
+    which happened when we last called upon [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), and the SQL emitted was to re-load the rows
+    from the new transaction. This expiration is optional, and in normal use we will
+    often be turning it off for situations where it doesn’t apply well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate the rows being deleted, here’s the commit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Tutorial discusses ORM deletion at [Deleting ORM Objects using the Unit
+    of Work pattern](../tutorial/orm_data_manipulation.html#tutorial-orm-deleting).
+    Background on object expiration is at [Expiring / Refreshing](session_basics.html#session-expiring);
+    cascades are discussed in depth at [Cascades](cascades.html#unitofwork-cascades).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Learn the above concepts in depth
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: For a new user, the above sections were likely a whirlwind tour. There’s a lot
+    of important concepts in each step above that weren’t covered. With a quick overview
+    of what things look like, it’s recommended to work through the [SQLAlchemy Unified
+    Tutorial](../tutorial/index.html#unified-tutorial) to gain a solid working knowledge
+    of what’s really going on above. Good luck!
+  prefs: []
+  type: TYPE_NORMAL

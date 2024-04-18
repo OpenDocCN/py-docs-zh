@@ -1,0 +1,314 @@
+- en: Declarative Extensions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/extensions/declarative/index.html](https://docs.sqlalchemy.org/en/20/orm/extensions/declarative/index.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Extensions specific to the [Declarative](../../mapping_styles.html#orm-declarative-mapping)
+    mapping API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: The vast majority of the Declarative extension is now
+    integrated into the SQLAlchemy ORM and is importable from the `sqlalchemy.orm`
+    namespace. See the documentation at [Declarative Mapping](../../mapping_styles.html#orm-declarative-mapping)
+    for new documentation. For an overview of the change, see [Declarative is now
+    integrated into the ORM with new features](../../../changelog/migration_14.html#change-5508).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [AbstractConcreteBase](#sqlalchemy.ext.declarative.AbstractConcreteBase)
+    | A helper class for ‘concrete’ declarative mappings. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ConcreteBase](#sqlalchemy.ext.declarative.ConcreteBase) | A helper class
+    for ‘concrete’ declarative mappings. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DeferredReflection](#sqlalchemy.ext.declarative.DeferredReflection) | A
+    helper class for construction of mappings based on a deferred reflection step.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: A helper class for ‘concrete’ declarative mappings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AbstractConcreteBase`](#sqlalchemy.ext.declarative.AbstractConcreteBase "sqlalchemy.ext.declarative.AbstractConcreteBase")
+    will use the [`polymorphic_union()`](../../mapping_api.html#sqlalchemy.orm.polymorphic_union
+    "sqlalchemy.orm.polymorphic_union") function automatically, against all tables
+    mapped as a subclass to this class. The function is called via the `__declare_first__()`
+    function, which is essentially a hook for the [`before_configured()`](../../events.html#sqlalchemy.orm.MapperEvents.before_configured
+    "sqlalchemy.orm.MapperEvents.before_configured") event.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AbstractConcreteBase`](#sqlalchemy.ext.declarative.AbstractConcreteBase "sqlalchemy.ext.declarative.AbstractConcreteBase")
+    applies [`Mapper`](../../mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    for its immediately inheriting class, as would occur for any other declarative
+    mapped class. However, the [`Mapper`](../../mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") is not mapped to any particular [`Table`](../../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object. Instead, it’s mapped directly to the “polymorphic”
+    selectable produced by [`polymorphic_union()`](../../mapping_api.html#sqlalchemy.orm.polymorphic_union
+    "sqlalchemy.orm.polymorphic_union"), and performs no persistence operations on
+    its own. Compare to [`ConcreteBase`](#sqlalchemy.ext.declarative.ConcreteBase
+    "sqlalchemy.ext.declarative.ConcreteBase"), which maps its immediately inheriting
+    class to an actual [`Table`](../../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") that stores rows directly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`AbstractConcreteBase`](#sqlalchemy.ext.declarative.AbstractConcreteBase
+    "sqlalchemy.ext.declarative.AbstractConcreteBase") delays the mapper creation
+    of the base class until all the subclasses have been defined, as it needs to create
+    a mapping against a selectable that will include all subclass tables. In order
+    to achieve this, it waits for the **mapper configuration event** to occur, at
+    which point it scans through all the configured subclasses and sets up a mapping
+    that will query against all subclasses at once.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While this event is normally invoked automatically, in the case of [`AbstractConcreteBase`](#sqlalchemy.ext.declarative.AbstractConcreteBase
+    "sqlalchemy.ext.declarative.AbstractConcreteBase"), it may be necessary to invoke
+    it explicitly after **all** subclass mappings are defined, if the first operation
+    is to be a query against this base class. To do so, once all the desired classes
+    have been configured, the [`registry.configure()`](../../mapping_api.html#sqlalchemy.orm.registry.configure
+    "sqlalchemy.orm.registry.configure") method on the [`registry`](../../mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") in use can be invoked, which is available in relation
+    to a particular declarative base class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The abstract base class is handled by declarative in a special way; at class
+    configuration time, it behaves like a declarative mixin or an `__abstract__` base
+    class. Once classes are configured and mappings are produced, it then gets mapped
+    itself, but after all of its descendants. This is a very unique system of mapping
+    not found in any other SQLAlchemy API feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using this approach, we can specify columns and properties that will take place
+    on mapped subclasses, in the way that we normally do as in [Mixin and Custom Base
+    Classes](mixins.html#declarative-mixins):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we make use of our mappings however, both `Manager` and `Employee` will
+    have an independently usable `.company` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**strict_attrs** –'
+  prefs: []
+  type: TYPE_NORMAL
+- en: when specified on the base class, “strict” attribute mode is enabled which attempts
+    to limit ORM mapped attributes on the base class to only those that are immediately
+    present, while still preserving “polymorphic” loading behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ConcreteBase`](#sqlalchemy.ext.declarative.ConcreteBase "sqlalchemy.ext.declarative.ConcreteBase")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Concrete Table Inheritance](../../inheritance.html#concrete-inheritance)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Abstract Concrete Classes](../../inheritance.html#abstract-concrete-base)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.declarative.AbstractConcreteBase`](#sqlalchemy.ext.declarative.AbstractConcreteBase
+    "sqlalchemy.ext.declarative.AbstractConcreteBase") ([`sqlalchemy.ext.declarative.extensions.ConcreteBase`](#sqlalchemy.ext.declarative.ConcreteBase
+    "sqlalchemy.ext.declarative.extensions.ConcreteBase"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: A helper class for ‘concrete’ declarative mappings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ConcreteBase`](#sqlalchemy.ext.declarative.ConcreteBase "sqlalchemy.ext.declarative.ConcreteBase")
+    will use the [`polymorphic_union()`](../../mapping_api.html#sqlalchemy.orm.polymorphic_union
+    "sqlalchemy.orm.polymorphic_union") function automatically, against all tables
+    mapped as a subclass to this class. The function is called via the `__declare_last__()`
+    function, which is essentially a hook for the [`after_configured()`](../../events.html#sqlalchemy.orm.MapperEvents.after_configured
+    "sqlalchemy.orm.MapperEvents.after_configured") event.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ConcreteBase`](#sqlalchemy.ext.declarative.ConcreteBase "sqlalchemy.ext.declarative.ConcreteBase")
+    produces a mapped table for the class itself. Compare to [`AbstractConcreteBase`](#sqlalchemy.ext.declarative.AbstractConcreteBase
+    "sqlalchemy.ext.declarative.AbstractConcreteBase"), which does not.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The name of the discriminator column used by [`polymorphic_union()`](../../mapping_api.html#sqlalchemy.orm.polymorphic_union
+    "sqlalchemy.orm.polymorphic_union") defaults to the name `type`. To suit the use
+    case of a mapping where an actual column in a mapped table is already named `type`,
+    the discriminator name can be configured by setting the `_concrete_discriminator_name`
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.3.19: Added the `_concrete_discriminator_name` attribute to
+    [`ConcreteBase`](#sqlalchemy.ext.declarative.ConcreteBase "sqlalchemy.ext.declarative.ConcreteBase")
+    so that the virtual discriminator column name can be customized.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4.2: The `_concrete_discriminator_name` attribute need
+    only be placed on the basemost class to take correct effect for all subclasses.
+    An explicit error message is now raised if the mapped column names conflict with
+    the discriminator name, whereas in the 1.3.x series there would be some warnings
+    and then a non-useful query would be generated.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`AbstractConcreteBase`](#sqlalchemy.ext.declarative.AbstractConcreteBase "sqlalchemy.ext.declarative.AbstractConcreteBase")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Concrete Table Inheritance](../../inheritance.html#concrete-inheritance)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: A helper class for construction of mappings based on a deferred reflection step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Normally, declarative can be used with reflection by setting a [`Table`](../../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object using autoload_with=engine as the `__table__`
+    attribute on a declarative class. The caveat is that the [`Table`](../../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") must be fully reflected, or at the very least have
+    a primary key column, at the point at which a normal declarative mapping is constructed,
+    meaning the [`Engine`](../../../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") must be available at class declaration time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`DeferredReflection`](#sqlalchemy.ext.declarative.DeferredReflection "sqlalchemy.ext.declarative.DeferredReflection")
+    mixin moves the construction of mappers to be at a later point, after a specific
+    method is called which first reflects all [`Table`](../../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects created so far. Classes can define it as such:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, `MyClass` is not yet mapped. After a series of classes have been defined
+    in the above fashion, all tables can be reflected and mappings created using [`prepare()`](#sqlalchemy.ext.declarative.DeferredReflection.prepare
+    "sqlalchemy.ext.declarative.DeferredReflection.prepare"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`DeferredReflection`](#sqlalchemy.ext.declarative.DeferredReflection "sqlalchemy.ext.declarative.DeferredReflection")
+    mixin can be applied to individual classes, used as the base for the declarative
+    base itself, or used in a custom abstract class. Using an abstract base allows
+    that only a subset of classes to be prepared for a particular prepare step, which
+    is necessary for applications that use more than one engine. For example, if an
+    application has two engines, you might use two bases, and prepare each separately,
+    e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the class hierarchies for `ReflectedOne` and `ReflectedTwo` can be configured
+    separately:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[prepare()](#sqlalchemy.ext.declarative.DeferredReflection.prepare)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using DeferredReflection](../../declarative_tables.html#orm-declarative-reflected-deferred-reflection)
+    - in the [Table Configuration with Declarative](../../declarative_tables.html)
+    section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Reflect all [`Table`](../../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects for all current [`DeferredReflection`](#sqlalchemy.ext.declarative.DeferredReflection
+    "sqlalchemy.ext.declarative.DeferredReflection") subclasses
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`bind` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Engine`](../../../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    or [`Connection`](../../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") instance'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '..versionchanged:: 2.0.16 a [`Connection`](../../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") is also accepted.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`**reflect_kw` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: additional keyword arguments passed to [`MetaData.reflect()`](../../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect"), such as [`MetaData.reflect.views`](../../../core/metadata.html#sqlalchemy.schema.MetaData.reflect.params.views
+    "sqlalchemy.schema.MetaData.reflect").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.16.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL

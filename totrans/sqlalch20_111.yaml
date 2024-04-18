@@ -1,0 +1,4220 @@
+- en: Oracle
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/dialects/oracle.html](https://docs.sqlalchemy.org/en/20/dialects/oracle.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Support for the Oracle database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following table summarizes current support levels for database release versions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Supported Oracle versions**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Support type | Versions |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Fully tested in CI](index.html#term-Fully-tested-in-CI) | 18c |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Normal support](index.html#term-Normal-support) | 11+ |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Best effort](index.html#term-Best-effort) | 9+ |'
+  prefs: []
+  type: TYPE_TB
+- en: DBAPI Support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The following dialect/DBAPI options are available. Please refer to individual
+    DBAPI sections for connect information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cx-Oracle](#module-sqlalchemy.dialects.oracle.cx_oracle)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[python-oracledb](#module-sqlalchemy.dialects.oracle.oracledb)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Auto Increment Behavior
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLAlchemy Table objects which include integer primary keys are usually assumed
+    to have “autoincrementing” behavior, meaning they can generate their own primary
+    key values upon INSERT. For use within Oracle, two options are available, which
+    are the use of IDENTITY columns (Oracle 12 and above only) or the association
+    of a SEQUENCE with the column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifying GENERATED AS IDENTITY (Oracle 12 and above)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Starting from version 12 Oracle can make use of identity columns using the
+    `Identity` to specify the autoincrementing behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The CREATE TABLE for the above [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object would be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Identity`](../core/defaults.html#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    object support many options to control the “autoincrementing” behavior of the
+    column, like the starting value, the incrementing value, etc. In addition to the
+    standard options, Oracle supports setting [`Identity.always`](../core/defaults.html#sqlalchemy.schema.Identity.params.always
+    "sqlalchemy.schema.Identity") to `None` to use the default generated mode, rendering
+    GENERATED AS IDENTITY in the DDL. It also supports setting [`Identity.on_null`](../core/defaults.html#sqlalchemy.schema.Identity.params.on_null
+    "sqlalchemy.schema.Identity") to `True` to specify ON NULL in conjunction with
+    a ‘BY DEFAULT’ identity column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a SEQUENCE (all Oracle versions)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Older version of Oracle had no “autoincrement” feature, SQLAlchemy relies upon
+    sequences to produce these values. With the older Oracle versions, *a sequence
+    must always be explicitly specified to enable autoincrement*. This is divergent
+    with the majority of documentation examples which assume the usage of an autoincrement-capable
+    database. To specify sequences, use the sqlalchemy.schema.Sequence object which
+    is passed to a Column construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This step is also required when using table reflection, i.e. autoload_with=engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.4: Added [`Identity`](../core/defaults.html#sqlalchemy.schema.Identity
+    "sqlalchemy.schema.Identity") construct in a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") to specify the option of an autoincrementing column.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Transaction Isolation Level / Autocommit'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Oracle database supports “READ COMMITTED” and “SERIALIZABLE” modes of isolation.
+    The AUTOCOMMIT isolation level is also supported by the cx_Oracle dialect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set using per-connection execution options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: For `READ COMMITTED` and `SERIALIZABLE`, the Oracle dialect sets the level at
+    the session level using `ALTER SESSION`, which is reverted back to its default
+    setting when the connection is returned to the connection pool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Valid values for `isolation_level` include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`READ COMMITTED`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`AUTOCOMMIT`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`SERIALIZABLE`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The implementation for the [`Connection.get_isolation_level()`](../core/connections.html#sqlalchemy.engine.Connection.get_isolation_level
+    "sqlalchemy.engine.Connection.get_isolation_level") method as implemented by the
+    Oracle dialect necessarily forces the start of a transaction using the Oracle
+    LOCAL_TRANSACTION_ID function; otherwise no level is normally readable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additionally, the [`Connection.get_isolation_level()`](../core/connections.html#sqlalchemy.engine.Connection.get_isolation_level
+    "sqlalchemy.engine.Connection.get_isolation_level") method will raise an exception
+    if the `v$transaction` view is not available due to permissions or other reasons,
+    which is a common occurrence in Oracle installations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cx_Oracle dialect attempts to call the [`Connection.get_isolation_level()`](../core/connections.html#sqlalchemy.engine.Connection.get_isolation_level
+    "sqlalchemy.engine.Connection.get_isolation_level") method when the dialect makes
+    its first connection to the database in order to acquire the “default”isolation
+    level. This default level is necessary so that the level can be reset on a connection
+    after it has been temporarily modified using [`Connection.execution_options()`](../core/connections.html#sqlalchemy.engine.Connection.execution_options
+    "sqlalchemy.engine.Connection.execution_options") method. In the common event
+    that the [`Connection.get_isolation_level()`](../core/connections.html#sqlalchemy.engine.Connection.get_isolation_level
+    "sqlalchemy.engine.Connection.get_isolation_level") method raises an exception
+    due to `v$transaction` not being readable as well as any other database-related
+    failure, the level is assumed to be “READ COMMITTED”. No warning is emitted for
+    this initial first-connect condition as it is expected to be a common restriction
+    on Oracle databases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3.16: added support for AUTOCOMMIT to the cx_oracle dialect
+    as well as the notion of a default isolation level'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3.21: Added support for SERIALIZABLE as well as live reading
+    of the isolation level.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3.22: In the event that the default isolation level cannot
+    be read due to permissions on the v$transaction view as is common in Oracle installations,
+    the default isolation level is hardcoded to “READ COMMITTED” which was the behavior
+    prior to 1.3.21.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Setting Transaction Isolation Levels including DBAPI Autocommit](../core/connections.html#dbapi-autocommit)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Identifier Casing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In Oracle, the data dictionary represents all case insensitive identifier names
+    using UPPERCASE text. SQLAlchemy on the other hand considers an all-lower case
+    identifier name to be case insensitive. The Oracle dialect converts all case insensitive
+    identifiers to and from those two formats during schema level communication, such
+    as reflection of tables and indexes. Using an UPPERCASE name on the SQLAlchemy
+    side indicates a case sensitive identifier, and SQLAlchemy will quote the name
+    - this will cause mismatches against data dictionary data received from Oracle,
+    so unless identifier names have been truly created as case sensitive (i.e. using
+    quoted names), all lowercase names should be used on the SQLAlchemy side.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Max Identifier Lengths'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle has changed the default max identifier length as of Oracle Server version
+    12.2\. Prior to this version, the length was 30, and for 12.2 and greater it is
+    now 128\. This change impacts SQLAlchemy in the area of generated SQL label names
+    as well as the generation of constraint names, particularly in the case where
+    the constraint naming convention feature described at [Configuring Constraint
+    Naming Conventions](../core/constraints.html#constraint-naming-conventions) is
+    being used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To assist with this change and others, Oracle includes the concept of a “compatibility”
+    version, which is a version number that is independent of the actual server version
+    in order to assist with migration of Oracle databases, and may be configured within
+    the Oracle server itself. This compatibility version is retrieved using the query
+    `SELECT value FROM v$parameter WHERE name = 'compatible';`. The SQLAlchemy Oracle
+    dialect, when tasked with determining the default max identifier length, will
+    attempt to use this query upon first connect in order to determine the effective
+    compatibility version of the server, which determines what the maximum allowed
+    identifier length is for the server. If the table is not available, the server
+    version information is used instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As of SQLAlchemy 1.4, the default max identifier length for the Oracle dialect
+    is 128 characters. Upon first connect, the compatibility version is detected and
+    if it is less than Oracle version 12.2, the max identifier length is changed to
+    be 30 characters. In all cases, setting the [`create_engine.max_identifier_length`](../core/engines.html#sqlalchemy.create_engine.params.max_identifier_length
+    "sqlalchemy.create_engine") parameter will bypass this change and the value given
+    will be used as is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The maximum identifier length comes into play both when generating anonymized
+    SQL labels in SELECT statements, but more crucially when generating constraint
+    names from a naming convention. It is this area that has created the need for
+    SQLAlchemy to change this default conservatively. For example, the following naming
+    convention produces two very different constraint names based on the identifier
+    length:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With an identifier length of 30, the above CREATE INDEX looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However with length=128, it becomes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Applications which have run versions of SQLAlchemy prior to 1.4 on an Oracle
+    server version 12.2 or greater are therefore subject to the scenario of a database
+    migration that wishes to “DROP CONSTRAINT” on a name that was previously generated
+    with the shorter length. This migration will fail when the identifier length is
+    changed without the name of the index or constraint first being adjusted. Such
+    applications are strongly advised to make use of [`create_engine.max_identifier_length`](../core/engines.html#sqlalchemy.create_engine.params.max_identifier_length
+    "sqlalchemy.create_engine") in order to maintain control of the generation of
+    truncated names, and to fully review and test all database migrations in a staging
+    environment when changing this value to ensure that the impact of this change
+    has been mitigated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: the default max_identifier_length for Oracle is 128
+    characters, which is adjusted down to 30 upon first connect if an older version
+    of Oracle server (compatibility version < 12.2) is detected.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: LIMIT/OFFSET/FETCH Support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Methods like [`Select.limit()`](../core/selectable.html#sqlalchemy.sql.expression.Select.limit
+    "sqlalchemy.sql.expression.Select.limit") and [`Select.offset()`](../core/selectable.html#sqlalchemy.sql.expression.Select.offset
+    "sqlalchemy.sql.expression.Select.offset") make use of `FETCH FIRST N ROW / OFFSET
+    N ROWS` syntax assuming Oracle 12c or above, and assuming the SELECT statement
+    is not embedded within a compound statement like UNION. This syntax is also available
+    directly by using the [`Select.fetch()`](../core/selectable.html#sqlalchemy.sql.expression.Select.fetch
+    "sqlalchemy.sql.expression.Select.fetch") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: the Oracle dialect now uses `FETCH FIRST N ROW / OFFSET
+    N ROWS` for all [`Select.limit()`](../core/selectable.html#sqlalchemy.sql.expression.Select.limit
+    "sqlalchemy.sql.expression.Select.limit") and [`Select.offset()`](../core/selectable.html#sqlalchemy.sql.expression.Select.offset
+    "sqlalchemy.sql.expression.Select.offset") usage including within the ORM and
+    legacy [`Query`](../orm/queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query").
+    To force the legacy behavior using window functions, specify the `enable_offset_fetch=False`
+    dialect parameter to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The use of `FETCH FIRST / OFFSET` may be disabled on any Oracle version by passing
+    `enable_offset_fetch=False` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), which will force the use of “legacy” mode that makes
+    use of window functions. This mode is also selected automatically when using a
+    version of Oracle prior to 12c.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using legacy mode, or when a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") statement with limit/offset is embedded in
+    a compound statement, an emulated approach for LIMIT / OFFSET based on window
+    functions is used, which involves creation of a subquery using `ROW_NUMBER` that
+    is prone to performance issues as well as SQL construction issues for complex
+    statements. However, this approach is supported by all Oracle versions. See notes
+    below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notes on LIMIT / OFFSET emulation (when fetch() method cannot be used)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If using [`Select.limit()`](../core/selectable.html#sqlalchemy.sql.expression.Select.limit
+    "sqlalchemy.sql.expression.Select.limit") and [`Select.offset()`](../core/selectable.html#sqlalchemy.sql.expression.Select.offset
+    "sqlalchemy.sql.expression.Select.offset"), or with the ORM the [`Query.limit()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.limit
+    "sqlalchemy.orm.Query.limit") and [`Query.offset()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.offset
+    "sqlalchemy.orm.Query.offset") methods on an Oracle version prior to 12c, the
+    following notes apply:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy currently makes use of ROWNUM to achieve LIMIT/OFFSET; the exact
+    methodology is taken from [https://blogs.oracle.com/oraclemagazine/on-rownum-and-limiting-results](https://blogs.oracle.com/oraclemagazine/on-rownum-and-limiting-results)
+    .
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “FIRST_ROWS()” optimization keyword is not used by default. To enable the
+    usage of this optimization directive, specify `optimize_limits=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: The Oracle dialect renders limit/offset integer values
+    using a “post compile” scheme which renders the integer directly before passing
+    the statement to the cursor for execution. The `use_binds_for_limits` flag no
+    longer has an effect.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[New “post compile” bound parameters used for LIMIT/OFFSET in Oracle, SQL Server](../changelog/migration_14.html#change-4808).'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '## RETURNING Support'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Oracle database supports RETURNING fully for INSERT, UPDATE and DELETE statements
+    that are invoked with a single collection of bound parameters (that is, a `cursor.execute()`
+    style statement; SQLAlchemy does not generally support RETURNING with [executemany](../glossary.html#term-executemany)
+    statements). Multiple rows may be returned as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: the Oracle backend has full support for RETURNING on
+    parity with other backends.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ON UPDATE CASCADE
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Oracle doesn’t have native ON UPDATE CASCADE functionality. A trigger based
+    solution is available at [https://asktom.oracle.com/tkyte/update_cascade/index.html](https://asktom.oracle.com/tkyte/update_cascade/index.html)
+    .
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the SQLAlchemy ORM, the ORM has limited ability to manually issue
+    cascading updates - specify ForeignKey objects using the “deferrable=True, initially=’deferred’”
+    keyword arguments, and specify “passive_updates=False” on each relationship().
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle 8 Compatibility
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The status of Oracle 8 compatibility is not known for SQLAlchemy 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When Oracle 8 is detected, the dialect internally configures itself to the
+    following behaviors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: the use_ansi flag is set to False. This has the effect of converting all JOIN
+    phrases into the WHERE clause, and in the case of LEFT OUTER JOIN makes use of
+    Oracle’s (+) operator.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the NVARCHAR2 and NCLOB datatypes are no longer generated as DDL when the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") is used - VARCHAR2 and CLOB are issued instead. This
+    because these types don’t seem to work correctly on Oracle 8 even though they
+    are available. The [`NVARCHAR`](../core/type_basics.html#sqlalchemy.types.NVARCHAR
+    "sqlalchemy.types.NVARCHAR") and [`NCLOB`](#sqlalchemy.dialects.oracle.NCLOB "sqlalchemy.dialects.oracle.NCLOB")
+    types will always generate NVARCHAR2 and NCLOB.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Synonym/DBLINK Reflection
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'When using reflection with Table objects, the dialect can optionally search
+    for tables indicated by synonyms, either in local or remote schemas or accessed
+    over DBLINK, by passing the flag `oracle_resolve_synonyms=True` as a keyword argument
+    to the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: When this flag is set, the given name (such as `some_table` above) will be searched
+    not just in the `ALL_TABLES` view, but also within the `ALL_SYNONYMS` view to
+    see if this name is actually a synonym to another name. If the synonym is located
+    and refers to a DBLINK, the oracle dialect knows how to locate the table’s information
+    using DBLINK syntax(e.g. `@dblink`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`oracle_resolve_synonyms` is accepted wherever reflection arguments are accepted,
+    including methods such as [`MetaData.reflect()`](../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") and [`Inspector.get_columns()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_columns
+    "sqlalchemy.engine.reflection.Inspector.get_columns").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If synonyms are not in use, this flag should be left disabled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Constraint Reflection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Oracle dialect can return information about foreign key, unique, and CHECK
+    constraints, as well as indexes on tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Raw information regarding these constraints can be acquired using [`Inspector.get_foreign_keys()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_foreign_keys
+    "sqlalchemy.engine.reflection.Inspector.get_foreign_keys"), [`Inspector.get_unique_constraints()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_unique_constraints
+    "sqlalchemy.engine.reflection.Inspector.get_unique_constraints"), [`Inspector.get_check_constraints()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_check_constraints
+    "sqlalchemy.engine.reflection.Inspector.get_check_constraints"), and [`Inspector.get_indexes()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_indexes
+    "sqlalchemy.engine.reflection.Inspector.get_indexes").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.2: The Oracle dialect can now reflect UNIQUE and CHECK
+    constraints.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using reflection at the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") level, the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") will also include these constraints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note the following caveats:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using the [`Inspector.get_check_constraints()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_check_constraints
+    "sqlalchemy.engine.reflection.Inspector.get_check_constraints") method, Oracle
+    builds a special “IS NOT NULL” constraint for columns that specify “NOT NULL”.
+    This constraint is **not** returned by default; to include the “IS NOT NULL” constraints,
+    pass the flag `include_all=True`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: in most cases, when reflecting a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), a UNIQUE constraint will **not** be available as a
+    [`UniqueConstraint`](../core/constraints.html#sqlalchemy.schema.UniqueConstraint
+    "sqlalchemy.schema.UniqueConstraint") object, as Oracle mirrors unique constraints
+    with a UNIQUE index in most cases (the exception seems to be when two or more
+    unique constraints represent the same columns); the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") will instead represent these using [`Index`](../core/constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index") with the `unique=True` flag set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Oracle creates an implicit index for the primary key of a table; this index
+    is **excluded** from all index results.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the list of columns reflected for an index will not include column names that
+    start with SYS_NC.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Table names with SYSTEM/SYSAUX tablespaces
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Inspector.get_table_names()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_table_names
+    "sqlalchemy.engine.reflection.Inspector.get_table_names") and [`Inspector.get_temp_table_names()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_temp_table_names
+    "sqlalchemy.engine.reflection.Inspector.get_temp_table_names") methods each return
+    a list of table names for the current engine. These methods are also part of the
+    reflection which occurs within an operation such as [`MetaData.reflect()`](../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect"). By default, these operations exclude the
+    `SYSTEM` and `SYSAUX` tablespaces from the operation. In order to change this,
+    the default list of tablespaces excluded can be changed at the engine level using
+    the `exclude_tablespaces` parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: DateTime Compatibility
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Oracle has no datatype known as `DATETIME`, it instead has only `DATE`, which
+    can actually store a date and time value. For this reason, the Oracle dialect
+    provides a type [`DATE`](#sqlalchemy.dialects.oracle.DATE "sqlalchemy.dialects.oracle.DATE")
+    which is a subclass of [`DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime"). This type has no special behavior, and is only present
+    as a “marker” for this type; additionally, when a database column is reflected
+    and the type is reported as `DATE`, the time-supporting [`DATE`](#sqlalchemy.dialects.oracle.DATE
+    "sqlalchemy.dialects.oracle.DATE") type is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Oracle Table Options'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The CREATE TABLE phrase supports the following options with Oracle in conjunction
+    with the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`ON COMMIT`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`COMPRESS`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE13]  ## Oracle Specific Index Options'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Bitmap Indexes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You can specify the `oracle_bitmap` parameter to create a bitmap index instead
+    of a B-tree index:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Bitmap indexes cannot be unique and cannot be compressed. SQLAlchemy will not
+    check for such limitations, only the database will.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Index compression
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Oracle has a more efficient storage mode for indexes containing lots of repeated
+    values. Use the `oracle_compress` parameter to turn on key compression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `oracle_compress` parameter accepts either an integer specifying the number
+    of prefix columns to compress, or `True` to use the default (all columns for non-unique
+    indexes, all but the last column for unique indexes).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle Data Types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As with all SQLAlchemy dialects, all UPPERCASE types that are known to be valid
+    with Oracle are importable from the top level dialect, whether they originate
+    from [`sqlalchemy.types`](../core/type_basics.html#module-sqlalchemy.types "sqlalchemy.types")
+    or from the local dialect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.2.19: Added [`NCHAR`](../core/type_basics.html#sqlalchemy.types.NCHAR
+    "sqlalchemy.types.NCHAR") to the list of datatypes exported by the Oracle dialect.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Types which are specific to Oracle, or have Oracle-specific construction arguments,
+    are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BFILE](#sqlalchemy.dialects.oracle.BFILE) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BINARY_DOUBLE](#sqlalchemy.dialects.oracle.BINARY_DOUBLE) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BINARY_FLOAT](#sqlalchemy.dialects.oracle.BINARY_FLOAT) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DATE](#sqlalchemy.dialects.oracle.DATE) | Provide the oracle DATE type.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [FLOAT](#sqlalchemy.dialects.oracle.FLOAT) | Oracle FLOAT. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [INTERVAL](#sqlalchemy.dialects.oracle.INTERVAL) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [LONG](#sqlalchemy.dialects.oracle.LONG) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [NCLOB](#sqlalchemy.dialects.oracle.NCLOB) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [NUMBER](#sqlalchemy.dialects.oracle.NUMBER) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [NVARCHAR2](#sqlalchemy.dialects.oracle.NVARCHAR2) | alias of [`NVARCHAR`](../core/type_basics.html#sqlalchemy.types.NVARCHAR
+    "sqlalchemy.sql.sqltypes.NVARCHAR") |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [RAW](#sqlalchemy.dialects.oracle.RAW) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ROWID](#sqlalchemy.dialects.oracle.ROWID) | Oracle ROWID type. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [TIMESTAMP](#sqlalchemy.dialects.oracle.TIMESTAMP) | Oracle implementation
+    of `TIMESTAMP`, which supports additional Oracle-specific modes |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.BFILE.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.BFILE`](#sqlalchemy.dialects.oracle.BFILE
+    "sqlalchemy.dialects.oracle.BFILE") ([`sqlalchemy.types.LargeBinary`](../core/type_basics.html#sqlalchemy.types.LargeBinary
+    "sqlalchemy.types.LargeBinary"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.LargeBinary.__init__` *method of* [`LargeBinary`](../core/type_basics.html#sqlalchemy.types.LargeBinary
+    "sqlalchemy.types.LargeBinary")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Construct a LargeBinary type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**length** – optional, a length for the column for use in DDL statements, for
+    those binary types that accept a length, such as the MySQL BLOB type.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.BINARY_DOUBLE.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.BINARY_DOUBLE`](#sqlalchemy.dialects.oracle.BINARY_DOUBLE
+    "sqlalchemy.dialects.oracle.BINARY_DOUBLE") ([`sqlalchemy.types.Double`](../core/type_basics.html#sqlalchemy.types.Double
+    "sqlalchemy.types.Double"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.Float.__init__` *method of* [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Construct a Float.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`precision` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the numeric precision for use in DDL `CREATE TABLE`. Backends **should** attempt
+    to ensure this precision indicates a number of digits for the generic [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float") datatype.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For the Oracle backend, the [`Float.precision`](../core/type_basics.html#sqlalchemy.types.Float.params.precision
+    "sqlalchemy.types.Float") parameter is not accepted when rendering DDL, as Oracle
+    does not support float precision specified as a number of decimal places. Instead,
+    use the Oracle-specific [`FLOAT`](#sqlalchemy.dialects.oracle.FLOAT "sqlalchemy.dialects.oracle.FLOAT")
+    datatype and specify the [`FLOAT.binary_precision`](#sqlalchemy.dialects.oracle.FLOAT.params.binary_precision
+    "sqlalchemy.dialects.oracle.FLOAT") parameter. This is new in version 2.0 of SQLAlchemy.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'To create a database agnostic [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float") that separately specifies binary precision for Oracle,
+    use [`TypeEngine.with_variant()`](../core/type_api.html#sqlalchemy.types.TypeEngine.with_variant
+    "sqlalchemy.types.TypeEngine.with_variant") as follows:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`asdecimal` – the same flag as that of [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric"), but defaults to `False`. Note that setting this flag
+    to `True` results in floating point conversion.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`decimal_return_scale` – Default scale to use when converting from floats to
+    Python decimals. Floating point values will typically be much longer due to decimal
+    inaccuracy, and most floating point database types don’t have a notion of “scale”,
+    so by default the float type looks for the first ten decimal places when converting.
+    Specifying this value will override that length. Note that the MySQL float types,
+    which do include “scale”, will use “scale” as the default for decimal_return_scale,
+    if not otherwise specified.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.BINARY_FLOAT.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.BINARY_FLOAT`](#sqlalchemy.dialects.oracle.BINARY_FLOAT
+    "sqlalchemy.dialects.oracle.BINARY_FLOAT") ([`sqlalchemy.types.Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.Float.__init__` *method of* [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Construct a Float.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`precision` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the numeric precision for use in DDL `CREATE TABLE`. Backends **should** attempt
+    to ensure this precision indicates a number of digits for the generic [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float") datatype.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For the Oracle backend, the [`Float.precision`](../core/type_basics.html#sqlalchemy.types.Float.params.precision
+    "sqlalchemy.types.Float") parameter is not accepted when rendering DDL, as Oracle
+    does not support float precision specified as a number of decimal places. Instead,
+    use the Oracle-specific [`FLOAT`](#sqlalchemy.dialects.oracle.FLOAT "sqlalchemy.dialects.oracle.FLOAT")
+    datatype and specify the [`FLOAT.binary_precision`](#sqlalchemy.dialects.oracle.FLOAT.params.binary_precision
+    "sqlalchemy.dialects.oracle.FLOAT") parameter. This is new in version 2.0 of SQLAlchemy.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'To create a database agnostic [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float") that separately specifies binary precision for Oracle,
+    use [`TypeEngine.with_variant()`](../core/type_api.html#sqlalchemy.types.TypeEngine.with_variant
+    "sqlalchemy.types.TypeEngine.with_variant") as follows:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`asdecimal` – the same flag as that of [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric"), but defaults to `False`. Note that setting this flag
+    to `True` results in floating point conversion.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`decimal_return_scale` – Default scale to use when converting from floats to
+    Python decimals. Floating point values will typically be much longer due to decimal
+    inaccuracy, and most floating point database types don’t have a notion of “scale”,
+    so by default the float type looks for the first ten decimal places when converting.
+    Specifying this value will override that length. Note that the MySQL float types,
+    which do include “scale”, will use “scale” as the default for decimal_return_scale,
+    if not otherwise specified.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide the oracle DATE type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This type has no special Python behavior, except that it subclasses [`DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime"); this is to suit the fact that the Oracle `DATE`
+    type supports a time value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.DATE.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.DATE`](#sqlalchemy.dialects.oracle.DATE "sqlalchemy.dialects.oracle.DATE")
+    (`sqlalchemy.dialects.oracle.types._OracleDateLiteralRender`, [`sqlalchemy.types.DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.DateTime.__init__` *method of* [`DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Construct a new [`DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**timezone** – boolean. Indicates that the datetime type should enable timezone
+    support, if available on the **base date/time-holding type only**. It is recommended
+    to make use of the [`TIMESTAMP`](../core/type_basics.html#sqlalchemy.types.TIMESTAMP
+    "sqlalchemy.types.TIMESTAMP") datatype directly when using this flag, as some
+    databases include separate generic date/time-holding types distinct from the timezone-capable
+    TIMESTAMP datatype, such as Oracle.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Oracle FLOAT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the same as [`FLOAT`](../core/type_basics.html#sqlalchemy.types.FLOAT
+    "sqlalchemy.types.FLOAT") except that an Oracle-specific [`FLOAT.binary_precision`](#sqlalchemy.dialects.oracle.FLOAT.params.binary_precision
+    "sqlalchemy.dialects.oracle.FLOAT") parameter is accepted, and the [`Float.precision`](../core/type_basics.html#sqlalchemy.types.Float.params.precision
+    "sqlalchemy.types.Float") parameter is not accepted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle FLOAT types indicate precision in terms of “binary precision”, which
+    defaults to 126\. For a REAL type, the value is 63\. This parameter does not cleanly
+    map to a specific number of decimal places but is roughly equivalent to the desired
+    number of decimal places divided by 0.3103.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.FLOAT.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.FLOAT`](#sqlalchemy.dialects.oracle.FLOAT
+    "sqlalchemy.dialects.oracle.FLOAT") ([`sqlalchemy.types.FLOAT`](../core/type_basics.html#sqlalchemy.types.FLOAT
+    "sqlalchemy.types.FLOAT"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a FLOAT
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`binary_precision` – Oracle binary precision value to be rendered in DDL. This
+    may be approximated to the number of decimal characters using the formula “decimal
+    precision = 0.30103 * binary precision”. The default value used by Oracle for
+    FLOAT / DOUBLE PRECISION is 126.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`asdecimal` – See [`Float.asdecimal`](../core/type_basics.html#sqlalchemy.types.Float.params.asdecimal
+    "sqlalchemy.types.Float")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`decimal_return_scale` – See [`Float.decimal_return_scale`](../core/type_basics.html#sqlalchemy.types.Float.params.decimal_return_scale
+    "sqlalchemy.types.Float")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.INTERVAL.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.INTERVAL`](#sqlalchemy.dialects.oracle.INTERVAL
+    "sqlalchemy.dialects.oracle.INTERVAL") (`sqlalchemy.types.NativeForEmulated`,
+    `sqlalchemy.types._AbstractInterval`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct an INTERVAL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that only DAY TO SECOND intervals are currently supported. This is due
+    to a lack of support for YEAR TO MONTH intervals within available DBAPIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`day_precision` – the day precision value. this is the number of digits to
+    store for the day field. Defaults to “2”'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`second_precision` – the second precision value. this is the number of digits
+    to store for the fractional seconds field. Defaults to “6”.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.NCLOB.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.NCLOB`](#sqlalchemy.dialects.oracle.NCLOB
+    "sqlalchemy.dialects.oracle.NCLOB") ([`sqlalchemy.types.Text`](../core/type_basics.html#sqlalchemy.types.Text
+    "sqlalchemy.types.Text"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.String.__init__` *method of* [`String`](../core/type_basics.html#sqlalchemy.types.String
+    "sqlalchemy.types.String")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a string-holding type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`length` – optional, a length for the column for use in DDL and CAST expressions.
+    May be safely omitted if no `CREATE TABLE` will be issued. Certain databases may
+    require a `length` for use in DDL, and will raise an exception when the `CREATE
+    TABLE` DDL is issued if a `VARCHAR` with no length is included. Whether the value
+    is interpreted as bytes or characters is database specific.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`collation` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Optional, a column-level collation for use in DDL and CAST expressions. Renders
+    using the COLLATE keyword supported by SQLite, MySQL, and PostgreSQL. E.g.:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In most cases, the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") or [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes should be used for a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") that expects to store non-ascii data. These datatypes
+    will ensure that the correct types are used on the database.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: alias of [`NVARCHAR`](../core/type_basics.html#sqlalchemy.types.NVARCHAR "sqlalchemy.sql.sqltypes.NVARCHAR")
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.NUMBER`](#sqlalchemy.dialects.oracle.NUMBER
+    "sqlalchemy.dialects.oracle.NUMBER") ([`sqlalchemy.types.Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric"), [`sqlalchemy.types.Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.LONG.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.LONG`](#sqlalchemy.dialects.oracle.LONG "sqlalchemy.dialects.oracle.LONG")
+    ([`sqlalchemy.types.Text`](../core/type_basics.html#sqlalchemy.types.Text "sqlalchemy.types.Text"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.String.__init__` *method of* [`String`](../core/type_basics.html#sqlalchemy.types.String
+    "sqlalchemy.types.String")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a string-holding type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`length` – optional, a length for the column for use in DDL and CAST expressions.
+    May be safely omitted if no `CREATE TABLE` will be issued. Certain databases may
+    require a `length` for use in DDL, and will raise an exception when the `CREATE
+    TABLE` DDL is issued if a `VARCHAR` with no length is included. Whether the value
+    is interpreted as bytes or characters is database specific.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`collation` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Optional, a column-level collation for use in DDL and CAST expressions. Renders
+    using the COLLATE keyword supported by SQLite, MySQL, and PostgreSQL. E.g.:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In most cases, the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") or [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes should be used for a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") that expects to store non-ascii data. These datatypes
+    will ensure that the correct types are used on the database.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.RAW`](#sqlalchemy.dialects.oracle.RAW "sqlalchemy.dialects.oracle.RAW")
+    (`sqlalchemy.types._Binary`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Oracle ROWID type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When used in a cast() or similar, generates ROWID.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.ROWID`](#sqlalchemy.dialects.oracle.ROWID
+    "sqlalchemy.dialects.oracle.ROWID") ([`sqlalchemy.types.TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Oracle implementation of `TIMESTAMP`, which supports additional Oracle-specific
+    modes
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.TIMESTAMP.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.TIMESTAMP`](#sqlalchemy.dialects.oracle.TIMESTAMP
+    "sqlalchemy.dialects.oracle.TIMESTAMP") ([`sqlalchemy.types.TIMESTAMP`](../core/type_basics.html#sqlalchemy.types.TIMESTAMP
+    "sqlalchemy.types.TIMESTAMP"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a new [`TIMESTAMP`](#sqlalchemy.dialects.oracle.TIMESTAMP "sqlalchemy.dialects.oracle.TIMESTAMP").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`timezone` – boolean. Indicates that the TIMESTAMP type should use Oracle’s
+    `TIMESTAMP WITH TIME ZONE` datatype.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`local_timezone` – boolean. Indicates that the TIMESTAMP type should use Oracle’s
+    `TIMESTAMP WITH LOCAL TIME ZONE` datatype.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## cx_Oracle'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Support for the Oracle database via the cx-Oracle driver.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DBAPI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Documentation and download information (if applicable) for cx-Oracle is available
+    at: [https://oracle.github.io/python-cx_Oracle/](https://oracle.github.io/python-cx_Oracle/)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Connect String:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: DSN vs. Hostname connections
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: cx_Oracle provides several methods of indicating the target database. The dialect
+    translates from a series of different URL forms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hostname Connections with Easy Connect Syntax
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Given a hostname, port and service name of the target Oracle Database, for
+    example from Oracle’s [Easy Connect syntax](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#easy-connect-syntax-for-connection-strings),
+    then connect in SQLAlchemy using the `service_name` query string parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [full Easy Connect syntax](https://www.oracle.com/pls/topic/lookup?ctx=dblatest&id=GUID-B0437826-43C1-49EC-A94D-B650B6A4A6EE)
+    is not supported. Instead, use a `tnsnames.ora` file and connect using a DSN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connections with tnsnames.ora or Oracle Cloud
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Alternatively, if no port, database name, or `service_name` is provided, the
+    dialect will use an Oracle DSN “connection string”. This takes the “hostname”
+    portion of the URL as the data source name. For example, if the `tnsnames.ora`
+    file contains a [Net Service Name](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#net-service-names-for-connection-strings)
+    of `myalias` as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cx_Oracle dialect connects to this database service when `myalias` is the
+    hostname portion of the URL, without specifying a port, database name or `service_name`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Users of Oracle Cloud should use this syntax and also configure the cloud wallet
+    as shown in cx_Oracle documentation [Connecting to Autononmous Databases](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#connecting-to-autononmous-databases).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SID Connections
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'To use Oracle’s obsolete SID connection syntax, the SID can be passed in a
+    “database name” portion of the URL as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the DSN passed to cx_Oracle is created by `cx_Oracle.makedsn()` as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Passing cx_Oracle connect arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Additional connection arguments can usually be passed via the URL query string;
+    particular symbols like `cx_Oracle.SYSDBA` are intercepted and converted to the
+    correct symbol:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.3: the cx_oracle dialect now accepts all argument names
+    within the URL string itself, to be passed to the cx_Oracle DBAPI. As was the
+    case earlier but not correctly documented, the [`create_engine.connect_args`](../core/engines.html#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") parameter also accepts all cx_Oracle DBAPI connect
+    arguments.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To pass arguments directly to `.connect()` without using the query string,
+    use the [`create_engine.connect_args`](../core/engines.html#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") dictionary. Any cx_Oracle parameter value and/or constant
+    may be passed, such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the default value for `encoding` and `nencoding` was changed to “UTF-8”
+    in cx_Oracle 8.0 so these parameters can be omitted when using that version, or
+    later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Options consumed by the SQLAlchemy cx_Oracle dialect outside of the driver
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'There are also options that are consumed by the SQLAlchemy cx_oracle dialect
+    itself. These options are always passed directly to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") , such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The parameters accepted by the cx_oracle dialect are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`arraysize` - set the cx_oracle.arraysize value on cursors; defaults to `None`,
+    indicating that the driver default should be used (typically the value is 100).
+    This setting controls how many rows are buffered when fetching rows, and can have
+    a significant effect on performance when modified. The setting is used for both
+    `cx_Oracle` as well as `oracledb`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0.26: - changed the default value from 50 to None, to
+    use the default value of the driver itself.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`auto_convert_lobs` - defaults to True; See [LOB Datatypes](#cx-oracle-lob).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`coerce_to_decimal` - see [Precision Numerics](#cx-oracle-numeric) for detail.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`encoding_errors` - see [Encoding Errors](#cx-oracle-unicode-encoding-errors)
+    for detail.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '### Using cx_Oracle SessionPool'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cx_Oracle library provides its own connection pool implementation that
+    may be used in place of SQLAlchemy’s pooling functionality. This can be achieved
+    by using the [`create_engine.creator`](../core/engines.html#sqlalchemy.create_engine.params.creator
+    "sqlalchemy.create_engine") parameter to provide a function that returns a new
+    connection, along with setting [`create_engine.pool_class`](../core/engines.html#sqlalchemy.create_engine.params.pool_class
+    "sqlalchemy.create_engine") to `NullPool` to disable SQLAlchemy’s pooling:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above engine may then be used normally where cx_Oracle’s pool handles connection
+    pooling:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: As well as providing a scalable solution for multi-user applications, the cx_Oracle
+    session pool supports some Oracle features such as DRCP and [Application Continuity](https://cx-oracle.readthedocs.io/en/latest/user_guide/ha.html#application-continuity-ac).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Oracle Database Resident Connection Pooling (DRCP)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When using Oracle’s [DRCP](https://www.oracle.com/pls/topic/lookup?ctx=dblatest&id=GUID-015CA8C1-2386-4626-855D-CC546DDC1086),
+    the best practice is to pass a connection class and “purity” when acquiring a
+    connection from the SessionPool. Refer to the [cx_Oracle DRCP documentation](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#database-resident-connection-pooling-drcp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This can be achieved by wrapping `pool.acquire()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above engine may then be used normally where cx_Oracle handles session
+    pooling and Oracle Database additionally uses DRCP:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Unicode'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case for all DBAPIs under Python 3, all strings are inherently Unicode
+    strings. In all cases however, the driver requires an explicit encoding configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ensuring the Correct Client Encoding
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The long accepted standard for establishing client encoding for nearly all Oracle
+    related software is via the [NLS_LANG](https://www.oracle.com/database/technologies/faq-nls-lang.html)
+    environment variable. cx_Oracle like most other Oracle drivers will use this environment
+    variable as the source of its encoding configuration. The format of this variable
+    is idiosyncratic; a typical value would be `AMERICAN_AMERICA.AL32UTF8`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cx_Oracle driver also supports a programmatic alternative which is to pass
+    the `encoding` and `nencoding` parameters directly to its `.connect()` function.
+    These can be present in the URL as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: For the meaning of the `encoding` and `nencoding` parameters, please consult
+    [Characters Sets and National Language Support (NLS)](https://cx-oracle.readthedocs.io/en/latest/user_guide/globalization.html#globalization).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Characters Sets and National Language Support (NLS)](https://cx-oracle.readthedocs.io/en/latest/user_guide/globalization.html#globalization)
+    - in the cx_Oracle documentation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unicode-specific Column datatypes
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The Core expression language handles unicode data by use of the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") and [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes. These types correspond to the VARCHAR2
+    and CLOB Oracle datatypes by default. When using these datatypes with Unicode
+    data, it is expected that the Oracle database is configured with a Unicode-aware
+    character set, as well as that the `NLS_LANG` environment variable is set appropriately,
+    so that the VARCHAR2 and CLOB datatypes can accommodate the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the case that the Oracle database is not configured with a Unicode character
+    set, the two options are to use the [`NCHAR`](../core/type_basics.html#sqlalchemy.types.NCHAR
+    "sqlalchemy.types.NCHAR") and [`NCLOB`](#sqlalchemy.dialects.oracle.NCLOB "sqlalchemy.dialects.oracle.NCLOB")
+    datatypes explicitly, or to pass the flag `use_nchar_for_unicode=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), which will cause the SQLAlchemy dialect to use NCHAR/NCLOB
+    for the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode "sqlalchemy.types.Unicode")
+    / [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText "sqlalchemy.types.UnicodeText")
+    datatypes instead of VARCHAR/CLOB.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3: The [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") and [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes now correspond to the `VARCHAR2` and
+    `CLOB` Oracle datatypes unless the `use_nchar_for_unicode=True` is passed to the
+    dialect when [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") is called.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Encoding Errors'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the unusual case that data in the Oracle database is present with a broken
+    encoding, the dialect accepts a parameter `encoding_errors` which will be passed
+    to Unicode decoding functions in order to affect how decoding errors are handled.
+    The value is ultimately consumed by the Python [decode](https://docs.python.org/3/library/stdtypes.html#bytes.decode)
+    function, and is passed both via cx_Oracle’s `encodingErrors` parameter consumed
+    by `Cursor.var()`, as well as SQLAlchemy’s own decoding function, as the cx_Oracle
+    dialect makes use of both under different circumstances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3.11.  ### Fine grained control over cx_Oracle data binding
+    performance with setinputsizes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cx_Oracle DBAPI has a deep and fundamental reliance upon the usage of the
+    DBAPI `setinputsizes()` call. The purpose of this call is to establish the datatypes
+    that are bound to a SQL statement for Python values being passed as parameters.
+    While virtually no other DBAPI assigns any use to the `setinputsizes()` call,
+    the cx_Oracle DBAPI relies upon it heavily in its interactions with the Oracle
+    client interface, and in some scenarios it is not possible for SQLAlchemy to know
+    exactly how data should be bound, as some settings can cause profoundly different
+    performance characteristics, while altering the type coercion behavior at the
+    same time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Users of the cx_Oracle dialect are **strongly encouraged** to read through cx_Oracle’s
+    list of built-in datatype symbols at [https://cx-oracle.readthedocs.io/en/latest/api_manual/module.html#database-types](https://cx-oracle.readthedocs.io/en/latest/api_manual/module.html#database-types).
+    Note that in some cases, significant performance degradation can occur when using
+    these types vs. not, in particular when specifying `cx_Oracle.CLOB`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the SQLAlchemy side, the [`DialectEvents.do_setinputsizes()`](../core/events.html#sqlalchemy.events.DialectEvents.do_setinputsizes
+    "sqlalchemy.events.DialectEvents.do_setinputsizes") event can be used both for
+    runtime visibility (e.g. logging) of the setinputsizes step as well as to fully
+    control how `setinputsizes()` is used on a per-statement basis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.2.9: Added `DialectEvents.setinputsizes()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Example 1 - logging all setinputsizes calls
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The following example illustrates how to log the intermediary values from a
+    SQLAlchemy perspective before they are converted to the raw `setinputsizes()`
+    parameter dictionary. The keys of the dictionary are [`BindParameter`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") objects which have a `.key` and a `.type`
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: Example 2 - remove all bindings to CLOB
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The `CLOB` datatype in cx_Oracle incurs a significant performance overhead,
+    however is set by default for the `Text` type within the SQLAlchemy 1.2 series.
+    This setting can be modified as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]  ### RETURNING Support'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cx_Oracle dialect implements RETURNING using OUT parameters. The dialect
+    supports RETURNING fully.  ### LOB Datatypes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: LOB datatypes refer to the “large object” datatypes such as CLOB, NCLOB and
+    BLOB. Modern versions of cx_Oracle and oracledb are optimized for these datatypes
+    to be delivered as a single buffer. As such, SQLAlchemy makes use of these newer
+    type handlers by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To disable the use of newer type handlers and deliver LOB objects as classic
+    buffered objects with a `read()` method, the parameter `auto_convert_lobs=False`
+    may be passed to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), which takes place only engine-wide.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two Phase Transactions Not Supported
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Two phase transactions are **not supported** under cx_Oracle due to poor driver
+    support. As of cx_Oracle 6.0b1, the interface for two phase transactions has been
+    changed to be more of a direct pass-through to the underlying OCI layer with less
+    automation. The additional logic to support this system is not implemented in
+    SQLAlchemy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Precision Numerics'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy’s numeric types can handle receiving and returning values as Python
+    `Decimal` objects or float objects. When a [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric") object, or a subclass such as [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float"), `DOUBLE_PRECISION` etc. is in use, the [`Numeric.asdecimal`](../core/type_basics.html#sqlalchemy.types.Numeric.params.asdecimal
+    "sqlalchemy.types.Numeric") flag determines if values should be coerced to `Decimal`
+    upon return, or returned as float objects. To make matters more complicated under
+    Oracle, Oracle’s `NUMBER` type can also represent integer values if the “scale”
+    is zero, so the Oracle-specific [`NUMBER`](#sqlalchemy.dialects.oracle.NUMBER
+    "sqlalchemy.dialects.oracle.NUMBER") type takes this into account as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cx_Oracle dialect makes extensive use of connection- and cursor-level “outputtypehandler”
+    callables in order to coerce numeric values as requested. These callables are
+    specific to the specific flavor of [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric") in use, as well as if no SQLAlchemy typing objects
+    are present. There are observed scenarios where Oracle may sends incomplete or
+    ambiguous information about the numeric types being returned, such as a query
+    where the numeric types are buried under multiple levels of subquery. The type
+    handlers do their best to make the right decision in all cases, deferring to the
+    underlying cx_Oracle DBAPI for all those cases where the driver can make the best
+    decision.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When no typing objects are present, as when executing plain SQL strings, a
+    default “outputtypehandler” is present which will generally return numeric values
+    which specify precision and scale as Python `Decimal` objects. To disable this
+    coercion to decimal for performance reasons, pass the flag `coerce_to_decimal=False`
+    to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine "sqlalchemy.create_engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `coerce_to_decimal` flag only impacts the results of plain string SQL statements
+    that are not otherwise associated with a [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric") SQLAlchemy type (or a subclass of such).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.2: The numeric handling system for cx_Oracle has been
+    reworked to take advantage of newer cx_Oracle features as well as better integration
+    of outputtypehandlers.  ## python-oracledb'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Support for the Oracle database via the python-oracledb driver.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DBAPI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Documentation and download information (if applicable) for python-oracledb
+    is available at: [https://oracle.github.io/python-oracledb/](https://oracle.github.io/python-oracledb/)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Connect String:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: python-oracledb is released by Oracle to supersede the cx_Oracle driver. It
+    is fully compatible with cx_Oracle and features both a “thin” client mode that
+    requires no dependencies, as well as a “thick” mode that uses the Oracle Client
+    Interface in the same way as cx_Oracle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cx_Oracle](#cx-oracle) - all of cx_Oracle’s notes apply to the oracledb driver
+    as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The SQLAlchemy `oracledb` dialect provides both a sync and an async implementation
+    under the same dialect name. The proper version is selected depending on how the
+    engine is created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'calling [`create_engine()`](../core/engines.html#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    with `oracle+oracledb://...` will automatically select the sync version, e.g.:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'calling [`create_async_engine()`](../orm/extensions/asyncio.html#sqlalchemy.ext.asyncio.create_async_engine
+    "sqlalchemy.ext.asyncio.create_async_engine") with `oracle+oracledb://...` will
+    automatically select the async version, e.g.:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The asyncio version of the dialect may also be specified explicitly using the
+    `oracledb_async` suffix, as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 2.0.25: added support for the async version of oracledb.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Thick mode support
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: By default the `python-oracledb` is started in thin mode, that does not require
+    oracle client libraries to be installed in the system. The `python-oracledb` driver
+    also support a “thick” mode, that behaves similarly to `cx_oracle` and requires
+    that Oracle Client Interface (OCI) is installed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable this mode, the user may call `oracledb.init_oracle_client` manually,
+    or by passing the parameter `thick_mode=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"). To pass custom arguments to `init_oracle_client`,
+    like the `lib_dir` path, a dict may be passed to this parameter, as in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://python-oracledb.readthedocs.io/en/latest/api_manual/module.html#oracledb.init_oracle_client](https://python-oracledb.readthedocs.io/en/latest/api_manual/module.html#oracledb.init_oracle_client)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0.0: added support for oracledb driver.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Support for the Oracle database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following table summarizes current support levels for database release versions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Supported Oracle versions**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Support type | Versions |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Fully tested in CI](index.html#term-Fully-tested-in-CI) | 18c |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Normal support](index.html#term-Normal-support) | 11+ |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Best effort](index.html#term-Best-effort) | 9+ |'
+  prefs: []
+  type: TYPE_TB
+- en: DBAPI Support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The following dialect/DBAPI options are available. Please refer to individual
+    DBAPI sections for connect information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cx-Oracle](#module-sqlalchemy.dialects.oracle.cx_oracle)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[python-oracledb](#module-sqlalchemy.dialects.oracle.oracledb)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Auto Increment Behavior
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLAlchemy Table objects which include integer primary keys are usually assumed
+    to have “autoincrementing” behavior, meaning they can generate their own primary
+    key values upon INSERT. For use within Oracle, two options are available, which
+    are the use of IDENTITY columns (Oracle 12 and above only) or the association
+    of a SEQUENCE with the column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifying GENERATED AS IDENTITY (Oracle 12 and above)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Starting from version 12 Oracle can make use of identity columns using the
+    `Identity` to specify the autoincrementing behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The CREATE TABLE for the above [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object would be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Identity`](../core/defaults.html#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    object support many options to control the “autoincrementing” behavior of the
+    column, like the starting value, the incrementing value, etc. In addition to the
+    standard options, Oracle supports setting [`Identity.always`](../core/defaults.html#sqlalchemy.schema.Identity.params.always
+    "sqlalchemy.schema.Identity") to `None` to use the default generated mode, rendering
+    GENERATED AS IDENTITY in the DDL. It also supports setting [`Identity.on_null`](../core/defaults.html#sqlalchemy.schema.Identity.params.on_null
+    "sqlalchemy.schema.Identity") to `True` to specify ON NULL in conjunction with
+    a ‘BY DEFAULT’ identity column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a SEQUENCE (all Oracle versions)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Older version of Oracle had no “autoincrement” feature, SQLAlchemy relies upon
+    sequences to produce these values. With the older Oracle versions, *a sequence
+    must always be explicitly specified to enable autoincrement*. This is divergent
+    with the majority of documentation examples which assume the usage of an autoincrement-capable
+    database. To specify sequences, use the sqlalchemy.schema.Sequence object which
+    is passed to a Column construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This step is also required when using table reflection, i.e. autoload_with=engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.4: Added [`Identity`](../core/defaults.html#sqlalchemy.schema.Identity
+    "sqlalchemy.schema.Identity") construct in a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") to specify the option of an autoincrementing column.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifying GENERATED AS IDENTITY (Oracle 12 and above)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Starting from version 12 Oracle can make use of identity columns using the
+    `Identity` to specify the autoincrementing behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The CREATE TABLE for the above [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object would be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Identity`](../core/defaults.html#sqlalchemy.schema.Identity "sqlalchemy.schema.Identity")
+    object support many options to control the “autoincrementing” behavior of the
+    column, like the starting value, the incrementing value, etc. In addition to the
+    standard options, Oracle supports setting [`Identity.always`](../core/defaults.html#sqlalchemy.schema.Identity.params.always
+    "sqlalchemy.schema.Identity") to `None` to use the default generated mode, rendering
+    GENERATED AS IDENTITY in the DDL. It also supports setting [`Identity.on_null`](../core/defaults.html#sqlalchemy.schema.Identity.params.on_null
+    "sqlalchemy.schema.Identity") to `True` to specify ON NULL in conjunction with
+    a ‘BY DEFAULT’ identity column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a SEQUENCE (all Oracle versions)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Older version of Oracle had no “autoincrement” feature, SQLAlchemy relies upon
+    sequences to produce these values. With the older Oracle versions, *a sequence
+    must always be explicitly specified to enable autoincrement*. This is divergent
+    with the majority of documentation examples which assume the usage of an autoincrement-capable
+    database. To specify sequences, use the sqlalchemy.schema.Sequence object which
+    is passed to a Column construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This step is also required when using table reflection, i.e. autoload_with=engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.4: Added [`Identity`](../core/defaults.html#sqlalchemy.schema.Identity
+    "sqlalchemy.schema.Identity") construct in a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") to specify the option of an autoincrementing column.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Transaction Isolation Level / Autocommit'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Oracle database supports “READ COMMITTED” and “SERIALIZABLE” modes of isolation.
+    The AUTOCOMMIT isolation level is also supported by the cx_Oracle dialect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set using per-connection execution options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: For `READ COMMITTED` and `SERIALIZABLE`, the Oracle dialect sets the level at
+    the session level using `ALTER SESSION`, which is reverted back to its default
+    setting when the connection is returned to the connection pool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Valid values for `isolation_level` include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`READ COMMITTED`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`AUTOCOMMIT`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`SERIALIZABLE`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The implementation for the [`Connection.get_isolation_level()`](../core/connections.html#sqlalchemy.engine.Connection.get_isolation_level
+    "sqlalchemy.engine.Connection.get_isolation_level") method as implemented by the
+    Oracle dialect necessarily forces the start of a transaction using the Oracle
+    LOCAL_TRANSACTION_ID function; otherwise no level is normally readable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additionally, the [`Connection.get_isolation_level()`](../core/connections.html#sqlalchemy.engine.Connection.get_isolation_level
+    "sqlalchemy.engine.Connection.get_isolation_level") method will raise an exception
+    if the `v$transaction` view is not available due to permissions or other reasons,
+    which is a common occurrence in Oracle installations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cx_Oracle dialect attempts to call the [`Connection.get_isolation_level()`](../core/connections.html#sqlalchemy.engine.Connection.get_isolation_level
+    "sqlalchemy.engine.Connection.get_isolation_level") method when the dialect makes
+    its first connection to the database in order to acquire the “default”isolation
+    level. This default level is necessary so that the level can be reset on a connection
+    after it has been temporarily modified using [`Connection.execution_options()`](../core/connections.html#sqlalchemy.engine.Connection.execution_options
+    "sqlalchemy.engine.Connection.execution_options") method. In the common event
+    that the [`Connection.get_isolation_level()`](../core/connections.html#sqlalchemy.engine.Connection.get_isolation_level
+    "sqlalchemy.engine.Connection.get_isolation_level") method raises an exception
+    due to `v$transaction` not being readable as well as any other database-related
+    failure, the level is assumed to be “READ COMMITTED”. No warning is emitted for
+    this initial first-connect condition as it is expected to be a common restriction
+    on Oracle databases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3.16: added support for AUTOCOMMIT to the cx_oracle dialect
+    as well as the notion of a default isolation level'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3.21: Added support for SERIALIZABLE as well as live reading
+    of the isolation level.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3.22: In the event that the default isolation level cannot
+    be read due to permissions on the v$transaction view as is common in Oracle installations,
+    the default isolation level is hardcoded to “READ COMMITTED” which was the behavior
+    prior to 1.3.21.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Setting Transaction Isolation Levels including DBAPI Autocommit](../core/connections.html#dbapi-autocommit)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Identifier Casing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In Oracle, the data dictionary represents all case insensitive identifier names
+    using UPPERCASE text. SQLAlchemy on the other hand considers an all-lower case
+    identifier name to be case insensitive. The Oracle dialect converts all case insensitive
+    identifiers to and from those two formats during schema level communication, such
+    as reflection of tables and indexes. Using an UPPERCASE name on the SQLAlchemy
+    side indicates a case sensitive identifier, and SQLAlchemy will quote the name
+    - this will cause mismatches against data dictionary data received from Oracle,
+    so unless identifier names have been truly created as case sensitive (i.e. using
+    quoted names), all lowercase names should be used on the SQLAlchemy side.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Max Identifier Lengths'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle has changed the default max identifier length as of Oracle Server version
+    12.2\. Prior to this version, the length was 30, and for 12.2 and greater it is
+    now 128\. This change impacts SQLAlchemy in the area of generated SQL label names
+    as well as the generation of constraint names, particularly in the case where
+    the constraint naming convention feature described at [Configuring Constraint
+    Naming Conventions](../core/constraints.html#constraint-naming-conventions) is
+    being used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To assist with this change and others, Oracle includes the concept of a “compatibility”
+    version, which is a version number that is independent of the actual server version
+    in order to assist with migration of Oracle databases, and may be configured within
+    the Oracle server itself. This compatibility version is retrieved using the query
+    `SELECT value FROM v$parameter WHERE name = 'compatible';`. The SQLAlchemy Oracle
+    dialect, when tasked with determining the default max identifier length, will
+    attempt to use this query upon first connect in order to determine the effective
+    compatibility version of the server, which determines what the maximum allowed
+    identifier length is for the server. If the table is not available, the server
+    version information is used instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As of SQLAlchemy 1.4, the default max identifier length for the Oracle dialect
+    is 128 characters. Upon first connect, the compatibility version is detected and
+    if it is less than Oracle version 12.2, the max identifier length is changed to
+    be 30 characters. In all cases, setting the [`create_engine.max_identifier_length`](../core/engines.html#sqlalchemy.create_engine.params.max_identifier_length
+    "sqlalchemy.create_engine") parameter will bypass this change and the value given
+    will be used as is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The maximum identifier length comes into play both when generating anonymized
+    SQL labels in SELECT statements, but more crucially when generating constraint
+    names from a naming convention. It is this area that has created the need for
+    SQLAlchemy to change this default conservatively. For example, the following naming
+    convention produces two very different constraint names based on the identifier
+    length:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With an identifier length of 30, the above CREATE INDEX looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However with length=128, it becomes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: Applications which have run versions of SQLAlchemy prior to 1.4 on an Oracle
+    server version 12.2 or greater are therefore subject to the scenario of a database
+    migration that wishes to “DROP CONSTRAINT” on a name that was previously generated
+    with the shorter length. This migration will fail when the identifier length is
+    changed without the name of the index or constraint first being adjusted. Such
+    applications are strongly advised to make use of [`create_engine.max_identifier_length`](../core/engines.html#sqlalchemy.create_engine.params.max_identifier_length
+    "sqlalchemy.create_engine") in order to maintain control of the generation of
+    truncated names, and to fully review and test all database migrations in a staging
+    environment when changing this value to ensure that the impact of this change
+    has been mitigated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: the default max_identifier_length for Oracle is 128
+    characters, which is adjusted down to 30 upon first connect if an older version
+    of Oracle server (compatibility version < 12.2) is detected.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: LIMIT/OFFSET/FETCH Support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Methods like [`Select.limit()`](../core/selectable.html#sqlalchemy.sql.expression.Select.limit
+    "sqlalchemy.sql.expression.Select.limit") and [`Select.offset()`](../core/selectable.html#sqlalchemy.sql.expression.Select.offset
+    "sqlalchemy.sql.expression.Select.offset") make use of `FETCH FIRST N ROW / OFFSET
+    N ROWS` syntax assuming Oracle 12c or above, and assuming the SELECT statement
+    is not embedded within a compound statement like UNION. This syntax is also available
+    directly by using the [`Select.fetch()`](../core/selectable.html#sqlalchemy.sql.expression.Select.fetch
+    "sqlalchemy.sql.expression.Select.fetch") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: the Oracle dialect now uses `FETCH FIRST N ROW / OFFSET
+    N ROWS` for all [`Select.limit()`](../core/selectable.html#sqlalchemy.sql.expression.Select.limit
+    "sqlalchemy.sql.expression.Select.limit") and [`Select.offset()`](../core/selectable.html#sqlalchemy.sql.expression.Select.offset
+    "sqlalchemy.sql.expression.Select.offset") usage including within the ORM and
+    legacy [`Query`](../orm/queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query").
+    To force the legacy behavior using window functions, specify the `enable_offset_fetch=False`
+    dialect parameter to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The use of `FETCH FIRST / OFFSET` may be disabled on any Oracle version by passing
+    `enable_offset_fetch=False` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), which will force the use of “legacy” mode that makes
+    use of window functions. This mode is also selected automatically when using a
+    version of Oracle prior to 12c.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using legacy mode, or when a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") statement with limit/offset is embedded in
+    a compound statement, an emulated approach for LIMIT / OFFSET based on window
+    functions is used, which involves creation of a subquery using `ROW_NUMBER` that
+    is prone to performance issues as well as SQL construction issues for complex
+    statements. However, this approach is supported by all Oracle versions. See notes
+    below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notes on LIMIT / OFFSET emulation (when fetch() method cannot be used)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If using [`Select.limit()`](../core/selectable.html#sqlalchemy.sql.expression.Select.limit
+    "sqlalchemy.sql.expression.Select.limit") and [`Select.offset()`](../core/selectable.html#sqlalchemy.sql.expression.Select.offset
+    "sqlalchemy.sql.expression.Select.offset"), or with the ORM the [`Query.limit()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.limit
+    "sqlalchemy.orm.Query.limit") and [`Query.offset()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.offset
+    "sqlalchemy.orm.Query.offset") methods on an Oracle version prior to 12c, the
+    following notes apply:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy currently makes use of ROWNUM to achieve LIMIT/OFFSET; the exact
+    methodology is taken from [https://blogs.oracle.com/oraclemagazine/on-rownum-and-limiting-results](https://blogs.oracle.com/oraclemagazine/on-rownum-and-limiting-results)
+    .
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “FIRST_ROWS()” optimization keyword is not used by default. To enable the
+    usage of this optimization directive, specify `optimize_limits=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: The Oracle dialect renders limit/offset integer values
+    using a “post compile” scheme which renders the integer directly before passing
+    the statement to the cursor for execution. The `use_binds_for_limits` flag no
+    longer has an effect.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[New “post compile” bound parameters used for LIMIT/OFFSET in Oracle, SQL Server](../changelog/migration_14.html#change-4808).'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Notes on LIMIT / OFFSET emulation (when fetch() method cannot be used)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If using [`Select.limit()`](../core/selectable.html#sqlalchemy.sql.expression.Select.limit
+    "sqlalchemy.sql.expression.Select.limit") and [`Select.offset()`](../core/selectable.html#sqlalchemy.sql.expression.Select.offset
+    "sqlalchemy.sql.expression.Select.offset"), or with the ORM the [`Query.limit()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.limit
+    "sqlalchemy.orm.Query.limit") and [`Query.offset()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.offset
+    "sqlalchemy.orm.Query.offset") methods on an Oracle version prior to 12c, the
+    following notes apply:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy currently makes use of ROWNUM to achieve LIMIT/OFFSET; the exact
+    methodology is taken from [https://blogs.oracle.com/oraclemagazine/on-rownum-and-limiting-results](https://blogs.oracle.com/oraclemagazine/on-rownum-and-limiting-results)
+    .
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the “FIRST_ROWS()” optimization keyword is not used by default. To enable the
+    usage of this optimization directive, specify `optimize_limits=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: The Oracle dialect renders limit/offset integer values
+    using a “post compile” scheme which renders the integer directly before passing
+    the statement to the cursor for execution. The `use_binds_for_limits` flag no
+    longer has an effect.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[New “post compile” bound parameters used for LIMIT/OFFSET in Oracle, SQL Server](../changelog/migration_14.html#change-4808).'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '## RETURNING Support'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Oracle database supports RETURNING fully for INSERT, UPDATE and DELETE statements
+    that are invoked with a single collection of bound parameters (that is, a `cursor.execute()`
+    style statement; SQLAlchemy does not generally support RETURNING with [executemany](../glossary.html#term-executemany)
+    statements). Multiple rows may be returned as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: the Oracle backend has full support for RETURNING on
+    parity with other backends.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ON UPDATE CASCADE
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Oracle doesn’t have native ON UPDATE CASCADE functionality. A trigger based
+    solution is available at [https://asktom.oracle.com/tkyte/update_cascade/index.html](https://asktom.oracle.com/tkyte/update_cascade/index.html)
+    .
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the SQLAlchemy ORM, the ORM has limited ability to manually issue
+    cascading updates - specify ForeignKey objects using the “deferrable=True, initially=’deferred’”
+    keyword arguments, and specify “passive_updates=False” on each relationship().
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle 8 Compatibility
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The status of Oracle 8 compatibility is not known for SQLAlchemy 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When Oracle 8 is detected, the dialect internally configures itself to the
+    following behaviors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: the use_ansi flag is set to False. This has the effect of converting all JOIN
+    phrases into the WHERE clause, and in the case of LEFT OUTER JOIN makes use of
+    Oracle’s (+) operator.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the NVARCHAR2 and NCLOB datatypes are no longer generated as DDL when the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") is used - VARCHAR2 and CLOB are issued instead. This
+    because these types don’t seem to work correctly on Oracle 8 even though they
+    are available. The [`NVARCHAR`](../core/type_basics.html#sqlalchemy.types.NVARCHAR
+    "sqlalchemy.types.NVARCHAR") and [`NCLOB`](#sqlalchemy.dialects.oracle.NCLOB "sqlalchemy.dialects.oracle.NCLOB")
+    types will always generate NVARCHAR2 and NCLOB.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Synonym/DBLINK Reflection
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'When using reflection with Table objects, the dialect can optionally search
+    for tables indicated by synonyms, either in local or remote schemas or accessed
+    over DBLINK, by passing the flag `oracle_resolve_synonyms=True` as a keyword argument
+    to the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: When this flag is set, the given name (such as `some_table` above) will be searched
+    not just in the `ALL_TABLES` view, but also within the `ALL_SYNONYMS` view to
+    see if this name is actually a synonym to another name. If the synonym is located
+    and refers to a DBLINK, the oracle dialect knows how to locate the table’s information
+    using DBLINK syntax(e.g. `@dblink`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`oracle_resolve_synonyms` is accepted wherever reflection arguments are accepted,
+    including methods such as [`MetaData.reflect()`](../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") and [`Inspector.get_columns()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_columns
+    "sqlalchemy.engine.reflection.Inspector.get_columns").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If synonyms are not in use, this flag should be left disabled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Constraint Reflection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Oracle dialect can return information about foreign key, unique, and CHECK
+    constraints, as well as indexes on tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Raw information regarding these constraints can be acquired using [`Inspector.get_foreign_keys()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_foreign_keys
+    "sqlalchemy.engine.reflection.Inspector.get_foreign_keys"), [`Inspector.get_unique_constraints()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_unique_constraints
+    "sqlalchemy.engine.reflection.Inspector.get_unique_constraints"), [`Inspector.get_check_constraints()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_check_constraints
+    "sqlalchemy.engine.reflection.Inspector.get_check_constraints"), and [`Inspector.get_indexes()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_indexes
+    "sqlalchemy.engine.reflection.Inspector.get_indexes").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.2: The Oracle dialect can now reflect UNIQUE and CHECK
+    constraints.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using reflection at the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") level, the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") will also include these constraints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note the following caveats:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using the [`Inspector.get_check_constraints()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_check_constraints
+    "sqlalchemy.engine.reflection.Inspector.get_check_constraints") method, Oracle
+    builds a special “IS NOT NULL” constraint for columns that specify “NOT NULL”.
+    This constraint is **not** returned by default; to include the “IS NOT NULL” constraints,
+    pass the flag `include_all=True`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: in most cases, when reflecting a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), a UNIQUE constraint will **not** be available as a
+    [`UniqueConstraint`](../core/constraints.html#sqlalchemy.schema.UniqueConstraint
+    "sqlalchemy.schema.UniqueConstraint") object, as Oracle mirrors unique constraints
+    with a UNIQUE index in most cases (the exception seems to be when two or more
+    unique constraints represent the same columns); the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") will instead represent these using [`Index`](../core/constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index") with the `unique=True` flag set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Oracle creates an implicit index for the primary key of a table; this index
+    is **excluded** from all index results.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the list of columns reflected for an index will not include column names that
+    start with SYS_NC.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Table names with SYSTEM/SYSAUX tablespaces
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`Inspector.get_table_names()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_table_names
+    "sqlalchemy.engine.reflection.Inspector.get_table_names") and [`Inspector.get_temp_table_names()`](../core/reflection.html#sqlalchemy.engine.reflection.Inspector.get_temp_table_names
+    "sqlalchemy.engine.reflection.Inspector.get_temp_table_names") methods each return
+    a list of table names for the current engine. These methods are also part of the
+    reflection which occurs within an operation such as [`MetaData.reflect()`](../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect"). By default, these operations exclude the
+    `SYSTEM` and `SYSAUX` tablespaces from the operation. In order to change this,
+    the default list of tablespaces excluded can be changed at the engine level using
+    the `exclude_tablespaces` parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: DateTime Compatibility
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Oracle has no datatype known as `DATETIME`, it instead has only `DATE`, which
+    can actually store a date and time value. For this reason, the Oracle dialect
+    provides a type [`DATE`](#sqlalchemy.dialects.oracle.DATE "sqlalchemy.dialects.oracle.DATE")
+    which is a subclass of [`DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime"). This type has no special behavior, and is only present
+    as a “marker” for this type; additionally, when a database column is reflected
+    and the type is reported as `DATE`, the time-supporting [`DATE`](#sqlalchemy.dialects.oracle.DATE
+    "sqlalchemy.dialects.oracle.DATE") type is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Oracle Table Options'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The CREATE TABLE phrase supports the following options with Oracle in conjunction
+    with the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`ON COMMIT`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`COMPRESS`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '## Oracle Specific Index Options'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bitmap Indexes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You can specify the `oracle_bitmap` parameter to create a bitmap index instead
+    of a B-tree index:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: Bitmap indexes cannot be unique and cannot be compressed. SQLAlchemy will not
+    check for such limitations, only the database will.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Index compression
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Oracle has a more efficient storage mode for indexes containing lots of repeated
+    values. Use the `oracle_compress` parameter to turn on key compression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `oracle_compress` parameter accepts either an integer specifying the number
+    of prefix columns to compress, or `True` to use the default (all columns for non-unique
+    indexes, all but the last column for unique indexes).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bitmap Indexes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You can specify the `oracle_bitmap` parameter to create a bitmap index instead
+    of a B-tree index:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: Bitmap indexes cannot be unique and cannot be compressed. SQLAlchemy will not
+    check for such limitations, only the database will.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Index compression
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Oracle has a more efficient storage mode for indexes containing lots of repeated
+    values. Use the `oracle_compress` parameter to turn on key compression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `oracle_compress` parameter accepts either an integer specifying the number
+    of prefix columns to compress, or `True` to use the default (all columns for non-unique
+    indexes, all but the last column for unique indexes).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle Data Types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As with all SQLAlchemy dialects, all UPPERCASE types that are known to be valid
+    with Oracle are importable from the top level dialect, whether they originate
+    from [`sqlalchemy.types`](../core/type_basics.html#module-sqlalchemy.types "sqlalchemy.types")
+    or from the local dialect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.2.19: Added [`NCHAR`](../core/type_basics.html#sqlalchemy.types.NCHAR
+    "sqlalchemy.types.NCHAR") to the list of datatypes exported by the Oracle dialect.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Types which are specific to Oracle, or have Oracle-specific construction arguments,
+    are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BFILE](#sqlalchemy.dialects.oracle.BFILE) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BINARY_DOUBLE](#sqlalchemy.dialects.oracle.BINARY_DOUBLE) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BINARY_FLOAT](#sqlalchemy.dialects.oracle.BINARY_FLOAT) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DATE](#sqlalchemy.dialects.oracle.DATE) | Provide the oracle DATE type.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [FLOAT](#sqlalchemy.dialects.oracle.FLOAT) | Oracle FLOAT. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [INTERVAL](#sqlalchemy.dialects.oracle.INTERVAL) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [LONG](#sqlalchemy.dialects.oracle.LONG) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [NCLOB](#sqlalchemy.dialects.oracle.NCLOB) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [NUMBER](#sqlalchemy.dialects.oracle.NUMBER) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [NVARCHAR2](#sqlalchemy.dialects.oracle.NVARCHAR2) | alias of [`NVARCHAR`](../core/type_basics.html#sqlalchemy.types.NVARCHAR
+    "sqlalchemy.sql.sqltypes.NVARCHAR") |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [RAW](#sqlalchemy.dialects.oracle.RAW) |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ROWID](#sqlalchemy.dialects.oracle.ROWID) | Oracle ROWID type. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [TIMESTAMP](#sqlalchemy.dialects.oracle.TIMESTAMP) | Oracle implementation
+    of `TIMESTAMP`, which supports additional Oracle-specific modes |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.BFILE.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.BFILE`](#sqlalchemy.dialects.oracle.BFILE
+    "sqlalchemy.dialects.oracle.BFILE") ([`sqlalchemy.types.LargeBinary`](../core/type_basics.html#sqlalchemy.types.LargeBinary
+    "sqlalchemy.types.LargeBinary"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.LargeBinary.__init__` *method of* [`LargeBinary`](../core/type_basics.html#sqlalchemy.types.LargeBinary
+    "sqlalchemy.types.LargeBinary")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Construct a LargeBinary type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**length** – optional, a length for the column for use in DDL statements, for
+    those binary types that accept a length, such as the MySQL BLOB type.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.BINARY_DOUBLE.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.BINARY_DOUBLE`](#sqlalchemy.dialects.oracle.BINARY_DOUBLE
+    "sqlalchemy.dialects.oracle.BINARY_DOUBLE") ([`sqlalchemy.types.Double`](../core/type_basics.html#sqlalchemy.types.Double
+    "sqlalchemy.types.Double"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.Float.__init__` *method of* [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Construct a Float.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`precision` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the numeric precision for use in DDL `CREATE TABLE`. Backends **should** attempt
+    to ensure this precision indicates a number of digits for the generic [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float") datatype.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For the Oracle backend, the [`Float.precision`](../core/type_basics.html#sqlalchemy.types.Float.params.precision
+    "sqlalchemy.types.Float") parameter is not accepted when rendering DDL, as Oracle
+    does not support float precision specified as a number of decimal places. Instead,
+    use the Oracle-specific [`FLOAT`](#sqlalchemy.dialects.oracle.FLOAT "sqlalchemy.dialects.oracle.FLOAT")
+    datatype and specify the [`FLOAT.binary_precision`](#sqlalchemy.dialects.oracle.FLOAT.params.binary_precision
+    "sqlalchemy.dialects.oracle.FLOAT") parameter. This is new in version 2.0 of SQLAlchemy.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'To create a database agnostic [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float") that separately specifies binary precision for Oracle,
+    use [`TypeEngine.with_variant()`](../core/type_api.html#sqlalchemy.types.TypeEngine.with_variant
+    "sqlalchemy.types.TypeEngine.with_variant") as follows:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`asdecimal` – the same flag as that of [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric"), but defaults to `False`. Note that setting this flag
+    to `True` results in floating point conversion.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`decimal_return_scale` – Default scale to use when converting from floats to
+    Python decimals. Floating point values will typically be much longer due to decimal
+    inaccuracy, and most floating point database types don’t have a notion of “scale”,
+    so by default the float type looks for the first ten decimal places when converting.
+    Specifying this value will override that length. Note that the MySQL float types,
+    which do include “scale”, will use “scale” as the default for decimal_return_scale,
+    if not otherwise specified.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.BINARY_FLOAT.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.BINARY_FLOAT`](#sqlalchemy.dialects.oracle.BINARY_FLOAT
+    "sqlalchemy.dialects.oracle.BINARY_FLOAT") ([`sqlalchemy.types.Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.Float.__init__` *method of* [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Construct a Float.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`precision` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the numeric precision for use in DDL `CREATE TABLE`. Backends **should** attempt
+    to ensure this precision indicates a number of digits for the generic [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float") datatype.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For the Oracle backend, the [`Float.precision`](../core/type_basics.html#sqlalchemy.types.Float.params.precision
+    "sqlalchemy.types.Float") parameter is not accepted when rendering DDL, as Oracle
+    does not support float precision specified as a number of decimal places. Instead,
+    use the Oracle-specific [`FLOAT`](#sqlalchemy.dialects.oracle.FLOAT "sqlalchemy.dialects.oracle.FLOAT")
+    datatype and specify the [`FLOAT.binary_precision`](#sqlalchemy.dialects.oracle.FLOAT.params.binary_precision
+    "sqlalchemy.dialects.oracle.FLOAT") parameter. This is new in version 2.0 of SQLAlchemy.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'To create a database agnostic [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float") that separately specifies binary precision for Oracle,
+    use [`TypeEngine.with_variant()`](../core/type_api.html#sqlalchemy.types.TypeEngine.with_variant
+    "sqlalchemy.types.TypeEngine.with_variant") as follows:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`asdecimal` – the same flag as that of [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric"), but defaults to `False`. Note that setting this flag
+    to `True` results in floating point conversion.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`decimal_return_scale` – Default scale to use when converting from floats to
+    Python decimals. Floating point values will typically be much longer due to decimal
+    inaccuracy, and most floating point database types don’t have a notion of “scale”,
+    so by default the float type looks for the first ten decimal places when converting.
+    Specifying this value will override that length. Note that the MySQL float types,
+    which do include “scale”, will use “scale” as the default for decimal_return_scale,
+    if not otherwise specified.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: Provide the oracle DATE type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This type has no special Python behavior, except that it subclasses [`DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime"); this is to suit the fact that the Oracle `DATE`
+    type supports a time value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.DATE.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.DATE`](#sqlalchemy.dialects.oracle.DATE "sqlalchemy.dialects.oracle.DATE")
+    (`sqlalchemy.dialects.oracle.types._OracleDateLiteralRender`, [`sqlalchemy.types.DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.DateTime.__init__` *method of* [`DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Construct a new [`DateTime`](../core/type_basics.html#sqlalchemy.types.DateTime
+    "sqlalchemy.types.DateTime").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**timezone** – boolean. Indicates that the datetime type should enable timezone
+    support, if available on the **base date/time-holding type only**. It is recommended
+    to make use of the [`TIMESTAMP`](../core/type_basics.html#sqlalchemy.types.TIMESTAMP
+    "sqlalchemy.types.TIMESTAMP") datatype directly when using this flag, as some
+    databases include separate generic date/time-holding types distinct from the timezone-capable
+    TIMESTAMP datatype, such as Oracle.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: Oracle FLOAT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the same as [`FLOAT`](../core/type_basics.html#sqlalchemy.types.FLOAT
+    "sqlalchemy.types.FLOAT") except that an Oracle-specific [`FLOAT.binary_precision`](#sqlalchemy.dialects.oracle.FLOAT.params.binary_precision
+    "sqlalchemy.dialects.oracle.FLOAT") parameter is accepted, and the [`Float.precision`](../core/type_basics.html#sqlalchemy.types.Float.params.precision
+    "sqlalchemy.types.Float") parameter is not accepted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle FLOAT types indicate precision in terms of “binary precision”, which
+    defaults to 126\. For a REAL type, the value is 63\. This parameter does not cleanly
+    map to a specific number of decimal places but is roughly equivalent to the desired
+    number of decimal places divided by 0.3103.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.FLOAT.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.FLOAT`](#sqlalchemy.dialects.oracle.FLOAT
+    "sqlalchemy.dialects.oracle.FLOAT") ([`sqlalchemy.types.FLOAT`](../core/type_basics.html#sqlalchemy.types.FLOAT
+    "sqlalchemy.types.FLOAT"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a FLOAT
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`binary_precision` – Oracle binary precision value to be rendered in DDL. This
+    may be approximated to the number of decimal characters using the formula “decimal
+    precision = 0.30103 * binary precision”. The default value used by Oracle for
+    FLOAT / DOUBLE PRECISION is 126.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`asdecimal` – See [`Float.asdecimal`](../core/type_basics.html#sqlalchemy.types.Float.params.asdecimal
+    "sqlalchemy.types.Float")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`decimal_return_scale` – See [`Float.decimal_return_scale`](../core/type_basics.html#sqlalchemy.types.Float.params.decimal_return_scale
+    "sqlalchemy.types.Float")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.INTERVAL.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.INTERVAL`](#sqlalchemy.dialects.oracle.INTERVAL
+    "sqlalchemy.dialects.oracle.INTERVAL") (`sqlalchemy.types.NativeForEmulated`,
+    `sqlalchemy.types._AbstractInterval`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct an INTERVAL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that only DAY TO SECOND intervals are currently supported. This is due
+    to a lack of support for YEAR TO MONTH intervals within available DBAPIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`day_precision` – the day precision value. this is the number of digits to
+    store for the day field. Defaults to “2”'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`second_precision` – the second precision value. this is the number of digits
+    to store for the fractional seconds field. Defaults to “6”.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.NCLOB.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.NCLOB`](#sqlalchemy.dialects.oracle.NCLOB
+    "sqlalchemy.dialects.oracle.NCLOB") ([`sqlalchemy.types.Text`](../core/type_basics.html#sqlalchemy.types.Text
+    "sqlalchemy.types.Text"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.String.__init__` *method of* [`String`](../core/type_basics.html#sqlalchemy.types.String
+    "sqlalchemy.types.String")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a string-holding type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`length` – optional, a length for the column for use in DDL and CAST expressions.
+    May be safely omitted if no `CREATE TABLE` will be issued. Certain databases may
+    require a `length` for use in DDL, and will raise an exception when the `CREATE
+    TABLE` DDL is issued if a `VARCHAR` with no length is included. Whether the value
+    is interpreted as bytes or characters is database specific.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`collation` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Optional, a column-level collation for use in DDL and CAST expressions. Renders
+    using the COLLATE keyword supported by SQLite, MySQL, and PostgreSQL. E.g.:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In most cases, the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") or [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes should be used for a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") that expects to store non-ascii data. These datatypes
+    will ensure that the correct types are used on the database.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: alias of [`NVARCHAR`](../core/type_basics.html#sqlalchemy.types.NVARCHAR "sqlalchemy.sql.sqltypes.NVARCHAR")
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.NUMBER`](#sqlalchemy.dialects.oracle.NUMBER
+    "sqlalchemy.dialects.oracle.NUMBER") ([`sqlalchemy.types.Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric"), [`sqlalchemy.types.Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.LONG.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.LONG`](#sqlalchemy.dialects.oracle.LONG "sqlalchemy.dialects.oracle.LONG")
+    ([`sqlalchemy.types.Text`](../core/type_basics.html#sqlalchemy.types.Text "sqlalchemy.types.Text"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*inherited from the* `sqlalchemy.types.String.__init__` *method of* [`String`](../core/type_basics.html#sqlalchemy.types.String
+    "sqlalchemy.types.String")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a string-holding type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`length` – optional, a length for the column for use in DDL and CAST expressions.
+    May be safely omitted if no `CREATE TABLE` will be issued. Certain databases may
+    require a `length` for use in DDL, and will raise an exception when the `CREATE
+    TABLE` DDL is issued if a `VARCHAR` with no length is included. Whether the value
+    is interpreted as bytes or characters is database specific.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`collation` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Optional, a column-level collation for use in DDL and CAST expressions. Renders
+    using the COLLATE keyword supported by SQLite, MySQL, and PostgreSQL. E.g.:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In most cases, the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") or [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes should be used for a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") that expects to store non-ascii data. These datatypes
+    will ensure that the correct types are used on the database.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.RAW`](#sqlalchemy.dialects.oracle.RAW "sqlalchemy.dialects.oracle.RAW")
+    (`sqlalchemy.types._Binary`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: Oracle ROWID type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When used in a cast() or similar, generates ROWID.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.ROWID`](#sqlalchemy.dialects.oracle.ROWID
+    "sqlalchemy.dialects.oracle.ROWID") ([`sqlalchemy.types.TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: Oracle implementation of `TIMESTAMP`, which supports additional Oracle-specific
+    modes
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.dialects.oracle.TIMESTAMP.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.dialects.oracle.TIMESTAMP`](#sqlalchemy.dialects.oracle.TIMESTAMP
+    "sqlalchemy.dialects.oracle.TIMESTAMP") ([`sqlalchemy.types.TIMESTAMP`](../core/type_basics.html#sqlalchemy.types.TIMESTAMP
+    "sqlalchemy.types.TIMESTAMP"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a new [`TIMESTAMP`](#sqlalchemy.dialects.oracle.TIMESTAMP "sqlalchemy.dialects.oracle.TIMESTAMP").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`timezone` – boolean. Indicates that the TIMESTAMP type should use Oracle’s
+    `TIMESTAMP WITH TIME ZONE` datatype.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`local_timezone` – boolean. Indicates that the TIMESTAMP type should use Oracle’s
+    `TIMESTAMP WITH LOCAL TIME ZONE` datatype.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## cx_Oracle'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Support for the Oracle database via the cx-Oracle driver.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DBAPI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Documentation and download information (if applicable) for cx-Oracle is available
+    at: [https://oracle.github.io/python-cx_Oracle/](https://oracle.github.io/python-cx_Oracle/)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Connect String:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: DSN vs. Hostname connections
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: cx_Oracle provides several methods of indicating the target database. The dialect
+    translates from a series of different URL forms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hostname Connections with Easy Connect Syntax
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Given a hostname, port and service name of the target Oracle Database, for
+    example from Oracle’s [Easy Connect syntax](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#easy-connect-syntax-for-connection-strings),
+    then connect in SQLAlchemy using the `service_name` query string parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [full Easy Connect syntax](https://www.oracle.com/pls/topic/lookup?ctx=dblatest&id=GUID-B0437826-43C1-49EC-A94D-B650B6A4A6EE)
+    is not supported. Instead, use a `tnsnames.ora` file and connect using a DSN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connections with tnsnames.ora or Oracle Cloud
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Alternatively, if no port, database name, or `service_name` is provided, the
+    dialect will use an Oracle DSN “connection string”. This takes the “hostname”
+    portion of the URL as the data source name. For example, if the `tnsnames.ora`
+    file contains a [Net Service Name](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#net-service-names-for-connection-strings)
+    of `myalias` as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cx_Oracle dialect connects to this database service when `myalias` is the
+    hostname portion of the URL, without specifying a port, database name or `service_name`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: Users of Oracle Cloud should use this syntax and also configure the cloud wallet
+    as shown in cx_Oracle documentation [Connecting to Autononmous Databases](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#connecting-to-autononmous-databases).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SID Connections
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'To use Oracle’s obsolete SID connection syntax, the SID can be passed in a
+    “database name” portion of the URL as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the DSN passed to cx_Oracle is created by `cx_Oracle.makedsn()` as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: Passing cx_Oracle connect arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Additional connection arguments can usually be passed via the URL query string;
+    particular symbols like `cx_Oracle.SYSDBA` are intercepted and converted to the
+    correct symbol:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.3: the cx_oracle dialect now accepts all argument names
+    within the URL string itself, to be passed to the cx_Oracle DBAPI. As was the
+    case earlier but not correctly documented, the [`create_engine.connect_args`](../core/engines.html#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") parameter also accepts all cx_Oracle DBAPI connect
+    arguments.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To pass arguments directly to `.connect()` without using the query string,
+    use the [`create_engine.connect_args`](../core/engines.html#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") dictionary. Any cx_Oracle parameter value and/or constant
+    may be passed, such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the default value for `encoding` and `nencoding` was changed to “UTF-8”
+    in cx_Oracle 8.0 so these parameters can be omitted when using that version, or
+    later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Options consumed by the SQLAlchemy cx_Oracle dialect outside of the driver
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'There are also options that are consumed by the SQLAlchemy cx_oracle dialect
+    itself. These options are always passed directly to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") , such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The parameters accepted by the cx_oracle dialect are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`arraysize` - set the cx_oracle.arraysize value on cursors; defaults to `None`,
+    indicating that the driver default should be used (typically the value is 100).
+    This setting controls how many rows are buffered when fetching rows, and can have
+    a significant effect on performance when modified. The setting is used for both
+    `cx_Oracle` as well as `oracledb`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0.26: - changed the default value from 50 to None, to
+    use the default value of the driver itself.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`auto_convert_lobs` - defaults to True; See [LOB Datatypes](#cx-oracle-lob).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`coerce_to_decimal` - see [Precision Numerics](#cx-oracle-numeric) for detail.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`encoding_errors` - see [Encoding Errors](#cx-oracle-unicode-encoding-errors)
+    for detail.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '### Using cx_Oracle SessionPool'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cx_Oracle library provides its own connection pool implementation that
+    may be used in place of SQLAlchemy’s pooling functionality. This can be achieved
+    by using the [`create_engine.creator`](../core/engines.html#sqlalchemy.create_engine.params.creator
+    "sqlalchemy.create_engine") parameter to provide a function that returns a new
+    connection, along with setting [`create_engine.pool_class`](../core/engines.html#sqlalchemy.create_engine.params.pool_class
+    "sqlalchemy.create_engine") to `NullPool` to disable SQLAlchemy’s pooling:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above engine may then be used normally where cx_Oracle’s pool handles connection
+    pooling:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: As well as providing a scalable solution for multi-user applications, the cx_Oracle
+    session pool supports some Oracle features such as DRCP and [Application Continuity](https://cx-oracle.readthedocs.io/en/latest/user_guide/ha.html#application-continuity-ac).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Oracle Database Resident Connection Pooling (DRCP)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When using Oracle’s [DRCP](https://www.oracle.com/pls/topic/lookup?ctx=dblatest&id=GUID-015CA8C1-2386-4626-855D-CC546DDC1086),
+    the best practice is to pass a connection class and “purity” when acquiring a
+    connection from the SessionPool. Refer to the [cx_Oracle DRCP documentation](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#database-resident-connection-pooling-drcp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This can be achieved by wrapping `pool.acquire()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above engine may then be used normally where cx_Oracle handles session
+    pooling and Oracle Database additionally uses DRCP:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Unicode'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case for all DBAPIs under Python 3, all strings are inherently Unicode
+    strings. In all cases however, the driver requires an explicit encoding configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ensuring the Correct Client Encoding
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The long accepted standard for establishing client encoding for nearly all Oracle
+    related software is via the [NLS_LANG](https://www.oracle.com/database/technologies/faq-nls-lang.html)
+    environment variable. cx_Oracle like most other Oracle drivers will use this environment
+    variable as the source of its encoding configuration. The format of this variable
+    is idiosyncratic; a typical value would be `AMERICAN_AMERICA.AL32UTF8`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cx_Oracle driver also supports a programmatic alternative which is to pass
+    the `encoding` and `nencoding` parameters directly to its `.connect()` function.
+    These can be present in the URL as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: For the meaning of the `encoding` and `nencoding` parameters, please consult
+    [Characters Sets and National Language Support (NLS)](https://cx-oracle.readthedocs.io/en/latest/user_guide/globalization.html#globalization).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Characters Sets and National Language Support (NLS)](https://cx-oracle.readthedocs.io/en/latest/user_guide/globalization.html#globalization)
+    - in the cx_Oracle documentation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unicode-specific Column datatypes
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The Core expression language handles unicode data by use of the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") and [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes. These types correspond to the VARCHAR2
+    and CLOB Oracle datatypes by default. When using these datatypes with Unicode
+    data, it is expected that the Oracle database is configured with a Unicode-aware
+    character set, as well as that the `NLS_LANG` environment variable is set appropriately,
+    so that the VARCHAR2 and CLOB datatypes can accommodate the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the case that the Oracle database is not configured with a Unicode character
+    set, the two options are to use the [`NCHAR`](../core/type_basics.html#sqlalchemy.types.NCHAR
+    "sqlalchemy.types.NCHAR") and [`NCLOB`](#sqlalchemy.dialects.oracle.NCLOB "sqlalchemy.dialects.oracle.NCLOB")
+    datatypes explicitly, or to pass the flag `use_nchar_for_unicode=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), which will cause the SQLAlchemy dialect to use NCHAR/NCLOB
+    for the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode "sqlalchemy.types.Unicode")
+    / [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText "sqlalchemy.types.UnicodeText")
+    datatypes instead of VARCHAR/CLOB.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3: The [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") and [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes now correspond to the `VARCHAR2` and
+    `CLOB` Oracle datatypes unless the `use_nchar_for_unicode=True` is passed to the
+    dialect when [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") is called.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Encoding Errors'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the unusual case that data in the Oracle database is present with a broken
+    encoding, the dialect accepts a parameter `encoding_errors` which will be passed
+    to Unicode decoding functions in order to affect how decoding errors are handled.
+    The value is ultimately consumed by the Python [decode](https://docs.python.org/3/library/stdtypes.html#bytes.decode)
+    function, and is passed both via cx_Oracle’s `encodingErrors` parameter consumed
+    by `Cursor.var()`, as well as SQLAlchemy’s own decoding function, as the cx_Oracle
+    dialect makes use of both under different circumstances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3.11.  ### Fine grained control over cx_Oracle data binding
+    performance with setinputsizes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cx_Oracle DBAPI has a deep and fundamental reliance upon the usage of the
+    DBAPI `setinputsizes()` call. The purpose of this call is to establish the datatypes
+    that are bound to a SQL statement for Python values being passed as parameters.
+    While virtually no other DBAPI assigns any use to the `setinputsizes()` call,
+    the cx_Oracle DBAPI relies upon it heavily in its interactions with the Oracle
+    client interface, and in some scenarios it is not possible for SQLAlchemy to know
+    exactly how data should be bound, as some settings can cause profoundly different
+    performance characteristics, while altering the type coercion behavior at the
+    same time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Users of the cx_Oracle dialect are **strongly encouraged** to read through cx_Oracle’s
+    list of built-in datatype symbols at [https://cx-oracle.readthedocs.io/en/latest/api_manual/module.html#database-types](https://cx-oracle.readthedocs.io/en/latest/api_manual/module.html#database-types).
+    Note that in some cases, significant performance degradation can occur when using
+    these types vs. not, in particular when specifying `cx_Oracle.CLOB`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the SQLAlchemy side, the [`DialectEvents.do_setinputsizes()`](../core/events.html#sqlalchemy.events.DialectEvents.do_setinputsizes
+    "sqlalchemy.events.DialectEvents.do_setinputsizes") event can be used both for
+    runtime visibility (e.g. logging) of the setinputsizes step as well as to fully
+    control how `setinputsizes()` is used on a per-statement basis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.2.9: Added `DialectEvents.setinputsizes()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Example 1 - logging all setinputsizes calls
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The following example illustrates how to log the intermediary values from a
+    SQLAlchemy perspective before they are converted to the raw `setinputsizes()`
+    parameter dictionary. The keys of the dictionary are [`BindParameter`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") objects which have a `.key` and a `.type`
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: Example 2 - remove all bindings to CLOB
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The `CLOB` datatype in cx_Oracle incurs a significant performance overhead,
+    however is set by default for the `Text` type within the SQLAlchemy 1.2 series.
+    This setting can be modified as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE129]  ### RETURNING Support'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cx_Oracle dialect implements RETURNING using OUT parameters. The dialect
+    supports RETURNING fully.  ### LOB Datatypes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: LOB datatypes refer to the “large object” datatypes such as CLOB, NCLOB and
+    BLOB. Modern versions of cx_Oracle and oracledb are optimized for these datatypes
+    to be delivered as a single buffer. As such, SQLAlchemy makes use of these newer
+    type handlers by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To disable the use of newer type handlers and deliver LOB objects as classic
+    buffered objects with a `read()` method, the parameter `auto_convert_lobs=False`
+    may be passed to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), which takes place only engine-wide.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two Phase Transactions Not Supported
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Two phase transactions are **not supported** under cx_Oracle due to poor driver
+    support. As of cx_Oracle 6.0b1, the interface for two phase transactions has been
+    changed to be more of a direct pass-through to the underlying OCI layer with less
+    automation. The additional logic to support this system is not implemented in
+    SQLAlchemy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Precision Numerics'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy’s numeric types can handle receiving and returning values as Python
+    `Decimal` objects or float objects. When a [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric") object, or a subclass such as [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float"), `DOUBLE_PRECISION` etc. is in use, the [`Numeric.asdecimal`](../core/type_basics.html#sqlalchemy.types.Numeric.params.asdecimal
+    "sqlalchemy.types.Numeric") flag determines if values should be coerced to `Decimal`
+    upon return, or returned as float objects. To make matters more complicated under
+    Oracle, Oracle’s `NUMBER` type can also represent integer values if the “scale”
+    is zero, so the Oracle-specific [`NUMBER`](#sqlalchemy.dialects.oracle.NUMBER
+    "sqlalchemy.dialects.oracle.NUMBER") type takes this into account as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cx_Oracle dialect makes extensive use of connection- and cursor-level “outputtypehandler”
+    callables in order to coerce numeric values as requested. These callables are
+    specific to the specific flavor of [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric") in use, as well as if no SQLAlchemy typing objects
+    are present. There are observed scenarios where Oracle may sends incomplete or
+    ambiguous information about the numeric types being returned, such as a query
+    where the numeric types are buried under multiple levels of subquery. The type
+    handlers do their best to make the right decision in all cases, deferring to the
+    underlying cx_Oracle DBAPI for all those cases where the driver can make the best
+    decision.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When no typing objects are present, as when executing plain SQL strings, a
+    default “outputtypehandler” is present which will generally return numeric values
+    which specify precision and scale as Python `Decimal` objects. To disable this
+    coercion to decimal for performance reasons, pass the flag `coerce_to_decimal=False`
+    to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine "sqlalchemy.create_engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE130]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `coerce_to_decimal` flag only impacts the results of plain string SQL statements
+    that are not otherwise associated with a [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric") SQLAlchemy type (or a subclass of such).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.2: The numeric handling system for cx_Oracle has been
+    reworked to take advantage of newer cx_Oracle features as well as better integration
+    of outputtypehandlers.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: DBAPI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Documentation and download information (if applicable) for cx-Oracle is available
+    at: [https://oracle.github.io/python-cx_Oracle/](https://oracle.github.io/python-cx_Oracle/)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Connect String:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE131]'
+  prefs: []
+  type: TYPE_PRE
+- en: DSN vs. Hostname connections
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: cx_Oracle provides several methods of indicating the target database. The dialect
+    translates from a series of different URL forms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hostname Connections with Easy Connect Syntax
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Given a hostname, port and service name of the target Oracle Database, for
+    example from Oracle’s [Easy Connect syntax](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#easy-connect-syntax-for-connection-strings),
+    then connect in SQLAlchemy using the `service_name` query string parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE132]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [full Easy Connect syntax](https://www.oracle.com/pls/topic/lookup?ctx=dblatest&id=GUID-B0437826-43C1-49EC-A94D-B650B6A4A6EE)
+    is not supported. Instead, use a `tnsnames.ora` file and connect using a DSN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connections with tnsnames.ora or Oracle Cloud
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Alternatively, if no port, database name, or `service_name` is provided, the
+    dialect will use an Oracle DSN “connection string”. This takes the “hostname”
+    portion of the URL as the data source name. For example, if the `tnsnames.ora`
+    file contains a [Net Service Name](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#net-service-names-for-connection-strings)
+    of `myalias` as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE133]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cx_Oracle dialect connects to this database service when `myalias` is the
+    hostname portion of the URL, without specifying a port, database name or `service_name`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE134]'
+  prefs: []
+  type: TYPE_PRE
+- en: Users of Oracle Cloud should use this syntax and also configure the cloud wallet
+    as shown in cx_Oracle documentation [Connecting to Autononmous Databases](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#connecting-to-autononmous-databases).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SID Connections
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'To use Oracle’s obsolete SID connection syntax, the SID can be passed in a
+    “database name” portion of the URL as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE135]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the DSN passed to cx_Oracle is created by `cx_Oracle.makedsn()` as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE136]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hostname Connections with Easy Connect Syntax
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Given a hostname, port and service name of the target Oracle Database, for
+    example from Oracle’s [Easy Connect syntax](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#easy-connect-syntax-for-connection-strings),
+    then connect in SQLAlchemy using the `service_name` query string parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE137]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [full Easy Connect syntax](https://www.oracle.com/pls/topic/lookup?ctx=dblatest&id=GUID-B0437826-43C1-49EC-A94D-B650B6A4A6EE)
+    is not supported. Instead, use a `tnsnames.ora` file and connect using a DSN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connections with tnsnames.ora or Oracle Cloud
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Alternatively, if no port, database name, or `service_name` is provided, the
+    dialect will use an Oracle DSN “connection string”. This takes the “hostname”
+    portion of the URL as the data source name. For example, if the `tnsnames.ora`
+    file contains a [Net Service Name](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#net-service-names-for-connection-strings)
+    of `myalias` as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE138]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cx_Oracle dialect connects to this database service when `myalias` is the
+    hostname portion of the URL, without specifying a port, database name or `service_name`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE139]'
+  prefs: []
+  type: TYPE_PRE
+- en: Users of Oracle Cloud should use this syntax and also configure the cloud wallet
+    as shown in cx_Oracle documentation [Connecting to Autononmous Databases](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#connecting-to-autononmous-databases).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SID Connections
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'To use Oracle’s obsolete SID connection syntax, the SID can be passed in a
+    “database name” portion of the URL as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE140]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the DSN passed to cx_Oracle is created by `cx_Oracle.makedsn()` as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE141]'
+  prefs: []
+  type: TYPE_PRE
+- en: Passing cx_Oracle connect arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Additional connection arguments can usually be passed via the URL query string;
+    particular symbols like `cx_Oracle.SYSDBA` are intercepted and converted to the
+    correct symbol:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE142]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.3: the cx_oracle dialect now accepts all argument names
+    within the URL string itself, to be passed to the cx_Oracle DBAPI. As was the
+    case earlier but not correctly documented, the [`create_engine.connect_args`](../core/engines.html#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") parameter also accepts all cx_Oracle DBAPI connect
+    arguments.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To pass arguments directly to `.connect()` without using the query string,
+    use the [`create_engine.connect_args`](../core/engines.html#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") dictionary. Any cx_Oracle parameter value and/or constant
+    may be passed, such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE143]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the default value for `encoding` and `nencoding` was changed to “UTF-8”
+    in cx_Oracle 8.0 so these parameters can be omitted when using that version, or
+    later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Options consumed by the SQLAlchemy cx_Oracle dialect outside of the driver
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'There are also options that are consumed by the SQLAlchemy cx_oracle dialect
+    itself. These options are always passed directly to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") , such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE144]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The parameters accepted by the cx_oracle dialect are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`arraysize` - set the cx_oracle.arraysize value on cursors; defaults to `None`,
+    indicating that the driver default should be used (typically the value is 100).
+    This setting controls how many rows are buffered when fetching rows, and can have
+    a significant effect on performance when modified. The setting is used for both
+    `cx_Oracle` as well as `oracledb`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0.26: - changed the default value from 50 to None, to
+    use the default value of the driver itself.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`auto_convert_lobs` - defaults to True; See [LOB Datatypes](#cx-oracle-lob).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`coerce_to_decimal` - see [Precision Numerics](#cx-oracle-numeric) for detail.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`encoding_errors` - see [Encoding Errors](#cx-oracle-unicode-encoding-errors)
+    for detail.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '### Using cx_Oracle SessionPool'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cx_Oracle library provides its own connection pool implementation that
+    may be used in place of SQLAlchemy’s pooling functionality. This can be achieved
+    by using the [`create_engine.creator`](../core/engines.html#sqlalchemy.create_engine.params.creator
+    "sqlalchemy.create_engine") parameter to provide a function that returns a new
+    connection, along with setting [`create_engine.pool_class`](../core/engines.html#sqlalchemy.create_engine.params.pool_class
+    "sqlalchemy.create_engine") to `NullPool` to disable SQLAlchemy’s pooling:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE145]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above engine may then be used normally where cx_Oracle’s pool handles connection
+    pooling:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE146]'
+  prefs: []
+  type: TYPE_PRE
+- en: As well as providing a scalable solution for multi-user applications, the cx_Oracle
+    session pool supports some Oracle features such as DRCP and [Application Continuity](https://cx-oracle.readthedocs.io/en/latest/user_guide/ha.html#application-continuity-ac).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Oracle Database Resident Connection Pooling (DRCP)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When using Oracle’s [DRCP](https://www.oracle.com/pls/topic/lookup?ctx=dblatest&id=GUID-015CA8C1-2386-4626-855D-CC546DDC1086),
+    the best practice is to pass a connection class and “purity” when acquiring a
+    connection from the SessionPool. Refer to the [cx_Oracle DRCP documentation](https://cx-oracle.readthedocs.io/en/latest/user_guide/connection_handling.html#database-resident-connection-pooling-drcp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This can be achieved by wrapping `pool.acquire()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE147]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above engine may then be used normally where cx_Oracle handles session
+    pooling and Oracle Database additionally uses DRCP:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE148]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Unicode'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case for all DBAPIs under Python 3, all strings are inherently Unicode
+    strings. In all cases however, the driver requires an explicit encoding configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ensuring the Correct Client Encoding
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The long accepted standard for establishing client encoding for nearly all Oracle
+    related software is via the [NLS_LANG](https://www.oracle.com/database/technologies/faq-nls-lang.html)
+    environment variable. cx_Oracle like most other Oracle drivers will use this environment
+    variable as the source of its encoding configuration. The format of this variable
+    is idiosyncratic; a typical value would be `AMERICAN_AMERICA.AL32UTF8`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cx_Oracle driver also supports a programmatic alternative which is to pass
+    the `encoding` and `nencoding` parameters directly to its `.connect()` function.
+    These can be present in the URL as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE149]'
+  prefs: []
+  type: TYPE_PRE
+- en: For the meaning of the `encoding` and `nencoding` parameters, please consult
+    [Characters Sets and National Language Support (NLS)](https://cx-oracle.readthedocs.io/en/latest/user_guide/globalization.html#globalization).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Characters Sets and National Language Support (NLS)](https://cx-oracle.readthedocs.io/en/latest/user_guide/globalization.html#globalization)
+    - in the cx_Oracle documentation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unicode-specific Column datatypes
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The Core expression language handles unicode data by use of the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") and [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes. These types correspond to the VARCHAR2
+    and CLOB Oracle datatypes by default. When using these datatypes with Unicode
+    data, it is expected that the Oracle database is configured with a Unicode-aware
+    character set, as well as that the `NLS_LANG` environment variable is set appropriately,
+    so that the VARCHAR2 and CLOB datatypes can accommodate the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the case that the Oracle database is not configured with a Unicode character
+    set, the two options are to use the [`NCHAR`](../core/type_basics.html#sqlalchemy.types.NCHAR
+    "sqlalchemy.types.NCHAR") and [`NCLOB`](#sqlalchemy.dialects.oracle.NCLOB "sqlalchemy.dialects.oracle.NCLOB")
+    datatypes explicitly, or to pass the flag `use_nchar_for_unicode=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), which will cause the SQLAlchemy dialect to use NCHAR/NCLOB
+    for the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode "sqlalchemy.types.Unicode")
+    / [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText "sqlalchemy.types.UnicodeText")
+    datatypes instead of VARCHAR/CLOB.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3: The [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") and [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes now correspond to the `VARCHAR2` and
+    `CLOB` Oracle datatypes unless the `use_nchar_for_unicode=True` is passed to the
+    dialect when [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") is called.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Encoding Errors'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the unusual case that data in the Oracle database is present with a broken
+    encoding, the dialect accepts a parameter `encoding_errors` which will be passed
+    to Unicode decoding functions in order to affect how decoding errors are handled.
+    The value is ultimately consumed by the Python [decode](https://docs.python.org/3/library/stdtypes.html#bytes.decode)
+    function, and is passed both via cx_Oracle’s `encodingErrors` parameter consumed
+    by `Cursor.var()`, as well as SQLAlchemy’s own decoding function, as the cx_Oracle
+    dialect makes use of both under different circumstances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.11.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ensuring the Correct Client Encoding
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The long accepted standard for establishing client encoding for nearly all Oracle
+    related software is via the [NLS_LANG](https://www.oracle.com/database/technologies/faq-nls-lang.html)
+    environment variable. cx_Oracle like most other Oracle drivers will use this environment
+    variable as the source of its encoding configuration. The format of this variable
+    is idiosyncratic; a typical value would be `AMERICAN_AMERICA.AL32UTF8`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cx_Oracle driver also supports a programmatic alternative which is to pass
+    the `encoding` and `nencoding` parameters directly to its `.connect()` function.
+    These can be present in the URL as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE150]'
+  prefs: []
+  type: TYPE_PRE
+- en: For the meaning of the `encoding` and `nencoding` parameters, please consult
+    [Characters Sets and National Language Support (NLS)](https://cx-oracle.readthedocs.io/en/latest/user_guide/globalization.html#globalization).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Characters Sets and National Language Support (NLS)](https://cx-oracle.readthedocs.io/en/latest/user_guide/globalization.html#globalization)
+    - in the cx_Oracle documentation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unicode-specific Column datatypes
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The Core expression language handles unicode data by use of the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") and [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes. These types correspond to the VARCHAR2
+    and CLOB Oracle datatypes by default. When using these datatypes with Unicode
+    data, it is expected that the Oracle database is configured with a Unicode-aware
+    character set, as well as that the `NLS_LANG` environment variable is set appropriately,
+    so that the VARCHAR2 and CLOB datatypes can accommodate the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the case that the Oracle database is not configured with a Unicode character
+    set, the two options are to use the [`NCHAR`](../core/type_basics.html#sqlalchemy.types.NCHAR
+    "sqlalchemy.types.NCHAR") and [`NCLOB`](#sqlalchemy.dialects.oracle.NCLOB "sqlalchemy.dialects.oracle.NCLOB")
+    datatypes explicitly, or to pass the flag `use_nchar_for_unicode=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), which will cause the SQLAlchemy dialect to use NCHAR/NCLOB
+    for the [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode "sqlalchemy.types.Unicode")
+    / [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText "sqlalchemy.types.UnicodeText")
+    datatypes instead of VARCHAR/CLOB.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3: The [`Unicode`](../core/type_basics.html#sqlalchemy.types.Unicode
+    "sqlalchemy.types.Unicode") and [`UnicodeText`](../core/type_basics.html#sqlalchemy.types.UnicodeText
+    "sqlalchemy.types.UnicodeText") datatypes now correspond to the `VARCHAR2` and
+    `CLOB` Oracle datatypes unless the `use_nchar_for_unicode=True` is passed to the
+    dialect when [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") is called.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Encoding Errors'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the unusual case that data in the Oracle database is present with a broken
+    encoding, the dialect accepts a parameter `encoding_errors` which will be passed
+    to Unicode decoding functions in order to affect how decoding errors are handled.
+    The value is ultimately consumed by the Python [decode](https://docs.python.org/3/library/stdtypes.html#bytes.decode)
+    function, and is passed both via cx_Oracle’s `encodingErrors` parameter consumed
+    by `Cursor.var()`, as well as SQLAlchemy’s own decoding function, as the cx_Oracle
+    dialect makes use of both under different circumstances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.11.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Fine grained control over cx_Oracle data binding performance with setinputsizes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cx_Oracle DBAPI has a deep and fundamental reliance upon the usage of the
+    DBAPI `setinputsizes()` call. The purpose of this call is to establish the datatypes
+    that are bound to a SQL statement for Python values being passed as parameters.
+    While virtually no other DBAPI assigns any use to the `setinputsizes()` call,
+    the cx_Oracle DBAPI relies upon it heavily in its interactions with the Oracle
+    client interface, and in some scenarios it is not possible for SQLAlchemy to know
+    exactly how data should be bound, as some settings can cause profoundly different
+    performance characteristics, while altering the type coercion behavior at the
+    same time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Users of the cx_Oracle dialect are **strongly encouraged** to read through cx_Oracle’s
+    list of built-in datatype symbols at [https://cx-oracle.readthedocs.io/en/latest/api_manual/module.html#database-types](https://cx-oracle.readthedocs.io/en/latest/api_manual/module.html#database-types).
+    Note that in some cases, significant performance degradation can occur when using
+    these types vs. not, in particular when specifying `cx_Oracle.CLOB`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the SQLAlchemy side, the [`DialectEvents.do_setinputsizes()`](../core/events.html#sqlalchemy.events.DialectEvents.do_setinputsizes
+    "sqlalchemy.events.DialectEvents.do_setinputsizes") event can be used both for
+    runtime visibility (e.g. logging) of the setinputsizes step as well as to fully
+    control how `setinputsizes()` is used on a per-statement basis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.2.9: Added `DialectEvents.setinputsizes()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Example 1 - logging all setinputsizes calls
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The following example illustrates how to log the intermediary values from a
+    SQLAlchemy perspective before they are converted to the raw `setinputsizes()`
+    parameter dictionary. The keys of the dictionary are [`BindParameter`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") objects which have a `.key` and a `.type`
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE151]'
+  prefs: []
+  type: TYPE_PRE
+- en: Example 2 - remove all bindings to CLOB
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The `CLOB` datatype in cx_Oracle incurs a significant performance overhead,
+    however is set by default for the `Text` type within the SQLAlchemy 1.2 series.
+    This setting can be modified as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE152]'
+  prefs: []
+  type: TYPE_PRE
+- en: Example 1 - logging all setinputsizes calls
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The following example illustrates how to log the intermediary values from a
+    SQLAlchemy perspective before they are converted to the raw `setinputsizes()`
+    parameter dictionary. The keys of the dictionary are [`BindParameter`](../core/sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") objects which have a `.key` and a `.type`
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE153]'
+  prefs: []
+  type: TYPE_PRE
+- en: Example 2 - remove all bindings to CLOB
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The `CLOB` datatype in cx_Oracle incurs a significant performance overhead,
+    however is set by default for the `Text` type within the SQLAlchemy 1.2 series.
+    This setting can be modified as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE154]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### RETURNING Support'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cx_Oracle dialect implements RETURNING using OUT parameters. The dialect
+    supports RETURNING fully.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### LOB Datatypes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: LOB datatypes refer to the “large object” datatypes such as CLOB, NCLOB and
+    BLOB. Modern versions of cx_Oracle and oracledb are optimized for these datatypes
+    to be delivered as a single buffer. As such, SQLAlchemy makes use of these newer
+    type handlers by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To disable the use of newer type handlers and deliver LOB objects as classic
+    buffered objects with a `read()` method, the parameter `auto_convert_lobs=False`
+    may be passed to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), which takes place only engine-wide.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two Phase Transactions Not Supported
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Two phase transactions are **not supported** under cx_Oracle due to poor driver
+    support. As of cx_Oracle 6.0b1, the interface for two phase transactions has been
+    changed to be more of a direct pass-through to the underlying OCI layer with less
+    automation. The additional logic to support this system is not implemented in
+    SQLAlchemy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Precision Numerics'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy’s numeric types can handle receiving and returning values as Python
+    `Decimal` objects or float objects. When a [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric") object, or a subclass such as [`Float`](../core/type_basics.html#sqlalchemy.types.Float
+    "sqlalchemy.types.Float"), `DOUBLE_PRECISION` etc. is in use, the [`Numeric.asdecimal`](../core/type_basics.html#sqlalchemy.types.Numeric.params.asdecimal
+    "sqlalchemy.types.Numeric") flag determines if values should be coerced to `Decimal`
+    upon return, or returned as float objects. To make matters more complicated under
+    Oracle, Oracle’s `NUMBER` type can also represent integer values if the “scale”
+    is zero, so the Oracle-specific [`NUMBER`](#sqlalchemy.dialects.oracle.NUMBER
+    "sqlalchemy.dialects.oracle.NUMBER") type takes this into account as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cx_Oracle dialect makes extensive use of connection- and cursor-level “outputtypehandler”
+    callables in order to coerce numeric values as requested. These callables are
+    specific to the specific flavor of [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric") in use, as well as if no SQLAlchemy typing objects
+    are present. There are observed scenarios where Oracle may sends incomplete or
+    ambiguous information about the numeric types being returned, such as a query
+    where the numeric types are buried under multiple levels of subquery. The type
+    handlers do their best to make the right decision in all cases, deferring to the
+    underlying cx_Oracle DBAPI for all those cases where the driver can make the best
+    decision.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When no typing objects are present, as when executing plain SQL strings, a
+    default “outputtypehandler” is present which will generally return numeric values
+    which specify precision and scale as Python `Decimal` objects. To disable this
+    coercion to decimal for performance reasons, pass the flag `coerce_to_decimal=False`
+    to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine "sqlalchemy.create_engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE155]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `coerce_to_decimal` flag only impacts the results of plain string SQL statements
+    that are not otherwise associated with a [`Numeric`](../core/type_basics.html#sqlalchemy.types.Numeric
+    "sqlalchemy.types.Numeric") SQLAlchemy type (or a subclass of such).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.2: The numeric handling system for cx_Oracle has been
+    reworked to take advantage of newer cx_Oracle features as well as better integration
+    of outputtypehandlers.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## python-oracledb'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Support for the Oracle database via the python-oracledb driver.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DBAPI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Documentation and download information (if applicable) for python-oracledb
+    is available at: [https://oracle.github.io/python-oracledb/](https://oracle.github.io/python-oracledb/)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Connect String:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE156]'
+  prefs: []
+  type: TYPE_PRE
+- en: python-oracledb is released by Oracle to supersede the cx_Oracle driver. It
+    is fully compatible with cx_Oracle and features both a “thin” client mode that
+    requires no dependencies, as well as a “thick” mode that uses the Oracle Client
+    Interface in the same way as cx_Oracle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[cx_Oracle](#cx-oracle) - all of cx_Oracle’s notes apply to the oracledb driver
+    as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The SQLAlchemy `oracledb` dialect provides both a sync and an async implementation
+    under the same dialect name. The proper version is selected depending on how the
+    engine is created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'calling [`create_engine()`](../core/engines.html#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    with `oracle+oracledb://...` will automatically select the sync version, e.g.:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE157]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'calling [`create_async_engine()`](../orm/extensions/asyncio.html#sqlalchemy.ext.asyncio.create_async_engine
+    "sqlalchemy.ext.asyncio.create_async_engine") with `oracle+oracledb://...` will
+    automatically select the async version, e.g.:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE158]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The asyncio version of the dialect may also be specified explicitly using the
+    `oracledb_async` suffix, as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE159]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 2.0.25: added support for the async version of oracledb.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Thick mode support
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: By default the `python-oracledb` is started in thin mode, that does not require
+    oracle client libraries to be installed in the system. The `python-oracledb` driver
+    also support a “thick” mode, that behaves similarly to `cx_oracle` and requires
+    that Oracle Client Interface (OCI) is installed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable this mode, the user may call `oracledb.init_oracle_client` manually,
+    or by passing the parameter `thick_mode=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"). To pass custom arguments to `init_oracle_client`,
+    like the `lib_dir` path, a dict may be passed to this parameter, as in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE160]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://python-oracledb.readthedocs.io/en/latest/api_manual/module.html#oracledb.init_oracle_client](https://python-oracledb.readthedocs.io/en/latest/api_manual/module.html#oracledb.init_oracle_client)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0.0: added support for oracledb driver.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: DBAPI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Documentation and download information (if applicable) for python-oracledb
+    is available at: [https://oracle.github.io/python-oracledb/](https://oracle.github.io/python-oracledb/)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Connect String:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE161]'
+  prefs: []
+  type: TYPE_PRE
+- en: Thick mode support
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: By default the `python-oracledb` is started in thin mode, that does not require
+    oracle client libraries to be installed in the system. The `python-oracledb` driver
+    also support a “thick” mode, that behaves similarly to `cx_oracle` and requires
+    that Oracle Client Interface (OCI) is installed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable this mode, the user may call `oracledb.init_oracle_client` manually,
+    or by passing the parameter `thick_mode=True` to [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"). To pass custom arguments to `init_oracle_client`,
+    like the `lib_dir` path, a dict may be passed to this parameter, as in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE162]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://python-oracledb.readthedocs.io/en/latest/api_manual/module.html#oracledb.init_oracle_client](https://python-oracledb.readthedocs.io/en/latest/api_manual/module.html#oracledb.init_oracle_client)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 2.0.0: added support for oracledb driver.'
+  prefs: []
+  type: TYPE_NORMAL

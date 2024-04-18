@@ -1,0 +1,530 @@
+- en: Indexable
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/extensions/indexable.html](https://docs.sqlalchemy.org/en/20/orm/extensions/indexable.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Define attributes on ORM-mapped classes that have “index” attributes for columns
+    with [`Indexable`](../../core/type_api.html#sqlalchemy.types.Indexable "sqlalchemy.types.Indexable")
+    types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: “index” means the attribute is associated with an element of an [`Indexable`](../../core/type_api.html#sqlalchemy.types.Indexable
+    "sqlalchemy.types.Indexable") column with the predefined index to access it. The
+    [`Indexable`](../../core/type_api.html#sqlalchemy.types.Indexable "sqlalchemy.types.Indexable")
+    types include types such as [`ARRAY`](../../core/type_basics.html#sqlalchemy.types.ARRAY
+    "sqlalchemy.types.ARRAY"), [`JSON`](../../core/type_basics.html#sqlalchemy.types.JSON
+    "sqlalchemy.types.JSON") and [`HSTORE`](../../dialects/postgresql.html#sqlalchemy.dialects.postgresql.HSTORE
+    "sqlalchemy.dialects.postgresql.HSTORE").
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`indexable`](#module-sqlalchemy.ext.indexable "sqlalchemy.ext.indexable")
+    extension provides [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column")-like interface for any element of an [`Indexable`](../../core/type_api.html#sqlalchemy.types.Indexable
+    "sqlalchemy.types.Indexable") typed column. In simple cases, it can be treated
+    as a [`Column`](../../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    - mapped attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Synopsis
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Given `Person` as a model with a primary key and JSON data field. While this
+    field may have any number of elements encoded within it, we would like to refer
+    to the element called `name` individually as a dedicated attribute which behaves
+    like a standalone column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the `name` attribute now behaves like a mapped column. We can compose
+    a new `Person` and set the value of `name`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The value is now accessible:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Behind the scenes, the JSON field was initialized to a new blank dictionary
+    and the field was set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The field is mutable in place:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property"),
+    the change that we make to the indexable structure is also automatically tracked
+    as history; we no longer need to use [`MutableDict`](mutable.html#sqlalchemy.ext.mutable.MutableDict
+    "sqlalchemy.ext.mutable.MutableDict") in order to track this change for the unit
+    of work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deletions work normally as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, deletion of `person.name` deletes the value from the dictionary, but
+    not the dictionary itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A missing key will produce `AttributeError`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Unless you set a default value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The attributes are also accessible at the class level. Below, we illustrate
+    `Person.name` used to generate an indexed SQL criteria:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above query is equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Multiple [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    objects can be chained to produce multiple levels of indexing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, a query such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'On a PostgreSQL backend, the above query will render as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Default Values
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    includes special behaviors for when the indexed data structure does not exist,
+    and a set operation is called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For an [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    that is given an integer index value, the default data structure will be a Python
+    list of `None` values, at least as long as the index value; the value is then
+    set at its place in the list. This means for an index value of zero, the list
+    will be initialized to `[None]` before setting the given value, and for an index
+    value of five, the list will be initialized to `[None, None, None, None, None]`
+    before setting the fifth element to the given value. Note that an existing list
+    is **not** extended in place to receive a value.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: for an [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    that is given any other kind of index value (e.g. strings usually), a Python dictionary
+    is used as the default data structure.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The default data structure can be set to any Python callable using the [`index_property.datatype`](#sqlalchemy.ext.indexable.index_property.params.datatype
+    "sqlalchemy.ext.indexable.index_property") parameter, overriding the previous
+    rules.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Subclassing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    can be subclassed, in particular for the common use case of providing coercion
+    of values or SQL expressions as they are accessed. Below is a common recipe for
+    use with a PostgreSQL JSON type, where we want to also include automatic casting
+    plus `astext()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above subclass can be used with the PostgreSQL-specific version of [`JSON`](../../dialects/postgresql.html#sqlalchemy.dialects.postgresql.JSON
+    "sqlalchemy.dialects.postgresql.JSON"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `age` attribute at the instance level works as before; however when rendering
+    SQL, PostgreSQL’s `->>` operator will be used for indexed access, instead of the
+    usual index operator of `->`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above query will render:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: API Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [index_property](#sqlalchemy.ext.indexable.index_property) | A property generator.
+    The generated property describes an object attribute that corresponds to an [`Indexable`](../../core/type_api.html#sqlalchemy.types.Indexable
+    "sqlalchemy.types.Indexable") column. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: A property generator. The generated property describes an object attribute that
+    corresponds to an [`Indexable`](../../core/type_api.html#sqlalchemy.types.Indexable
+    "sqlalchemy.types.Indexable") column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`sqlalchemy.ext.indexable`](#module-sqlalchemy.ext.indexable "sqlalchemy.ext.indexable")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.indexable.index_property.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.indexable.index_property`](#sqlalchemy.ext.indexable.index_property
+    "sqlalchemy.ext.indexable.index_property") ([`sqlalchemy.ext.hybrid.hybrid_property`](hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`attr_name` – An attribute name of an Indexable typed column, or other attribute
+    that returns an indexable structure.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`index` – The index to be used for getting and setting this value. This should
+    be the Python-side index value for integers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default` – A value which will be returned instead of AttributeError when there
+    is not a value at given index.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`datatype` – default datatype to use when the field is empty. By default, this
+    is derived from the type of index used; a Python list for an integer index, or
+    a Python dictionary for any other style of index. For a list, the list will be
+    initialized to a list of None values that is at least `index` elements long.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`mutable` – if False, writes and deletes to the attribute will be disallowed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`onebased` – assume the SQL representation of this value is one-based; that
+    is, the first index in SQL is 1, not zero.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Synopsis
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Given `Person` as a model with a primary key and JSON data field. While this
+    field may have any number of elements encoded within it, we would like to refer
+    to the element called `name` individually as a dedicated attribute which behaves
+    like a standalone column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the `name` attribute now behaves like a mapped column. We can compose
+    a new `Person` and set the value of `name`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The value is now accessible:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Behind the scenes, the JSON field was initialized to a new blank dictionary
+    and the field was set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The field is mutable in place:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property"),
+    the change that we make to the indexable structure is also automatically tracked
+    as history; we no longer need to use [`MutableDict`](mutable.html#sqlalchemy.ext.mutable.MutableDict
+    "sqlalchemy.ext.mutable.MutableDict") in order to track this change for the unit
+    of work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deletions work normally as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, deletion of `person.name` deletes the value from the dictionary, but
+    not the dictionary itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A missing key will produce `AttributeError`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Unless you set a default value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The attributes are also accessible at the class level. Below, we illustrate
+    `Person.name` used to generate an indexed SQL criteria:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above query is equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Multiple [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    objects can be chained to produce multiple levels of indexing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, a query such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'On a PostgreSQL backend, the above query will render as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Default Values
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    includes special behaviors for when the indexed data structure does not exist,
+    and a set operation is called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For an [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    that is given an integer index value, the default data structure will be a Python
+    list of `None` values, at least as long as the index value; the value is then
+    set at its place in the list. This means for an index value of zero, the list
+    will be initialized to `[None]` before setting the given value, and for an index
+    value of five, the list will be initialized to `[None, None, None, None, None]`
+    before setting the fifth element to the given value. Note that an existing list
+    is **not** extended in place to receive a value.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: for an [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    that is given any other kind of index value (e.g. strings usually), a Python dictionary
+    is used as the default data structure.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The default data structure can be set to any Python callable using the [`index_property.datatype`](#sqlalchemy.ext.indexable.index_property.params.datatype
+    "sqlalchemy.ext.indexable.index_property") parameter, overriding the previous
+    rules.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Subclassing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property")
+    can be subclassed, in particular for the common use case of providing coercion
+    of values or SQL expressions as they are accessed. Below is a common recipe for
+    use with a PostgreSQL JSON type, where we want to also include automatic casting
+    plus `astext()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above subclass can be used with the PostgreSQL-specific version of [`JSON`](../../dialects/postgresql.html#sqlalchemy.dialects.postgresql.JSON
+    "sqlalchemy.dialects.postgresql.JSON"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `age` attribute at the instance level works as before; however when rendering
+    SQL, PostgreSQL’s `->>` operator will be used for indexed access, instead of the
+    usual index operator of `->`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above query will render:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: API Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [index_property](#sqlalchemy.ext.indexable.index_property) | A property generator.
+    The generated property describes an object attribute that corresponds to an [`Indexable`](../../core/type_api.html#sqlalchemy.types.Indexable
+    "sqlalchemy.types.Indexable") column. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: A property generator. The generated property describes an object attribute that
+    corresponds to an [`Indexable`](../../core/type_api.html#sqlalchemy.types.Indexable
+    "sqlalchemy.types.Indexable") column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`sqlalchemy.ext.indexable`](#module-sqlalchemy.ext.indexable "sqlalchemy.ext.indexable")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.ext.indexable.index_property.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.ext.indexable.index_property`](#sqlalchemy.ext.indexable.index_property
+    "sqlalchemy.ext.indexable.index_property") ([`sqlalchemy.ext.hybrid.hybrid_property`](hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`index_property`](#sqlalchemy.ext.indexable.index_property "sqlalchemy.ext.indexable.index_property").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`attr_name` – An attribute name of an Indexable typed column, or other attribute
+    that returns an indexable structure.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`index` – The index to be used for getting and setting this value. This should
+    be the Python-side index value for integers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default` – A value which will be returned instead of AttributeError when there
+    is not a value at given index.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`datatype` – default datatype to use when the field is empty. By default, this
+    is derived from the type of index used; a Python list for an integer index, or
+    a Python dictionary for any other style of index. For a list, the list will be
+    initialized to a list of None values that is at least `index` elements long.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`mutable` – if False, writes and deletes to the attribute will be disallowed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`onebased` – assume the SQL representation of this value is one-based; that
+    is, the first index in SQL is 1, not zero.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

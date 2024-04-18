@@ -1,0 +1,1100 @@
+- en: Connections / Engines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/faq/connections.html](https://docs.sqlalchemy.org/en/20/faq/connections.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[How do I configure logging?](#how-do-i-configure-logging)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[How do I pool database connections? Are my connections pooled?](#how-do-i-pool-database-connections-are-my-connections-pooled)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[How do I pass custom connect arguments to my database API?](#how-do-i-pass-custom-connect-arguments-to-my-database-api)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[“MySQL Server has gone away”](#mysql-server-has-gone-away)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[“Commands out of sync; you can’t run this command now” / “This result object
+    does not return rows. It has been closed automatically”](#commands-out-of-sync-you-can-t-run-this-command-now-this-result-object-does-not-return-rows-it-has-been-closed-automatically)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[How Do I “Retry” a Statement Execution Automatically?](#how-do-i-retry-a-statement-execution-automatically)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Using DBAPI Autocommit Allows for a Readonly Version of Transparent Reconnect](#using-dbapi-autocommit-allows-for-a-readonly-version-of-transparent-reconnect)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Why does SQLAlchemy issue so many ROLLBACKs?](#why-does-sqlalchemy-issue-so-many-rollbacks)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[I’m on MyISAM - how do I turn it off?](#i-m-on-myisam-how-do-i-turn-it-off)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[I’m on SQL Server - how do I turn those ROLLBACKs into COMMITs?](#i-m-on-sql-server-how-do-i-turn-those-rollbacks-into-commits)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[I am using multiple connections with a SQLite database (typically to test
+    transaction operation), and my test program is not working!](#i-am-using-multiple-connections-with-a-sqlite-database-typically-to-test-transaction-operation-and-my-test-program-is-not-working)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[How do I get at the raw DBAPI connection when using an Engine?](#how-do-i-get-at-the-raw-dbapi-connection-when-using-an-engine)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Accessing the underlying connection for an asyncio driver](#accessing-the-underlying-connection-for-an-asyncio-driver)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[How do I use engines / connections / sessions with Python multiprocessing,
+    or os.fork()?](#how-do-i-use-engines-connections-sessions-with-python-multiprocessing-or-os-fork)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How do I configure logging?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: See [Configuring Logging](../core/engines.html#dbengine-logging).
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do I pool database connections? Are my connections pooled?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLAlchemy performs application-level connection pooling automatically in most
+    cases. For all included dialects (except SQLite when using a “memory” database),
+    a [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    object refers to a [`QueuePool`](../core/pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") as a source of connectivity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more detail, see [Engine Configuration](../core/engines.html) and [Connection
+    Pooling](../core/pooling.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do I pass custom connect arguments to my database API?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`create_engine()`](../core/engines.html#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    call accepts additional arguments either directly via the `connect_args` keyword
+    argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or for basic string and integer arguments, they can usually be specified in
+    the query string of the URL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Custom DBAPI connect() arguments / on-connect routines](../core/engines.html#custom-dbapi-args)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: “MySQL Server has gone away”
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The primary cause of this error is that the MySQL connection has timed out and
+    has been closed by the server. The MySQL server closes connections which have
+    been idle a period of time which defaults to eight hours. To accommodate this,
+    the immediate setting is to enable the [`create_engine.pool_recycle`](../core/engines.html#sqlalchemy.create_engine.params.pool_recycle
+    "sqlalchemy.create_engine") setting, which will ensure that a connection which
+    is older than a set amount of seconds will be discarded and replaced with a new
+    connection when it is next checked out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the more general case of accommodating database restarts and other temporary
+    loss of connectivity due to network issues, connections that are in the pool may
+    be recycled in response to more generalized disconnect detection techniques. The
+    section [Dealing with Disconnects](../core/pooling.html#pool-disconnects) provides
+    background on both “pessimistic” (e.g. pre-ping) and “optimistic” (e.g. graceful
+    recovery) techniques. Modern SQLAlchemy tends to favor the “pessimistic” approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dealing with Disconnects](../core/pooling.html#pool-disconnects)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## “Commands out of sync; you can’t run this command now” / “This result object
+    does not return rows. It has been closed automatically”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The MySQL drivers have a fairly wide class of failure modes whereby the state
+    of the connection to the server is in an invalid state. Typically, when the connection
+    is used again, one of these two error messages will occur. The reason is because
+    the state of the server has been changed to one in which the client library does
+    not expect, such that when the client library emits a new statement on the connection,
+    the server does not respond as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In SQLAlchemy, because database connections are pooled, the issue of the messaging
+    being out of sync on a connection becomes more important, since when an operation
+    fails, if the connection itself is in an unusable state, if it goes back into
+    the connection pool, it will malfunction when checked out again. The mitigation
+    for this issue is that the connection is **invalidated** when such a failure mode
+    occurs so that the underlying database connection to MySQL is discarded. This
+    invalidation occurs automatically for many known failure modes and can also be
+    called explicitly via the [`Connection.invalidate()`](../core/connections.html#sqlalchemy.engine.Connection.invalidate
+    "sqlalchemy.engine.Connection.invalidate") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is also a second class of failure modes within this category where a context
+    manager such as `with session.begin_nested():` wants to “roll back” the transaction
+    when an error occurs; however within some failure modes of the connection, the
+    rollback itself (which can also be a RELEASE SAVEPOINT operation) also fails,
+    causing misleading stack traces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Originally, the cause of this error used to be fairly simple, it meant that
+    a multithreaded program was invoking commands on a single connection from more
+    than one thread. This applied to the original “MySQLdb” native-C driver that was
+    pretty much the only driver in use. However, with the introduction of pure Python
+    drivers like PyMySQL and MySQL-connector-Python, as well as increased use of tools
+    such as gevent/eventlet, multiprocessing (often with Celery), and others, there
+    is a whole series of factors that has been known to cause this problem, some of
+    which have been improved across SQLAlchemy versions but others which are unavoidable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Sharing a connection among threads** - This is the original reason these
+    kinds of errors occurred. A program used the same connection in two or more threads
+    at the same time, meaning multiple sets of messages got mixed up on the connection,
+    putting the server-side session into a state that the client no longer knows how
+    to interpret. However, other causes are usually more likely today.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Sharing the filehandle for the connection among processes** - This usually
+    occurs when a program uses `os.fork()` to spawn a new process, and a TCP connection
+    that is present in th parent process gets shared into one or more child processes.
+    As multiple processes are now emitting messages to essentially the same filehandle,
+    the server receives interleaved messages and breaks the state of the connection.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This scenario can occur very easily if a program uses Python’s “multiprocessing”
+    module and makes use of an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") that was created in the parent process. It’s common
+    that “multiprocessing” is in use when using tools like Celery. The correct approach
+    should be either that a new [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") is produced when a child process first starts, discarding
+    any [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    that came down from the parent process; or, the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") that’s inherited from the parent process can have
+    it’s internal pool of connections disposed by calling [`Engine.dispose()`](../core/connections.html#sqlalchemy.engine.Engine.dispose
+    "sqlalchemy.engine.Engine.dispose").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**Greenlet Monkeypatching w/ Exits** - When using a library like gevent or
+    eventlet that monkeypatches the Python networking API, libraries like PyMySQL
+    are now working in an asynchronous mode of operation, even though they are not
+    developed explicitly against this model. A common issue is that a greenthread
+    is interrupted, often due to timeout logic in the application. This results in
+    the `GreenletExit` exception being raised, and the pure-Python MySQL driver is
+    interrupted from its work, which may have been that it was receiving a response
+    from the server or preparing to otherwise reset the state of the connection. When
+    the exception cuts all that work short, the conversation between client and server
+    is now out of sync and subsequent usage of the connection may fail. SQLAlchemy
+    as of version 1.1.0 knows how to guard against this, as if a database operation
+    is interrupted by a so-called “exit exception”, which includes `GreenletExit`
+    and any other subclass of Python `BaseException` that is not also a subclass of
+    `Exception`, the connection is invalidated.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Rollbacks / SAVEPOINT releases failing** - Some classes of error cause the
+    connection to be unusable within the context of a transaction, as well as when
+    operating in a “SAVEPOINT” block. In these cases, the failure on the connection
+    has rendered any SAVEPOINT as no longer existing, yet when SQLAlchemy, or the
+    application, attempts to “roll back” this savepoint, the “RELEASE SAVEPOINT” operation
+    fails, typically with a message like “savepoint does not exist”. In this case,
+    under Python 3 there will be a chain of exceptions output, where the ultimate
+    “cause” of the error will be displayed as well. Under Python 2, there are no “chained”
+    exceptions, however recent versions of SQLAlchemy will attempt to emit a warning
+    illustrating the original failure cause, while still throwing the immediate error
+    which is the failure of the ROLLBACK.  ## How Do I “Retry” a Statement Execution
+    Automatically?'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The documentation section [Dealing with Disconnects](../core/pooling.html#pool-disconnects)
+    discusses the strategies available for pooled connections that have been disconnected
+    since the last time a particular connection was checked out. The most modern feature
+    in this regard is the [`create_engine.pre_ping`](../core/engines.html#sqlalchemy.create_engine.params.pre_ping
+    "sqlalchemy.create_engine") parameter, which allows that a “ping” is emitted on
+    a database connection when it’s retrieved from the pool, reconnecting if the current
+    connection has been disconnected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s important to note that this “ping” is only emitted **before** the connection
+    is actually used for an operation. Once the connection is delivered to the caller,
+    per the Python [DBAPI](../glossary.html#term-DBAPI) specification it is now subject
+    to an **autobegin** operation, which means it will automatically BEGIN a new transaction
+    when it is first used that remains in effect for subsequent statements, until
+    the DBAPI-level `connection.commit()` or `connection.rollback()` method is invoked.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In modern use of SQLAlchemy, a series of SQL statements are always invoked within
+    this transactional state, assuming [DBAPI autocommit mode](../core/connections.html#dbapi-autocommit)
+    is not enabled (more on that in the next section), meaning that no single statement
+    is automatically committed; if an operation fails, the effects of all statements
+    within the current transaction will be lost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The implication that this has for the notion of “retrying” a statement is that
+    in the default case, when a connection is lost, **the entire transaction is lost**.
+    There is no useful way that the database can “reconnect and retry” and continue
+    where it left off, since data is already lost. For this reason, SQLAlchemy does
+    not have a transparent “reconnection” feature that works mid-transaction, for
+    the case when the database connection has disconnected while being used. The canonical
+    approach to dealing with mid-operation disconnects is to **retry the entire operation
+    from the start of the transaction**, often by using a custom Python decorator
+    that will “retry” a particular function several times until it succeeds, or to
+    otherwise architect the application in such a way that it is resilient against
+    transactions that are dropped that then cause operations to fail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is also the notion of extensions that can keep track of all of the statements
+    that have proceeded within a transaction and then replay them all in a new transaction
+    in order to approximate a “retry” operation. SQLAlchemy’s [event system](../core/events.html)
+    does allow such a system to be constructed, however this approach is also not
+    generally useful as there is no way to guarantee that those [DML](../glossary.html#term-DML)
+    statements will be working against the same state, as once a transaction has ended
+    the state of the database in a new transaction may be totally different. Architecting
+    “retry” explicitly into the application at the points at which transactional operations
+    begin and commit remains the better approach since the application-level transactional
+    methods are the ones that know best how to re-run their steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Otherwise, if SQLAlchemy were to provide a feature that transparently and silently
+    “reconnected” a connection mid-transaction, the effect would be that data is silently
+    lost. By trying to hide the problem, SQLAlchemy would make the situation much
+    worse.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, if we are **not** using transactions, then there are more options available,
+    as the next section describes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using DBAPI Autocommit Allows for a Readonly Version of Transparent Reconnect'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the rationale for not having a transparent reconnection mechanism stated,
+    the preceding section rests upon the assumption that the application is in fact
+    using DBAPI-level transactions. As most DBAPIs now offer [native “autocommit”
+    settings](../core/connections.html#dbapi-autocommit), we can make use of these
+    features to provide a limited form of transparent reconnect for **read only, autocommit
+    only operations**. A transparent statement retry may be applied to the `cursor.execute()`
+    method of the DBAPI, however it is still not safe to apply to the `cursor.executemany()`
+    method of the DBAPI, as the statement may have consumed any portion of the arguments
+    given.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following recipe should **not** be used for operations that write data.
+    Users should carefully read and understand how the recipe works and test failure
+    modes very carefully against the specifically targeted DBAPI driver before making
+    production use of this recipe. The retry mechanism does not guarantee prevention
+    of disconnection errors in all cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A simple retry mechanism may be applied to the DBAPI level `cursor.execute()`
+    method by making use of the [`DialectEvents.do_execute()`](../core/events.html#sqlalchemy.events.DialectEvents.do_execute
+    "sqlalchemy.events.DialectEvents.do_execute") and [`DialectEvents.do_execute_no_params()`](../core/events.html#sqlalchemy.events.DialectEvents.do_execute_no_params
+    "sqlalchemy.events.DialectEvents.do_execute_no_params") hooks, which will be able
+    to intercept disconnections during statement executions. It will **not** intercept
+    connection failures during result set fetch operations, for those DBAPIs that
+    don’t fully buffer result sets. The recipe requires that the database support
+    DBAPI level autocommit and is **not guaranteed** for particular backends. A single
+    function `reconnecting_engine()` is presented which applies the event hooks to
+    a given [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    object, returning an always-autocommit version that enables DBAPI-level autocommit.
+    A connection will transparently reconnect for single-parameter and no-parameter
+    statement executions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Given the above recipe, a reconnection mid-transaction may be demonstrated
+    using the following proof of concept script. Once run, it will emit a `SELECT
+    1` statement to the database every five seconds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Restart the database while the script runs to demonstrate the transparent reconnect
+    operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above recipe is tested for SQLAlchemy 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why does SQLAlchemy issue so many ROLLBACKs?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLAlchemy currently assumes DBAPI connections are in “non-autocommit” mode
+    - this is the default behavior of the Python database API, meaning it must be
+    assumed that a transaction is always in progress. The connection pool issues `connection.rollback()`
+    when a connection is returned. This is so that any transactional resources remaining
+    on the connection are released. On a database like PostgreSQL or MSSQL where table
+    resources are aggressively locked, this is critical so that rows and tables don’t
+    remain locked within connections that are no longer in use. An application can
+    otherwise hang. It’s not just for locks, however, and is equally critical on any
+    database that has any kind of transaction isolation, including MySQL with InnoDB.
+    Any connection that is still inside an old transaction will return stale data,
+    if that data was already queried on that connection within isolation. For background
+    on why you might see stale data even on MySQL, see [https://dev.mysql.com/doc/refman/5.1/en/innodb-transaction-model.html](https://dev.mysql.com/doc/refman/5.1/en/innodb-transaction-model.html)
+  prefs: []
+  type: TYPE_NORMAL
+- en: I’m on MyISAM - how do I turn it off?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The behavior of the connection pool’s connection return behavior can be configured
+    using `reset_on_return`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: I’m on SQL Server - how do I turn those ROLLBACKs into COMMITs?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`reset_on_return` accepts the values `commit`, `rollback` in addition to `True`,
+    `False`, and `None`. Setting to `commit` will cause a COMMIT as any connection
+    is returned to the pool:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: I am using multiple connections with a SQLite database (typically to test transaction
+    operation), and my test program is not working!
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'If using a SQLite `:memory:` database the default connection pool is the [`SingletonThreadPool`](../core/pooling.html#sqlalchemy.pool.SingletonThreadPool
+    "sqlalchemy.pool.SingletonThreadPool"), which maintains exactly one SQLite connection
+    per thread. So two connections in use in the same thread will actually be the
+    same SQLite connection. Make sure you’re not using a :memory: database so that
+    the engine will use [`QueuePool`](../core/pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") (the default for non-memory databases in current
+    SQLAlchemy versions).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Threading/Pooling Behavior](../dialects/sqlite.html#pysqlite-threading-pooling)
+    - info on PySQLite’s behavior.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## How do I get at the raw DBAPI connection when using an Engine?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With a regular SA engine-level Connection, you can get at a pool-proxied version
+    of the DBAPI connection via the [`Connection.connection`](../core/connections.html#sqlalchemy.engine.Connection.connection
+    "sqlalchemy.engine.Connection.connection") attribute on [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), and for the really-real DBAPI connection you
+    can call the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") attribute on that. On
+    regular sync drivers there is usually no need to access the non-pool-proxied DBAPI
+    connection, as all methods are proxied through:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.4.24: Added the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") attribute, which supersedes
+    the previous `PoolProxiedConnection.connection` attribute which still remains
+    available; this attribute always provides a pep-249 synchronous style connection
+    object. The [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") attribute is also added
+    which will always refer to the real driver-level connection regardless of what
+    API it presents.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Accessing the underlying connection for an asyncio driver
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When an asyncio driver is in use, there are two changes to the above scheme.
+    The first is that when using an [`AsyncConnection`](../orm/extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncConnection
+    "sqlalchemy.ext.asyncio.AsyncConnection"), the [`PoolProxiedConnection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection
+    "sqlalchemy.pool.PoolProxiedConnection") must be accessed using the awaitable
+    method [`AsyncConnection.get_raw_connection()`](../orm/extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncConnection.get_raw_connection
+    "sqlalchemy.ext.asyncio.AsyncConnection.get_raw_connection"). The returned [`PoolProxiedConnection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection
+    "sqlalchemy.pool.PoolProxiedConnection") in this case retains a sync-style pep-249
+    usage pattern, and the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") attribute refers to
+    a a SQLAlchemy-adapted connection object which adapts the asyncio connection to
+    a sync style pep-249 API, in other words there are *two* levels of proxying going
+    on when using an asyncio driver. The actual asyncio connection is available from
+    the `driver_connection` attribute. To restate the previous example in terms of
+    asyncio looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.4.24: Added the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") and [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") attributes to allow
+    access to pep-249 connections, pep-249 adaption layers, and underlying driver
+    connections using a consistent interface.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using asyncio drivers, the above “DBAPI” connection is actually a SQLAlchemy-adapted
+    form of connection which presents a synchronous-style pep-249 style API. To access
+    the actual asyncio driver connection, which will present the original asyncio
+    API of the driver in use, this can be accessed via the [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") attribute of [`PoolProxiedConnection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection
+    "sqlalchemy.pool.PoolProxiedConnection"). For a standard pep-249 driver, [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") and [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") are synonymous.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You must ensure that you revert any isolation level settings or other operation-specific
+    settings on the connection back to normal before returning it to the pool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an alternative to reverting settings, you can call the [`Connection.detach()`](../core/connections.html#sqlalchemy.engine.Connection.detach
+    "sqlalchemy.engine.Connection.detach") method on either [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") or the proxied connection, which will de-associate
+    the connection from the pool such that it will be closed and discarded when [`Connection.close()`](../core/connections.html#sqlalchemy.engine.Connection.close
+    "sqlalchemy.engine.Connection.close") is called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: How do I use engines / connections / sessions with Python multiprocessing, or
+    os.fork()?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This is covered in the section [Using Connection Pools with Multiprocessing
+    or os.fork()](../core/pooling.html#pooling-multiprocessing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do I configure logging?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: See [Configuring Logging](../core/engines.html#dbengine-logging).
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do I pool database connections? Are my connections pooled?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLAlchemy performs application-level connection pooling automatically in most
+    cases. For all included dialects (except SQLite when using a “memory” database),
+    a [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    object refers to a [`QueuePool`](../core/pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") as a source of connectivity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more detail, see [Engine Configuration](../core/engines.html) and [Connection
+    Pooling](../core/pooling.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do I pass custom connect arguments to my database API?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`create_engine()`](../core/engines.html#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    call accepts additional arguments either directly via the `connect_args` keyword
+    argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or for basic string and integer arguments, they can usually be specified in
+    the query string of the URL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Custom DBAPI connect() arguments / on-connect routines](../core/engines.html#custom-dbapi-args)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: “MySQL Server has gone away”
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The primary cause of this error is that the MySQL connection has timed out and
+    has been closed by the server. The MySQL server closes connections which have
+    been idle a period of time which defaults to eight hours. To accommodate this,
+    the immediate setting is to enable the [`create_engine.pool_recycle`](../core/engines.html#sqlalchemy.create_engine.params.pool_recycle
+    "sqlalchemy.create_engine") setting, which will ensure that a connection which
+    is older than a set amount of seconds will be discarded and replaced with a new
+    connection when it is next checked out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the more general case of accommodating database restarts and other temporary
+    loss of connectivity due to network issues, connections that are in the pool may
+    be recycled in response to more generalized disconnect detection techniques. The
+    section [Dealing with Disconnects](../core/pooling.html#pool-disconnects) provides
+    background on both “pessimistic” (e.g. pre-ping) and “optimistic” (e.g. graceful
+    recovery) techniques. Modern SQLAlchemy tends to favor the “pessimistic” approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dealing with Disconnects](../core/pooling.html#pool-disconnects)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## “Commands out of sync; you can’t run this command now” / “This result object
+    does not return rows. It has been closed automatically”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The MySQL drivers have a fairly wide class of failure modes whereby the state
+    of the connection to the server is in an invalid state. Typically, when the connection
+    is used again, one of these two error messages will occur. The reason is because
+    the state of the server has been changed to one in which the client library does
+    not expect, such that when the client library emits a new statement on the connection,
+    the server does not respond as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In SQLAlchemy, because database connections are pooled, the issue of the messaging
+    being out of sync on a connection becomes more important, since when an operation
+    fails, if the connection itself is in an unusable state, if it goes back into
+    the connection pool, it will malfunction when checked out again. The mitigation
+    for this issue is that the connection is **invalidated** when such a failure mode
+    occurs so that the underlying database connection to MySQL is discarded. This
+    invalidation occurs automatically for many known failure modes and can also be
+    called explicitly via the [`Connection.invalidate()`](../core/connections.html#sqlalchemy.engine.Connection.invalidate
+    "sqlalchemy.engine.Connection.invalidate") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is also a second class of failure modes within this category where a context
+    manager such as `with session.begin_nested():` wants to “roll back” the transaction
+    when an error occurs; however within some failure modes of the connection, the
+    rollback itself (which can also be a RELEASE SAVEPOINT operation) also fails,
+    causing misleading stack traces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Originally, the cause of this error used to be fairly simple, it meant that
+    a multithreaded program was invoking commands on a single connection from more
+    than one thread. This applied to the original “MySQLdb” native-C driver that was
+    pretty much the only driver in use. However, with the introduction of pure Python
+    drivers like PyMySQL and MySQL-connector-Python, as well as increased use of tools
+    such as gevent/eventlet, multiprocessing (often with Celery), and others, there
+    is a whole series of factors that has been known to cause this problem, some of
+    which have been improved across SQLAlchemy versions but others which are unavoidable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Sharing a connection among threads** - This is the original reason these
+    kinds of errors occurred. A program used the same connection in two or more threads
+    at the same time, meaning multiple sets of messages got mixed up on the connection,
+    putting the server-side session into a state that the client no longer knows how
+    to interpret. However, other causes are usually more likely today.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Sharing the filehandle for the connection among processes** - This usually
+    occurs when a program uses `os.fork()` to spawn a new process, and a TCP connection
+    that is present in th parent process gets shared into one or more child processes.
+    As multiple processes are now emitting messages to essentially the same filehandle,
+    the server receives interleaved messages and breaks the state of the connection.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This scenario can occur very easily if a program uses Python’s “multiprocessing”
+    module and makes use of an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") that was created in the parent process. It’s common
+    that “multiprocessing” is in use when using tools like Celery. The correct approach
+    should be either that a new [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") is produced when a child process first starts, discarding
+    any [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    that came down from the parent process; or, the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") that’s inherited from the parent process can have
+    it’s internal pool of connections disposed by calling [`Engine.dispose()`](../core/connections.html#sqlalchemy.engine.Engine.dispose
+    "sqlalchemy.engine.Engine.dispose").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**Greenlet Monkeypatching w/ Exits** - When using a library like gevent or
+    eventlet that monkeypatches the Python networking API, libraries like PyMySQL
+    are now working in an asynchronous mode of operation, even though they are not
+    developed explicitly against this model. A common issue is that a greenthread
+    is interrupted, often due to timeout logic in the application. This results in
+    the `GreenletExit` exception being raised, and the pure-Python MySQL driver is
+    interrupted from its work, which may have been that it was receiving a response
+    from the server or preparing to otherwise reset the state of the connection. When
+    the exception cuts all that work short, the conversation between client and server
+    is now out of sync and subsequent usage of the connection may fail. SQLAlchemy
+    as of version 1.1.0 knows how to guard against this, as if a database operation
+    is interrupted by a so-called “exit exception”, which includes `GreenletExit`
+    and any other subclass of Python `BaseException` that is not also a subclass of
+    `Exception`, the connection is invalidated.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Rollbacks / SAVEPOINT releases failing** - Some classes of error cause the
+    connection to be unusable within the context of a transaction, as well as when
+    operating in a “SAVEPOINT” block. In these cases, the failure on the connection
+    has rendered any SAVEPOINT as no longer existing, yet when SQLAlchemy, or the
+    application, attempts to “roll back” this savepoint, the “RELEASE SAVEPOINT” operation
+    fails, typically with a message like “savepoint does not exist”. In this case,
+    under Python 3 there will be a chain of exceptions output, where the ultimate
+    “cause” of the error will be displayed as well. Under Python 2, there are no “chained”
+    exceptions, however recent versions of SQLAlchemy will attempt to emit a warning
+    illustrating the original failure cause, while still throwing the immediate error
+    which is the failure of the ROLLBACK.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## How Do I “Retry” a Statement Execution Automatically?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The documentation section [Dealing with Disconnects](../core/pooling.html#pool-disconnects)
+    discusses the strategies available for pooled connections that have been disconnected
+    since the last time a particular connection was checked out. The most modern feature
+    in this regard is the [`create_engine.pre_ping`](../core/engines.html#sqlalchemy.create_engine.params.pre_ping
+    "sqlalchemy.create_engine") parameter, which allows that a “ping” is emitted on
+    a database connection when it’s retrieved from the pool, reconnecting if the current
+    connection has been disconnected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s important to note that this “ping” is only emitted **before** the connection
+    is actually used for an operation. Once the connection is delivered to the caller,
+    per the Python [DBAPI](../glossary.html#term-DBAPI) specification it is now subject
+    to an **autobegin** operation, which means it will automatically BEGIN a new transaction
+    when it is first used that remains in effect for subsequent statements, until
+    the DBAPI-level `connection.commit()` or `connection.rollback()` method is invoked.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In modern use of SQLAlchemy, a series of SQL statements are always invoked within
+    this transactional state, assuming [DBAPI autocommit mode](../core/connections.html#dbapi-autocommit)
+    is not enabled (more on that in the next section), meaning that no single statement
+    is automatically committed; if an operation fails, the effects of all statements
+    within the current transaction will be lost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The implication that this has for the notion of “retrying” a statement is that
+    in the default case, when a connection is lost, **the entire transaction is lost**.
+    There is no useful way that the database can “reconnect and retry” and continue
+    where it left off, since data is already lost. For this reason, SQLAlchemy does
+    not have a transparent “reconnection” feature that works mid-transaction, for
+    the case when the database connection has disconnected while being used. The canonical
+    approach to dealing with mid-operation disconnects is to **retry the entire operation
+    from the start of the transaction**, often by using a custom Python decorator
+    that will “retry” a particular function several times until it succeeds, or to
+    otherwise architect the application in such a way that it is resilient against
+    transactions that are dropped that then cause operations to fail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is also the notion of extensions that can keep track of all of the statements
+    that have proceeded within a transaction and then replay them all in a new transaction
+    in order to approximate a “retry” operation. SQLAlchemy’s [event system](../core/events.html)
+    does allow such a system to be constructed, however this approach is also not
+    generally useful as there is no way to guarantee that those [DML](../glossary.html#term-DML)
+    statements will be working against the same state, as once a transaction has ended
+    the state of the database in a new transaction may be totally different. Architecting
+    “retry” explicitly into the application at the points at which transactional operations
+    begin and commit remains the better approach since the application-level transactional
+    methods are the ones that know best how to re-run their steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Otherwise, if SQLAlchemy were to provide a feature that transparently and silently
+    “reconnected” a connection mid-transaction, the effect would be that data is silently
+    lost. By trying to hide the problem, SQLAlchemy would make the situation much
+    worse.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, if we are **not** using transactions, then there are more options available,
+    as the next section describes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using DBAPI Autocommit Allows for a Readonly Version of Transparent Reconnect'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the rationale for not having a transparent reconnection mechanism stated,
+    the preceding section rests upon the assumption that the application is in fact
+    using DBAPI-level transactions. As most DBAPIs now offer [native “autocommit”
+    settings](../core/connections.html#dbapi-autocommit), we can make use of these
+    features to provide a limited form of transparent reconnect for **read only, autocommit
+    only operations**. A transparent statement retry may be applied to the `cursor.execute()`
+    method of the DBAPI, however it is still not safe to apply to the `cursor.executemany()`
+    method of the DBAPI, as the statement may have consumed any portion of the arguments
+    given.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following recipe should **not** be used for operations that write data.
+    Users should carefully read and understand how the recipe works and test failure
+    modes very carefully against the specifically targeted DBAPI driver before making
+    production use of this recipe. The retry mechanism does not guarantee prevention
+    of disconnection errors in all cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A simple retry mechanism may be applied to the DBAPI level `cursor.execute()`
+    method by making use of the [`DialectEvents.do_execute()`](../core/events.html#sqlalchemy.events.DialectEvents.do_execute
+    "sqlalchemy.events.DialectEvents.do_execute") and [`DialectEvents.do_execute_no_params()`](../core/events.html#sqlalchemy.events.DialectEvents.do_execute_no_params
+    "sqlalchemy.events.DialectEvents.do_execute_no_params") hooks, which will be able
+    to intercept disconnections during statement executions. It will **not** intercept
+    connection failures during result set fetch operations, for those DBAPIs that
+    don’t fully buffer result sets. The recipe requires that the database support
+    DBAPI level autocommit and is **not guaranteed** for particular backends. A single
+    function `reconnecting_engine()` is presented which applies the event hooks to
+    a given [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    object, returning an always-autocommit version that enables DBAPI-level autocommit.
+    A connection will transparently reconnect for single-parameter and no-parameter
+    statement executions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Given the above recipe, a reconnection mid-transaction may be demonstrated
+    using the following proof of concept script. Once run, it will emit a `SELECT
+    1` statement to the database every five seconds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Restart the database while the script runs to demonstrate the transparent reconnect
+    operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above recipe is tested for SQLAlchemy 1.4.  ### Using DBAPI Autocommit
+    Allows for a Readonly Version of Transparent Reconnect'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the rationale for not having a transparent reconnection mechanism stated,
+    the preceding section rests upon the assumption that the application is in fact
+    using DBAPI-level transactions. As most DBAPIs now offer [native “autocommit”
+    settings](../core/connections.html#dbapi-autocommit), we can make use of these
+    features to provide a limited form of transparent reconnect for **read only, autocommit
+    only operations**. A transparent statement retry may be applied to the `cursor.execute()`
+    method of the DBAPI, however it is still not safe to apply to the `cursor.executemany()`
+    method of the DBAPI, as the statement may have consumed any portion of the arguments
+    given.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following recipe should **not** be used for operations that write data.
+    Users should carefully read and understand how the recipe works and test failure
+    modes very carefully against the specifically targeted DBAPI driver before making
+    production use of this recipe. The retry mechanism does not guarantee prevention
+    of disconnection errors in all cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A simple retry mechanism may be applied to the DBAPI level `cursor.execute()`
+    method by making use of the [`DialectEvents.do_execute()`](../core/events.html#sqlalchemy.events.DialectEvents.do_execute
+    "sqlalchemy.events.DialectEvents.do_execute") and [`DialectEvents.do_execute_no_params()`](../core/events.html#sqlalchemy.events.DialectEvents.do_execute_no_params
+    "sqlalchemy.events.DialectEvents.do_execute_no_params") hooks, which will be able
+    to intercept disconnections during statement executions. It will **not** intercept
+    connection failures during result set fetch operations, for those DBAPIs that
+    don’t fully buffer result sets. The recipe requires that the database support
+    DBAPI level autocommit and is **not guaranteed** for particular backends. A single
+    function `reconnecting_engine()` is presented which applies the event hooks to
+    a given [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    object, returning an always-autocommit version that enables DBAPI-level autocommit.
+    A connection will transparently reconnect for single-parameter and no-parameter
+    statement executions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Given the above recipe, a reconnection mid-transaction may be demonstrated
+    using the following proof of concept script. Once run, it will emit a `SELECT
+    1` statement to the database every five seconds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Restart the database while the script runs to demonstrate the transparent reconnect
+    operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above recipe is tested for SQLAlchemy 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why does SQLAlchemy issue so many ROLLBACKs?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQLAlchemy currently assumes DBAPI connections are in “non-autocommit” mode
+    - this is the default behavior of the Python database API, meaning it must be
+    assumed that a transaction is always in progress. The connection pool issues `connection.rollback()`
+    when a connection is returned. This is so that any transactional resources remaining
+    on the connection are released. On a database like PostgreSQL or MSSQL where table
+    resources are aggressively locked, this is critical so that rows and tables don’t
+    remain locked within connections that are no longer in use. An application can
+    otherwise hang. It’s not just for locks, however, and is equally critical on any
+    database that has any kind of transaction isolation, including MySQL with InnoDB.
+    Any connection that is still inside an old transaction will return stale data,
+    if that data was already queried on that connection within isolation. For background
+    on why you might see stale data even on MySQL, see [https://dev.mysql.com/doc/refman/5.1/en/innodb-transaction-model.html](https://dev.mysql.com/doc/refman/5.1/en/innodb-transaction-model.html)
+  prefs: []
+  type: TYPE_NORMAL
+- en: I’m on MyISAM - how do I turn it off?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The behavior of the connection pool’s connection return behavior can be configured
+    using `reset_on_return`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: I’m on SQL Server - how do I turn those ROLLBACKs into COMMITs?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`reset_on_return` accepts the values `commit`, `rollback` in addition to `True`,
+    `False`, and `None`. Setting to `commit` will cause a COMMIT as any connection
+    is returned to the pool:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: I’m on MyISAM - how do I turn it off?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The behavior of the connection pool’s connection return behavior can be configured
+    using `reset_on_return`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: I’m on SQL Server - how do I turn those ROLLBACKs into COMMITs?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`reset_on_return` accepts the values `commit`, `rollback` in addition to `True`,
+    `False`, and `None`. Setting to `commit` will cause a COMMIT as any connection
+    is returned to the pool:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: I am using multiple connections with a SQLite database (typically to test transaction
+    operation), and my test program is not working!
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'If using a SQLite `:memory:` database the default connection pool is the [`SingletonThreadPool`](../core/pooling.html#sqlalchemy.pool.SingletonThreadPool
+    "sqlalchemy.pool.SingletonThreadPool"), which maintains exactly one SQLite connection
+    per thread. So two connections in use in the same thread will actually be the
+    same SQLite connection. Make sure you’re not using a :memory: database so that
+    the engine will use [`QueuePool`](../core/pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") (the default for non-memory databases in current
+    SQLAlchemy versions).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Threading/Pooling Behavior](../dialects/sqlite.html#pysqlite-threading-pooling)
+    - info on PySQLite’s behavior.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## How do I get at the raw DBAPI connection when using an Engine?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With a regular SA engine-level Connection, you can get at a pool-proxied version
+    of the DBAPI connection via the [`Connection.connection`](../core/connections.html#sqlalchemy.engine.Connection.connection
+    "sqlalchemy.engine.Connection.connection") attribute on [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), and for the really-real DBAPI connection you
+    can call the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") attribute on that. On
+    regular sync drivers there is usually no need to access the non-pool-proxied DBAPI
+    connection, as all methods are proxied through:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.4.24: Added the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") attribute, which supersedes
+    the previous `PoolProxiedConnection.connection` attribute which still remains
+    available; this attribute always provides a pep-249 synchronous style connection
+    object. The [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") attribute is also added
+    which will always refer to the real driver-level connection regardless of what
+    API it presents.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Accessing the underlying connection for an asyncio driver
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When an asyncio driver is in use, there are two changes to the above scheme.
+    The first is that when using an [`AsyncConnection`](../orm/extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncConnection
+    "sqlalchemy.ext.asyncio.AsyncConnection"), the [`PoolProxiedConnection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection
+    "sqlalchemy.pool.PoolProxiedConnection") must be accessed using the awaitable
+    method [`AsyncConnection.get_raw_connection()`](../orm/extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncConnection.get_raw_connection
+    "sqlalchemy.ext.asyncio.AsyncConnection.get_raw_connection"). The returned [`PoolProxiedConnection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection
+    "sqlalchemy.pool.PoolProxiedConnection") in this case retains a sync-style pep-249
+    usage pattern, and the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") attribute refers to
+    a a SQLAlchemy-adapted connection object which adapts the asyncio connection to
+    a sync style pep-249 API, in other words there are *two* levels of proxying going
+    on when using an asyncio driver. The actual asyncio connection is available from
+    the `driver_connection` attribute. To restate the previous example in terms of
+    asyncio looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.4.24: Added the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") and [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") attributes to allow
+    access to pep-249 connections, pep-249 adaption layers, and underlying driver
+    connections using a consistent interface.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using asyncio drivers, the above “DBAPI” connection is actually a SQLAlchemy-adapted
+    form of connection which presents a synchronous-style pep-249 style API. To access
+    the actual asyncio driver connection, which will present the original asyncio
+    API of the driver in use, this can be accessed via the [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") attribute of [`PoolProxiedConnection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection
+    "sqlalchemy.pool.PoolProxiedConnection"). For a standard pep-249 driver, [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") and [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") are synonymous.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You must ensure that you revert any isolation level settings or other operation-specific
+    settings on the connection back to normal before returning it to the pool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an alternative to reverting settings, you can call the [`Connection.detach()`](../core/connections.html#sqlalchemy.engine.Connection.detach
+    "sqlalchemy.engine.Connection.detach") method on either [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") or the proxied connection, which will de-associate
+    the connection from the pool such that it will be closed and discarded when [`Connection.close()`](../core/connections.html#sqlalchemy.engine.Connection.close
+    "sqlalchemy.engine.Connection.close") is called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Accessing the underlying connection for an asyncio driver
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When an asyncio driver is in use, there are two changes to the above scheme.
+    The first is that when using an [`AsyncConnection`](../orm/extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncConnection
+    "sqlalchemy.ext.asyncio.AsyncConnection"), the [`PoolProxiedConnection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection
+    "sqlalchemy.pool.PoolProxiedConnection") must be accessed using the awaitable
+    method [`AsyncConnection.get_raw_connection()`](../orm/extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncConnection.get_raw_connection
+    "sqlalchemy.ext.asyncio.AsyncConnection.get_raw_connection"). The returned [`PoolProxiedConnection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection
+    "sqlalchemy.pool.PoolProxiedConnection") in this case retains a sync-style pep-249
+    usage pattern, and the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") attribute refers to
+    a a SQLAlchemy-adapted connection object which adapts the asyncio connection to
+    a sync style pep-249 API, in other words there are *two* levels of proxying going
+    on when using an asyncio driver. The actual asyncio connection is available from
+    the `driver_connection` attribute. To restate the previous example in terms of
+    asyncio looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Changed in version 1.4.24: Added the [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") and [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") attributes to allow
+    access to pep-249 connections, pep-249 adaption layers, and underlying driver
+    connections using a consistent interface.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using asyncio drivers, the above “DBAPI” connection is actually a SQLAlchemy-adapted
+    form of connection which presents a synchronous-style pep-249 style API. To access
+    the actual asyncio driver connection, which will present the original asyncio
+    API of the driver in use, this can be accessed via the [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") attribute of [`PoolProxiedConnection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection
+    "sqlalchemy.pool.PoolProxiedConnection"). For a standard pep-249 driver, [`PoolProxiedConnection.dbapi_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.dbapi_connection
+    "sqlalchemy.pool.PoolProxiedConnection.dbapi_connection") and [`PoolProxiedConnection.driver_connection`](../core/pooling.html#sqlalchemy.pool.PoolProxiedConnection.driver_connection
+    "sqlalchemy.pool.PoolProxiedConnection.driver_connection") are synonymous.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You must ensure that you revert any isolation level settings or other operation-specific
+    settings on the connection back to normal before returning it to the pool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an alternative to reverting settings, you can call the [`Connection.detach()`](../core/connections.html#sqlalchemy.engine.Connection.detach
+    "sqlalchemy.engine.Connection.detach") method on either [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") or the proxied connection, which will de-associate
+    the connection from the pool such that it will be closed and discarded when [`Connection.close()`](../core/connections.html#sqlalchemy.engine.Connection.close
+    "sqlalchemy.engine.Connection.close") is called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: How do I use engines / connections / sessions with Python multiprocessing, or
+    os.fork()?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This is covered in the section [Using Connection Pools with Multiprocessing
+    or os.fork()](../core/pooling.html#pooling-multiprocessing).
+  prefs: []
+  type: TYPE_NORMAL

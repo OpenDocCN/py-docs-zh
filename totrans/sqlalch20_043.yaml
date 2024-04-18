@@ -1,0 +1,1788 @@
+- en: Writing SELECT statements for Inheritance Mappings
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html](https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: About this Document
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section makes use of ORM mappings configured using the [ORM Inheritance](../inheritance.html)
+    feature, described at [Mapping Class Inheritance Hierarchies](../inheritance.html).
+    The emphasis will be on [Joined Table Inheritance](../inheritance.html#joined-inheritance)
+    as this is the most intricate ORM querying case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[View the ORM setup for this page](_inheritance_setup.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SELECTing from the base class vs. specific sub-classes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A SELECT statement constructed against a class in a joined inheritance hierarchy
+    will query against the table to which the class is mapped, as well as any super-tables
+    present, using JOIN to link them together. The query would then return objects
+    that are of that requested type as well as any sub-types of the requested type,
+    using the [discriminator](../../glossary.html#term-discriminator) value in each
+    row to determine the correct type. The query below is established against the
+    `Manager` subclass of `Employee`, which then returns a result that will contain
+    only objects of type `Manager`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: When the SELECT statement is against the base class in the hierarchy, the default
+    behavior is that only that class’ table will be included in the rendered SQL and
+    JOIN will not be used. As in all cases, the [discriminator](../../glossary.html#term-discriminator)
+    column is used to distinguish between different requested sub-types, which then
+    results in objects of any possible sub-type being returned. The objects returned
+    will have attributes corresponding to the base table populated, and attributes
+    corresponding to sub-tables will start in an un-loaded state, loading automatically
+    when accessed. The loading of sub-attributes is configurable to be more “eager”
+    in a variety of ways, discussed later in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The example below creates a query against the `Employee` superclass. This indicates
+    that objects of any type, including `Manager`, `Engineer`, and `Employee`, may
+    be within the result set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the additional tables for `Manager` and `Engineer` were not included
+    in the SELECT, which means that the returned objects will not yet contain data
+    represented from those tables, in this example the `.manager_name` attribute of
+    the `Manager` class as well as the `.engineer_info` attribute of the `Engineer`
+    class. These attributes start out in the [expired](../../glossary.html#term-expired)
+    state, and will automatically populate themselves when first accessed using [lazy
+    loading](../../glossary.html#term-lazy-loading):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: This lazy load behavior is not desirable if a large number of objects have been
+    loaded, in the case that the consuming application will need to be accessing subclass-specific
+    attributes, as this would be an example of the [N plus one](../../glossary.html#term-N-plus-one)
+    problem that emits additional SQL per row. This additional SQL can impact performance
+    and also be incompatible with approaches such as using [asyncio](../extensions/asyncio.html).
+    Additionally, in our query for `Employee` objects, since the query is against
+    the base table only, we did not have a way to add SQL criteria involving subclass-specific
+    attributes in terms of `Manager` or `Engineer`. The next two sections detail two
+    constructs that provide solutions to these two issues in different ways, the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") loader option and the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") entity construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Using selectin_polymorphic()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To address the issue of performance when accessing attributes on subclasses,
+    the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    loader strategy may be used to [eagerly load](../../glossary.html#term-eagerly-load)
+    these additional attributes up front across many objects at once. This loader
+    option works in a similar fashion as the [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") relationship loader strategy to emit an additional
+    SELECT statement against each sub-table for objects loaded in the hierarchy, using
+    `IN` to query for additional rows based on primary key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    accepts as its arguments the base entity that is being queried, followed by a
+    sequence of subclasses of that entity for which their specific attributes should
+    be loaded for incoming rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    construct is then used as a loader option, passing it to the [`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
+    "sqlalchemy.sql.expression.Select.options") method of [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select"). The example illustrates the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") to eagerly load columns local to both the
+    `Manager` and `Engineer` subclasses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above example illustrates two additional SELECT statements being emitted
+    in order to eagerly fetch additional attributes such as `Engineer.engineer_info`
+    as well as `Manager.manager_name`. We can now access these sub-attributes on the
+    objects that were loaded without any additional SQL statements being emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    loader option does not yet optimize for the fact that the base `employee` table
+    does not need to be included in the second two “eager load” queries; hence in
+    the example above we see a JOIN from `employee` to `manager` and `engineer`, even
+    though columns from `employee` are already loaded. This is in contrast to the
+    [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    relationship strategy which is more sophisticated in this regard and can factor
+    out the JOIN when not needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Applying selectin_polymorphic() to an existing eager load'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") being specified as an option for a top-level
+    entity loaded by a statement, we may also indicate [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") on the target of an existing load. As our
+    [setup](_inheritance_setup.html) mapping includes a parent `Company` entity with
+    a `Company.employees` [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") referring to `Employee` entities, we may illustrate
+    a SELECT against the `Company` entity that eagerly loads all `Employee` objects
+    as well as all attributes on their subtypes as follows, by applying [`Load.selectin_polymorphic()`](relationships.html#sqlalchemy.orm.Load.selectin_polymorphic
+    "sqlalchemy.orm.Load.selectin_polymorphic") as a chained loader option; in this
+    form, the first argument is implicit from the previous loader option (in this
+    case [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")),
+    so we only indicate the additional target subclasses we wish to load:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Eager Loading of Polymorphic Subtypes](#eagerloading-polymorphic-subtypes)
+    - illustrates the equivalent example as above using [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") instead  ### Applying loader options to the
+    subclasses loaded by selectin_polymorphic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SELECT statements emitted by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") are themselves ORM statements, so we may
+    also add other loader options (such as those documented at [Relationship Loading
+    Techniques](relationships.html#orm-queryguide-relationship-loaders)) that refer
+    to specific subclasses. These options should be applied as **siblings** to a [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") option, that is, comma separated within
+    `select.options()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, if we considered that the `Manager` mapper had a [one to many](../basic_relationships.html#relationship-patterns-o2m)
+    relationship to an entity called `Paperwork`, we could combine the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") to eagerly load this collection on all `Manager`
+    objects, where the sub-attributes of `Manager` objects were also themselves eagerly
+    loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Applying loader options when selectin_polymorphic is itself a sub-option'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.21.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The previous section illustrated [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") used as sibling options, both used within a single
+    call to `select.options()`. If the target entity is one that is already being
+    loaded from a parent relationship, as in the example at [Applying selectin_polymorphic()
+    to an existing eager load](#polymorphic-selectin-as-loader-option-target), we
+    can apply this “sibling” pattern using the [`Load.options()`](relationships.html#sqlalchemy.orm.Load.options
+    "sqlalchemy.orm.Load.options") method that applies sub-options to a parent, as
+    illustrated at [Specifying Sub-Options with Load.options()](relationships.html#orm-queryguide-relationship-sub-options).
+    Below we combine the two examples to load `Company.employees`, also loading the
+    attributes for the `Manager` and `Engineer` classes, as well as eagerly loading
+    the ``Manager.paperwork`` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Configuring selectin_polymorphic() on mappers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The behavior of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") may be configured on specific mappers so
+    that it takes place by default, by using the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") parameter, using the value `"selectin"` on a per-subclass
+    basis. The example below illustrates the use of this parameter within `Engineer`
+    and `Manager` subclasses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, SELECT statements against the `Employee` class will
+    automatically assume the use of `selectin_polymorphic(Employee, [Engineer, Manager])`
+    as a loader option when the statement is emitted.  ## Using with_polymorphic()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In contrast to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") which affects only the loading of objects,
+    the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    construct affects how the SQL query for a polymorphic structure is rendered, most
+    commonly as a series of LEFT OUTER JOINs to each of the included sub-tables. This
+    join structure is known as the **polymorphic selectable**. By providing for a
+    view of several sub-tables at once, [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") offers a means of writing a SELECT statement
+    across several inherited classes at once with the ability to add filtering criteria
+    based on individual sub-tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    is essentially a special form of the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct. It accepts as its arguments a similar form
+    to that of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic"),
+    which is the base entity that is being queried, followed by a sequence of subclasses
+    of that entity for which their specific attributes should be loaded for incoming
+    rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to indicate that all subclasses should be part of the entity, [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") will also accept the string `"*"`, which may
+    be passed in place of the sequence of classes to indicate all classes (note this
+    is not yet supported by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The example below illustrates the same operation as illustrated in the previous
+    section, to load all columns for `Manager` and `Engineer` at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic"), attributes on subclasses are already loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: As the default selectable produced by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") uses LEFT OUTER JOIN, from a database point
+    of view the query is not as well optimized as the approach that [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") takes, with simple SELECT statements using
+    only JOINs emitted on a per-table basis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Filtering Subclass Attributes with with_polymorphic()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    construct makes available the attributes on the included subclass mappers, by
+    including namespaces that allow references to subclasses. The `employee_poly`
+    construct created in the previous section includes attributes named `.Engineer`
+    and `.Manager` which provide the namespace for `Engineer` and `Manager` in terms
+    of the polymorphic SELECT. In the example below, we can use the [`or_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.or_
+    "sqlalchemy.sql.expression.or_") construct to create criteria against both classes
+    at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]  ### Using aliasing with with_polymorphic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    construct, as a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased"), also provides the basic feature that [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") does, which is that of “aliasing” of the polymorphic
+    selectable itself. Specifically this means two or more [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") entities, referring to the same class hierarchy,
+    can be used at once in a single statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use this feature with a joined inheritance mapping, we typically want to
+    pass two parameters, [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") as well as [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic"). The [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") parameter indicates that the polymorphic selectable
+    should be referenced by an alias name that is unique to this construct. The [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") parameter is specific to the default LEFT OUTER
+    JOIN polymorphic selectable and indicates that a more optimized form of aliasing
+    should be used in the statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate this feature, the example below emits a SELECT for two separate
+    polymorphic entities, `Employee` joined with `Engineer`, and `Employee` joined
+    with `Manager`. Since these two polymorphic entities will both be including the
+    base `employee` table in their polymorphic selectable, aliasing must be applied
+    in order to differentiate this table in its two different contexts. The two polymorphic
+    entities are treated like two individual tables, and as such typically need to
+    be joined with each other in some way, as illustrated below where the entities
+    are joined on the `company_id` column along with some additional limiting criteria
+    against the `Employee` / `Manager` entity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the behavior of [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") is that the polymorphic selectables remain
+    as a LEFT OUTER JOIN of their individual tables, which themselves are given anonymous
+    alias names. There is also a right-nested JOIN produced.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When omitting the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") parameter, the usual behavior is that each
+    polymorphic selectable is enclosed within a subquery, producing a more verbose
+    form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above form historically has been more portable to backends that didn’t
+    necessarily have support for right-nested JOINs, and it additionally may be appropriate
+    when the “polymorphic selectable” used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") is not a simple LEFT OUTER JOIN of tables,
+    as is the case when using mappings such as [concrete table inheritance](../inheritance.html#concrete-inheritance)
+    mappings as well as when using alternative polymorphic selectables in general.  ###
+    Configuring with_polymorphic() on mappers'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic"), the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") construct also supports a mapper-configured
+    version which may be configured in two different ways, either on the base class
+    using the `mapper.with_polymorphic` parameter, or in a more modern form using
+    the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") parameter on a per-subclass basis, passing the value
+    `"inline"`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: For joined inheritance mappings, prefer explicit use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") within queries, or for implicit eager subclass
+    loading use [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") with `"selectin"`, instead of using the mapper-level
+    `mapper.with_polymorphic` parameter described in this section. This parameter
+    invokes complex heuristics intended to rewrite the FROM clauses within SELECT
+    statements that can interfere with construction of more complex statements, particularly
+    those with nested subqueries that refer to the same mapped entity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, we may state our `Employee` mapping using [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") as `"inline"` as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, SELECT statements against the `Employee` class will
+    automatically assume the use of `with_polymorphic(Employee, [Engineer, Manager])`
+    as the primary entity when the statement is emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using mapper-level “with polymorphic”, queries can also refer to the subclass
+    entities directly, where they implicitly represent the joined tables in the polymorphic
+    query. Above, we can freely refer to `Manager` and `Engineer` directly against
+    the default `Employee` entity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: However, if we needed to refer to the `Employee` entity or its sub entities
+    in separate, aliased contexts, we would again make direct use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") to define these aliased entities as illustrated
+    in [Using aliasing with with_polymorphic](#with-polymorphic-aliasing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For more centralized control over the polymorphic selectable, the more legacy
+    form of mapper-level polymorphic control may be used which is the [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") parameter, configured on the base class. This parameter
+    accepts arguments that are comparable to the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") construct, however common use with a joined
+    inheritance mapping is the plain asterisk, indicating all sub-tables should be
+    LEFT OUTER JOINED, as in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Overall, the LEFT OUTER JOIN format used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") and by options such as [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") may be cumbersome from a SQL and database optimizer point
+    of view; for general loading of subclass attributes in joined inheritance mappings,
+    the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    approach, or its mapper level equivalent of setting [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") to `"selectin"` should likely be preferred, making use
+    of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    on a per-query basis only as needed.  ## Joining to specific sub-types or with_polymorphic()
+    entities'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    entity is a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased"),
+    in order to treat a polymorphic entity as the target of a join, specifically when
+    using a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct as the ON clause, we use the same technique
+    for regular aliases as detailed at [Using Relationship to join between aliased
+    targets](select.html#orm-queryguide-joining-relationships-aliased), most succinctly
+    using [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type"). In the example below we illustrate a
+    join from the parent `Company` entity along the one-to-many relationship `Company.employees`,
+    which is configured in the [setup](_inheritance_setup.html) to link to `Employee`
+    objects, using a [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    entity as the target:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'More directly, [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") is also used with inheritance mappings
+    of any kind to limit a join along a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to a particular sub-type of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")’s target. The above query could be written strictly
+    in terms of `Engineer` targets as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: It can be observed above that joining to the `Engineer` target directly, rather
+    than the “polymorphic selectable” of `with_polymorphic(Employee, [Engineer])`
+    has the useful characteristic of using an inner JOIN rather than a LEFT OUTER
+    JOIN, which is generally more performant from a SQL optimizer point of view.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Eager Loading of Polymorphic Subtypes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The use of [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") illustrated with the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method in the previous section may also
+    be applied equivalently to [relationship loader options](relationships.html#orm-queryguide-relationship-loaders),
+    such as [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    and [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a basic example, if we wished to load `Company` objects, and additionally
+    eagerly load all elements of `Company.employees` using the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") construct against the full hierarchy, we may
+    write:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query may be compared directly to the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") version illustrated in the previous section
+    [Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target)
+    - illustrates the equivalent example as above using [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") instead  ## SELECT Statements for Single
+    Inheritance Mappings'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Single Table Inheritance Setup
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section discusses single table inheritance, described at [Single Table
+    Inheritance](../inheritance.html#single-inheritance), which uses a single table
+    to represent multiple classes in a hierarchy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[View the ORM setup for this section](_single_inheritance.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In contrast to joined inheritance mappings, the construction of SELECT statements
+    for single inheritance mappings tends to be simpler since for an all-single-inheritance
+    hierarchy, there’s only one table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of whether or not the inheritance hierarchy is all single-inheritance
+    or has a mixture of joined and single inheritance, SELECT statements for single
+    inheritance differentiate queries against the base class vs. a subclass by limiting
+    the SELECT statement with additional WHERE criteria.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example, a query for the single-inheritance example mapping of `Employee`
+    will load objects of type `Manager`, `Engineer` and `Employee` using a simple
+    SELECT of the table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When a load is emitted for a specific subclass, additional criteria is added
+    to the SELECT that limits the rows, such as below where a SELECT against the `Engineer`
+    entity is performed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Optimizing Attribute Loads for Single Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The default behavior of single inheritance mappings regarding how attributes
+    on subclasses are SELECTed is similar to that of joined inheritance, in that subclass-specific
+    attributes still emit a second SELECT by default. In the example below, a single
+    `Employee` of type `Manager` is loaded, however since the requested class is `Employee`,
+    the `Manager.manager_name` attribute is not present by default, and an additional
+    SELECT is emitted when it’s accessed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To alter this behavior, the same general concepts used to eagerly load these
+    additional attributes used in joined inheritance loading apply to single inheritance
+    as well, including use of the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") option as well as the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") option, the latter of which simply includes
+    the additional columns and from a SQL perspective is more efficient for single-inheritance
+    mappers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since the overhead of loading single-inheritance subclass mappings is usually
+    minimal, it’s therefore recommended that single inheritance mappings include the
+    [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") parameter with a setting of `"inline"` for those subclasses
+    where loading of their specific subclass attributes is expected to be common.
+    An example illustrating the [setup](_single_inheritance.html), modified to include
+    this option, is below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, the `Manager` and `Engineer` classes will have their
+    columns included in SELECT statements against the `Employee` entity automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Inheritance Loading API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [selectin_polymorphic](#sqlalchemy.orm.selectin_polymorphic)(base_cls, classes)
+    | Indicate an eager load should take place for all attributes specific to a subclass.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [with_polymorphic](#sqlalchemy.orm.with_polymorphic)(base, classes[, selectable,
+    flat, ...]) | Produce an [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass
+    "sqlalchemy.orm.util.AliasedClass") construct which specifies columns for descendant
+    mappers of the given base. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Produce an [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass "sqlalchemy.orm.util.AliasedClass")
+    construct which specifies columns for descendant mappers of the given base.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using this method will ensure that each descendant mapper’s tables are included
+    in the FROM clause, and will allow filter() criterion to be used against those
+    tables. The resulting instances will also have those columns already loaded so
+    that no “post fetch” of those columns will be required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using with_polymorphic()](#with-polymorphic) - full discussion of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – Base class to be aliased.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`classes` – a single class or mapper, or list of class/mappers, which inherit
+    from the base class. Alternatively, it may also be the string `''*''`, in which
+    case all descending mapped classes will be added to the FROM clause.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`aliased` – when True, the selectable will be aliased. For a JOIN, this means
+    the JOIN will be SELECTed from inside of a subquery unless the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") flag is set to True, which is recommended for
+    simpler use cases.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`flat` – Boolean, will be passed through to the [`FromClause.alias()`](../../core/selectable.html#sqlalchemy.sql.expression.FromClause.alias
+    "sqlalchemy.sql.expression.FromClause.alias") call so that aliases of [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") objects will alias the individual tables inside
+    the join, rather than creating a subquery. This is generally supported by all
+    modern databases with regards to right-nested joins and generally produces more
+    efficient queries. Setting this flag is recommended as long as the resulting SQL
+    is functional.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`selectable` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: a table or subquery that will be used in place of the generated FROM clause.
+    This argument is required if any of the desired classes use concrete table inheritance,
+    since SQLAlchemy currently cannot generate UNIONs among tables automatically.
+    If used, the `selectable` argument must represent the full set of tables and columns
+    mapped by every mapped class. Otherwise, the unaccounted mapped columns will result
+    in their table being appended directly to the FROM clause which will usually lead
+    to incorrect results.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: When left at its default value of `False`, the polymorphic selectable assigned
+    to the base mapper is used for selecting rows. However, it may also be passed
+    as `None`, which will bypass the configured polymorphic selectable and instead
+    construct an ad-hoc selectable for the target classes given; for joined table
+    inheritance this will be a join that includes all target mappers and their subclasses.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`polymorphic_on` – a column to be used as the “discriminator” column for the
+    given selectable. If not given, the polymorphic_on attribute of the base classes’
+    mapper will be used, if any. This is useful for mappings that don’t have polymorphic
+    loading behavior by default.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`innerjoin` – if True, an INNER JOIN will be used. This should only be specified
+    if querying for one specific subtype only'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`adapt_on_names` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passes through the [`aliased.adapt_on_names`](api.html#sqlalchemy.orm.aliased.params.adapt_on_names
+    "sqlalchemy.orm.aliased") parameter to the aliased object. This may be useful
+    in situations where the given selectable is not directly related to the existing
+    mapped selectable.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.33.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate an eager load should take place for all attributes specific to a subclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This uses an additional SELECT with IN against all matched primary key values,
+    and is the per-query analogue to the `"selectin"` setting on the `mapper.polymorphic_load`
+    parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using selectin_polymorphic()](#polymorphic-selectin)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SELECTing from the base class vs. specific sub-classes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A SELECT statement constructed against a class in a joined inheritance hierarchy
+    will query against the table to which the class is mapped, as well as any super-tables
+    present, using JOIN to link them together. The query would then return objects
+    that are of that requested type as well as any sub-types of the requested type,
+    using the [discriminator](../../glossary.html#term-discriminator) value in each
+    row to determine the correct type. The query below is established against the
+    `Manager` subclass of `Employee`, which then returns a result that will contain
+    only objects of type `Manager`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: When the SELECT statement is against the base class in the hierarchy, the default
+    behavior is that only that class’ table will be included in the rendered SQL and
+    JOIN will not be used. As in all cases, the [discriminator](../../glossary.html#term-discriminator)
+    column is used to distinguish between different requested sub-types, which then
+    results in objects of any possible sub-type being returned. The objects returned
+    will have attributes corresponding to the base table populated, and attributes
+    corresponding to sub-tables will start in an un-loaded state, loading automatically
+    when accessed. The loading of sub-attributes is configurable to be more “eager”
+    in a variety of ways, discussed later in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The example below creates a query against the `Employee` superclass. This indicates
+    that objects of any type, including `Manager`, `Engineer`, and `Employee`, may
+    be within the result set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the additional tables for `Manager` and `Engineer` were not included
+    in the SELECT, which means that the returned objects will not yet contain data
+    represented from those tables, in this example the `.manager_name` attribute of
+    the `Manager` class as well as the `.engineer_info` attribute of the `Engineer`
+    class. These attributes start out in the [expired](../../glossary.html#term-expired)
+    state, and will automatically populate themselves when first accessed using [lazy
+    loading](../../glossary.html#term-lazy-loading):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: This lazy load behavior is not desirable if a large number of objects have been
+    loaded, in the case that the consuming application will need to be accessing subclass-specific
+    attributes, as this would be an example of the [N plus one](../../glossary.html#term-N-plus-one)
+    problem that emits additional SQL per row. This additional SQL can impact performance
+    and also be incompatible with approaches such as using [asyncio](../extensions/asyncio.html).
+    Additionally, in our query for `Employee` objects, since the query is against
+    the base table only, we did not have a way to add SQL criteria involving subclass-specific
+    attributes in terms of `Manager` or `Engineer`. The next two sections detail two
+    constructs that provide solutions to these two issues in different ways, the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") loader option and the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") entity construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Using selectin_polymorphic()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To address the issue of performance when accessing attributes on subclasses,
+    the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    loader strategy may be used to [eagerly load](../../glossary.html#term-eagerly-load)
+    these additional attributes up front across many objects at once. This loader
+    option works in a similar fashion as the [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") relationship loader strategy to emit an additional
+    SELECT statement against each sub-table for objects loaded in the hierarchy, using
+    `IN` to query for additional rows based on primary key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    accepts as its arguments the base entity that is being queried, followed by a
+    sequence of subclasses of that entity for which their specific attributes should
+    be loaded for incoming rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    construct is then used as a loader option, passing it to the [`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
+    "sqlalchemy.sql.expression.Select.options") method of [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select"). The example illustrates the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") to eagerly load columns local to both the
+    `Manager` and `Engineer` subclasses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above example illustrates two additional SELECT statements being emitted
+    in order to eagerly fetch additional attributes such as `Engineer.engineer_info`
+    as well as `Manager.manager_name`. We can now access these sub-attributes on the
+    objects that were loaded without any additional SQL statements being emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    loader option does not yet optimize for the fact that the base `employee` table
+    does not need to be included in the second two “eager load” queries; hence in
+    the example above we see a JOIN from `employee` to `manager` and `engineer`, even
+    though columns from `employee` are already loaded. This is in contrast to the
+    [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    relationship strategy which is more sophisticated in this regard and can factor
+    out the JOIN when not needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Applying selectin_polymorphic() to an existing eager load'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") being specified as an option for a top-level
+    entity loaded by a statement, we may also indicate [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") on the target of an existing load. As our
+    [setup](_inheritance_setup.html) mapping includes a parent `Company` entity with
+    a `Company.employees` [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") referring to `Employee` entities, we may illustrate
+    a SELECT against the `Company` entity that eagerly loads all `Employee` objects
+    as well as all attributes on their subtypes as follows, by applying [`Load.selectin_polymorphic()`](relationships.html#sqlalchemy.orm.Load.selectin_polymorphic
+    "sqlalchemy.orm.Load.selectin_polymorphic") as a chained loader option; in this
+    form, the first argument is implicit from the previous loader option (in this
+    case [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")),
+    so we only indicate the additional target subclasses we wish to load:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Eager Loading of Polymorphic Subtypes](#eagerloading-polymorphic-subtypes)
+    - illustrates the equivalent example as above using [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") instead  ### Applying loader options to the
+    subclasses loaded by selectin_polymorphic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SELECT statements emitted by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") are themselves ORM statements, so we may
+    also add other loader options (such as those documented at [Relationship Loading
+    Techniques](relationships.html#orm-queryguide-relationship-loaders)) that refer
+    to specific subclasses. These options should be applied as **siblings** to a [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") option, that is, comma separated within
+    `select.options()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, if we considered that the `Manager` mapper had a [one to many](../basic_relationships.html#relationship-patterns-o2m)
+    relationship to an entity called `Paperwork`, we could combine the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") to eagerly load this collection on all `Manager`
+    objects, where the sub-attributes of `Manager` objects were also themselves eagerly
+    loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Applying loader options when selectin_polymorphic is itself a sub-option'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.21.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The previous section illustrated [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") used as sibling options, both used within a single
+    call to `select.options()`. If the target entity is one that is already being
+    loaded from a parent relationship, as in the example at [Applying selectin_polymorphic()
+    to an existing eager load](#polymorphic-selectin-as-loader-option-target), we
+    can apply this “sibling” pattern using the [`Load.options()`](relationships.html#sqlalchemy.orm.Load.options
+    "sqlalchemy.orm.Load.options") method that applies sub-options to a parent, as
+    illustrated at [Specifying Sub-Options with Load.options()](relationships.html#orm-queryguide-relationship-sub-options).
+    Below we combine the two examples to load `Company.employees`, also loading the
+    attributes for the `Manager` and `Engineer` classes, as well as eagerly loading
+    the ``Manager.paperwork`` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Configuring selectin_polymorphic() on mappers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The behavior of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") may be configured on specific mappers so
+    that it takes place by default, by using the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") parameter, using the value `"selectin"` on a per-subclass
+    basis. The example below illustrates the use of this parameter within `Engineer`
+    and `Manager` subclasses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the above mapping, SELECT statements against the `Employee` class will
+    automatically assume the use of `selectin_polymorphic(Employee, [Engineer, Manager])`
+    as a loader option when the statement is emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Applying selectin_polymorphic() to an existing eager load'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") being specified as an option for a top-level
+    entity loaded by a statement, we may also indicate [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") on the target of an existing load. As our
+    [setup](_inheritance_setup.html) mapping includes a parent `Company` entity with
+    a `Company.employees` [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") referring to `Employee` entities, we may illustrate
+    a SELECT against the `Company` entity that eagerly loads all `Employee` objects
+    as well as all attributes on their subtypes as follows, by applying [`Load.selectin_polymorphic()`](relationships.html#sqlalchemy.orm.Load.selectin_polymorphic
+    "sqlalchemy.orm.Load.selectin_polymorphic") as a chained loader option; in this
+    form, the first argument is implicit from the previous loader option (in this
+    case [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")),
+    so we only indicate the additional target subclasses we wish to load:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Eager Loading of Polymorphic Subtypes](#eagerloading-polymorphic-subtypes)
+    - illustrates the equivalent example as above using [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") instead'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Applying loader options to the subclasses loaded by selectin_polymorphic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SELECT statements emitted by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") are themselves ORM statements, so we may
+    also add other loader options (such as those documented at [Relationship Loading
+    Techniques](relationships.html#orm-queryguide-relationship-loaders)) that refer
+    to specific subclasses. These options should be applied as **siblings** to a [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") option, that is, comma separated within
+    `select.options()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, if we considered that the `Manager` mapper had a [one to many](../basic_relationships.html#relationship-patterns-o2m)
+    relationship to an entity called `Paperwork`, we could combine the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") to eagerly load this collection on all `Manager`
+    objects, where the sub-attributes of `Manager` objects were also themselves eagerly
+    loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Applying loader options when selectin_polymorphic is itself a sub-option'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.21.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The previous section illustrated [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") used as sibling options, both used within a single
+    call to `select.options()`. If the target entity is one that is already being
+    loaded from a parent relationship, as in the example at [Applying selectin_polymorphic()
+    to an existing eager load](#polymorphic-selectin-as-loader-option-target), we
+    can apply this “sibling” pattern using the [`Load.options()`](relationships.html#sqlalchemy.orm.Load.options
+    "sqlalchemy.orm.Load.options") method that applies sub-options to a parent, as
+    illustrated at [Specifying Sub-Options with Load.options()](relationships.html#orm-queryguide-relationship-sub-options).
+    Below we combine the two examples to load `Company.employees`, also loading the
+    attributes for the `Manager` and `Engineer` classes, as well as eagerly loading
+    the ``Manager.paperwork`` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]  #### Applying loader options when selectin_polymorphic is itself a
+    sub-option'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.21.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The previous section illustrated [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") used as sibling options, both used within a single
+    call to `select.options()`. If the target entity is one that is already being
+    loaded from a parent relationship, as in the example at [Applying selectin_polymorphic()
+    to an existing eager load](#polymorphic-selectin-as-loader-option-target), we
+    can apply this “sibling” pattern using the [`Load.options()`](relationships.html#sqlalchemy.orm.Load.options
+    "sqlalchemy.orm.Load.options") method that applies sub-options to a parent, as
+    illustrated at [Specifying Sub-Options with Load.options()](relationships.html#orm-queryguide-relationship-sub-options).
+    Below we combine the two examples to load `Company.employees`, also loading the
+    attributes for the `Manager` and `Engineer` classes, as well as eagerly loading
+    the ``Manager.paperwork`` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Configuring selectin_polymorphic() on mappers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The behavior of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") may be configured on specific mappers so
+    that it takes place by default, by using the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") parameter, using the value `"selectin"` on a per-subclass
+    basis. The example below illustrates the use of this parameter within `Engineer`
+    and `Manager` subclasses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the above mapping, SELECT statements against the `Employee` class will
+    automatically assume the use of `selectin_polymorphic(Employee, [Engineer, Manager])`
+    as a loader option when the statement is emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Using with_polymorphic()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In contrast to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") which affects only the loading of objects,
+    the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    construct affects how the SQL query for a polymorphic structure is rendered, most
+    commonly as a series of LEFT OUTER JOINs to each of the included sub-tables. This
+    join structure is known as the **polymorphic selectable**. By providing for a
+    view of several sub-tables at once, [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") offers a means of writing a SELECT statement
+    across several inherited classes at once with the ability to add filtering criteria
+    based on individual sub-tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    is essentially a special form of the [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct. It accepts as its arguments a similar form
+    to that of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic"),
+    which is the base entity that is being queried, followed by a sequence of subclasses
+    of that entity for which their specific attributes should be loaded for incoming
+    rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to indicate that all subclasses should be part of the entity, [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") will also accept the string `"*"`, which may
+    be passed in place of the sequence of classes to indicate all classes (note this
+    is not yet supported by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The example below illustrates the same operation as illustrated in the previous
+    section, to load all columns for `Manager` and `Engineer` at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic"), attributes on subclasses are already loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: As the default selectable produced by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") uses LEFT OUTER JOIN, from a database point
+    of view the query is not as well optimized as the approach that [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") takes, with simple SELECT statements using
+    only JOINs emitted on a per-table basis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Filtering Subclass Attributes with with_polymorphic()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    construct makes available the attributes on the included subclass mappers, by
+    including namespaces that allow references to subclasses. The `employee_poly`
+    construct created in the previous section includes attributes named `.Engineer`
+    and `.Manager` which provide the namespace for `Engineer` and `Manager` in terms
+    of the polymorphic SELECT. In the example below, we can use the [`or_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.or_
+    "sqlalchemy.sql.expression.or_") construct to create criteria against both classes
+    at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]  ### Using aliasing with with_polymorphic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    construct, as a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased"), also provides the basic feature that [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") does, which is that of “aliasing” of the polymorphic
+    selectable itself. Specifically this means two or more [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") entities, referring to the same class hierarchy,
+    can be used at once in a single statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use this feature with a joined inheritance mapping, we typically want to
+    pass two parameters, [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") as well as [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic"). The [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") parameter indicates that the polymorphic selectable
+    should be referenced by an alias name that is unique to this construct. The [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") parameter is specific to the default LEFT OUTER
+    JOIN polymorphic selectable and indicates that a more optimized form of aliasing
+    should be used in the statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate this feature, the example below emits a SELECT for two separate
+    polymorphic entities, `Employee` joined with `Engineer`, and `Employee` joined
+    with `Manager`. Since these two polymorphic entities will both be including the
+    base `employee` table in their polymorphic selectable, aliasing must be applied
+    in order to differentiate this table in its two different contexts. The two polymorphic
+    entities are treated like two individual tables, and as such typically need to
+    be joined with each other in some way, as illustrated below where the entities
+    are joined on the `company_id` column along with some additional limiting criteria
+    against the `Employee` / `Manager` entity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the behavior of [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") is that the polymorphic selectables remain
+    as a LEFT OUTER JOIN of their individual tables, which themselves are given anonymous
+    alias names. There is also a right-nested JOIN produced.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When omitting the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") parameter, the usual behavior is that each
+    polymorphic selectable is enclosed within a subquery, producing a more verbose
+    form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above form historically has been more portable to backends that didn’t
+    necessarily have support for right-nested JOINs, and it additionally may be appropriate
+    when the “polymorphic selectable” used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") is not a simple LEFT OUTER JOIN of tables,
+    as is the case when using mappings such as [concrete table inheritance](../inheritance.html#concrete-inheritance)
+    mappings as well as when using alternative polymorphic selectables in general.  ###
+    Configuring with_polymorphic() on mappers'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic"), the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") construct also supports a mapper-configured
+    version which may be configured in two different ways, either on the base class
+    using the `mapper.with_polymorphic` parameter, or in a more modern form using
+    the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") parameter on a per-subclass basis, passing the value
+    `"inline"`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: For joined inheritance mappings, prefer explicit use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") within queries, or for implicit eager subclass
+    loading use [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") with `"selectin"`, instead of using the mapper-level
+    `mapper.with_polymorphic` parameter described in this section. This parameter
+    invokes complex heuristics intended to rewrite the FROM clauses within SELECT
+    statements that can interfere with construction of more complex statements, particularly
+    those with nested subqueries that refer to the same mapped entity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, we may state our `Employee` mapping using [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") as `"inline"` as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, SELECT statements against the `Employee` class will
+    automatically assume the use of `with_polymorphic(Employee, [Engineer, Manager])`
+    as the primary entity when the statement is emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using mapper-level “with polymorphic”, queries can also refer to the subclass
+    entities directly, where they implicitly represent the joined tables in the polymorphic
+    query. Above, we can freely refer to `Manager` and `Engineer` directly against
+    the default `Employee` entity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: However, if we needed to refer to the `Employee` entity or its sub entities
+    in separate, aliased contexts, we would again make direct use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") to define these aliased entities as illustrated
+    in [Using aliasing with with_polymorphic](#with-polymorphic-aliasing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For more centralized control over the polymorphic selectable, the more legacy
+    form of mapper-level polymorphic control may be used which is the [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") parameter, configured on the base class. This parameter
+    accepts arguments that are comparable to the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") construct, however common use with a joined
+    inheritance mapping is the plain asterisk, indicating all sub-tables should be
+    LEFT OUTER JOINED, as in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Overall, the LEFT OUTER JOIN format used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") and by options such as [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") may be cumbersome from a SQL and database optimizer point
+    of view; for general loading of subclass attributes in joined inheritance mappings,
+    the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    approach, or its mapper level equivalent of setting [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") to `"selectin"` should likely be preferred, making use
+    of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    on a per-query basis only as needed.  ### Filtering Subclass Attributes with with_polymorphic()'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    construct makes available the attributes on the included subclass mappers, by
+    including namespaces that allow references to subclasses. The `employee_poly`
+    construct created in the previous section includes attributes named `.Engineer`
+    and `.Manager` which provide the namespace for `Engineer` and `Manager` in terms
+    of the polymorphic SELECT. In the example below, we can use the [`or_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.or_
+    "sqlalchemy.sql.expression.or_") construct to create criteria against both classes
+    at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using aliasing with with_polymorphic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    construct, as a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased"), also provides the basic feature that [`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") does, which is that of “aliasing” of the polymorphic
+    selectable itself. Specifically this means two or more [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") entities, referring to the same class hierarchy,
+    can be used at once in a single statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use this feature with a joined inheritance mapping, we typically want to
+    pass two parameters, [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") as well as [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic"). The [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") parameter indicates that the polymorphic selectable
+    should be referenced by an alias name that is unique to this construct. The [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") parameter is specific to the default LEFT OUTER
+    JOIN polymorphic selectable and indicates that a more optimized form of aliasing
+    should be used in the statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate this feature, the example below emits a SELECT for two separate
+    polymorphic entities, `Employee` joined with `Engineer`, and `Employee` joined
+    with `Manager`. Since these two polymorphic entities will both be including the
+    base `employee` table in their polymorphic selectable, aliasing must be applied
+    in order to differentiate this table in its two different contexts. The two polymorphic
+    entities are treated like two individual tables, and as such typically need to
+    be joined with each other in some way, as illustrated below where the entities
+    are joined on the `company_id` column along with some additional limiting criteria
+    against the `Employee` / `Manager` entity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the behavior of [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") is that the polymorphic selectables remain
+    as a LEFT OUTER JOIN of their individual tables, which themselves are given anonymous
+    alias names. There is also a right-nested JOIN produced.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When omitting the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") parameter, the usual behavior is that each
+    polymorphic selectable is enclosed within a subquery, producing a more verbose
+    form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above form historically has been more portable to backends that didn’t necessarily
+    have support for right-nested JOINs, and it additionally may be appropriate when
+    the “polymorphic selectable” used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") is not a simple LEFT OUTER JOIN of tables,
+    as is the case when using mappings such as [concrete table inheritance](../inheritance.html#concrete-inheritance)
+    mappings as well as when using alternative polymorphic selectables in general.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Configuring with_polymorphic() on mappers'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic"), the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") construct also supports a mapper-configured
+    version which may be configured in two different ways, either on the base class
+    using the `mapper.with_polymorphic` parameter, or in a more modern form using
+    the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") parameter on a per-subclass basis, passing the value
+    `"inline"`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: For joined inheritance mappings, prefer explicit use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") within queries, or for implicit eager subclass
+    loading use [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") with `"selectin"`, instead of using the mapper-level
+    `mapper.with_polymorphic` parameter described in this section. This parameter
+    invokes complex heuristics intended to rewrite the FROM clauses within SELECT
+    statements that can interfere with construction of more complex statements, particularly
+    those with nested subqueries that refer to the same mapped entity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, we may state our `Employee` mapping using [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") as `"inline"` as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, SELECT statements against the `Employee` class will
+    automatically assume the use of `with_polymorphic(Employee, [Engineer, Manager])`
+    as the primary entity when the statement is emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using mapper-level “with polymorphic”, queries can also refer to the subclass
+    entities directly, where they implicitly represent the joined tables in the polymorphic
+    query. Above, we can freely refer to `Manager` and `Engineer` directly against
+    the default `Employee` entity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: However, if we needed to refer to the `Employee` entity or its sub entities
+    in separate, aliased contexts, we would again make direct use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") to define these aliased entities as illustrated
+    in [Using aliasing with with_polymorphic](#with-polymorphic-aliasing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For more centralized control over the polymorphic selectable, the more legacy
+    form of mapper-level polymorphic control may be used which is the [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") parameter, configured on the base class. This parameter
+    accepts arguments that are comparable to the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") construct, however common use with a joined
+    inheritance mapping is the plain asterisk, indicating all sub-tables should be
+    LEFT OUTER JOINED, as in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: Overall, the LEFT OUTER JOIN format used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") and by options such as [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") may be cumbersome from a SQL and database optimizer point
+    of view; for general loading of subclass attributes in joined inheritance mappings,
+    the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    approach, or its mapper level equivalent of setting [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") to `"selectin"` should likely be preferred, making use
+    of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    on a per-query basis only as needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Joining to specific sub-types or with_polymorphic() entities'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    entity is a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased"),
+    in order to treat a polymorphic entity as the target of a join, specifically when
+    using a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct as the ON clause, we use the same technique
+    for regular aliases as detailed at [Using Relationship to join between aliased
+    targets](select.html#orm-queryguide-joining-relationships-aliased), most succinctly
+    using [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type"). In the example below we illustrate a
+    join from the parent `Company` entity along the one-to-many relationship `Company.employees`,
+    which is configured in the [setup](_inheritance_setup.html) to link to `Employee`
+    objects, using a [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    entity as the target:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'More directly, [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") is also used with inheritance mappings
+    of any kind to limit a join along a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to a particular sub-type of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")’s target. The above query could be written strictly
+    in terms of `Engineer` targets as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: It can be observed above that joining to the `Engineer` target directly, rather
+    than the “polymorphic selectable” of `with_polymorphic(Employee, [Engineer])`
+    has the useful characteristic of using an inner JOIN rather than a LEFT OUTER
+    JOIN, which is generally more performant from a SQL optimizer point of view.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Eager Loading of Polymorphic Subtypes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The use of [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") illustrated with the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method in the previous section may also
+    be applied equivalently to [relationship loader options](relationships.html#orm-queryguide-relationship-loaders),
+    such as [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    and [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a basic example, if we wished to load `Company` objects, and additionally
+    eagerly load all elements of `Company.employees` using the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") construct against the full hierarchy, we may
+    write:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query may be compared directly to the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") version illustrated in the previous section
+    [Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target)
+    - illustrates the equivalent example as above using [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") instead  ### Eager Loading of Polymorphic
+    Subtypes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The use of [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") illustrated with the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") method in the previous section may also
+    be applied equivalently to [relationship loader options](relationships.html#orm-queryguide-relationship-loaders),
+    such as [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    and [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a basic example, if we wished to load `Company` objects, and additionally
+    eagerly load all elements of `Company.employees` using the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") construct against the full hierarchy, we may
+    write:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above query may be compared directly to the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") version illustrated in the previous section
+    [Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target)
+    - illustrates the equivalent example as above using [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") instead'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## SELECT Statements for Single Inheritance Mappings'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Single Table Inheritance Setup
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section discusses single table inheritance, described at [Single Table
+    Inheritance](../inheritance.html#single-inheritance), which uses a single table
+    to represent multiple classes in a hierarchy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[View the ORM setup for this section](_single_inheritance.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In contrast to joined inheritance mappings, the construction of SELECT statements
+    for single inheritance mappings tends to be simpler since for an all-single-inheritance
+    hierarchy, there’s only one table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of whether or not the inheritance hierarchy is all single-inheritance
+    or has a mixture of joined and single inheritance, SELECT statements for single
+    inheritance differentiate queries against the base class vs. a subclass by limiting
+    the SELECT statement with additional WHERE criteria.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example, a query for the single-inheritance example mapping of `Employee`
+    will load objects of type `Manager`, `Engineer` and `Employee` using a simple
+    SELECT of the table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When a load is emitted for a specific subclass, additional criteria is added
+    to the SELECT that limits the rows, such as below where a SELECT against the `Engineer`
+    entity is performed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: Optimizing Attribute Loads for Single Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The default behavior of single inheritance mappings regarding how attributes
+    on subclasses are SELECTed is similar to that of joined inheritance, in that subclass-specific
+    attributes still emit a second SELECT by default. In the example below, a single
+    `Employee` of type `Manager` is loaded, however since the requested class is `Employee`,
+    the `Manager.manager_name` attribute is not present by default, and an additional
+    SELECT is emitted when it’s accessed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To alter this behavior, the same general concepts used to eagerly load these
+    additional attributes used in joined inheritance loading apply to single inheritance
+    as well, including use of the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") option as well as the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") option, the latter of which simply includes
+    the additional columns and from a SQL perspective is more efficient for single-inheritance
+    mappers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since the overhead of loading single-inheritance subclass mappings is usually
+    minimal, it’s therefore recommended that single inheritance mappings include the
+    [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") parameter with a setting of `"inline"` for those subclasses
+    where loading of their specific subclass attributes is expected to be common.
+    An example illustrating the [setup](_single_inheritance.html), modified to include
+    this option, is below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, the `Manager` and `Engineer` classes will have their
+    columns included in SELECT statements against the `Employee` entity automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: Optimizing Attribute Loads for Single Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The default behavior of single inheritance mappings regarding how attributes
+    on subclasses are SELECTed is similar to that of joined inheritance, in that subclass-specific
+    attributes still emit a second SELECT by default. In the example below, a single
+    `Employee` of type `Manager` is loaded, however since the requested class is `Employee`,
+    the `Manager.manager_name` attribute is not present by default, and an additional
+    SELECT is emitted when it’s accessed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To alter this behavior, the same general concepts used to eagerly load these
+    additional attributes used in joined inheritance loading apply to single inheritance
+    as well, including use of the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") option as well as the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") option, the latter of which simply includes
+    the additional columns and from a SQL perspective is more efficient for single-inheritance
+    mappers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since the overhead of loading single-inheritance subclass mappings is usually
+    minimal, it’s therefore recommended that single inheritance mappings include the
+    [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") parameter with a setting of `"inline"` for those subclasses
+    where loading of their specific subclass attributes is expected to be common.
+    An example illustrating the [setup](_single_inheritance.html), modified to include
+    this option, is below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, the `Manager` and `Engineer` classes will have their
+    columns included in SELECT statements against the `Employee` entity automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: Inheritance Loading API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [selectin_polymorphic](#sqlalchemy.orm.selectin_polymorphic)(base_cls, classes)
+    | Indicate an eager load should take place for all attributes specific to a subclass.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [with_polymorphic](#sqlalchemy.orm.with_polymorphic)(base, classes[, selectable,
+    flat, ...]) | Produce an [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass
+    "sqlalchemy.orm.util.AliasedClass") construct which specifies columns for descendant
+    mappers of the given base. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: Produce an [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass "sqlalchemy.orm.util.AliasedClass")
+    construct which specifies columns for descendant mappers of the given base.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using this method will ensure that each descendant mapper’s tables are included
+    in the FROM clause, and will allow filter() criterion to be used against those
+    tables. The resulting instances will also have those columns already loaded so
+    that no “post fetch” of those columns will be required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using with_polymorphic()](#with-polymorphic) - full discussion of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – Base class to be aliased.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`classes` – a single class or mapper, or list of class/mappers, which inherit
+    from the base class. Alternatively, it may also be the string `''*''`, in which
+    case all descending mapped classes will be added to the FROM clause.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`aliased` – when True, the selectable will be aliased. For a JOIN, this means
+    the JOIN will be SELECTed from inside of a subquery unless the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") flag is set to True, which is recommended for
+    simpler use cases.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`flat` – Boolean, will be passed through to the [`FromClause.alias()`](../../core/selectable.html#sqlalchemy.sql.expression.FromClause.alias
+    "sqlalchemy.sql.expression.FromClause.alias") call so that aliases of [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") objects will alias the individual tables inside
+    the join, rather than creating a subquery. This is generally supported by all
+    modern databases with regards to right-nested joins and generally produces more
+    efficient queries. Setting this flag is recommended as long as the resulting SQL
+    is functional.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`selectable` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: a table or subquery that will be used in place of the generated FROM clause.
+    This argument is required if any of the desired classes use concrete table inheritance,
+    since SQLAlchemy currently cannot generate UNIONs among tables automatically.
+    If used, the `selectable` argument must represent the full set of tables and columns
+    mapped by every mapped class. Otherwise, the unaccounted mapped columns will result
+    in their table being appended directly to the FROM clause which will usually lead
+    to incorrect results.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: When left at its default value of `False`, the polymorphic selectable assigned
+    to the base mapper is used for selecting rows. However, it may also be passed
+    as `None`, which will bypass the configured polymorphic selectable and instead
+    construct an ad-hoc selectable for the target classes given; for joined table
+    inheritance this will be a join that includes all target mappers and their subclasses.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`polymorphic_on` – a column to be used as the “discriminator” column for the
+    given selectable. If not given, the polymorphic_on attribute of the base classes’
+    mapper will be used, if any. This is useful for mappings that don’t have polymorphic
+    loading behavior by default.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`innerjoin` – if True, an INNER JOIN will be used. This should only be specified
+    if querying for one specific subtype only'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`adapt_on_names` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passes through the [`aliased.adapt_on_names`](api.html#sqlalchemy.orm.aliased.params.adapt_on_names
+    "sqlalchemy.orm.aliased") parameter to the aliased object. This may be useful
+    in situations where the given selectable is not directly related to the existing
+    mapped selectable.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.33.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indicate an eager load should take place for all attributes specific to a subclass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This uses an additional SELECT with IN against all matched primary key values,
+    and is the per-query analogue to the `"selectin"` setting on the `mapper.polymorphic_load`
+    parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using selectin_polymorphic()](#polymorphic-selectin)'
+  prefs: []
+  type: TYPE_NORMAL

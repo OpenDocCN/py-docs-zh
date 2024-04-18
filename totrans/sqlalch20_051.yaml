@@ -1,0 +1,1691 @@
+- en: State Management
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/session_state_management.html](https://docs.sqlalchemy.org/en/20/orm/session_state_management.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '## Quickie Intro to Object States'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s helpful to know the states which an instance can have within a session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Transient** - an instance that’s not in a session, and is not saved to the
+    database; i.e. it has no database identity. The only relationship such an object
+    has to the ORM is that its class has a [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") associated with it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Pending** - when you [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") a transient instance, it becomes pending. It still
+    wasn’t actually flushed to the database yet, but it will be when the next flush
+    occurs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Persistent** - An instance which is present in the session and has a record
+    in the database. You get persistent instances by either flushing so that the pending
+    instances become persistent, or by querying the database for existing instances
+    (or moving persistent instances from other sessions into your local session).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Deleted** - An instance which has been deleted within a flush, but the transaction
+    has not yet completed. Objects in this state are essentially in the opposite of
+    “pending” state; when the session’s transaction is committed, the object will
+    move to the detached state. Alternatively, when the session’s transaction is rolled
+    back, a deleted object moves *back* to the persistent state.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Detached** - an instance which corresponds, or previously corresponded, to
+    a record in the database, but is not currently in any session. The detached object
+    will contain a database identity marker, however because it is not associated
+    with a session, it is unknown whether or not this database identity actually exists
+    in a target database. Detached objects are safe to use normally, except that they
+    have no ability to load unloaded attributes or attributes that were previously
+    marked as “expired”.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For a deeper dive into all possible state transitions, see the section [Object
+    Lifecycle Events](session_events.html#session-lifecycle-events) which describes
+    each transition as well as how to programmatically track each one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting the Current State of an Object
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The actual state of any mapped object can be viewed at any time using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function on a mapped instance; this function will return
+    the corresponding [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") object which manages the internal ORM state for
+    the object. [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
+    provides, among other accessors, boolean attributes indicating the persistence
+    state of the object, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState.transient`](internals.html#sqlalchemy.orm.InstanceState.transient
+    "sqlalchemy.orm.InstanceState.transient")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.pending`](internals.html#sqlalchemy.orm.InstanceState.pending
+    "sqlalchemy.orm.InstanceState.pending")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.persistent`](internals.html#sqlalchemy.orm.InstanceState.persistent
+    "sqlalchemy.orm.InstanceState.persistent")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.detached`](internals.html#sqlalchemy.orm.InstanceState.detached
+    "sqlalchemy.orm.InstanceState.detached")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Inspection of Mapped Instances](mapping_styles.html#orm-mapper-inspection-instancestate)
+    - further examples of [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")  ## Session Attributes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
+    itself acts somewhat like a set-like collection. All items present may be accessed
+    using the iterator interface:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And presence may be tested for using regular “contains” semantics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The session is also keeping track of all newly created (i.e. pending) objects,
+    all objects which have had changes since they were last loaded or saved (i.e.
+    “dirty”), and everything that’s been marked as deleted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '(Documentation: [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
+    "sqlalchemy.orm.Session.new"), [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty
+    "sqlalchemy.orm.Session.dirty"), [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
+    "sqlalchemy.orm.Session.deleted"), [`Session.identity_map`](session_api.html#sqlalchemy.orm.Session.identity_map
+    "sqlalchemy.orm.Session.identity_map")).  ## Session Referencing Behavior'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Objects within the session are *weakly referenced*. This means that when they
+    are dereferenced in the outside application, they fall out of scope from within
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
+    as well and are subject to garbage collection by the Python interpreter. The exceptions
+    to this include objects which are pending, objects which are marked as deleted,
+    or persistent objects which have pending changes on them. After a full flush,
+    these collections are all empty, and all objects are again weakly referenced.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To cause objects in the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") to remain strongly referenced, usually a simple approach
+    is all that’s needed. Examples of externally managed strong-referencing behavior
+    include loading objects into a local dictionary keyed to their primary key, or
+    into lists or sets for the span of time that they need to remain referenced. These
+    collections can be associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), if desired, by placing them into the [`Session.info`](session_api.html#sqlalchemy.orm.Session.info
+    "sqlalchemy.orm.Session.info") dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An event based approach is also feasible. A simple recipe that provides “strong
+    referencing” behavior for all objects as they remain within the [persistent](../glossary.html#term-persistent)
+    state is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we intercept the [`SessionEvents.pending_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_persistent
+    "sqlalchemy.orm.SessionEvents.pending_to_persistent"), [`SessionEvents.detached_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.detached_to_persistent
+    "sqlalchemy.orm.SessionEvents.detached_to_persistent"), [`SessionEvents.deleted_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_persistent
+    "sqlalchemy.orm.SessionEvents.deleted_to_persistent") and [`SessionEvents.loaded_as_persistent()`](events.html#sqlalchemy.orm.SessionEvents.loaded_as_persistent
+    "sqlalchemy.orm.SessionEvents.loaded_as_persistent") event hooks in order to intercept
+    objects as they enter the [persistent](../glossary.html#term-persistent) transition,
+    and the [`SessionEvents.persistent_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_detached
+    "sqlalchemy.orm.SessionEvents.persistent_to_detached") and [`SessionEvents.persistent_to_deleted()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_deleted
+    "sqlalchemy.orm.SessionEvents.persistent_to_deleted") hooks to intercept objects
+    as they leave the persistent state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The above function may be called for any [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") in order to provide strong-referencing behavior on a
+    per-[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    basis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It may also be called for any [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]  ## Merging'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    transfers state from an outside object into a new or already existing instance
+    within a session. It also reconciles the incoming data against the state of the
+    database, producing a history stream which will be applied towards the next flush,
+    or alternatively can be made to produce a simple “transfer” of state without producing
+    change history or accessing the database. Usage is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When given an instance, it follows these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It examines the primary key of the instance. If it’s present, it attempts to
+    locate that instance in the local identity map. If the `load=True` flag is left
+    at its default, it also checks the database for this primary key if not located
+    locally.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the given instance has no primary key, or if no instance can be found with
+    the primary key given, a new instance is created.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The state of the given instance is then copied onto the located/newly created
+    instance. For attribute values which are present on the source instance, the value
+    is transferred to the target instance. For attribute values that aren’t present
+    on the source instance, the corresponding attribute on the target instance is
+    [expired](../glossary.html#term-expired) from memory, which discards any locally
+    present value from the target instance for that attribute, but no direct modification
+    is made to the database-persisted value for that attribute.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the `load=True` flag is left at its default, this copy process emits events
+    and will load the target object’s unloaded collections for each attribute present
+    on the source object, so that the incoming state can be reconciled against what’s
+    present in the database. If `load` is passed as `False`, the incoming data is
+    “stamped” directly without producing any history.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The operation is cascaded to related objects and collections, as indicated by
+    the `merge` cascade (see [Cascades](cascades.html#unitofwork-cascades)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The new instance is returned.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'With [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge"),
+    the given “source” instance is not modified nor is it associated with the target
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    and remains available to be merged with any number of other [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") objects. [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") is useful for taking the state of any kind of
+    object structure without regard for its origins or current session associations
+    and copying its state into a new session. Here’s some examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An application which reads an object structure from a file and wishes to save
+    it to the database might parse the file, build up the structure, and then use
+    [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    to save it to the database, ensuring that the data within the file is used to
+    formulate the primary key of each element of the structure. Later, when the file
+    has changed, the same process can be re-run, producing a slightly different object
+    structure, which can then be `merged` in again, and the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session") will automatically update the database to reflect
+    those changes, loading each object from the database by primary key and then updating
+    its state with the new state given.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An application is storing objects in an in-memory cache, shared by many [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") objects simultaneously. [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") is used each time an object is retrieved from
+    the cache to create a local copy of it in each [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") which requests it. The cached object remains detached;
+    only its state is moved into copies of itself that are local to individual [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") objects.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the caching use case, it’s common to use the `load=False` flag to remove
+    the overhead of reconciling the object’s state with the database. There’s also
+    a “bulk” version of [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") called [`Query.merge_result()`](queryguide/query.html#sqlalchemy.orm.Query.merge_result
+    "sqlalchemy.orm.Query.merge_result") that was designed to work with cache-extended
+    [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query") objects
+    - see the section [Dogpile Caching](examples.html#examples-caching).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: An application wants to transfer the state of a series of objects into a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") maintained by a worker thread or other concurrent system.
+    [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    makes a copy of each object to be placed into this new [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). At the end of the operation, the parent thread/process
+    maintains the objects it started with, and the thread/worker can proceed with
+    local copies of those objects.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the “transfer between threads/processes” use case, the application may want
+    to use the `load=False` flag as well to avoid overhead and redundant SQL queries
+    as the data is transferred.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Merge Tips
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    is an extremely useful method for many purposes. However, it deals with the intricate
+    border between objects that are transient/detached and those that are persistent,
+    as well as the automated transference of state. The wide variety of scenarios
+    that can present themselves here often require a more careful approach to the
+    state of objects. Common problems with merge usually involve some unexpected state
+    regarding the object being passed to [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lets use the canonical example of the User and Address objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Assume a `User` object with one `Address`, already persistent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We now create `a1`, an object outside the session, which we’d like to merge
+    on top of the existing `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A surprise would occur if we said this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Why is that ? We weren’t careful with our cascades. The assignment of `a1.user`
+    to a persistent object cascaded to the backref of `User.addresses` and made our
+    `a1` object pending, as though we had added it. Now we have *two* `Address` objects
+    in the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, our `a1` is already pending in the session. The subsequent [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") operation essentially does nothing. Cascade can
+    be configured via the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") option on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), although in this case it would mean removing the
+    `save-update` cascade from the `User.addresses` relationship - and usually, that
+    behavior is extremely convenient. The solution here would usually be to not assign
+    `a1.user` to an object already persistent in the target session.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `cascade_backrefs=False` option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") will also prevent the `Address` from being added
+    to the session via the `a1.user = u1` assignment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further detail on cascade operation is at [Cascades](cascades.html#unitofwork-cascades).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another example of unexpected state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the assignment of `user` takes precedence over the foreign key assignment
+    of `user_id`, with the end result that `None` is applied to `user_id`, causing
+    a failure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    issues can be examined by first checking - is the object prematurely in the session
+    ?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or is there state on the object that we don’t want ? Examining `__dict__` is
+    a quick way to check:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Expunging
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Expunge removes an object from the Session, sending persistent instances to
+    the detached state, and pending instances to the transient state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: To remove all items, call [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all") (this method was formerly known as `clear()`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Refreshing / Expiring'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Expiring](../glossary.html#term-Expiring) means that the database-persisted
+    data held inside a series of object attributes is erased, in such a way that when
+    those attributes are next accessed, a SQL query is emitted which will refresh
+    that data from the database.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When we talk about expiration of data we are usually talking about an object
+    that is in the [persistent](../glossary.html#term-persistent) state. For example,
+    if we load an object as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above `User` object is persistent, and has a series of attributes present;
+    if we were to look inside its `__dict__`, we’d see that state loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: where `id` and `name` refer to those columns in the database. `_sa_instance_state`
+    is a non-database-persisted value used by SQLAlchemy internally (it refers to
+    the [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
+    for the instance. While not directly relevant to this section, if we want to get
+    at it, we should use the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function to access it).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At this point, the state in our `User` object matches that of the loaded database
+    row. But upon expiring the object using a method such as [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire"), we see that the state is removed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We see that while the internal “state” still hangs around, the values which
+    correspond to the `id` and `name` columns are gone. If we were to access one of
+    these columns and are watching SQL, we’d see this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, upon accessing the expired attribute `user.name`, the ORM initiated
+    a [lazy load](../glossary.html#term-lazy-load) to retrieve the most recent state
+    from the database, by emitting a SELECT for the user row to which this user refers.
+    Afterwards, the `__dict__` is again populated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: While we are peeking inside of `__dict__` in order to see a bit of what SQLAlchemy
+    does with object attributes, we **should not modify** the contents of `__dict__`
+    directly, at least as far as those attributes which the SQLAlchemy ORM is maintaining
+    (other attributes outside of SQLA’s realm are fine). This is because SQLAlchemy
+    uses [descriptors](../glossary.html#term-descriptors) in order to track the changes
+    we make to an object, and when we modify `__dict__` directly, the ORM won’t be
+    able to track that we changed something.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another key behavior of both [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") is that all un-flushed changes on an object
+    are discarded. That is, if we were to modify an attribute on our `User`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'but then we call [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") without first calling [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush"), our pending value of `''user2''` is discarded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
+    method can be used to mark as “expired” all ORM-mapped attributes for an instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'it can also be passed a list of string attribute names, referring to specific
+    attributes to be marked as expired:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") method allows us to essentially call [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") on all objects contained within the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    method has a similar interface, but instead of expiring, it emits an immediate
+    SELECT for the object’s row immediately:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    also accepts a list of string attribute names, but unlike [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire"), expects at least one name to be that of a column-mapped
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An alternative method of refreshing which is often more flexible is to use
+    the [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)
+    feature of the ORM, available for [2.0 style](../glossary.html#term-2.0-style)
+    queries with [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") as well as from the [`Query.populate_existing()`](queryguide/query.html#sqlalchemy.orm.Query.populate_existing
+    "sqlalchemy.orm.Query.populate_existing") method of [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") within [1.x style](../glossary.html#term-1.x-style) queries.
+    Using this execution option, all of the ORM objects returned in the result set
+    of the statement will be refreshed with data from the database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: See [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)
+    for further detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What Actually Loads
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The SELECT statement that’s emitted when an object marked with [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") or loaded with [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") varies based on several factors, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The load of expired attributes is triggered from **column-mapped attributes
+    only**. While any kind of attribute can be marked as expired, including a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") - mapped attribute, accessing an expired [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") attribute will emit a load only for that attribute,
+    using standard relationship-oriented lazy loading. Column-oriented attributes,
+    even if expired, will not load as part of this operation, and instead will load
+    when any column-oriented attribute is accessed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")-
+    mapped attributes will not load in response to expired column-based attributes
+    being accessed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Regarding relationships, [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") is more restrictive than [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") with regards to attributes that aren’t column-mapped.
+    Calling [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") and passing a list of names that only includes
+    relationship-mapped attributes will actually raise an error. In any case, non-eager-loading
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    attributes will not be included in any refresh operation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    attributes configured as “eager loading” via the [`relationship.lazy`](relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") parameter will load in the case of [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh"), if either no attribute names are specified,
+    or if their names are included in the list of attributes to be refreshed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attributes that are configured as [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") will not normally load, during either the expired-attribute
+    load or during a refresh. An unloaded attribute that’s [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") instead loads on its own when directly accessed, or
+    if part of a “group” of deferred attributes where an unloaded attribute in that
+    group is accessed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For expired attributes that are loaded on access, a joined-inheritance table
+    mapping will emit a SELECT that typically only includes those tables for which
+    unloaded attributes are present. The action here is sophisticated enough to load
+    only the parent or child table, for example, if the subset of columns that were
+    originally expired encompass only one or the other of those tables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    is used on a joined-inheritance table mapping, the SELECT emitted will resemble
+    that of when [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
+    "sqlalchemy.orm.Session.query") is used on the target object’s class. This is
+    typically all those tables that are set up as part of the mapping.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When to Expire or Refresh
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    uses the expiration feature automatically whenever the transaction referred to
+    by the session ends. Meaning, whenever [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") is called, all objects within the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") are expired, using a feature equivalent to that of the
+    [`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all "sqlalchemy.orm.Session.expire_all")
+    method. The rationale is that the end of a transaction is a demarcating point
+    at which there is no more context available in order to know what the current
+    state of the database is, as any number of other transactions may be affecting
+    it. Only when a new transaction starts can we again have access to the current
+    state of the database, at which point any number of changes may have occurred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
+    and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    methods are used in those cases when one wants to force an object to re-load its
+    data from the database, in those cases when it is known that the current state
+    of data is possibly stale. Reasons for this might include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: some SQL has been emitted within the transaction outside of the scope of the
+    ORM’s object handling, such as if a [`Table.update()`](../core/metadata.html#sqlalchemy.schema.Table.update
+    "sqlalchemy.schema.Table.update") construct were emitted using the [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if the application is attempting to acquire data that is known to have been
+    modified in a concurrent transaction, and it is also known that the isolation
+    rules in effect allow this data to be visible.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second bullet has the important caveat that “it is also known that the isolation
+    rules in effect allow this data to be visible.” This means that it cannot be assumed
+    that an UPDATE that happened on another database connection will yet be visible
+    here locally; in many cases, it will not. This is why if one wishes to use [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") or [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") in order to view data between ongoing transactions,
+    an understanding of the isolation behavior in effect is essential.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Populate Existing](queryguide/api.html#orm-queryguide-populate-existing) -
+    allows any ORM query to refresh objects as they would be loaded normally, refreshing
+    all matching objects in the identity map against the results of a SELECT statement.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[isolation](../glossary.html#term-isolation) - glossary explanation of isolation
+    which includes links to Wikipedia.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[The SQLAlchemy Session In-Depth](https://techspot.zzzeek.org/2012/11/14/pycon-canada-the-sqlalchemy-session-in-depth/)
+    - a video + slides with an in-depth discussion of the object lifecycle including
+    the role of data expiration.  ## Quickie Intro to Object States'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s helpful to know the states which an instance can have within a session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Transient** - an instance that’s not in a session, and is not saved to the
+    database; i.e. it has no database identity. The only relationship such an object
+    has to the ORM is that its class has a [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") associated with it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Pending** - when you [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add") a transient instance, it becomes pending. It still
+    wasn’t actually flushed to the database yet, but it will be when the next flush
+    occurs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Persistent** - An instance which is present in the session and has a record
+    in the database. You get persistent instances by either flushing so that the pending
+    instances become persistent, or by querying the database for existing instances
+    (or moving persistent instances from other sessions into your local session).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Deleted** - An instance which has been deleted within a flush, but the transaction
+    has not yet completed. Objects in this state are essentially in the opposite of
+    “pending” state; when the session’s transaction is committed, the object will
+    move to the detached state. Alternatively, when the session’s transaction is rolled
+    back, a deleted object moves *back* to the persistent state.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Detached** - an instance which corresponds, or previously corresponded, to
+    a record in the database, but is not currently in any session. The detached object
+    will contain a database identity marker, however because it is not associated
+    with a session, it is unknown whether or not this database identity actually exists
+    in a target database. Detached objects are safe to use normally, except that they
+    have no ability to load unloaded attributes or attributes that were previously
+    marked as “expired”.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For a deeper dive into all possible state transitions, see the section [Object
+    Lifecycle Events](session_events.html#session-lifecycle-events) which describes
+    each transition as well as how to programmatically track each one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting the Current State of an Object
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The actual state of any mapped object can be viewed at any time using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function on a mapped instance; this function will return
+    the corresponding [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") object which manages the internal ORM state for
+    the object. [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
+    provides, among other accessors, boolean attributes indicating the persistence
+    state of the object, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState.transient`](internals.html#sqlalchemy.orm.InstanceState.transient
+    "sqlalchemy.orm.InstanceState.transient")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.pending`](internals.html#sqlalchemy.orm.InstanceState.pending
+    "sqlalchemy.orm.InstanceState.pending")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.persistent`](internals.html#sqlalchemy.orm.InstanceState.persistent
+    "sqlalchemy.orm.InstanceState.persistent")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.detached`](internals.html#sqlalchemy.orm.InstanceState.detached
+    "sqlalchemy.orm.InstanceState.detached")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Inspection of Mapped Instances](mapping_styles.html#orm-mapper-inspection-instancestate)
+    - further examples of [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting the Current State of an Object
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The actual state of any mapped object can be viewed at any time using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function on a mapped instance; this function will return
+    the corresponding [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") object which manages the internal ORM state for
+    the object. [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
+    provides, among other accessors, boolean attributes indicating the persistence
+    state of the object, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`InstanceState.transient`](internals.html#sqlalchemy.orm.InstanceState.transient
+    "sqlalchemy.orm.InstanceState.transient")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.pending`](internals.html#sqlalchemy.orm.InstanceState.pending
+    "sqlalchemy.orm.InstanceState.pending")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.persistent`](internals.html#sqlalchemy.orm.InstanceState.persistent
+    "sqlalchemy.orm.InstanceState.persistent")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`InstanceState.detached`](internals.html#sqlalchemy.orm.InstanceState.detached
+    "sqlalchemy.orm.InstanceState.detached")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Inspection of Mapped Instances](mapping_styles.html#orm-mapper-inspection-instancestate)
+    - further examples of [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Session Attributes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
+    itself acts somewhat like a set-like collection. All items present may be accessed
+    using the iterator interface:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And presence may be tested for using regular “contains” semantics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The session is also keeping track of all newly created (i.e. pending) objects,
+    all objects which have had changes since they were last loaded or saved (i.e.
+    “dirty”), and everything that’s been marked as deleted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '(Documentation: [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
+    "sqlalchemy.orm.Session.new"), [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty
+    "sqlalchemy.orm.Session.dirty"), [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
+    "sqlalchemy.orm.Session.deleted"), [`Session.identity_map`](session_api.html#sqlalchemy.orm.Session.identity_map
+    "sqlalchemy.orm.Session.identity_map")).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Session Referencing Behavior'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Objects within the session are *weakly referenced*. This means that when they
+    are dereferenced in the outside application, they fall out of scope from within
+    the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
+    as well and are subject to garbage collection by the Python interpreter. The exceptions
+    to this include objects which are pending, objects which are marked as deleted,
+    or persistent objects which have pending changes on them. After a full flush,
+    these collections are all empty, and all objects are again weakly referenced.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To cause objects in the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") to remain strongly referenced, usually a simple approach
+    is all that’s needed. Examples of externally managed strong-referencing behavior
+    include loading objects into a local dictionary keyed to their primary key, or
+    into lists or sets for the span of time that they need to remain referenced. These
+    collections can be associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), if desired, by placing them into the [`Session.info`](session_api.html#sqlalchemy.orm.Session.info
+    "sqlalchemy.orm.Session.info") dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An event based approach is also feasible. A simple recipe that provides “strong
+    referencing” behavior for all objects as they remain within the [persistent](../glossary.html#term-persistent)
+    state is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we intercept the [`SessionEvents.pending_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_persistent
+    "sqlalchemy.orm.SessionEvents.pending_to_persistent"), [`SessionEvents.detached_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.detached_to_persistent
+    "sqlalchemy.orm.SessionEvents.detached_to_persistent"), [`SessionEvents.deleted_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_persistent
+    "sqlalchemy.orm.SessionEvents.deleted_to_persistent") and [`SessionEvents.loaded_as_persistent()`](events.html#sqlalchemy.orm.SessionEvents.loaded_as_persistent
+    "sqlalchemy.orm.SessionEvents.loaded_as_persistent") event hooks in order to intercept
+    objects as they enter the [persistent](../glossary.html#term-persistent) transition,
+    and the [`SessionEvents.persistent_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_detached
+    "sqlalchemy.orm.SessionEvents.persistent_to_detached") and [`SessionEvents.persistent_to_deleted()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_deleted
+    "sqlalchemy.orm.SessionEvents.persistent_to_deleted") hooks to intercept objects
+    as they leave the persistent state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The above function may be called for any [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") in order to provide strong-referencing behavior on a
+    per-[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    basis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It may also be called for any [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Merging'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    transfers state from an outside object into a new or already existing instance
+    within a session. It also reconciles the incoming data against the state of the
+    database, producing a history stream which will be applied towards the next flush,
+    or alternatively can be made to produce a simple “transfer” of state without producing
+    change history or accessing the database. Usage is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When given an instance, it follows these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It examines the primary key of the instance. If it’s present, it attempts to
+    locate that instance in the local identity map. If the `load=True` flag is left
+    at its default, it also checks the database for this primary key if not located
+    locally.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the given instance has no primary key, or if no instance can be found with
+    the primary key given, a new instance is created.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The state of the given instance is then copied onto the located/newly created
+    instance. For attribute values which are present on the source instance, the value
+    is transferred to the target instance. For attribute values that aren’t present
+    on the source instance, the corresponding attribute on the target instance is
+    [expired](../glossary.html#term-expired) from memory, which discards any locally
+    present value from the target instance for that attribute, but no direct modification
+    is made to the database-persisted value for that attribute.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the `load=True` flag is left at its default, this copy process emits events
+    and will load the target object’s unloaded collections for each attribute present
+    on the source object, so that the incoming state can be reconciled against what’s
+    present in the database. If `load` is passed as `False`, the incoming data is
+    “stamped” directly without producing any history.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The operation is cascaded to related objects and collections, as indicated by
+    the `merge` cascade (see [Cascades](cascades.html#unitofwork-cascades)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The new instance is returned.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'With [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge"),
+    the given “source” instance is not modified nor is it associated with the target
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    and remains available to be merged with any number of other [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") objects. [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") is useful for taking the state of any kind of
+    object structure without regard for its origins or current session associations
+    and copying its state into a new session. Here’s some examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An application which reads an object structure from a file and wishes to save
+    it to the database might parse the file, build up the structure, and then use
+    [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    to save it to the database, ensuring that the data within the file is used to
+    formulate the primary key of each element of the structure. Later, when the file
+    has changed, the same process can be re-run, producing a slightly different object
+    structure, which can then be `merged` in again, and the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session") will automatically update the database to reflect
+    those changes, loading each object from the database by primary key and then updating
+    its state with the new state given.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An application is storing objects in an in-memory cache, shared by many [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") objects simultaneously. [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") is used each time an object is retrieved from
+    the cache to create a local copy of it in each [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") which requests it. The cached object remains detached;
+    only its state is moved into copies of itself that are local to individual [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") objects.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the caching use case, it’s common to use the `load=False` flag to remove
+    the overhead of reconciling the object’s state with the database. There’s also
+    a “bulk” version of [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") called [`Query.merge_result()`](queryguide/query.html#sqlalchemy.orm.Query.merge_result
+    "sqlalchemy.orm.Query.merge_result") that was designed to work with cache-extended
+    [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query") objects
+    - see the section [Dogpile Caching](examples.html#examples-caching).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: An application wants to transfer the state of a series of objects into a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") maintained by a worker thread or other concurrent system.
+    [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    makes a copy of each object to be placed into this new [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). At the end of the operation, the parent thread/process
+    maintains the objects it started with, and the thread/worker can proceed with
+    local copies of those objects.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the “transfer between threads/processes” use case, the application may want
+    to use the `load=False` flag as well to avoid overhead and redundant SQL queries
+    as the data is transferred.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Merge Tips
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    is an extremely useful method for many purposes. However, it deals with the intricate
+    border between objects that are transient/detached and those that are persistent,
+    as well as the automated transference of state. The wide variety of scenarios
+    that can present themselves here often require a more careful approach to the
+    state of objects. Common problems with merge usually involve some unexpected state
+    regarding the object being passed to [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lets use the canonical example of the User and Address objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Assume a `User` object with one `Address`, already persistent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We now create `a1`, an object outside the session, which we’d like to merge
+    on top of the existing `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A surprise would occur if we said this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Why is that ? We weren’t careful with our cascades. The assignment of `a1.user`
+    to a persistent object cascaded to the backref of `User.addresses` and made our
+    `a1` object pending, as though we had added it. Now we have *two* `Address` objects
+    in the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, our `a1` is already pending in the session. The subsequent [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") operation essentially does nothing. Cascade can
+    be configured via the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") option on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), although in this case it would mean removing the
+    `save-update` cascade from the `User.addresses` relationship - and usually, that
+    behavior is extremely convenient. The solution here would usually be to not assign
+    `a1.user` to an object already persistent in the target session.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `cascade_backrefs=False` option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") will also prevent the `Address` from being added
+    to the session via the `a1.user = u1` assignment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further detail on cascade operation is at [Cascades](cascades.html#unitofwork-cascades).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another example of unexpected state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the assignment of `user` takes precedence over the foreign key assignment
+    of `user_id`, with the end result that `None` is applied to `user_id`, causing
+    a failure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    issues can be examined by first checking - is the object prematurely in the session
+    ?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or is there state on the object that we don’t want ? Examining `__dict__` is
+    a quick way to check:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Merge Tips
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    is an extremely useful method for many purposes. However, it deals with the intricate
+    border between objects that are transient/detached and those that are persistent,
+    as well as the automated transference of state. The wide variety of scenarios
+    that can present themselves here often require a more careful approach to the
+    state of objects. Common problems with merge usually involve some unexpected state
+    regarding the object being passed to [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lets use the canonical example of the User and Address objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Assume a `User` object with one `Address`, already persistent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We now create `a1`, an object outside the session, which we’d like to merge
+    on top of the existing `Address`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A surprise would occur if we said this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Why is that ? We weren’t careful with our cascades. The assignment of `a1.user`
+    to a persistent object cascaded to the backref of `User.addresses` and made our
+    `a1` object pending, as though we had added it. Now we have *two* `Address` objects
+    in the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, our `a1` is already pending in the session. The subsequent [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") operation essentially does nothing. Cascade can
+    be configured via the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") option on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), although in this case it would mean removing the
+    `save-update` cascade from the `User.addresses` relationship - and usually, that
+    behavior is extremely convenient. The solution here would usually be to not assign
+    `a1.user` to an object already persistent in the target session.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `cascade_backrefs=False` option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") will also prevent the `Address` from being added
+    to the session via the `a1.user = u1` assignment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further detail on cascade operation is at [Cascades](cascades.html#unitofwork-cascades).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another example of unexpected state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the assignment of `user` takes precedence over the foreign key assignment
+    of `user_id`, with the end result that `None` is applied to `user_id`, causing
+    a failure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    issues can be examined by first checking - is the object prematurely in the session
+    ?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or is there state on the object that we don’t want ? Examining `__dict__` is
+    a quick way to check:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: Expunging
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Expunge removes an object from the Session, sending persistent instances to
+    the detached state, and pending instances to the transient state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: To remove all items, call [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all") (this method was formerly known as `clear()`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Refreshing / Expiring'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Expiring](../glossary.html#term-Expiring) means that the database-persisted
+    data held inside a series of object attributes is erased, in such a way that when
+    those attributes are next accessed, a SQL query is emitted which will refresh
+    that data from the database.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When we talk about expiration of data we are usually talking about an object
+    that is in the [persistent](../glossary.html#term-persistent) state. For example,
+    if we load an object as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above `User` object is persistent, and has a series of attributes present;
+    if we were to look inside its `__dict__`, we’d see that state loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: where `id` and `name` refer to those columns in the database. `_sa_instance_state`
+    is a non-database-persisted value used by SQLAlchemy internally (it refers to
+    the [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
+    for the instance. While not directly relevant to this section, if we want to get
+    at it, we should use the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function to access it).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At this point, the state in our `User` object matches that of the loaded database
+    row. But upon expiring the object using a method such as [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire"), we see that the state is removed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We see that while the internal “state” still hangs around, the values which
+    correspond to the `id` and `name` columns are gone. If we were to access one of
+    these columns and are watching SQL, we’d see this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, upon accessing the expired attribute `user.name`, the ORM initiated
+    a [lazy load](../glossary.html#term-lazy-load) to retrieve the most recent state
+    from the database, by emitting a SELECT for the user row to which this user refers.
+    Afterwards, the `__dict__` is again populated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: While we are peeking inside of `__dict__` in order to see a bit of what SQLAlchemy
+    does with object attributes, we **should not modify** the contents of `__dict__`
+    directly, at least as far as those attributes which the SQLAlchemy ORM is maintaining
+    (other attributes outside of SQLA’s realm are fine). This is because SQLAlchemy
+    uses [descriptors](../glossary.html#term-descriptors) in order to track the changes
+    we make to an object, and when we modify `__dict__` directly, the ORM won’t be
+    able to track that we changed something.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another key behavior of both [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") is that all un-flushed changes on an object
+    are discarded. That is, if we were to modify an attribute on our `User`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'but then we call [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") without first calling [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush"), our pending value of `''user2''` is discarded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
+    method can be used to mark as “expired” all ORM-mapped attributes for an instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'it can also be passed a list of string attribute names, referring to specific
+    attributes to be marked as expired:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") method allows us to essentially call [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") on all objects contained within the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    method has a similar interface, but instead of expiring, it emits an immediate
+    SELECT for the object’s row immediately:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    also accepts a list of string attribute names, but unlike [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire"), expects at least one name to be that of a column-mapped
+    attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An alternative method of refreshing which is often more flexible is to use
+    the [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)
+    feature of the ORM, available for [2.0 style](../glossary.html#term-2.0-style)
+    queries with [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") as well as from the [`Query.populate_existing()`](queryguide/query.html#sqlalchemy.orm.Query.populate_existing
+    "sqlalchemy.orm.Query.populate_existing") method of [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") within [1.x style](../glossary.html#term-1.x-style) queries.
+    Using this execution option, all of the ORM objects returned in the result set
+    of the statement will be refreshed with data from the database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: See [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)
+    for further detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What Actually Loads
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The SELECT statement that’s emitted when an object marked with [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") or loaded with [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") varies based on several factors, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The load of expired attributes is triggered from **column-mapped attributes
+    only**. While any kind of attribute can be marked as expired, including a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") - mapped attribute, accessing an expired [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") attribute will emit a load only for that attribute,
+    using standard relationship-oriented lazy loading. Column-oriented attributes,
+    even if expired, will not load as part of this operation, and instead will load
+    when any column-oriented attribute is accessed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")-
+    mapped attributes will not load in response to expired column-based attributes
+    being accessed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Regarding relationships, [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") is more restrictive than [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") with regards to attributes that aren’t column-mapped.
+    Calling [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") and passing a list of names that only includes
+    relationship-mapped attributes will actually raise an error. In any case, non-eager-loading
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    attributes will not be included in any refresh operation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    attributes configured as “eager loading” via the [`relationship.lazy`](relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") parameter will load in the case of [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh"), if either no attribute names are specified,
+    or if their names are included in the list of attributes to be refreshed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attributes that are configured as [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") will not normally load, during either the expired-attribute
+    load or during a refresh. An unloaded attribute that’s [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") instead loads on its own when directly accessed, or
+    if part of a “group” of deferred attributes where an unloaded attribute in that
+    group is accessed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For expired attributes that are loaded on access, a joined-inheritance table
+    mapping will emit a SELECT that typically only includes those tables for which
+    unloaded attributes are present. The action here is sophisticated enough to load
+    only the parent or child table, for example, if the subset of columns that were
+    originally expired encompass only one or the other of those tables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    is used on a joined-inheritance table mapping, the SELECT emitted will resemble
+    that of when [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
+    "sqlalchemy.orm.Session.query") is used on the target object’s class. This is
+    typically all those tables that are set up as part of the mapping.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When to Expire or Refresh
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    uses the expiration feature automatically whenever the transaction referred to
+    by the session ends. Meaning, whenever [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") is called, all objects within the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") are expired, using a feature equivalent to that of the
+    [`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all "sqlalchemy.orm.Session.expire_all")
+    method. The rationale is that the end of a transaction is a demarcating point
+    at which there is no more context available in order to know what the current
+    state of the database is, as any number of other transactions may be affecting
+    it. Only when a new transaction starts can we again have access to the current
+    state of the database, at which point any number of changes may have occurred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
+    and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    methods are used in those cases when one wants to force an object to re-load its
+    data from the database, in those cases when it is known that the current state
+    of data is possibly stale. Reasons for this might include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: some SQL has been emitted within the transaction outside of the scope of the
+    ORM’s object handling, such as if a [`Table.update()`](../core/metadata.html#sqlalchemy.schema.Table.update
+    "sqlalchemy.schema.Table.update") construct were emitted using the [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if the application is attempting to acquire data that is known to have been
+    modified in a concurrent transaction, and it is also known that the isolation
+    rules in effect allow this data to be visible.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second bullet has the important caveat that “it is also known that the isolation
+    rules in effect allow this data to be visible.” This means that it cannot be assumed
+    that an UPDATE that happened on another database connection will yet be visible
+    here locally; in many cases, it will not. This is why if one wishes to use [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") or [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") in order to view data between ongoing transactions,
+    an understanding of the isolation behavior in effect is essential.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Populate Existing](queryguide/api.html#orm-queryguide-populate-existing) -
+    allows any ORM query to refresh objects as they would be loaded normally, refreshing
+    all matching objects in the identity map against the results of a SELECT statement.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[isolation](../glossary.html#term-isolation) - glossary explanation of isolation
+    which includes links to Wikipedia.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[The SQLAlchemy Session In-Depth](https://techspot.zzzeek.org/2012/11/14/pycon-canada-the-sqlalchemy-session-in-depth/)
+    - a video + slides with an in-depth discussion of the object lifecycle including
+    the role of data expiration.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What Actually Loads
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The SELECT statement that’s emitted when an object marked with [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") or loaded with [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") varies based on several factors, including:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The load of expired attributes is triggered from **column-mapped attributes
+    only**. While any kind of attribute can be marked as expired, including a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") - mapped attribute, accessing an expired [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") attribute will emit a load only for that attribute,
+    using standard relationship-oriented lazy loading. Column-oriented attributes,
+    even if expired, will not load as part of this operation, and instead will load
+    when any column-oriented attribute is accessed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")-
+    mapped attributes will not load in response to expired column-based attributes
+    being accessed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Regarding relationships, [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") is more restrictive than [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") with regards to attributes that aren’t column-mapped.
+    Calling [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") and passing a list of names that only includes
+    relationship-mapped attributes will actually raise an error. In any case, non-eager-loading
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    attributes will not be included in any refresh operation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    attributes configured as “eager loading” via the [`relationship.lazy`](relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") parameter will load in the case of [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh"), if either no attribute names are specified,
+    or if their names are included in the list of attributes to be refreshed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attributes that are configured as [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") will not normally load, during either the expired-attribute
+    load or during a refresh. An unloaded attribute that’s [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") instead loads on its own when directly accessed, or
+    if part of a “group” of deferred attributes where an unloaded attribute in that
+    group is accessed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For expired attributes that are loaded on access, a joined-inheritance table
+    mapping will emit a SELECT that typically only includes those tables for which
+    unloaded attributes are present. The action here is sophisticated enough to load
+    only the parent or child table, for example, if the subset of columns that were
+    originally expired encompass only one or the other of those tables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    is used on a joined-inheritance table mapping, the SELECT emitted will resemble
+    that of when [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
+    "sqlalchemy.orm.Session.query") is used on the target object’s class. This is
+    typically all those tables that are set up as part of the mapping.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When to Expire or Refresh
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    uses the expiration feature automatically whenever the transaction referred to
+    by the session ends. Meaning, whenever [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") is called, all objects within the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") are expired, using a feature equivalent to that of the
+    [`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all "sqlalchemy.orm.Session.expire_all")
+    method. The rationale is that the end of a transaction is a demarcating point
+    at which there is no more context available in order to know what the current
+    state of the database is, as any number of other transactions may be affecting
+    it. Only when a new transaction starts can we again have access to the current
+    state of the database, at which point any number of changes may have occurred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
+    and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    methods are used in those cases when one wants to force an object to re-load its
+    data from the database, in those cases when it is known that the current state
+    of data is possibly stale. Reasons for this might include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: some SQL has been emitted within the transaction outside of the scope of the
+    ORM’s object handling, such as if a [`Table.update()`](../core/metadata.html#sqlalchemy.schema.Table.update
+    "sqlalchemy.schema.Table.update") construct were emitted using the [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if the application is attempting to acquire data that is known to have been
+    modified in a concurrent transaction, and it is also known that the isolation
+    rules in effect allow this data to be visible.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second bullet has the important caveat that “it is also known that the isolation
+    rules in effect allow this data to be visible.” This means that it cannot be assumed
+    that an UPDATE that happened on another database connection will yet be visible
+    here locally; in many cases, it will not. This is why if one wishes to use [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") or [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") in order to view data between ongoing transactions,
+    an understanding of the isolation behavior in effect is essential.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Populate Existing](queryguide/api.html#orm-queryguide-populate-existing) -
+    allows any ORM query to refresh objects as they would be loaded normally, refreshing
+    all matching objects in the identity map against the results of a SELECT statement.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[isolation](../glossary.html#term-isolation) - glossary explanation of isolation
+    which includes links to Wikipedia.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[The SQLAlchemy Session In-Depth](https://techspot.zzzeek.org/2012/11/14/pycon-canada-the-sqlalchemy-session-in-depth/)
+    - a video + slides with an in-depth discussion of the object lifecycle including
+    the role of data expiration.'
+  prefs: []
+  type: TYPE_NORMAL

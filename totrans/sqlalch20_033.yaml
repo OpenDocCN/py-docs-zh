@@ -1,0 +1,2097 @@
+- en: Basic Relationship Patterns
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/basic_relationships.html](https://docs.sqlalchemy.org/en/20/orm/basic_relationships.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: A quick walkthrough of the basic relational patterns, which in this section
+    are illustrated using [Declarative](declarative_styles.html#orm-explicit-declarative-base)
+    style mappings based on the use of the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The setup for each of the following sections is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Declarative vs. Imperative Forms
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As SQLAlchemy has evolved, different ORM configurational styles have emerged.
+    For examples in this section and others that use annotated [Declarative](declarative_styles.html#orm-explicit-declarative-base)
+    mappings with [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped"),
+    the corresponding non-annotated form should use the desired class, or string class
+    name, as the first argument passed to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). The example below illustrates the form used in
+    this document, which is a fully Declarative example using [**PEP 484**](https://peps.python.org/pep-0484/)
+    annotations, where the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct is also deriving the target class and
+    collection type from the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    annotation, which is the most modern form of SQLAlchemy Declarative mapping:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In contrast, using a Declarative mapping **without** annotations is the more
+    “classic” form of mapping, where [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") requires all parameters passed to it directly,
+    as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, using [Imperative Mapping](mapping_styles.html#orm-imperative-mapping),
+    which is SQLAlchemy’s original mapping form before Declarative was made (which
+    nonetheless remains preferred by a vocal minority of users), the above configuration
+    looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Additionally, the default collection style for non-annotated mappings is `list`.
+    To use a `set` or other collection without annotations, indicate it using the
+    [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Detail on collection configuration for [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is at [Customizing Collection Access](collection_api.html#custom-collections).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additional differences between annotated and non-annotated / imperative styles
+    will be noted as needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## One To Many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A one to many relationship places a foreign key on the child table referencing
+    the parent. [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is then specified on the parent, as referencing
+    a collection of items represented by the child:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To establish a bidirectional relationship in one-to-many, where the “reverse”
+    side is a many to one, specify an additional [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and connect the two using the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") parameter, using the attribute name of each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") as the value for [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") on the other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`Child` will get a `parent` attribute with many-to-one semantics.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using Sets, Lists, or other Collection Types for One To Many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using annotated Declarative mappings, the type of collection used for the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is derived from the collection type passed to the
+    [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped") container
+    type. The example from the previous section may be written to use a `set` rather
+    than a `list` for the `Parent.children` collection using `Mapped[Set["Child"]]`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using non-annotated forms including imperative mappings, the Python class
+    to use as a collection may be passed using the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing Collection Access](collection_api.html#custom-collections) - contains
+    further detail on collection configuration including some techniques to map [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to dictionaries.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring Delete Behavior for One to Many
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: It is often the case that all `Child` objects should be deleted when their owning
+    `Parent` is deleted. To configure this behavior, the `delete` cascade option described
+    at [delete](cascades.html#cascade-delete) is used. An additional option is that
+    a `Child` object can itself be deleted when it is deassociated from its parent.
+    This behavior is described at [delete-orphan](cascades.html#cascade-delete-orphan).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete](cascades.html#cascade-delete)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete-orphan](cascades.html#cascade-delete-orphan)  ## Many To One'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many to one places a foreign key in the parent table referencing the child.
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    is declared on the parent, where a new scalar-holding attribute will be created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example shows a many-to-one relationship that assumes non-nullable
+    behavior; the next section, [Nullable Many-to-One](#relationship-patterns-nullable-m2o),
+    illustrates a nullable version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Bidirectional behavior is achieved by adding a second [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and applying the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") parameter in both directions, using the attribute
+    name of each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") as the value for [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") on the other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Nullable Many-to-One'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the preceding example, the `Parent.child` relationship is not typed as allowing
+    `None`; this follows from the `Parent.child_id` column itself not being nullable,
+    as it is typed with `Mapped[int]`. If we wanted `Parent.child` to be a **nullable**
+    many-to-one, we can set both `Parent.child_id` and `Parent.child` to be `Optional[]`,
+    in which case the configuration would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the column for `Parent.child_id` will be created in DDL to allow `NULL`
+    values. When using [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") with explicit typing declarations, the specification
+    of `child_id: Mapped[Optional[int]]` is equivalent to setting [`Column.nullable`](../core/metadata.html#sqlalchemy.schema.Column.params.nullable
+    "sqlalchemy.schema.Column") to `True` on the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), whereas `child_id: Mapped[int]` is equivalent to
+    setting it to `False`. See [mapped_column() derives the datatype and nullability
+    from the Mapped annotation](declarative_tables.html#orm-declarative-mapped-column-nullability)
+    for background on this behavior.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If using Python 3.10 or greater, [**PEP 604**](https://peps.python.org/pep-0604/)
+    syntax is more convenient to indicate optional types using `| None`, which when
+    combined with [**PEP 563**](https://peps.python.org/pep-0563/) postponed annotation
+    evaluation so that string-quoted types aren’t required, would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]  ## One To One'
+  prefs: []
+  type: TYPE_NORMAL
+- en: One To One is essentially a [One To Many](#relationship-patterns-o2m) relationship
+    from a foreign key perspective, but indicates that there will only be one row
+    at any time that refers to a particular parent row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using annotated mappings with [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), the “one-to-one” convention is achieved by applying
+    a non-collection type to the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    annotation on both sides of the relationship, which will imply to the ORM that
+    a collection should not be used on either side, as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, when we load a `Parent` object, the `Parent.child` attribute will refer
+    to a single `Child` object rather than a collection. If we replace the value of
+    `Parent.child` with a new `Child` object, the ORM’s unit of work process will
+    replace the previous `Child` row with the new one, setting the previous `child.parent_id`
+    column to NULL by default unless there are specific [cascade](cascades.html#unitofwork-cascades)
+    behaviors set up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned previously, the ORM considers the “one-to-one” pattern as a convention,
+    where it makes the assumption that when it loads the `Parent.child` attribute
+    on a `Parent` object, it will get only one row back. If more than one row is returned,
+    the ORM will emit a warning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, the `Child.parent` side of the above relationship remains as a “many-to-one”
+    relationship. By itself, it will not detect assignment of more than one `Child`,
+    unless the [`relationship.single_parent`](relationship_api.html#sqlalchemy.orm.relationship.params.single_parent
+    "sqlalchemy.orm.relationship") parameter is set, which may be useful:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Outside of setting this parameter, the “one-to-many” side (which here is one-to-one
+    by convention) will also not reliably detect if more than one `Child` is associated
+    with a single `Parent`, such as in the case where the multiple `Child` objects
+    are pending and not database-persistent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Whether or not [`relationship.single_parent`](relationship_api.html#sqlalchemy.orm.relationship.params.single_parent
+    "sqlalchemy.orm.relationship") is used, it is recommended that the database schema
+    include a [unique constraint](../core/constraints.html#schema-unique-constraint)
+    to indicate that the `Child.parent_id` column should be unique, to ensure at the
+    database level that only one `Child` row may refer to a particular `Parent` row
+    at a time (see [Declarative Table Configuration](declarative_tables.html#orm-declarative-table-configuration)
+    for background on the `__table_args__` tuple syntax):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 2.0: The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct can derive the effective value of the
+    [`relationship.uselist`](relationship_api.html#sqlalchemy.orm.relationship.params.uselist
+    "sqlalchemy.orm.relationship") parameter from a given [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting uselist=False for non-annotated configurations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When using [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") without the benefit of [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotations, the one-to-one pattern can be enabled using
+    the [`relationship.uselist`](relationship_api.html#sqlalchemy.orm.relationship.params.uselist
+    "sqlalchemy.orm.relationship") parameter set to `False` on what would normally
+    be the “many” side, illustrated in a non-annotated Declarative configuration below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]  ## Many To Many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many to Many adds an association table between two classes. The association
+    table is nearly always given as a Core [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object or other Core selectable such as a [`Join`](../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") object, and is indicated by the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). Usually, the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") uses the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object associated with the declarative base class,
+    so that the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") directives can locate the remote tables with which
+    to link:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “association table” above has foreign key constraints established that
+    refer to the two entity tables on either side of the relationship. The data type
+    of each of `association.left_id` and `association.right_id` is normally inferred
+    from that of the referenced table and may be omitted. It is also **recommended**,
+    though not in any way required by SQLAlchemy, that the columns which refer to
+    the two entity tables are established within either a **unique constraint** or
+    more commonly as the **primary key constraint**; this ensures that duplicate rows
+    won’t be persisted within the table regardless of issues on the application side:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Bi-Directional Many-to-many
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For a bidirectional relationship, both sides of the relationship contain a
+    collection. Specify using [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship"), and for each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") specify the common association table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using a late-evaluated form for the “secondary” argument
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") also accepts two different “late evaluated” forms,
+    including string table name as well as lambda callable. See the section [Using
+    a late-evaluated form for the “secondary” argument of many-to-many](#orm-declarative-relationship-secondary-eval)
+    for background and examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Sets, Lists, or other Collection Types for Many To Many
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Configuration of collections for a Many to Many relationship is identical to
+    that of [One To Many](#relationship-patterns-o2m), as described at [Using Sets,
+    Lists, or other Collection Types for One To Many](#relationship-patterns-o2m-collection).
+    For an annotated mapping using [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), the collection can be indicated by the type of collection
+    used within the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    generic class, such as `set`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using non-annotated forms including imperative mappings, as is the case
+    with one-to-many, the Python class to use as a collection may be passed using
+    the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing Collection Access](collection_api.html#custom-collections) - contains
+    further detail on collection configuration including some techniques to map [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to dictionaries.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Deleting Rows from the Many to Many Table'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A behavior which is unique to the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is that the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") which is specified here is automatically subject to
+    INSERT and DELETE statements, as objects are added or removed from the collection.
+    There is **no need to delete from this table manually**. The act of removing a
+    record from the collection will have the effect of the row being deleted on flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A question which often arises is how the row in the “secondary” table can be
+    deleted when the child object is handed directly to [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are several possibilities here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If there is a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") from `Parent` to `Child`, but there is **not**
+    a reverse-relationship that links a particular `Child` to each `Parent`, SQLAlchemy
+    will not have any awareness that when deleting this particular `Child` object,
+    it needs to maintain the “secondary” table that links it to the `Parent`. No delete
+    of the “secondary” table will occur.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If there is a relationship that links a particular `Child` to each `Parent`,
+    suppose it’s called `Child.parents`, SQLAlchemy by default will load in the `Child.parents`
+    collection to locate all `Parent` objects, and remove each row from the “secondary”
+    table which establishes this link. Note that this relationship does not need to
+    be bidirectional; SQLAlchemy is strictly looking at every [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") associated with the `Child` object being deleted.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A higher performing option here is to use ON DELETE CASCADE directives with
+    the foreign keys used by the database. Assuming the database supports this feature,
+    the database itself can be made to automatically delete rows in the “secondary”
+    table as referencing rows in “child” are deleted. SQLAlchemy can be instructed
+    to forego actively loading in the `Child.parents` collection in this case using
+    the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") directive on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"); see [Using foreign key ON DELETE cascade with
+    ORM relationships](cascades.html#passive-deletes) for more details on this.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note again, these behaviors are *only* relevant to the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") option used with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). If dealing with association tables that are mapped
+    explicitly and are *not* present in the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") option of a relevant [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), cascade rules can be used instead to automatically
+    delete entities in reaction to a related entity being deleted - see [Cascades](cascades.html#unitofwork-cascades)
+    for information on this feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using delete cascade with many-to-many relationships](cascades.html#cascade-delete-many-to-many)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE with many-to-many relationships](cascades.html#passive-deletes-many-to-many)  ##
+    Association Object'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The association object pattern is a variant on many-to-many: it’s used when
+    an association table contains additional columns beyond those which are foreign
+    keys to the parent and child (or left and right) tables, columns which are most
+    ideally mapped to their own ORM mapped class. This mapped class is mapped against
+    the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that would otherwise be noted as [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") when using the many-to-many pattern.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the association object pattern, the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter is not used; instead, a class is mapped
+    directly to the association table. Two individual [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs then link first the parent side to the
+    mapped association class via one to many, and then the mapped association class
+    to the child side via many-to-one, to form a uni-directional association object
+    relationship from parent, to association, to child. For a bi-directional relationship,
+    four [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    constructs are used to link the mapped association class to both parent and child
+    in both directions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The example below illustrates a new class `Association` which maps to the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") named `association`; this table now includes an additional
+    column called `extra_data`, which is a string value that is stored along with
+    each association between `Parent` and `Child`. By mapping the table to an explicit
+    class, rudimental access from `Parent` to `Child` makes explicit use of `Association`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To illustrate the bi-directional version, we add two more [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs, linked to the existing ones using [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Working with the association pattern in its direct form requires that child
+    objects are associated with an association instance before being appended to the
+    parent; similarly, access from parent to child goes through the association object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: To enhance the association object pattern such that direct access to the `Association`
+    object is optional, SQLAlchemy provides the [Association Proxy](extensions/associationproxy.html)
+    extension. This extension allows the configuration of attributes which will access
+    two “hops” with a single access, one “hop” to the associated object, and a second
+    to a target attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Association Proxy](extensions/associationproxy.html) - allows direct “many
+    to many” style access between parent and child for a three-class association object
+    mapping.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: Avoid mixing the association object pattern with the [many-to-many](#relationships-many-to-many)
+    pattern directly, as this produces conditions where data may be read and written
+    in an inconsistent fashion without special steps; the [association proxy](extensions/associationproxy.html)
+    is typically used to provide more succinct access. For more detailed background
+    on the caveats introduced by this combination, see the next section [Combining
+    Association Object with Many-to-Many Access Patterns](#association-pattern-w-m2m).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Combining Association Object with Many-to-Many Access Patterns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned in the previous section, the association object pattern does not
+    automatically integrate with usage of the many-to-many pattern against the same
+    tables/columns at the same time. From this it follows that read operations may
+    return conflicting data and write operations may also attempt to flush conflicting
+    changes, causing either integrity errors or unexpected inserts or deletes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate, the example below configures a bidirectional many-to-many relationship
+    between `Parent` and `Child` via `Parent.children` and `Child.parents`. At the
+    same time, an association object relationship is also configured, between `Parent.child_associations
+    -> Association.child` and `Child.parent_associations -> Association.parent`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using this ORM model to make changes, changes made to `Parent.children`
+    will not be coordinated with changes made to `Parent.child_associations` or `Child.parent_associations`
+    in Python; while all of these relationships will continue to function normally
+    by themselves, changes on one will not show up in another until the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is expired, which normally occurs automatically after
+    [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Additionally, if conflicting changes are made, such as adding a new `Association`
+    object while also appending the same related `Child` to `Parent.children`, this
+    will raise integrity errors when the unit of work flush process proceeds, as in
+    the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Appending `Child` to `Parent.children` directly also implies the creation of
+    rows in the `association` table without indicating any value for the `association.extra_data`
+    column, which will receive `NULL` for its value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s fine to use a mapping like the above if you know what you’re doing; there
+    may be good reason to use many-to-many relationships in the case where use of
+    the “association object” pattern is infrequent, which is that it’s easier to load
+    relationships along a single many-to-many relationship, which can also optimize
+    slightly better how the “secondary” table is used in SQL statements, compared
+    to how two separate relationships to an explicit association class is used. It’s
+    at least a good idea to apply the [`relationship.viewonly`](relationship_api.html#sqlalchemy.orm.relationship.params.viewonly
+    "sqlalchemy.orm.relationship") parameter to the “secondary” relationship to avoid
+    the issue of conflicting changes occurring, as well as preventing `NULL` being
+    written to the additional association columns, as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above mapping will not write any changes to `Parent.children` or `Child.parents`
+    to the database, preventing conflicting writes. However, reads of `Parent.children`
+    or `Child.parents` will not necessarily match the data that’s read from `Parent.child_associations`
+    or `Child.parent_associations`, if changes are being made to these collections
+    within the same transaction or [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") as where the viewonly collections are being read. If
+    use of the association object relationships is infrequent and is carefully organized
+    against code that accesses the many-to-many collections to avoid stale reads (in
+    extreme cases, making direct use of [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") to cause collections to be refreshed within the
+    current transaction), the pattern may be feasible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A popular alternative to the above pattern is one where the direct many-to-many
+    `Parent.children` and `Child.parents` relationships are replaced with an extension
+    that will transparently proxy through the `Association` class, while keeping everything
+    consistent from the ORM’s point of view. This extension is known as the [Association
+    Proxy](extensions/associationproxy.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Association Proxy](extensions/associationproxy.html) - allows direct “many
+    to many” style access between parent and child for a three-class association object
+    mapping.  ## Late-Evaluation of Relationship Arguments'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Most of the examples in the preceding sections illustrate mappings where the
+    various [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    constructs refer to their target classes using a string name, rather than the
+    class itself, such as when using [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), a forward reference is generated that exists at runtime
+    only as a string:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly, when using non-annotated forms such as non-annotated Declarative
+    or Imperative mappings, a string name is also supported directly by the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: These string names are resolved into classes in the mapper resolution stage,
+    which is an internal process that occurs typically after all mappings have been
+    defined and is normally triggered by the first usage of the mappings themselves.
+    The [`registry`](mapping_api.html#sqlalchemy.orm.registry "sqlalchemy.orm.registry")
+    object is the container where these names are stored and resolved to the mapped
+    classes to which they refer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to the main class argument for [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), other arguments which depend upon the columns
+    present on an as-yet undefined class may also be specified either as Python functions,
+    or more commonly as strings. For most of these arguments except that of the main
+    argument, string inputs are **evaluated as Python expressions using Python’s built-in
+    eval() function**, as they are intended to receive complete SQL expressions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the Python `eval()` function is used to interpret the late-evaluated string
+    arguments passed to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") mapper configuration construct, these arguments
+    should **not** be repurposed such that they would receive untrusted user input;
+    `eval()` is **not secure** against untrusted user input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The full namespace available within this evaluation includes all classes mapped
+    for this declarative base, as well as the contents of the `sqlalchemy` package,
+    including expression functions like [`desc()`](../core/sqlelement.html#sqlalchemy.sql.expression.desc
+    "sqlalchemy.sql.expression.desc") and `sqlalchemy.sql.functions.func`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the case where more than one module contains a class of the same name,
+    string class names can also be specified as module-qualified paths within any
+    of these string expressions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In an example like the above, the string passed to [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") can be disambiguated from a specific class argument by
+    passing the class location string directly to [`relationship.argument`](relationship_api.html#sqlalchemy.orm.relationship.params.argument
+    "sqlalchemy.orm.relationship") as well. Below illustrates a typing-only import
+    for `Child`, combined with a runtime specifier for the target class that will
+    search for the correct name within the [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The qualified path can be any partial path that removes ambiguity between the
+    names. For example, to disambiguate between `myapp.model1.Child` and `myapp.model2.Child`,
+    we can specify `model1.Child` or `model2.Child`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    construct also accepts Python functions or lambdas as input for these arguments.
+    A Python functional approach might look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The full list of parameters which accept Python functions/lambdas or strings
+    that will be passed to `eval()` are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`relationship.order_by`](relationship_api.html#sqlalchemy.orm.relationship.params.order_by
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship._user_defined_foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params._user_defined_foreign_keys
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: As stated previously, the above parameters to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") are **evaluated as Python code expressions using
+    eval(). DO NOT PASS UNTRUSTED INPUT TO THESE ARGUMENTS.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Adding Relationships to Mapped Classes After Declaration'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It should also be noted that in a similar way as described at [Appending additional
+    columns to an existing Declarative mapped class](declarative_tables.html#orm-declarative-table-adding-columns),
+    any [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty")
+    construct can be added to a declarative base mapping at any time (noting that
+    annotated forms are not supported in this context). If we wanted to implement
+    this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    after the `Address` class were available, we could also apply it afterwards:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: As is the case for ORM mapped columns, there’s no capability for the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation type to take part in this operation; therefore,
+    the related class must be specified directly within the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct, either as the class itself, the string
+    name of the class, or a callable function that returns a reference to the target
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case for ORM mapped columns, assignment of mapped properties to an
+    already mapped class will only function correctly if the “declarative base” class
+    is used, meaning the user-defined subclass of [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") or the dynamically generated class returned
+    by [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base "sqlalchemy.orm.declarative_base")
+    or [`registry.generate_base()`](mapping_api.html#sqlalchemy.orm.registry.generate_base
+    "sqlalchemy.orm.registry.generate_base"). This “base” class includes a Python
+    metaclass which implements a special `__setattr__()` method that intercepts these
+    operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Runtime assignment of class-mapped attributes to a mapped class will **not**
+    work if the class is mapped using decorators like [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") or imperative functions like [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively").  ### Using a late-evaluated form
+    for the “secondary” argument of many-to-many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many-to-many relationships make use of the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter, which ordinarily indicates a reference
+    to a typically non-mapped [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object or other Core selectable object. Late evaluation
+    using a lambda callable is typical.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the example given at [Many To Many](#relationships-many-to-many), if we
+    assumed that the `association_table` [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object would be defined at a point later on in the
+    module than the mapped class itself, we may write the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") using a lambda as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: As a shortcut for table names that are also **valid Python identifiers**, the
+    [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter may also be passed as a string, where
+    resolution works by evaluation of the string as a Python expression, with simple
+    identifier names linked to same-named [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects that are present in the same [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection referenced by the current [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example below, the expression `"association_table"` is evaluated as
+    a variable named “association_table” that is resolved against the table names
+    within the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a string, the name passed to [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") **must be a valid Python identifier** starting
+    with a letter and containing only alphanumeric characters or underscores. Other
+    characters such as dashes etc. will be interpreted as Python operators which will
+    not resolve to the name given. Please consider using lambda expressions rather
+    than strings for improved clarity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a string, [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument is interpreted using Python’s `eval()`
+    function, even though it’s typically the name of a table. **DO NOT PASS UNTRUSTED
+    INPUT TO THIS STRING**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declarative vs. Imperative Forms
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As SQLAlchemy has evolved, different ORM configurational styles have emerged.
+    For examples in this section and others that use annotated [Declarative](declarative_styles.html#orm-explicit-declarative-base)
+    mappings with [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped"),
+    the corresponding non-annotated form should use the desired class, or string class
+    name, as the first argument passed to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). The example below illustrates the form used in
+    this document, which is a fully Declarative example using [**PEP 484**](https://peps.python.org/pep-0484/)
+    annotations, where the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct is also deriving the target class and
+    collection type from the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    annotation, which is the most modern form of SQLAlchemy Declarative mapping:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In contrast, using a Declarative mapping **without** annotations is the more
+    “classic” form of mapping, where [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") requires all parameters passed to it directly,
+    as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, using [Imperative Mapping](mapping_styles.html#orm-imperative-mapping),
+    which is SQLAlchemy’s original mapping form before Declarative was made (which
+    nonetheless remains preferred by a vocal minority of users), the above configuration
+    looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Additionally, the default collection style for non-annotated mappings is `list`.
+    To use a `set` or other collection without annotations, indicate it using the
+    [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Detail on collection configuration for [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is at [Customizing Collection Access](collection_api.html#custom-collections).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additional differences between annotated and non-annotated / imperative styles
+    will be noted as needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## One To Many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A one to many relationship places a foreign key on the child table referencing
+    the parent. [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is then specified on the parent, as referencing
+    a collection of items represented by the child:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To establish a bidirectional relationship in one-to-many, where the “reverse”
+    side is a many to one, specify an additional [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and connect the two using the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") parameter, using the attribute name of each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") as the value for [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") on the other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`Child` will get a `parent` attribute with many-to-one semantics.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using Sets, Lists, or other Collection Types for One To Many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using annotated Declarative mappings, the type of collection used for the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is derived from the collection type passed to the
+    [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped") container
+    type. The example from the previous section may be written to use a `set` rather
+    than a `list` for the `Parent.children` collection using `Mapped[Set["Child"]]`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using non-annotated forms including imperative mappings, the Python class
+    to use as a collection may be passed using the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing Collection Access](collection_api.html#custom-collections) - contains
+    further detail on collection configuration including some techniques to map [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to dictionaries.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring Delete Behavior for One to Many
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: It is often the case that all `Child` objects should be deleted when their owning
+    `Parent` is deleted. To configure this behavior, the `delete` cascade option described
+    at [delete](cascades.html#cascade-delete) is used. An additional option is that
+    a `Child` object can itself be deleted when it is deassociated from its parent.
+    This behavior is described at [delete-orphan](cascades.html#cascade-delete-orphan).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete](cascades.html#cascade-delete)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete-orphan](cascades.html#cascade-delete-orphan)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using Sets, Lists, or other Collection Types for One To Many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using annotated Declarative mappings, the type of collection used for the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is derived from the collection type passed to the
+    [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped") container
+    type. The example from the previous section may be written to use a `set` rather
+    than a `list` for the `Parent.children` collection using `Mapped[Set["Child"]]`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using non-annotated forms including imperative mappings, the Python class
+    to use as a collection may be passed using the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing Collection Access](collection_api.html#custom-collections) - contains
+    further detail on collection configuration including some techniques to map [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to dictionaries.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring Delete Behavior for One to Many
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: It is often the case that all `Child` objects should be deleted when their owning
+    `Parent` is deleted. To configure this behavior, the `delete` cascade option described
+    at [delete](cascades.html#cascade-delete) is used. An additional option is that
+    a `Child` object can itself be deleted when it is deassociated from its parent.
+    This behavior is described at [delete-orphan](cascades.html#cascade-delete-orphan).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete](cascades.html#cascade-delete)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[delete-orphan](cascades.html#cascade-delete-orphan)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Many To One'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many to one places a foreign key in the parent table referencing the child.
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    is declared on the parent, where a new scalar-holding attribute will be created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example shows a many-to-one relationship that assumes non-nullable
+    behavior; the next section, [Nullable Many-to-One](#relationship-patterns-nullable-m2o),
+    illustrates a nullable version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Bidirectional behavior is achieved by adding a second [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and applying the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") parameter in both directions, using the attribute
+    name of each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") as the value for [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") on the other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Nullable Many-to-One'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the preceding example, the `Parent.child` relationship is not typed as allowing
+    `None`; this follows from the `Parent.child_id` column itself not being nullable,
+    as it is typed with `Mapped[int]`. If we wanted `Parent.child` to be a **nullable**
+    many-to-one, we can set both `Parent.child_id` and `Parent.child` to be `Optional[]`,
+    in which case the configuration would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the column for `Parent.child_id` will be created in DDL to allow `NULL`
+    values. When using [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") with explicit typing declarations, the specification
+    of `child_id: Mapped[Optional[int]]` is equivalent to setting [`Column.nullable`](../core/metadata.html#sqlalchemy.schema.Column.params.nullable
+    "sqlalchemy.schema.Column") to `True` on the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), whereas `child_id: Mapped[int]` is equivalent to
+    setting it to `False`. See [mapped_column() derives the datatype and nullability
+    from the Mapped annotation](declarative_tables.html#orm-declarative-mapped-column-nullability)
+    for background on this behavior.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If using Python 3.10 or greater, [**PEP 604**](https://peps.python.org/pep-0604/)
+    syntax is more convenient to indicate optional types using `| None`, which when
+    combined with [**PEP 563**](https://peps.python.org/pep-0563/) postponed annotation
+    evaluation so that string-quoted types aren’t required, would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]  ### Nullable Many-to-One'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the preceding example, the `Parent.child` relationship is not typed as allowing
+    `None`; this follows from the `Parent.child_id` column itself not being nullable,
+    as it is typed with `Mapped[int]`. If we wanted `Parent.child` to be a **nullable**
+    many-to-one, we can set both `Parent.child_id` and `Parent.child` to be `Optional[]`,
+    in which case the configuration would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the column for `Parent.child_id` will be created in DDL to allow `NULL`
+    values. When using [`mapped_column()`](mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") with explicit typing declarations, the specification
+    of `child_id: Mapped[Optional[int]]` is equivalent to setting [`Column.nullable`](../core/metadata.html#sqlalchemy.schema.Column.params.nullable
+    "sqlalchemy.schema.Column") to `True` on the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), whereas `child_id: Mapped[int]` is equivalent to
+    setting it to `False`. See [mapped_column() derives the datatype and nullability
+    from the Mapped annotation](declarative_tables.html#orm-declarative-mapped-column-nullability)
+    for background on this behavior.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If using Python 3.10 or greater, [**PEP 604**](https://peps.python.org/pep-0604/)
+    syntax is more convenient to indicate optional types using `| None`, which when
+    combined with [**PEP 563**](https://peps.python.org/pep-0563/) postponed annotation
+    evaluation so that string-quoted types aren’t required, would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## One To One'
+  prefs: []
+  type: TYPE_NORMAL
+- en: One To One is essentially a [One To Many](#relationship-patterns-o2m) relationship
+    from a foreign key perspective, but indicates that there will only be one row
+    at any time that refers to a particular parent row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using annotated mappings with [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), the “one-to-one” convention is achieved by applying
+    a non-collection type to the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    annotation on both sides of the relationship, which will imply to the ORM that
+    a collection should not be used on either side, as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, when we load a `Parent` object, the `Parent.child` attribute will refer
+    to a single `Child` object rather than a collection. If we replace the value of
+    `Parent.child` with a new `Child` object, the ORM’s unit of work process will
+    replace the previous `Child` row with the new one, setting the previous `child.parent_id`
+    column to NULL by default unless there are specific [cascade](cascades.html#unitofwork-cascades)
+    behaviors set up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned previously, the ORM considers the “one-to-one” pattern as a convention,
+    where it makes the assumption that when it loads the `Parent.child` attribute
+    on a `Parent` object, it will get only one row back. If more than one row is returned,
+    the ORM will emit a warning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, the `Child.parent` side of the above relationship remains as a “many-to-one”
+    relationship. By itself, it will not detect assignment of more than one `Child`,
+    unless the [`relationship.single_parent`](relationship_api.html#sqlalchemy.orm.relationship.params.single_parent
+    "sqlalchemy.orm.relationship") parameter is set, which may be useful:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: Outside of setting this parameter, the “one-to-many” side (which here is one-to-one
+    by convention) will also not reliably detect if more than one `Child` is associated
+    with a single `Parent`, such as in the case where the multiple `Child` objects
+    are pending and not database-persistent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Whether or not [`relationship.single_parent`](relationship_api.html#sqlalchemy.orm.relationship.params.single_parent
+    "sqlalchemy.orm.relationship") is used, it is recommended that the database schema
+    include a [unique constraint](../core/constraints.html#schema-unique-constraint)
+    to indicate that the `Child.parent_id` column should be unique, to ensure at the
+    database level that only one `Child` row may refer to a particular `Parent` row
+    at a time (see [Declarative Table Configuration](declarative_tables.html#orm-declarative-table-configuration)
+    for background on the `__table_args__` tuple syntax):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 2.0: The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct can derive the effective value of the
+    [`relationship.uselist`](relationship_api.html#sqlalchemy.orm.relationship.params.uselist
+    "sqlalchemy.orm.relationship") parameter from a given [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting uselist=False for non-annotated configurations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When using [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") without the benefit of [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotations, the one-to-one pattern can be enabled using
+    the [`relationship.uselist`](relationship_api.html#sqlalchemy.orm.relationship.params.uselist
+    "sqlalchemy.orm.relationship") parameter set to `False` on what would normally
+    be the “many” side, illustrated in a non-annotated Declarative configuration below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting uselist=False for non-annotated configurations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When using [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") without the benefit of [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotations, the one-to-one pattern can be enabled using
+    the [`relationship.uselist`](relationship_api.html#sqlalchemy.orm.relationship.params.uselist
+    "sqlalchemy.orm.relationship") parameter set to `False` on what would normally
+    be the “many” side, illustrated in a non-annotated Declarative configuration below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Many To Many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many to Many adds an association table between two classes. The association
+    table is nearly always given as a Core [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object or other Core selectable such as a [`Join`](../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") object, and is indicated by the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). Usually, the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") uses the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object associated with the declarative base class,
+    so that the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") directives can locate the remote tables with which
+    to link:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “association table” above has foreign key constraints established that
+    refer to the two entity tables on either side of the relationship. The data type
+    of each of `association.left_id` and `association.right_id` is normally inferred
+    from that of the referenced table and may be omitted. It is also **recommended**,
+    though not in any way required by SQLAlchemy, that the columns which refer to
+    the two entity tables are established within either a **unique constraint** or
+    more commonly as the **primary key constraint**; this ensures that duplicate rows
+    won’t be persisted within the table regardless of issues on the application side:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Bi-Directional Many-to-many
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For a bidirectional relationship, both sides of the relationship contain a
+    collection. Specify using [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship"), and for each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") specify the common association table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using a late-evaluated form for the “secondary” argument
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") also accepts two different “late evaluated” forms,
+    including string table name as well as lambda callable. See the section [Using
+    a late-evaluated form for the “secondary” argument of many-to-many](#orm-declarative-relationship-secondary-eval)
+    for background and examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Sets, Lists, or other Collection Types for Many To Many
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Configuration of collections for a Many to Many relationship is identical to
+    that of [One To Many](#relationship-patterns-o2m), as described at [Using Sets,
+    Lists, or other Collection Types for One To Many](#relationship-patterns-o2m-collection).
+    For an annotated mapping using [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), the collection can be indicated by the type of collection
+    used within the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    generic class, such as `set`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using non-annotated forms including imperative mappings, as is the case
+    with one-to-many, the Python class to use as a collection may be passed using
+    the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing Collection Access](collection_api.html#custom-collections) - contains
+    further detail on collection configuration including some techniques to map [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to dictionaries.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Deleting Rows from the Many to Many Table'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A behavior which is unique to the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is that the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") which is specified here is automatically subject to
+    INSERT and DELETE statements, as objects are added or removed from the collection.
+    There is **no need to delete from this table manually**. The act of removing a
+    record from the collection will have the effect of the row being deleted on flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A question which often arises is how the row in the “secondary” table can be
+    deleted when the child object is handed directly to [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are several possibilities here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If there is a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") from `Parent` to `Child`, but there is **not**
+    a reverse-relationship that links a particular `Child` to each `Parent`, SQLAlchemy
+    will not have any awareness that when deleting this particular `Child` object,
+    it needs to maintain the “secondary” table that links it to the `Parent`. No delete
+    of the “secondary” table will occur.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If there is a relationship that links a particular `Child` to each `Parent`,
+    suppose it’s called `Child.parents`, SQLAlchemy by default will load in the `Child.parents`
+    collection to locate all `Parent` objects, and remove each row from the “secondary”
+    table which establishes this link. Note that this relationship does not need to
+    be bidirectional; SQLAlchemy is strictly looking at every [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") associated with the `Child` object being deleted.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A higher performing option here is to use ON DELETE CASCADE directives with
+    the foreign keys used by the database. Assuming the database supports this feature,
+    the database itself can be made to automatically delete rows in the “secondary”
+    table as referencing rows in “child” are deleted. SQLAlchemy can be instructed
+    to forego actively loading in the `Child.parents` collection in this case using
+    the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") directive on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"); see [Using foreign key ON DELETE cascade with
+    ORM relationships](cascades.html#passive-deletes) for more details on this.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note again, these behaviors are *only* relevant to the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") option used with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). If dealing with association tables that are mapped
+    explicitly and are *not* present in the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") option of a relevant [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), cascade rules can be used instead to automatically
+    delete entities in reaction to a related entity being deleted - see [Cascades](cascades.html#unitofwork-cascades)
+    for information on this feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using delete cascade with many-to-many relationships](cascades.html#cascade-delete-many-to-many)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE with many-to-many relationships](cascades.html#passive-deletes-many-to-many)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting Bi-Directional Many-to-many
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For a bidirectional relationship, both sides of the relationship contain a
+    collection. Specify using [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship"), and for each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") specify the common association table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using a late-evaluated form for the “secondary” argument
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") also accepts two different “late evaluated” forms,
+    including string table name as well as lambda callable. See the section [Using
+    a late-evaluated form for the “secondary” argument of many-to-many](#orm-declarative-relationship-secondary-eval)
+    for background and examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Sets, Lists, or other Collection Types for Many To Many
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Configuration of collections for a Many to Many relationship is identical to
+    that of [One To Many](#relationship-patterns-o2m), as described at [Using Sets,
+    Lists, or other Collection Types for One To Many](#relationship-patterns-o2m-collection).
+    For an annotated mapping using [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), the collection can be indicated by the type of collection
+    used within the [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    generic class, such as `set`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using non-annotated forms including imperative mappings, as is the case
+    with one-to-many, the Python class to use as a collection may be passed using
+    the [`relationship.collection_class`](relationship_api.html#sqlalchemy.orm.relationship.params.collection_class
+    "sqlalchemy.orm.relationship") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Customizing Collection Access](collection_api.html#custom-collections) - contains
+    further detail on collection configuration including some techniques to map [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") to dictionaries.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Deleting Rows from the Many to Many Table'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A behavior which is unique to the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") is that the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") which is specified here is automatically subject to
+    INSERT and DELETE statements, as objects are added or removed from the collection.
+    There is **no need to delete from this table manually**. The act of removing a
+    record from the collection will have the effect of the row being deleted on flush:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A question which often arises is how the row in the “secondary” table can be
+    deleted when the child object is handed directly to [`Session.delete()`](session_api.html#sqlalchemy.orm.Session.delete
+    "sqlalchemy.orm.Session.delete"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are several possibilities here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If there is a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") from `Parent` to `Child`, but there is **not**
+    a reverse-relationship that links a particular `Child` to each `Parent`, SQLAlchemy
+    will not have any awareness that when deleting this particular `Child` object,
+    it needs to maintain the “secondary” table that links it to the `Parent`. No delete
+    of the “secondary” table will occur.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If there is a relationship that links a particular `Child` to each `Parent`,
+    suppose it’s called `Child.parents`, SQLAlchemy by default will load in the `Child.parents`
+    collection to locate all `Parent` objects, and remove each row from the “secondary”
+    table which establishes this link. Note that this relationship does not need to
+    be bidirectional; SQLAlchemy is strictly looking at every [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") associated with the `Child` object being deleted.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A higher performing option here is to use ON DELETE CASCADE directives with
+    the foreign keys used by the database. Assuming the database supports this feature,
+    the database itself can be made to automatically delete rows in the “secondary”
+    table as referencing rows in “child” are deleted. SQLAlchemy can be instructed
+    to forego actively loading in the `Child.parents` collection in this case using
+    the [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") directive on [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"); see [Using foreign key ON DELETE cascade with
+    ORM relationships](cascades.html#passive-deletes) for more details on this.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note again, these behaviors are *only* relevant to the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") option used with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). If dealing with association tables that are mapped
+    explicitly and are *not* present in the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") option of a relevant [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), cascade rules can be used instead to automatically
+    delete entities in reaction to a related entity being deleted - see [Cascades](cascades.html#unitofwork-cascades)
+    for information on this feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using delete cascade with many-to-many relationships](cascades.html#cascade-delete-many-to-many)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE with many-to-many relationships](cascades.html#passive-deletes-many-to-many)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Association Object'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The association object pattern is a variant on many-to-many: it’s used when
+    an association table contains additional columns beyond those which are foreign
+    keys to the parent and child (or left and right) tables, columns which are most
+    ideally mapped to their own ORM mapped class. This mapped class is mapped against
+    the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that would otherwise be noted as [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") when using the many-to-many pattern.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the association object pattern, the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter is not used; instead, a class is mapped
+    directly to the association table. Two individual [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs then link first the parent side to the
+    mapped association class via one to many, and then the mapped association class
+    to the child side via many-to-one, to form a uni-directional association object
+    relationship from parent, to association, to child. For a bi-directional relationship,
+    four [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    constructs are used to link the mapped association class to both parent and child
+    in both directions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The example below illustrates a new class `Association` which maps to the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") named `association`; this table now includes an additional
+    column called `extra_data`, which is a string value that is stored along with
+    each association between `Parent` and `Child`. By mapping the table to an explicit
+    class, rudimental access from `Parent` to `Child` makes explicit use of `Association`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To illustrate the bi-directional version, we add two more [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") constructs, linked to the existing ones using [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Working with the association pattern in its direct form requires that child
+    objects are associated with an association instance before being appended to the
+    parent; similarly, access from parent to child goes through the association object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: To enhance the association object pattern such that direct access to the `Association`
+    object is optional, SQLAlchemy provides the [Association Proxy](extensions/associationproxy.html)
+    extension. This extension allows the configuration of attributes which will access
+    two “hops” with a single access, one “hop” to the associated object, and a second
+    to a target attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Association Proxy](extensions/associationproxy.html) - allows direct “many
+    to many” style access between parent and child for a three-class association object
+    mapping.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: Avoid mixing the association object pattern with the [many-to-many](#relationships-many-to-many)
+    pattern directly, as this produces conditions where data may be read and written
+    in an inconsistent fashion without special steps; the [association proxy](extensions/associationproxy.html)
+    is typically used to provide more succinct access. For more detailed background
+    on the caveats introduced by this combination, see the next section [Combining
+    Association Object with Many-to-Many Access Patterns](#association-pattern-w-m2m).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Combining Association Object with Many-to-Many Access Patterns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned in the previous section, the association object pattern does not
+    automatically integrate with usage of the many-to-many pattern against the same
+    tables/columns at the same time. From this it follows that read operations may
+    return conflicting data and write operations may also attempt to flush conflicting
+    changes, causing either integrity errors or unexpected inserts or deletes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate, the example below configures a bidirectional many-to-many relationship
+    between `Parent` and `Child` via `Parent.children` and `Child.parents`. At the
+    same time, an association object relationship is also configured, between `Parent.child_associations
+    -> Association.child` and `Child.parent_associations -> Association.parent`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using this ORM model to make changes, changes made to `Parent.children`
+    will not be coordinated with changes made to `Parent.child_associations` or `Child.parent_associations`
+    in Python; while all of these relationships will continue to function normally
+    by themselves, changes on one will not show up in another until the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is expired, which normally occurs automatically after
+    [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Additionally, if conflicting changes are made, such as adding a new `Association`
+    object while also appending the same related `Child` to `Parent.children`, this
+    will raise integrity errors when the unit of work flush process proceeds, as in
+    the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: Appending `Child` to `Parent.children` directly also implies the creation of
+    rows in the `association` table without indicating any value for the `association.extra_data`
+    column, which will receive `NULL` for its value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s fine to use a mapping like the above if you know what you’re doing; there
+    may be good reason to use many-to-many relationships in the case where use of
+    the “association object” pattern is infrequent, which is that it’s easier to load
+    relationships along a single many-to-many relationship, which can also optimize
+    slightly better how the “secondary” table is used in SQL statements, compared
+    to how two separate relationships to an explicit association class is used. It’s
+    at least a good idea to apply the [`relationship.viewonly`](relationship_api.html#sqlalchemy.orm.relationship.params.viewonly
+    "sqlalchemy.orm.relationship") parameter to the “secondary” relationship to avoid
+    the issue of conflicting changes occurring, as well as preventing `NULL` being
+    written to the additional association columns, as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above mapping will not write any changes to `Parent.children` or `Child.parents`
+    to the database, preventing conflicting writes. However, reads of `Parent.children`
+    or `Child.parents` will not necessarily match the data that’s read from `Parent.child_associations`
+    or `Child.parent_associations`, if changes are being made to these collections
+    within the same transaction or [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") as where the viewonly collections are being read. If
+    use of the association object relationships is infrequent and is carefully organized
+    against code that accesses the many-to-many collections to avoid stale reads (in
+    extreme cases, making direct use of [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") to cause collections to be refreshed within the
+    current transaction), the pattern may be feasible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A popular alternative to the above pattern is one where the direct many-to-many
+    `Parent.children` and `Child.parents` relationships are replaced with an extension
+    that will transparently proxy through the `Association` class, while keeping everything
+    consistent from the ORM’s point of view. This extension is known as the [Association
+    Proxy](extensions/associationproxy.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Association Proxy](extensions/associationproxy.html) - allows direct “many
+    to many” style access between parent and child for a three-class association object
+    mapping.  ### Combining Association Object with Many-to-Many Access Patterns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned in the previous section, the association object pattern does not
+    automatically integrate with usage of the many-to-many pattern against the same
+    tables/columns at the same time. From this it follows that read operations may
+    return conflicting data and write operations may also attempt to flush conflicting
+    changes, causing either integrity errors or unexpected inserts or deletes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate, the example below configures a bidirectional many-to-many relationship
+    between `Parent` and `Child` via `Parent.children` and `Child.parents`. At the
+    same time, an association object relationship is also configured, between `Parent.child_associations
+    -> Association.child` and `Child.parent_associations -> Association.parent`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using this ORM model to make changes, changes made to `Parent.children`
+    will not be coordinated with changes made to `Parent.child_associations` or `Child.parent_associations`
+    in Python; while all of these relationships will continue to function normally
+    by themselves, changes on one will not show up in another until the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is expired, which normally occurs automatically after
+    [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Additionally, if conflicting changes are made, such as adding a new `Association`
+    object while also appending the same related `Child` to `Parent.children`, this
+    will raise integrity errors when the unit of work flush process proceeds, as in
+    the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: Appending `Child` to `Parent.children` directly also implies the creation of
+    rows in the `association` table without indicating any value for the `association.extra_data`
+    column, which will receive `NULL` for its value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s fine to use a mapping like the above if you know what you’re doing; there
+    may be good reason to use many-to-many relationships in the case where use of
+    the “association object” pattern is infrequent, which is that it’s easier to load
+    relationships along a single many-to-many relationship, which can also optimize
+    slightly better how the “secondary” table is used in SQL statements, compared
+    to how two separate relationships to an explicit association class is used. It’s
+    at least a good idea to apply the [`relationship.viewonly`](relationship_api.html#sqlalchemy.orm.relationship.params.viewonly
+    "sqlalchemy.orm.relationship") parameter to the “secondary” relationship to avoid
+    the issue of conflicting changes occurring, as well as preventing `NULL` being
+    written to the additional association columns, as below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above mapping will not write any changes to `Parent.children` or `Child.parents`
+    to the database, preventing conflicting writes. However, reads of `Parent.children`
+    or `Child.parents` will not necessarily match the data that’s read from `Parent.child_associations`
+    or `Child.parent_associations`, if changes are being made to these collections
+    within the same transaction or [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") as where the viewonly collections are being read. If
+    use of the association object relationships is infrequent and is carefully organized
+    against code that accesses the many-to-many collections to avoid stale reads (in
+    extreme cases, making direct use of [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") to cause collections to be refreshed within the
+    current transaction), the pattern may be feasible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A popular alternative to the above pattern is one where the direct many-to-many
+    `Parent.children` and `Child.parents` relationships are replaced with an extension
+    that will transparently proxy through the `Association` class, while keeping everything
+    consistent from the ORM’s point of view. This extension is known as the [Association
+    Proxy](extensions/associationproxy.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Association Proxy](extensions/associationproxy.html) - allows direct “many
+    to many” style access between parent and child for a three-class association object
+    mapping.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Late-Evaluation of Relationship Arguments'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Most of the examples in the preceding sections illustrate mappings where the
+    various [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    constructs refer to their target classes using a string name, rather than the
+    class itself, such as when using [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped"), a forward reference is generated that exists at runtime
+    only as a string:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly, when using non-annotated forms such as non-annotated Declarative
+    or Imperative mappings, a string name is also supported directly by the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: These string names are resolved into classes in the mapper resolution stage,
+    which is an internal process that occurs typically after all mappings have been
+    defined and is normally triggered by the first usage of the mappings themselves.
+    The [`registry`](mapping_api.html#sqlalchemy.orm.registry "sqlalchemy.orm.registry")
+    object is the container where these names are stored and resolved to the mapped
+    classes to which they refer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to the main class argument for [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), other arguments which depend upon the columns
+    present on an as-yet undefined class may also be specified either as Python functions,
+    or more commonly as strings. For most of these arguments except that of the main
+    argument, string inputs are **evaluated as Python expressions using Python’s built-in
+    eval() function**, as they are intended to receive complete SQL expressions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the Python `eval()` function is used to interpret the late-evaluated string
+    arguments passed to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") mapper configuration construct, these arguments
+    should **not** be repurposed such that they would receive untrusted user input;
+    `eval()` is **not secure** against untrusted user input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The full namespace available within this evaluation includes all classes mapped
+    for this declarative base, as well as the contents of the `sqlalchemy` package,
+    including expression functions like [`desc()`](../core/sqlelement.html#sqlalchemy.sql.expression.desc
+    "sqlalchemy.sql.expression.desc") and `sqlalchemy.sql.functions.func`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the case where more than one module contains a class of the same name,
+    string class names can also be specified as module-qualified paths within any
+    of these string expressions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In an example like the above, the string passed to [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") can be disambiguated from a specific class argument by
+    passing the class location string directly to [`relationship.argument`](relationship_api.html#sqlalchemy.orm.relationship.params.argument
+    "sqlalchemy.orm.relationship") as well. Below illustrates a typing-only import
+    for `Child`, combined with a runtime specifier for the target class that will
+    search for the correct name within the [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The qualified path can be any partial path that removes ambiguity between the
+    names. For example, to disambiguate between `myapp.model1.Child` and `myapp.model2.Child`,
+    we can specify `model1.Child` or `model2.Child`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    construct also accepts Python functions or lambdas as input for these arguments.
+    A Python functional approach might look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The full list of parameters which accept Python functions/lambdas or strings
+    that will be passed to `eval()` are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`relationship.order_by`](relationship_api.html#sqlalchemy.orm.relationship.params.order_by
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`relationship._user_defined_foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params._user_defined_foreign_keys
+    "sqlalchemy.orm.relationship")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: As stated previously, the above parameters to [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") are **evaluated as Python code expressions using
+    eval(). DO NOT PASS UNTRUSTED INPUT TO THESE ARGUMENTS.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Adding Relationships to Mapped Classes After Declaration'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It should also be noted that in a similar way as described at [Appending additional
+    columns to an existing Declarative mapped class](declarative_tables.html#orm-declarative-table-adding-columns),
+    any [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty")
+    construct can be added to a declarative base mapping at any time (noting that
+    annotated forms are not supported in this context). If we wanted to implement
+    this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    after the `Address` class were available, we could also apply it afterwards:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: As is the case for ORM mapped columns, there’s no capability for the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation type to take part in this operation; therefore,
+    the related class must be specified directly within the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct, either as the class itself, the string
+    name of the class, or a callable function that returns a reference to the target
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case for ORM mapped columns, assignment of mapped properties to an
+    already mapped class will only function correctly if the “declarative base” class
+    is used, meaning the user-defined subclass of [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") or the dynamically generated class returned
+    by [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base "sqlalchemy.orm.declarative_base")
+    or [`registry.generate_base()`](mapping_api.html#sqlalchemy.orm.registry.generate_base
+    "sqlalchemy.orm.registry.generate_base"). This “base” class includes a Python
+    metaclass which implements a special `__setattr__()` method that intercepts these
+    operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Runtime assignment of class-mapped attributes to a mapped class will **not**
+    work if the class is mapped using decorators like [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") or imperative functions like [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively").  ### Using a late-evaluated form
+    for the “secondary” argument of many-to-many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many-to-many relationships make use of the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter, which ordinarily indicates a reference
+    to a typically non-mapped [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object or other Core selectable object. Late evaluation
+    using a lambda callable is typical.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the example given at [Many To Many](#relationships-many-to-many), if we
+    assumed that the `association_table` [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object would be defined at a point later on in the
+    module than the mapped class itself, we may write the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") using a lambda as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: As a shortcut for table names that are also **valid Python identifiers**, the
+    [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter may also be passed as a string, where
+    resolution works by evaluation of the string as a Python expression, with simple
+    identifier names linked to same-named [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects that are present in the same [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection referenced by the current [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example below, the expression `"association_table"` is evaluated as
+    a variable named “association_table” that is resolved against the table names
+    within the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a string, the name passed to [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") **must be a valid Python identifier** starting
+    with a letter and containing only alphanumeric characters or underscores. Other
+    characters such as dashes etc. will be interpreted as Python operators which will
+    not resolve to the name given. Please consider using lambda expressions rather
+    than strings for improved clarity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When passed as a string, [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument is interpreted using Python’s `eval()`
+    function, even though it’s typically the name of a table. **DO NOT PASS UNTRUSTED
+    INPUT TO THIS STRING**.  ### Adding Relationships to Mapped Classes After Declaration'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It should also be noted that in a similar way as described at [Appending additional
+    columns to an existing Declarative mapped class](declarative_tables.html#orm-declarative-table-adding-columns),
+    any [`MapperProperty`](internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty")
+    construct can be added to a declarative base mapping at any time (noting that
+    annotated forms are not supported in this context). If we wanted to implement
+    this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    after the `Address` class were available, we could also apply it afterwards:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: As is the case for ORM mapped columns, there’s no capability for the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") annotation type to take part in this operation; therefore,
+    the related class must be specified directly within the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct, either as the class itself, the string
+    name of the class, or a callable function that returns a reference to the target
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: As is the case for ORM mapped columns, assignment of mapped properties to an
+    already mapped class will only function correctly if the “declarative base” class
+    is used, meaning the user-defined subclass of [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") or the dynamically generated class returned
+    by [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base "sqlalchemy.orm.declarative_base")
+    or [`registry.generate_base()`](mapping_api.html#sqlalchemy.orm.registry.generate_base
+    "sqlalchemy.orm.registry.generate_base"). This “base” class includes a Python
+    metaclass which implements a special `__setattr__()` method that intercepts these
+    operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runtime assignment of class-mapped attributes to a mapped class will **not**
+    work if the class is mapped using decorators like [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped
+    "sqlalchemy.orm.registry.mapped") or imperative functions like [`registry.map_imperatively()`](mapping_api.html#sqlalchemy.orm.registry.map_imperatively
+    "sqlalchemy.orm.registry.map_imperatively").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using a late-evaluated form for the “secondary” argument of many-to-many'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many-to-many relationships make use of the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter, which ordinarily indicates a reference
+    to a typically non-mapped [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object or other Core selectable object. Late evaluation
+    using a lambda callable is typical.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the example given at [Many To Many](#relationships-many-to-many), if we
+    assumed that the `association_table` [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object would be defined at a point later on in the
+    module than the mapped class itself, we may write the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") using a lambda as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: As a shortcut for table names that are also **valid Python identifiers**, the
+    [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter may also be passed as a string, where
+    resolution works by evaluation of the string as a Python expression, with simple
+    identifier names linked to same-named [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects that are present in the same [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection referenced by the current [`registry`](mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example below, the expression `"association_table"` is evaluated as
+    a variable named “association_table” that is resolved against the table names
+    within the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a string, the name passed to [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") **must be a valid Python identifier** starting
+    with a letter and containing only alphanumeric characters or underscores. Other
+    characters such as dashes etc. will be interpreted as Python operators which will
+    not resolve to the name given. Please consider using lambda expressions rather
+    than strings for improved clarity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a string, [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument is interpreted using Python’s `eval()`
+    function, even though it’s typically the name of a table. **DO NOT PASS UNTRUSTED
+    INPUT TO THIS STRING**.
+  prefs: []
+  type: TYPE_NORMAL

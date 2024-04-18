@@ -1,0 +1,1376 @@
+- en: Working with Database Metadata
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/tutorial/metadata.html](https://docs.sqlalchemy.org/en/20/tutorial/metadata.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: With engines and SQL execution down, we are ready to begin some Alchemy. The
+    central element of both SQLAlchemy Core and ORM is the SQL Expression Language
+    which allows for fluent, composable construction of SQL queries. The foundation
+    for these queries are Python objects that represent database concepts like tables
+    and columns. These objects are known collectively as [database metadata](../glossary.html#term-database-metadata).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most common foundational objects for database metadata in SQLAlchemy are
+    known as [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData"),
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table"),
+    and [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column").
+    The sections below will illustrate how these objects are used in both a Core-oriented
+    style as well as an ORM-oriented style.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**ORM readers, stay with us!**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As with other sections, Core users can skip the ORM sections, but ORM users
+    would best be familiar with these objects from both perspectives. The [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object discussed here is declared in a more indirect
+    (and also fully Python-typed) way when using the ORM, however there is still a
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object within the ORM’s configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Setting up MetaData with Table objects'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we work with a relational database, the basic data-holding structure in
+    the database which we query from is known as a **table**. In SQLAlchemy, the database
+    “table” is ultimately represented by a Python object similarly named [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: To start using the SQLAlchemy Expression Language, we will want to have [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects constructed that represent all of the database
+    tables we are interested in working with. The [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") is constructed programmatically, either directly by
+    using the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    constructor, or indirectly by using ORM Mapped classes (described later at [Using
+    ORM Declarative Forms to Define Table Metadata](#tutorial-orm-table-metadata)).
+    There is also the option to load some or all table information from an existing
+    database, called [reflection](../glossary.html#term-reflection).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Whichever kind of approach is used, we always start out with a collection that
+    will be where we place our tables known as the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object. This object is essentially a [facade](../glossary.html#term-facade)
+    around a Python dictionary that stores a series of [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects keyed to their string name. While the ORM provides
+    some options on where to get this collection, we always have the option to simply
+    make one directly, which looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once we have a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object, we can declare some [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects. This tutorial will start with the classic
+    SQLAlchemy tutorial model, which has a table called `user_account` that stores,
+    for example, the users of a website, and a related table `address`, which stores
+    email addresses associated with rows in the `user_account` table. When not using
+    ORM Declarative models at all, we construct each [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object directly, typically assigning each to a variable
+    that will be how we will refer to the table in application code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the above example, when we wish to write code that refers to the `user_account`
+    table in the database, we will use the `user_table` Python variable to refer to
+    it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Components of `Table`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We can observe that the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") construct as written in Python has a resemblance to
+    a SQL CREATE TABLE statement; starting with the table name, then listing out each
+    column, where each column has a name and a datatype. The objects we use above
+    are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    - represents a database table and assigns itself to a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    - represents a column in a database table, and assigns itself to a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object. The [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") usually includes a string name and a type object.
+    The collection of [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects in terms of the parent [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") are typically accessed via an associative array located
+    at [`Table.c`](../core/metadata.html#sqlalchemy.schema.Table.c "sqlalchemy.schema.Table.c"):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[`Integer`](../core/type_basics.html#sqlalchemy.types.Integer "sqlalchemy.types.Integer"),
+    [`String`](../core/type_basics.html#sqlalchemy.types.String "sqlalchemy.types.String")
+    - these classes represent SQL datatypes and can be passed to a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") with or without necessarily being instantiated. Above,
+    we want to give a length of “30” to the “name” column, so we instantiated `String(30)`.
+    But for “id” and “fullname” we did not specify these, so we can send the class
+    itself.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reference and API documentation for [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") and [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") is at [Describing Databases with MetaData](../core/metadata.html).
+    The reference documentation for datatypes is at [SQL Datatype Objects](../core/types.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In an upcoming section, we will illustrate one of the fundamental functions
+    of [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    which is to generate [DDL](../glossary.html#term-DDL) on a particular database
+    connection. But first we will declare a second [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declaring Simple Constraints
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The first [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    in the example `user_table` includes the [`Column.primary_key`](../core/metadata.html#sqlalchemy.schema.Column.params.primary_key
+    "sqlalchemy.schema.Column") parameter which is a shorthand technique of indicating
+    that this [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    should be part of the primary key for this table. The primary key itself is normally
+    declared implicitly and is represented by the [`PrimaryKeyConstraint`](../core/constraints.html#sqlalchemy.schema.PrimaryKeyConstraint
+    "sqlalchemy.schema.PrimaryKeyConstraint") construct, which we can see on the [`Table.primary_key`](../core/metadata.html#sqlalchemy.schema.Table.primary_key
+    "sqlalchemy.schema.Table.primary_key") attribute on the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The constraint that is most typically declared explicitly is the [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") object that corresponds to a database
+    [foreign key constraint](../glossary.html#term-foreign-key-constraint). When we
+    declare tables that are related to each other, SQLAlchemy uses the presence of
+    these foreign key constraint declarations not only so that they are emitted within
+    CREATE statements to the database, but also to assist in constructing SQL expressions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") that involves only a single column on
+    the target table is typically declared using a column-level shorthand notation
+    via the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")
+    object. Below we declare a second table `address` that will have a foreign key
+    constraint referring to the `user` table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The table above also features a third kind of constraint, which in SQL is the
+    “NOT NULL” constraint, indicated above using the [`Column.nullable`](../core/metadata.html#sqlalchemy.schema.Column.params.nullable
+    "sqlalchemy.schema.Column") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") object within a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") definition, we can omit the datatype for that [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"); it is automatically inferred from that of the related
+    column, in the above example the [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") datatype of the `user_account.id` column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section we will emit the completed DDL for the `user` and `address`
+    table to see the completed result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Emitting DDL to the Database'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ve constructed an object structure that represents two database tables in
+    a database, starting at the root [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object, then into two [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects, each of which hold onto a collection of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") and [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") objects. This object structure will be at the
+    center of most operations we perform with both Core and ORM going forward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first useful thing we can do with this structure will be to emit CREATE
+    TABLE statements, or [DDL](../glossary.html#term-DDL), to our SQLite database
+    so that we can insert and query data from them. We have already all the tools
+    needed to do so, by invoking the [`MetaData.create_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") method on our [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), sending it the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") that refers to the target database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The DDL create process above includes some SQLite-specific PRAGMA statements
+    that test for the existence of each table before emitting a CREATE. The full series
+    of steps are also included within a BEGIN/COMMIT pair to accommodate for transactional
+    DDL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The create process also takes care of emitting CREATE statements in the correct
+    order; above, the FOREIGN KEY constraint is dependent on the `user` table existing,
+    so the `address` table is created second. In more complicated dependency scenarios
+    the FOREIGN KEY constraints may also be applied to tables after the fact using
+    ALTER.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    object also features a [`MetaData.drop_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.drop_all
+    "sqlalchemy.schema.MetaData.drop_all") method that will emit DROP statements in
+    the reverse order as it would emit CREATE in order to drop schema elements.  ##
+    Using ORM Declarative Forms to Define Table Metadata'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the ORM, the process by which we declare [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata is usually combined with the process of declaring
+    [mapped](../glossary.html#term-mapped) classes. The mapped class is any Python
+    class we’d like to create, which will then have attributes on it that will be
+    linked to the columns in a database table. While there are a few varieties of
+    how this is achieved, the most common style is known as [declarative](../orm/declarative_config.html),
+    and allows us to declare our user-defined classes and [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata at once.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Establishing a Declarative Base'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using the ORM, the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection remains present, however it itself is
+    associated with an ORM-only construct commonly referred towards as the **Declarative
+    Base**. The most expedient way to acquire a new Declarative Base is to create
+    a new class that subclasses the SQLAlchemy [`DeclarativeBase`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the `Base` class is what we’ll call the Declarative Base. When we make
+    new classes that are subclasses of `Base`, combined with appropriate class-level
+    directives, they will each be established as a new **ORM mapped class** at class
+    creation time, each one typically (but not exclusively) referring to a particular
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Declarative Base refers to a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection that is created for us automatically,
+    assuming we didn’t provide one from the outside. This [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection is accessible via the [`DeclarativeBase.metadata`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.metadata
+    "sqlalchemy.orm.DeclarativeBase.metadata") class-level attribute. As we create
+    new mapped classes, they each will reference a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") within this [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The Declarative Base also refers to a collection called [`registry`](../orm/mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry"), which is the central “mapper configuration” unit in
+    the SQLAlchemy ORM. While seldom accessed directly, this object is central to
+    the mapper configuration process, as a set of ORM mapped classes will coordinate
+    with each other via this registry. As was the case with [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), our Declarative Base also created a [`registry`](../orm/mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") for us (again with options to pass our own [`registry`](../orm/mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry")), which we can access via the [`DeclarativeBase.registry`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.registry
+    "sqlalchemy.orm.DeclarativeBase.registry") class variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]  ### Declaring Mapped Classes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the `Base` class established, we can now define ORM mapped classes for
+    the `user_account` and `address` tables in terms of new classes `User` and `Address`.
+    We illustrate below the most modern form of Declarative, which is driven from
+    [**PEP 484**](https://peps.python.org/pep-0484/) type annotations using a special
+    type [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped"),
+    which indicates attributes to be mapped as particular types:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The two classes above, `User` and `Address`, are now called as **ORM Mapped
+    Classes**, and are available for use in ORM persistence and query operations,
+    which will be described later. Details about these classes include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each class refers to a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object that was generated as part of the declarative
+    mapping process, which is named by assigning a string to the [`DeclarativeBase.__tablename__`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.__tablename__
+    "sqlalchemy.orm.DeclarativeBase.__tablename__") attribute. Once the class is created,
+    this generated [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    is available from the [`DeclarativeBase.__table__`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.__table__
+    "sqlalchemy.orm.DeclarativeBase.__table__") attribute.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As mentioned previously, this form is known as [Declarative Table Configuration](../orm/declarative_tables.html#orm-declarative-table-configuration).
+    One of several alternative declaration styles would instead have us build the
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object directly, and **assign** it directly to [`DeclarativeBase.__table__`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.__table__
+    "sqlalchemy.orm.DeclarativeBase.__table__"). This style is known as [Declarative
+    with Imperative Table](../orm/declarative_tables.html#orm-imperative-table-configuration).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To indicate columns in the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), we use the [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct, in combination with typing annotations
+    based on the [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    type. This object will generate [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects that are applied to the construction of the
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For columns with simple datatypes and no other options, we can indicate a [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") type annotation alone, using simple Python types like
+    `int` and `str` to mean [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") and [`String`](../core/type_basics.html#sqlalchemy.types.String
+    "sqlalchemy.types.String"). Customization of how Python types are interpreted
+    within the Declarative mapping process is very open ended; see the sections [Using
+    Annotated Declarative Table (Type Annotated Forms for mapped_column())](../orm/declarative_tables.html#orm-declarative-mapped-column)
+    and [Customizing the Type Map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map)
+    for background.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A column can be declared as “nullable” or “not null” based on the presence of
+    the `Optional[<typ>]` type annotation (or its equivalents, `<typ> | None` or `Union[<typ>,
+    None]`). The [`mapped_column.nullable`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column.params.nullable
+    "sqlalchemy.orm.mapped_column") parameter may also be used explicitly (and does
+    not have to match the annotation’s optionality).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use of explicit typing annotations is **completely optional**. We can also use
+    [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column")
+    without annotations. When using this form, we would use more explicit type objects
+    like [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer "sqlalchemy.types.Integer")
+    and [`String`](../core/type_basics.html#sqlalchemy.types.String "sqlalchemy.types.String")
+    as well as `nullable=False` as needed within each [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Two additional attributes, `User.addresses` and `Address.user`, define a different
+    kind of attribute called [`relationship()`](../orm/relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), which features similar annotation-aware configuration
+    styles as shown. The [`relationship()`](../orm/relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct is discussed more fully at [Working with
+    ORM Related Objects](orm_related_objects.html#tutorial-orm-related-objects).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The classes are automatically given an `__init__()` method if we don’t declare
+    one of our own. The default form of this method accepts all attribute names as
+    optional keyword arguments:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: To automatically generate a full-featured `__init__()` method which provides
+    for positional arguments as well as arguments with default keyword values, the
+    dataclasses feature introduced at [Declarative Dataclass Mapping](../orm/dataclasses.html#orm-declarative-native-dataclasses)
+    may be used. It’s of course always an option to use an explicit `__init__()` method
+    as well.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The `__repr__()` methods are added so that we get a readable string output;
+    there’s no requirement for these methods to be here. As is the case with `__init__()`,
+    a `__repr__()` method can be generated automatically by using the [dataclasses](../orm/dataclasses.html#orm-declarative-native-dataclasses)
+    feature.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Mapping Styles](../orm/mapping_styles.html#orm-mapping-styles) - full
+    background on different ORM configurational styles.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Declarative Mapping](../orm/mapping_styles.html#orm-declarative-mapping) -
+    overview of Declarative class mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Declarative Table with mapped_column()](../orm/declarative_tables.html#orm-declarative-table)
+    - detail on how to use [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") and [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") to define the columns within a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to be mapped when using Declarative.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Emitting DDL to the database from an ORM mapping
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As our ORM mapped classes refer to [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects contained within a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection, emitting DDL given the Declarative Base
+    uses the same process as that described previously at [Emitting DDL to the Database](#tutorial-emitting-ddl).
+    In our case, we have already generated the `user` and `address` tables in our
+    SQLite database. If we had not done so already, we would be free to make use of
+    the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    associated with our ORM Declarative Base class in order to do so, by accessing
+    the collection from the [`DeclarativeBase.metadata`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.metadata
+    "sqlalchemy.orm.DeclarativeBase.metadata") attribute and then using [`MetaData.create_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") as before. In this case, PRAGMA statements
+    are run, but no new tables are generated since they are found to be present already:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]  ## Table Reflection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To round out the section on working with table metadata, we will illustrate
+    another operation that was mentioned at the beginning of the section, that of
+    **table reflection**. Table reflection refers to the process of generating [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") and related objects by reading the current state of
+    a database. Whereas in the previous sections we’ve been declaring [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects in Python, where we then have the option to
+    emit DDL to the database to generate such a schema, the reflection process does
+    these two steps in reverse, starting from an existing database and generating
+    in-Python data structures to represent the schemas within that database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is no requirement that reflection must be used in order to use SQLAlchemy
+    with a pre-existing database. It is entirely typical that the SQLAlchemy application
+    declares all metadata explicitly in Python, such that its structure corresponds
+    to that the existing database. The metadata structure also need not include tables,
+    columns, or other constraints and constructs in the pre-existing database that
+    are not needed for the local application to function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example of reflection, we will create a new [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object which represents the `some_table` object we
+    created manually in the earlier sections of this document. There are again some
+    varieties of how this is performed, however the most basic is to construct a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object, given the name of the table and a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection to which it will belong, then instead
+    of indicating individual [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") and [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") objects, pass it the target [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") using the [`Table.autoload_with`](../core/metadata.html#sqlalchemy.schema.Table.params.autoload_with
+    "sqlalchemy.schema.Table") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the end of the process, the `some_table` object now contains the information
+    about the [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects present in the table, and the object is usable in exactly the same way
+    as a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that we declared explicitly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: Read more about table and schema reflection at [Reflecting Database Objects](../core/reflection.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: For ORM-related variants of table reflection, the section [Mapping Declaratively
+    with Reflected Tables](../orm/declarative_tables.html#orm-declarative-reflected)
+    includes an overview of the available options.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next Steps
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We now have a SQLite database ready to go with two tables present, and Core
+    and ORM table-oriented constructs that we can use to interact with these tables
+    via a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    and/or ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    In the following sections, we will illustrate how to create, manipulate, and select
+    data using these structures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Setting up MetaData with Table objects'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we work with a relational database, the basic data-holding structure in
+    the database which we query from is known as a **table**. In SQLAlchemy, the database
+    “table” is ultimately represented by a Python object similarly named [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: To start using the SQLAlchemy Expression Language, we will want to have [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects constructed that represent all of the database
+    tables we are interested in working with. The [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") is constructed programmatically, either directly by
+    using the [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    constructor, or indirectly by using ORM Mapped classes (described later at [Using
+    ORM Declarative Forms to Define Table Metadata](#tutorial-orm-table-metadata)).
+    There is also the option to load some or all table information from an existing
+    database, called [reflection](../glossary.html#term-reflection).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Whichever kind of approach is used, we always start out with a collection that
+    will be where we place our tables known as the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object. This object is essentially a [facade](../glossary.html#term-facade)
+    around a Python dictionary that stores a series of [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects keyed to their string name. While the ORM provides
+    some options on where to get this collection, we always have the option to simply
+    make one directly, which looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once we have a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object, we can declare some [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects. This tutorial will start with the classic
+    SQLAlchemy tutorial model, which has a table called `user_account` that stores,
+    for example, the users of a website, and a related table `address`, which stores
+    email addresses associated with rows in the `user_account` table. When not using
+    ORM Declarative models at all, we construct each [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object directly, typically assigning each to a variable
+    that will be how we will refer to the table in application code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the above example, when we wish to write code that refers to the `user_account`
+    table in the database, we will use the `user_table` Python variable to refer to
+    it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Components of `Table`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We can observe that the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") construct as written in Python has a resemblance to
+    a SQL CREATE TABLE statement; starting with the table name, then listing out each
+    column, where each column has a name and a datatype. The objects we use above
+    are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    - represents a database table and assigns itself to a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    - represents a column in a database table, and assigns itself to a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object. The [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") usually includes a string name and a type object.
+    The collection of [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects in terms of the parent [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") are typically accessed via an associative array located
+    at [`Table.c`](../core/metadata.html#sqlalchemy.schema.Table.c "sqlalchemy.schema.Table.c"):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[`Integer`](../core/type_basics.html#sqlalchemy.types.Integer "sqlalchemy.types.Integer"),
+    [`String`](../core/type_basics.html#sqlalchemy.types.String "sqlalchemy.types.String")
+    - these classes represent SQL datatypes and can be passed to a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") with or without necessarily being instantiated. Above,
+    we want to give a length of “30” to the “name” column, so we instantiated `String(30)`.
+    But for “id” and “fullname” we did not specify these, so we can send the class
+    itself.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reference and API documentation for [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") and [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") is at [Describing Databases with MetaData](../core/metadata.html).
+    The reference documentation for datatypes is at [SQL Datatype Objects](../core/types.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In an upcoming section, we will illustrate one of the fundamental functions
+    of [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    which is to generate [DDL](../glossary.html#term-DDL) on a particular database
+    connection. But first we will declare a second [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declaring Simple Constraints
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The first [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    in the example `user_table` includes the [`Column.primary_key`](../core/metadata.html#sqlalchemy.schema.Column.params.primary_key
+    "sqlalchemy.schema.Column") parameter which is a shorthand technique of indicating
+    that this [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    should be part of the primary key for this table. The primary key itself is normally
+    declared implicitly and is represented by the [`PrimaryKeyConstraint`](../core/constraints.html#sqlalchemy.schema.PrimaryKeyConstraint
+    "sqlalchemy.schema.PrimaryKeyConstraint") construct, which we can see on the [`Table.primary_key`](../core/metadata.html#sqlalchemy.schema.Table.primary_key
+    "sqlalchemy.schema.Table.primary_key") attribute on the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The constraint that is most typically declared explicitly is the [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") object that corresponds to a database
+    [foreign key constraint](../glossary.html#term-foreign-key-constraint). When we
+    declare tables that are related to each other, SQLAlchemy uses the presence of
+    these foreign key constraint declarations not only so that they are emitted within
+    CREATE statements to the database, but also to assist in constructing SQL expressions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") that involves only a single column on
+    the target table is typically declared using a column-level shorthand notation
+    via the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")
+    object. Below we declare a second table `address` that will have a foreign key
+    constraint referring to the `user` table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: The table above also features a third kind of constraint, which in SQL is the
+    “NOT NULL” constraint, indicated above using the [`Column.nullable`](../core/metadata.html#sqlalchemy.schema.Column.params.nullable
+    "sqlalchemy.schema.Column") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") object within a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") definition, we can omit the datatype for that [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"); it is automatically inferred from that of the related
+    column, in the above example the [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") datatype of the `user_account.id` column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section we will emit the completed DDL for the `user` and `address`
+    table to see the completed result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Emitting DDL to the Database'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ve constructed an object structure that represents two database tables in
+    a database, starting at the root [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object, then into two [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects, each of which hold onto a collection of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") and [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") objects. This object structure will be at the
+    center of most operations we perform with both Core and ORM going forward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first useful thing we can do with this structure will be to emit CREATE
+    TABLE statements, or [DDL](../glossary.html#term-DDL), to our SQLite database
+    so that we can insert and query data from them. We have already all the tools
+    needed to do so, by invoking the [`MetaData.create_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") method on our [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), sending it the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") that refers to the target database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: The DDL create process above includes some SQLite-specific PRAGMA statements
+    that test for the existence of each table before emitting a CREATE. The full series
+    of steps are also included within a BEGIN/COMMIT pair to accommodate for transactional
+    DDL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The create process also takes care of emitting CREATE statements in the correct
+    order; above, the FOREIGN KEY constraint is dependent on the `user` table existing,
+    so the `address` table is created second. In more complicated dependency scenarios
+    the FOREIGN KEY constraints may also be applied to tables after the fact using
+    ALTER.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    object also features a [`MetaData.drop_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.drop_all
+    "sqlalchemy.schema.MetaData.drop_all") method that will emit DROP statements in
+    the reverse order as it would emit CREATE in order to drop schema elements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Components of `Table`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We can observe that the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") construct as written in Python has a resemblance to
+    a SQL CREATE TABLE statement; starting with the table name, then listing out each
+    column, where each column has a name and a datatype. The objects we use above
+    are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    - represents a database table and assigns itself to a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    - represents a column in a database table, and assigns itself to a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object. The [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") usually includes a string name and a type object.
+    The collection of [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects in terms of the parent [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") are typically accessed via an associative array located
+    at [`Table.c`](../core/metadata.html#sqlalchemy.schema.Table.c "sqlalchemy.schema.Table.c"):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[`Integer`](../core/type_basics.html#sqlalchemy.types.Integer "sqlalchemy.types.Integer"),
+    [`String`](../core/type_basics.html#sqlalchemy.types.String "sqlalchemy.types.String")
+    - these classes represent SQL datatypes and can be passed to a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") with or without necessarily being instantiated. Above,
+    we want to give a length of “30” to the “name” column, so we instantiated `String(30)`.
+    But for “id” and “fullname” we did not specify these, so we can send the class
+    itself.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reference and API documentation for [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") and [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") is at [Describing Databases with MetaData](../core/metadata.html).
+    The reference documentation for datatypes is at [SQL Datatype Objects](../core/types.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In an upcoming section, we will illustrate one of the fundamental functions
+    of [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    which is to generate [DDL](../glossary.html#term-DDL) on a particular database
+    connection. But first we will declare a second [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Declaring Simple Constraints
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The first [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    in the example `user_table` includes the [`Column.primary_key`](../core/metadata.html#sqlalchemy.schema.Column.params.primary_key
+    "sqlalchemy.schema.Column") parameter which is a shorthand technique of indicating
+    that this [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    should be part of the primary key for this table. The primary key itself is normally
+    declared implicitly and is represented by the [`PrimaryKeyConstraint`](../core/constraints.html#sqlalchemy.schema.PrimaryKeyConstraint
+    "sqlalchemy.schema.PrimaryKeyConstraint") construct, which we can see on the [`Table.primary_key`](../core/metadata.html#sqlalchemy.schema.Table.primary_key
+    "sqlalchemy.schema.Table.primary_key") attribute on the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The constraint that is most typically declared explicitly is the [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") object that corresponds to a database
+    [foreign key constraint](../glossary.html#term-foreign-key-constraint). When we
+    declare tables that are related to each other, SQLAlchemy uses the presence of
+    these foreign key constraint declarations not only so that they are emitted within
+    CREATE statements to the database, but also to assist in constructing SQL expressions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") that involves only a single column on
+    the target table is typically declared using a column-level shorthand notation
+    via the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")
+    object. Below we declare a second table `address` that will have a foreign key
+    constraint referring to the `user` table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: The table above also features a third kind of constraint, which in SQL is the
+    “NOT NULL” constraint, indicated above using the [`Column.nullable`](../core/metadata.html#sqlalchemy.schema.Column.params.nullable
+    "sqlalchemy.schema.Column") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") object within a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") definition, we can omit the datatype for that [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"); it is automatically inferred from that of the related
+    column, in the above example the [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") datatype of the `user_account.id` column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section we will emit the completed DDL for the `user` and `address`
+    table to see the completed result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Emitting DDL to the Database'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ve constructed an object structure that represents two database tables in
+    a database, starting at the root [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object, then into two [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects, each of which hold onto a collection of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") and [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") objects. This object structure will be at the
+    center of most operations we perform with both Core and ORM going forward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first useful thing we can do with this structure will be to emit CREATE
+    TABLE statements, or [DDL](../glossary.html#term-DDL), to our SQLite database
+    so that we can insert and query data from them. We have already all the tools
+    needed to do so, by invoking the [`MetaData.create_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") method on our [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), sending it the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") that refers to the target database:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The DDL create process above includes some SQLite-specific PRAGMA statements
+    that test for the existence of each table before emitting a CREATE. The full series
+    of steps are also included within a BEGIN/COMMIT pair to accommodate for transactional
+    DDL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The create process also takes care of emitting CREATE statements in the correct
+    order; above, the FOREIGN KEY constraint is dependent on the `user` table existing,
+    so the `address` table is created second. In more complicated dependency scenarios
+    the FOREIGN KEY constraints may also be applied to tables after the fact using
+    ALTER.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    object also features a [`MetaData.drop_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.drop_all
+    "sqlalchemy.schema.MetaData.drop_all") method that will emit DROP statements in
+    the reverse order as it would emit CREATE in order to drop schema elements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Using ORM Declarative Forms to Define Table Metadata'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the ORM, the process by which we declare [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata is usually combined with the process of declaring
+    [mapped](../glossary.html#term-mapped) classes. The mapped class is any Python
+    class we’d like to create, which will then have attributes on it that will be
+    linked to the columns in a database table. While there are a few varieties of
+    how this is achieved, the most common style is known as [declarative](../orm/declarative_config.html),
+    and allows us to declare our user-defined classes and [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") metadata at once.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Establishing a Declarative Base'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using the ORM, the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection remains present, however it itself is
+    associated with an ORM-only construct commonly referred towards as the **Declarative
+    Base**. The most expedient way to acquire a new Declarative Base is to create
+    a new class that subclasses the SQLAlchemy [`DeclarativeBase`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the `Base` class is what we’ll call the Declarative Base. When we make
+    new classes that are subclasses of `Base`, combined with appropriate class-level
+    directives, they will each be established as a new **ORM mapped class** at class
+    creation time, each one typically (but not exclusively) referring to a particular
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Declarative Base refers to a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection that is created for us automatically,
+    assuming we didn’t provide one from the outside. This [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection is accessible via the [`DeclarativeBase.metadata`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.metadata
+    "sqlalchemy.orm.DeclarativeBase.metadata") class-level attribute. As we create
+    new mapped classes, they each will reference a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") within this [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The Declarative Base also refers to a collection called [`registry`](../orm/mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry"), which is the central “mapper configuration” unit in
+    the SQLAlchemy ORM. While seldom accessed directly, this object is central to
+    the mapper configuration process, as a set of ORM mapped classes will coordinate
+    with each other via this registry. As was the case with [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), our Declarative Base also created a [`registry`](../orm/mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") for us (again with options to pass our own [`registry`](../orm/mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry")), which we can access via the [`DeclarativeBase.registry`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.registry
+    "sqlalchemy.orm.DeclarativeBase.registry") class variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]  ### Declaring Mapped Classes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the `Base` class established, we can now define ORM mapped classes for
+    the `user_account` and `address` tables in terms of new classes `User` and `Address`.
+    We illustrate below the most modern form of Declarative, which is driven from
+    [**PEP 484**](https://peps.python.org/pep-0484/) type annotations using a special
+    type [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped"),
+    which indicates attributes to be mapped as particular types:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The two classes above, `User` and `Address`, are now called as **ORM Mapped
+    Classes**, and are available for use in ORM persistence and query operations,
+    which will be described later. Details about these classes include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each class refers to a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object that was generated as part of the declarative
+    mapping process, which is named by assigning a string to the [`DeclarativeBase.__tablename__`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.__tablename__
+    "sqlalchemy.orm.DeclarativeBase.__tablename__") attribute. Once the class is created,
+    this generated [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    is available from the [`DeclarativeBase.__table__`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.__table__
+    "sqlalchemy.orm.DeclarativeBase.__table__") attribute.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As mentioned previously, this form is known as [Declarative Table Configuration](../orm/declarative_tables.html#orm-declarative-table-configuration).
+    One of several alternative declaration styles would instead have us build the
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object directly, and **assign** it directly to [`DeclarativeBase.__table__`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.__table__
+    "sqlalchemy.orm.DeclarativeBase.__table__"). This style is known as [Declarative
+    with Imperative Table](../orm/declarative_tables.html#orm-imperative-table-configuration).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To indicate columns in the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), we use the [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct, in combination with typing annotations
+    based on the [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    type. This object will generate [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects that are applied to the construction of the
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For columns with simple datatypes and no other options, we can indicate a [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") type annotation alone, using simple Python types like
+    `int` and `str` to mean [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") and [`String`](../core/type_basics.html#sqlalchemy.types.String
+    "sqlalchemy.types.String"). Customization of how Python types are interpreted
+    within the Declarative mapping process is very open ended; see the sections [Using
+    Annotated Declarative Table (Type Annotated Forms for mapped_column())](../orm/declarative_tables.html#orm-declarative-mapped-column)
+    and [Customizing the Type Map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map)
+    for background.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A column can be declared as “nullable” or “not null” based on the presence of
+    the `Optional[<typ>]` type annotation (or its equivalents, `<typ> | None` or `Union[<typ>,
+    None]`). The [`mapped_column.nullable`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column.params.nullable
+    "sqlalchemy.orm.mapped_column") parameter may also be used explicitly (and does
+    not have to match the annotation’s optionality).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use of explicit typing annotations is **completely optional**. We can also use
+    [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column")
+    without annotations. When using this form, we would use more explicit type objects
+    like [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer "sqlalchemy.types.Integer")
+    and [`String`](../core/type_basics.html#sqlalchemy.types.String "sqlalchemy.types.String")
+    as well as `nullable=False` as needed within each [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Two additional attributes, `User.addresses` and `Address.user`, define a different
+    kind of attribute called [`relationship()`](../orm/relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), which features similar annotation-aware configuration
+    styles as shown. The [`relationship()`](../orm/relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct is discussed more fully at [Working with
+    ORM Related Objects](orm_related_objects.html#tutorial-orm-related-objects).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The classes are automatically given an `__init__()` method if we don’t declare
+    one of our own. The default form of this method accepts all attribute names as
+    optional keyword arguments:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: To automatically generate a full-featured `__init__()` method which provides
+    for positional arguments as well as arguments with default keyword values, the
+    dataclasses feature introduced at [Declarative Dataclass Mapping](../orm/dataclasses.html#orm-declarative-native-dataclasses)
+    may be used. It’s of course always an option to use an explicit `__init__()` method
+    as well.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The `__repr__()` methods are added so that we get a readable string output;
+    there’s no requirement for these methods to be here. As is the case with `__init__()`,
+    a `__repr__()` method can be generated automatically by using the [dataclasses](../orm/dataclasses.html#orm-declarative-native-dataclasses)
+    feature.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Mapping Styles](../orm/mapping_styles.html#orm-mapping-styles) - full
+    background on different ORM configurational styles.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Declarative Mapping](../orm/mapping_styles.html#orm-declarative-mapping) -
+    overview of Declarative class mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Declarative Table with mapped_column()](../orm/declarative_tables.html#orm-declarative-table)
+    - detail on how to use [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") and [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") to define the columns within a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to be mapped when using Declarative.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Emitting DDL to the database from an ORM mapping
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As our ORM mapped classes refer to [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects contained within a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection, emitting DDL given the Declarative Base
+    uses the same process as that described previously at [Emitting DDL to the Database](#tutorial-emitting-ddl).
+    In our case, we have already generated the `user` and `address` tables in our
+    SQLite database. If we had not done so already, we would be free to make use of
+    the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    associated with our ORM Declarative Base class in order to do so, by accessing
+    the collection from the [`DeclarativeBase.metadata`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.metadata
+    "sqlalchemy.orm.DeclarativeBase.metadata") attribute and then using [`MetaData.create_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") as before. In this case, PRAGMA statements
+    are run, but no new tables are generated since they are found to be present already:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Establishing a Declarative Base'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using the ORM, the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection remains present, however it itself is
+    associated with an ORM-only construct commonly referred towards as the **Declarative
+    Base**. The most expedient way to acquire a new Declarative Base is to create
+    a new class that subclasses the SQLAlchemy [`DeclarativeBase`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the `Base` class is what we’ll call the Declarative Base. When we make
+    new classes that are subclasses of `Base`, combined with appropriate class-level
+    directives, they will each be established as a new **ORM mapped class** at class
+    creation time, each one typically (but not exclusively) referring to a particular
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Declarative Base refers to a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection that is created for us automatically,
+    assuming we didn’t provide one from the outside. This [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection is accessible via the [`DeclarativeBase.metadata`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.metadata
+    "sqlalchemy.orm.DeclarativeBase.metadata") class-level attribute. As we create
+    new mapped classes, they each will reference a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") within this [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The Declarative Base also refers to a collection called [`registry`](../orm/mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry"), which is the central “mapper configuration” unit in
+    the SQLAlchemy ORM. While seldom accessed directly, this object is central to
+    the mapper configuration process, as a set of ORM mapped classes will coordinate
+    with each other via this registry. As was the case with [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData"), our Declarative Base also created a [`registry`](../orm/mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry") for us (again with options to pass our own [`registry`](../orm/mapping_api.html#sqlalchemy.orm.registry
+    "sqlalchemy.orm.registry")), which we can access via the [`DeclarativeBase.registry`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.registry
+    "sqlalchemy.orm.DeclarativeBase.registry") class variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Declaring Mapped Classes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the `Base` class established, we can now define ORM mapped classes for
+    the `user_account` and `address` tables in terms of new classes `User` and `Address`.
+    We illustrate below the most modern form of Declarative, which is driven from
+    [**PEP 484**](https://peps.python.org/pep-0484/) type annotations using a special
+    type [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped"),
+    which indicates attributes to be mapped as particular types:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The two classes above, `User` and `Address`, are now called as **ORM Mapped
+    Classes**, and are available for use in ORM persistence and query operations,
+    which will be described later. Details about these classes include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each class refers to a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object that was generated as part of the declarative
+    mapping process, which is named by assigning a string to the [`DeclarativeBase.__tablename__`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.__tablename__
+    "sqlalchemy.orm.DeclarativeBase.__tablename__") attribute. Once the class is created,
+    this generated [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    is available from the [`DeclarativeBase.__table__`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.__table__
+    "sqlalchemy.orm.DeclarativeBase.__table__") attribute.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As mentioned previously, this form is known as [Declarative Table Configuration](../orm/declarative_tables.html#orm-declarative-table-configuration).
+    One of several alternative declaration styles would instead have us build the
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object directly, and **assign** it directly to [`DeclarativeBase.__table__`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.__table__
+    "sqlalchemy.orm.DeclarativeBase.__table__"). This style is known as [Declarative
+    with Imperative Table](../orm/declarative_tables.html#orm-imperative-table-configuration).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To indicate columns in the [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), we use the [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct, in combination with typing annotations
+    based on the [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped")
+    type. This object will generate [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects that are applied to the construction of the
+    [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table").
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For columns with simple datatypes and no other options, we can indicate a [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") type annotation alone, using simple Python types like
+    `int` and `str` to mean [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer
+    "sqlalchemy.types.Integer") and [`String`](../core/type_basics.html#sqlalchemy.types.String
+    "sqlalchemy.types.String"). Customization of how Python types are interpreted
+    within the Declarative mapping process is very open ended; see the sections [Using
+    Annotated Declarative Table (Type Annotated Forms for mapped_column())](../orm/declarative_tables.html#orm-declarative-mapped-column)
+    and [Customizing the Type Map](../orm/declarative_tables.html#orm-declarative-mapped-column-type-map)
+    for background.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A column can be declared as “nullable” or “not null” based on the presence of
+    the `Optional[<typ>]` type annotation (or its equivalents, `<typ> | None` or `Union[<typ>,
+    None]`). The [`mapped_column.nullable`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column.params.nullable
+    "sqlalchemy.orm.mapped_column") parameter may also be used explicitly (and does
+    not have to match the annotation’s optionality).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use of explicit typing annotations is **completely optional**. We can also use
+    [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column "sqlalchemy.orm.mapped_column")
+    without annotations. When using this form, we would use more explicit type objects
+    like [`Integer`](../core/type_basics.html#sqlalchemy.types.Integer "sqlalchemy.types.Integer")
+    and [`String`](../core/type_basics.html#sqlalchemy.types.String "sqlalchemy.types.String")
+    as well as `nullable=False` as needed within each [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") construct.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Two additional attributes, `User.addresses` and `Address.user`, define a different
+    kind of attribute called [`relationship()`](../orm/relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), which features similar annotation-aware configuration
+    styles as shown. The [`relationship()`](../orm/relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct is discussed more fully at [Working with
+    ORM Related Objects](orm_related_objects.html#tutorial-orm-related-objects).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The classes are automatically given an `__init__()` method if we don’t declare
+    one of our own. The default form of this method accepts all attribute names as
+    optional keyword arguments:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: To automatically generate a full-featured `__init__()` method which provides
+    for positional arguments as well as arguments with default keyword values, the
+    dataclasses feature introduced at [Declarative Dataclass Mapping](../orm/dataclasses.html#orm-declarative-native-dataclasses)
+    may be used. It’s of course always an option to use an explicit `__init__()` method
+    as well.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The `__repr__()` methods are added so that we get a readable string output;
+    there’s no requirement for these methods to be here. As is the case with `__init__()`,
+    a `__repr__()` method can be generated automatically by using the [dataclasses](../orm/dataclasses.html#orm-declarative-native-dataclasses)
+    feature.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Mapping Styles](../orm/mapping_styles.html#orm-mapping-styles) - full
+    background on different ORM configurational styles.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Declarative Mapping](../orm/mapping_styles.html#orm-declarative-mapping) -
+    overview of Declarative class mapping'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Declarative Table with mapped_column()](../orm/declarative_tables.html#orm-declarative-table)
+    - detail on how to use [`mapped_column()`](../orm/mapping_api.html#sqlalchemy.orm.mapped_column
+    "sqlalchemy.orm.mapped_column") and [`Mapped`](../orm/internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") to define the columns within a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") to be mapped when using Declarative.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Emitting DDL to the database from an ORM mapping
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As our ORM mapped classes refer to [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects contained within a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection, emitting DDL given the Declarative Base
+    uses the same process as that described previously at [Emitting DDL to the Database](#tutorial-emitting-ddl).
+    In our case, we have already generated the `user` and `address` tables in our
+    SQLite database. If we had not done so already, we would be free to make use of
+    the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    associated with our ORM Declarative Base class in order to do so, by accessing
+    the collection from the [`DeclarativeBase.metadata`](../orm/mapping_api.html#sqlalchemy.orm.DeclarativeBase.metadata
+    "sqlalchemy.orm.DeclarativeBase.metadata") attribute and then using [`MetaData.create_all()`](../core/metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") as before. In this case, PRAGMA statements
+    are run, but no new tables are generated since they are found to be present already:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Table Reflection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To round out the section on working with table metadata, we will illustrate
+    another operation that was mentioned at the beginning of the section, that of
+    **table reflection**. Table reflection refers to the process of generating [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") and related objects by reading the current state of
+    a database. Whereas in the previous sections we’ve been declaring [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects in Python, where we then have the option to
+    emit DDL to the database to generate such a schema, the reflection process does
+    these two steps in reverse, starting from an existing database and generating
+    in-Python data structures to represent the schemas within that database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is no requirement that reflection must be used in order to use SQLAlchemy
+    with a pre-existing database. It is entirely typical that the SQLAlchemy application
+    declares all metadata explicitly in Python, such that its structure corresponds
+    to that the existing database. The metadata structure also need not include tables,
+    columns, or other constraints and constructs in the pre-existing database that
+    are not needed for the local application to function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example of reflection, we will create a new [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object which represents the `some_table` object we
+    created manually in the earlier sections of this document. There are again some
+    varieties of how this is performed, however the most basic is to construct a [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object, given the name of the table and a [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection to which it will belong, then instead
+    of indicating individual [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") and [`Constraint`](../core/constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") objects, pass it the target [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") using the [`Table.autoload_with`](../core/metadata.html#sqlalchemy.schema.Table.params.autoload_with
+    "sqlalchemy.schema.Table") parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the end of the process, the `some_table` object now contains the information
+    about the [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects present in the table, and the object is usable in exactly the same way
+    as a [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that we declared explicitly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: Read more about table and schema reflection at [Reflecting Database Objects](../core/reflection.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: For ORM-related variants of table reflection, the section [Mapping Declaratively
+    with Reflected Tables](../orm/declarative_tables.html#orm-declarative-reflected)
+    includes an overview of the available options.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next Steps
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We now have a SQLite database ready to go with two tables present, and Core
+    and ORM table-oriented constructs that we can use to interact with these tables
+    via a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    and/or ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    In the following sections, we will illustrate how to create, manipulate, and select
+    data using these structures.
+  prefs: []
+  type: TYPE_NORMAL

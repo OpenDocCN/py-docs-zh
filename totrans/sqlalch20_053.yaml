@@ -1,0 +1,1635 @@
+- en: Transactions and Connection Management
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/session_transaction.html](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '## Managing Transactions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: Session transaction management has been revised to
+    be clearer and easier to use. In particular, it now features “autobegin” operation,
+    which means the point at which a transaction begins may be controlled, without
+    using the legacy “autocommit” mode.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    tracks the state of a single “virtual” transaction at a time, using an object
+    called [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction"). This object then makes use of the underlying
+    [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    or engines to which the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object is bound in order to start real connection-level transactions using the
+    [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    object as needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This “virtual” transaction is created automatically when needed, or can alternatively
+    be started using the [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin
+    "sqlalchemy.orm.Session.begin") method. To as great a degree as possible, Python
+    context manager use is supported both at the level of creating [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") objects as well as to maintain the scope of the [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below, assume we start with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can now run operations within a demarcated transaction using a context manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: At the end of the above context, assuming no exceptions were raised, any pending
+    objects will be flushed to the database and the database transaction will be committed.
+    If an exception was raised within the above block, then the transaction would
+    be rolled back. In both cases, the above [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") subsequent to exiting the block is ready to be used
+    in subsequent transactions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin "sqlalchemy.orm.Session.begin")
+    method is optional, and the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") may also be used in a commit-as-you-go approach, where
+    it will begin transactions automatically as needed; these only need be committed
+    or rolled back:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    itself features a [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") method. If the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is begun within a transaction that has not yet been
+    committed or rolled back, this method will cancel (i.e. rollback) that transaction,
+    and also expunge all objects contained within the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object’s state. If the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is being used in such a way that a call to [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") is not guaranteed (e.g. not within a context
+    manager or similar), the [`close`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") method may be used to ensure all resources are
+    released:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, the session construction / close process can itself be run via context
+    manager. This is the best way to ensure that the scope of a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object’s use is scoped within a fixed block. Illustrated
+    via the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    constructor first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly, the [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") can be used in the same way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    itself includes a [`sessionmaker.begin()`](session_api.html#sqlalchemy.orm.sessionmaker.begin
+    "sqlalchemy.orm.sessionmaker.begin") method to allow both operations to take place
+    at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using SAVEPOINT'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SAVEPOINT transactions, if supported by the underlying engine, may be delineated
+    using the [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Each time [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is called, a new “BEGIN SAVEPOINT” command
+    is emitted to the database within the scope of the current database transaction
+    (starting one if not already in progress), and an object of type [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction") is returned, which represents a handle to
+    this SAVEPOINT. When the `.commit()` method on this object is called, “RELEASE
+    SAVEPOINT” is emitted to the database, and if instead the `.rollback()` method
+    is called, “ROLLBACK TO SAVEPOINT” is emitted. The enclosing database transaction
+    remains in progress.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is typically used as a context manager
+    where specific per-instance errors may be caught, in conjunction with a rollback
+    emitted for that portion of the transaction’s state, without rolling back the
+    whole transaction, as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: When the context manager yielded by [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") completes, it “commits” the savepoint,
+    which includes the usual behavior of flushing all pending state. When an error
+    is raised, the savepoint is rolled back and the state of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") local to the objects that were changed is expired.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This pattern is ideal for situations such as using PostgreSQL and catching
+    [`IntegrityError`](../core/exceptions.html#sqlalchemy.exc.IntegrityError "sqlalchemy.exc.IntegrityError")
+    to detect duplicate rows; PostgreSQL normally aborts the entire transaction when
+    such an error is raised, however when using SAVEPOINT, the outer transaction is
+    maintained. In the example below a list of data is persisted into the database,
+    with the occasional “duplicate primary key” record skipped, without rolling back
+    the entire operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: When [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is called, the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") first flushes all currently pending state to the database;
+    this occurs unconditionally, regardless of the value of the [`Session.autoflush`](session_api.html#sqlalchemy.orm.Session.params.autoflush
+    "sqlalchemy.orm.Session") parameter which normally may be used to disable automatic
+    flush. The rationale for this behavior is so that when a rollback on this nested
+    transaction occurs, the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    may expire any in-memory state that was created within the scope of the SAVEPOINT,
+    while ensuring that when those expired objects are refreshed, the state of the
+    object graph prior to the beginning of the SAVEPOINT will be available to re-load
+    from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In modern versions of SQLAlchemy, when a SAVEPOINT initiated by [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is rolled back, in-memory object state
+    that was modified since the SAVEPOINT was created is expired, however other object
+    state that was not altered since the SAVEPOINT began is maintained. This is so
+    that subsequent operations can continue to make use of the otherwise unaffected
+    data without the need for refreshing it from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Connection.begin_nested()`](../core/connections.html#sqlalchemy.engine.Connection.begin_nested
+    "sqlalchemy.engine.Connection.begin_nested") - Core SAVEPOINT API  ### Session-level
+    vs. Engine level transaction control'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    in Core and `_session.Session` in ORM feature equivalent transactional semantics,
+    both at the level of the [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") vs. the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"), as well as the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") vs. the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"). The following sections detail these scenarios
+    based on the following scheme:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Commit as you go
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Both [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    and [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    feature [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") and [`Connection.rollback()`](../core/connections.html#sqlalchemy.engine.Connection.rollback
+    "sqlalchemy.engine.Connection.rollback") methods. Using SQLAlchemy 2.0-style operation,
+    these methods affect the **outermost** transaction in all cases. For the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), it is assumed that [`Session.autobegin`](session_api.html#sqlalchemy.orm.Session.params.autobegin
+    "sqlalchemy.orm.Session") is left at its default value of `True`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Begin Once
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Both [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    and [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    feature a [`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
+    "sqlalchemy.engine.Engine.begin") method that will both procure a new object with
+    which to execute SQL statements (the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") and [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), respectively) and then return a context manager
+    that will maintain a begin/commit/rollback context for that object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nested Transaction
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: When using a SAVEPOINT via the [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") or [`Connection.begin_nested()`](../core/connections.html#sqlalchemy.engine.Connection.begin_nested
+    "sqlalchemy.engine.Connection.begin_nested") methods, the transaction object returned
+    must be used to commit or rollback the SAVEPOINT. Calling the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") methods will always commit the **outermost**
+    transaction; this is a SQLAlchemy 2.0 specific behavior that is reversed from
+    the 1.x series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]  ### Explicit Begin'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    features “autobegin” behavior, meaning that as soon as operations begin to take
+    place, it ensures a [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction") is present to track ongoing operations. This
+    transaction is completed when [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") is called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is often desirable, particularly in framework integrations, to control the
+    point at which the “begin” operation occurs. To suit this, the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") uses an “autobegin” strategy, such that the [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin
+    "sqlalchemy.orm.Session.begin") method may be called directly for a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that has not already had a transaction begun:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above pattern is more idiomatically invoked using a context manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin "sqlalchemy.orm.Session.begin")
+    method and the session’s “autobegin” process use the same sequence of steps to
+    begin the transaction. This includes that the [`SessionEvents.after_transaction_create()`](events.html#sqlalchemy.orm.SessionEvents.after_transaction_create
+    "sqlalchemy.orm.SessionEvents.after_transaction_create") event is invoked when
+    it occurs; this hook is used by frameworks in order to integrate their own transactional
+    processes with that of the ORM [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").  ### Enabling Two-Phase Commit'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For backends which support two-phase operation (currently MySQL and PostgreSQL),
+    the session can be instructed to use two-phase commit semantics. This will coordinate
+    the committing of transactions across databases so that the transaction is either
+    committed or rolled back in all databases. You can also [`Session.prepare()`](session_api.html#sqlalchemy.orm.Session.prepare
+    "sqlalchemy.orm.Session.prepare") the session for interacting with transactions
+    not managed by SQLAlchemy. To use two phase transactions set the flag `twophase=True`
+    on the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]  ### Setting Transaction Isolation Levels / DBAPI AUTOCOMMIT'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most DBAPIs support the concept of configurable transaction [isolation](../glossary.html#term-isolation)
+    levels. These are traditionally the four levels “READ UNCOMMITTED”, “READ COMMITTED”,
+    “REPEATABLE READ” and “SERIALIZABLE”. These are usually applied to a DBAPI connection
+    before it begins a new transaction, noting that most DBAPIs will begin this transaction
+    implicitly when SQL statements are first emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DBAPIs that support isolation levels also usually support the concept of true
+    “autocommit”, which means that the DBAPI connection itself will be placed into
+    a non-transactional autocommit mode. This usually means that the typical DBAPI
+    behavior of emitting “BEGIN” to the database automatically no longer occurs, but
+    it may also include other directives. When using this mode, **the DBAPI does not
+    use a transaction under any circumstances**. SQLAlchemy methods like `.begin()`,
+    `.commit()` and `.rollback()` pass silently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy’s dialects support settable isolation modes on a per-[`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or per-[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") basis, using flags at both the [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") level as well as at the [`Connection.execution_options()`](../core/connections.html#sqlalchemy.engine.Connection.execution_options
+    "sqlalchemy.engine.Connection.execution_options") level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the ORM [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    it acts as a *facade* for engines and connections, but does not expose transaction
+    isolation directly. So in order to affect transaction isolation level, we need
+    to act upon the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    or [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    as appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Setting Transaction Isolation Levels including DBAPI Autocommit](../core/connections.html#dbapi-autocommit)
+    - be sure to review how isolation levels work at the level of the SQLAlchemy [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Setting Isolation For A Sessionmaker / Engine Wide'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set up a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    with a specific isolation level globally, the first technique is that an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") can be constructed against a specific isolation level
+    in all cases, which is then used as the source of connectivity for a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") and/or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another option, useful if there are to be two engines with different isolation
+    levels at once, is to use the [`Engine.execution_options()`](../core/connections.html#sqlalchemy.engine.Engine.execution_options
+    "sqlalchemy.engine.Engine.execution_options") method, which will produce a shallow
+    copy of the original [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") which shares the same connection pool as the parent
+    engine. This is often preferable when operations will be separated into “transactional”
+    and “autocommit” operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, both “`eng`” and `"autocommit_engine"` share the same dialect and connection
+    pool. However the “AUTOCOMMIT” mode will be set upon connections when they are
+    acquired from the `autocommit_engine`. The two [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") objects “`transactional_session`” and “`autocommit_session"`
+    then inherit these characteristics when they work with database connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “`autocommit_session`” **continues to have transactional semantics**, including
+    that [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit")
+    and [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback "sqlalchemy.orm.Session.rollback")
+    still consider themselves to be “committing” and “rolling back” objects, however
+    the transaction will be silently absent. For this reason, **it is typical, though
+    not strictly required, that a Session with AUTOCOMMIT isolation be used in a read-only
+    fashion**, that is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Isolation for Individual Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'When we make a new [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    either using the constructor directly or when we call upon the callable produced
+    by a [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker"),
+    we can pass the `bind` argument directly, overriding the pre-existing bind. We
+    can for example create our [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") from a default [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") and pass an engine set for autocommit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the case where the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") is configured with multiple “binds”, we can either
+    re-specify the `binds` argument fully, or if we want to only replace specific
+    binds, we can use the [`Session.bind_mapper()`](session_api.html#sqlalchemy.orm.Session.bind_mapper
+    "sqlalchemy.orm.Session.bind_mapper") or [`Session.bind_table()`](session_api.html#sqlalchemy.orm.Session.bind_table
+    "sqlalchemy.orm.Session.bind_table") methods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Isolation for Individual Transactions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: A key caveat regarding isolation level is that the setting cannot be safely
+    modified on a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") where a transaction has already started. Databases
+    cannot change the isolation level of a transaction in progress, and some DBAPIs
+    and SQLAlchemy dialects have inconsistent behaviors in this area.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore it is preferable to use a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that is up front bound to an engine with the desired
+    isolation level. However, the isolation level on a per-connection basis can be
+    affected by using the [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection") method at the start of a transaction:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we first produce a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using either the constructor or a [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"). Then we explicitly set up the start of a database-level
+    transaction by calling upon [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection"), which provides for execution options that
+    will be passed to the connection before the database-level transaction is begun.
+    The transaction proceeds with this selected isolation level. When the transaction
+    completes, the isolation level is reset on the connection to its default before
+    the connection is returned to the connection pool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin "sqlalchemy.orm.Session.begin")
+    method may also be used to begin the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") level transaction; calling upon [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection") subsequent to that call may be used to set
+    up the per-connection-transaction isolation level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tracking Transaction State with Events
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'See the section [Transaction Events](session_events.html#session-transaction-events)
+    for an overview of the available event hooks for session transaction state changes.  ##
+    Joining a Session into an External Transaction (such as for test suites)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    is being used which is already in a transactional state (i.e. has a [`Transaction`](../core/connections.html#sqlalchemy.engine.Transaction
+    "sqlalchemy.engine.Transaction") established), a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") can be made to participate within that transaction by
+    just binding the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to that [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection").
+    The usual rationale for this is a test suite that allows ORM code to work freely
+    with a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    including the ability to call [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), where afterwards the entire database interaction
+    is rolled back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The “join into an external transaction” recipe is newly
+    improved again in 2.0; event handlers to “reset” the nested transaction are no
+    longer required.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The recipe works by establishing a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") within a transaction and optionally a SAVEPOINT,
+    then passing it to a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    as the “bind”; the [`Session.join_transaction_mode`](session_api.html#sqlalchemy.orm.Session.params.join_transaction_mode
+    "sqlalchemy.orm.Session") parameter is passed with the setting `"create_savepoint"`,
+    which indicates that new SAVEPOINTs should be created in order to implement BEGIN/COMMIT/ROLLBACK
+    for the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    which will leave the external transaction in the same state in which it was passed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When the test tears down, the external transaction is rolled back so that any
+    data changes throughout the test are reverted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above recipe is part of SQLAlchemy’s own CI to ensure that it remains working
+    as expected.  ## Managing Transactions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: Session transaction management has been revised to
+    be clearer and easier to use. In particular, it now features “autobegin” operation,
+    which means the point at which a transaction begins may be controlled, without
+    using the legacy “autocommit” mode.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    tracks the state of a single “virtual” transaction at a time, using an object
+    called [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction"). This object then makes use of the underlying
+    [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    or engines to which the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object is bound in order to start real connection-level transactions using the
+    [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    object as needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This “virtual” transaction is created automatically when needed, or can alternatively
+    be started using the [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin
+    "sqlalchemy.orm.Session.begin") method. To as great a degree as possible, Python
+    context manager use is supported both at the level of creating [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") objects as well as to maintain the scope of the [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below, assume we start with a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can now run operations within a demarcated transaction using a context manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: At the end of the above context, assuming no exceptions were raised, any pending
+    objects will be flushed to the database and the database transaction will be committed.
+    If an exception was raised within the above block, then the transaction would
+    be rolled back. In both cases, the above [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") subsequent to exiting the block is ready to be used
+    in subsequent transactions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin "sqlalchemy.orm.Session.begin")
+    method is optional, and the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") may also be used in a commit-as-you-go approach, where
+    it will begin transactions automatically as needed; these only need be committed
+    or rolled back:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    itself features a [`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") method. If the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is begun within a transaction that has not yet been
+    committed or rolled back, this method will cancel (i.e. rollback) that transaction,
+    and also expunge all objects contained within the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object’s state. If the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is being used in such a way that a call to [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") is not guaranteed (e.g. not within a context
+    manager or similar), the [`close`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close") method may be used to ensure all resources are
+    released:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, the session construction / close process can itself be run via context
+    manager. This is the best way to ensure that the scope of a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object’s use is scoped within a fixed block. Illustrated
+    via the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    constructor first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly, the [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") can be used in the same way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    itself includes a [`sessionmaker.begin()`](session_api.html#sqlalchemy.orm.sessionmaker.begin
+    "sqlalchemy.orm.sessionmaker.begin") method to allow both operations to take place
+    at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Using SAVEPOINT'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SAVEPOINT transactions, if supported by the underlying engine, may be delineated
+    using the [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Each time [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is called, a new “BEGIN SAVEPOINT” command
+    is emitted to the database within the scope of the current database transaction
+    (starting one if not already in progress), and an object of type [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction") is returned, which represents a handle to
+    this SAVEPOINT. When the `.commit()` method on this object is called, “RELEASE
+    SAVEPOINT” is emitted to the database, and if instead the `.rollback()` method
+    is called, “ROLLBACK TO SAVEPOINT” is emitted. The enclosing database transaction
+    remains in progress.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is typically used as a context manager
+    where specific per-instance errors may be caught, in conjunction with a rollback
+    emitted for that portion of the transaction’s state, without rolling back the
+    whole transaction, as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: When the context manager yielded by [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") completes, it “commits” the savepoint,
+    which includes the usual behavior of flushing all pending state. When an error
+    is raised, the savepoint is rolled back and the state of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") local to the objects that were changed is expired.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This pattern is ideal for situations such as using PostgreSQL and catching
+    [`IntegrityError`](../core/exceptions.html#sqlalchemy.exc.IntegrityError "sqlalchemy.exc.IntegrityError")
+    to detect duplicate rows; PostgreSQL normally aborts the entire transaction when
+    such an error is raised, however when using SAVEPOINT, the outer transaction is
+    maintained. In the example below a list of data is persisted into the database,
+    with the occasional “duplicate primary key” record skipped, without rolling back
+    the entire operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: When [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is called, the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") first flushes all currently pending state to the database;
+    this occurs unconditionally, regardless of the value of the [`Session.autoflush`](session_api.html#sqlalchemy.orm.Session.params.autoflush
+    "sqlalchemy.orm.Session") parameter which normally may be used to disable automatic
+    flush. The rationale for this behavior is so that when a rollback on this nested
+    transaction occurs, the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    may expire any in-memory state that was created within the scope of the SAVEPOINT,
+    while ensuring that when those expired objects are refreshed, the state of the
+    object graph prior to the beginning of the SAVEPOINT will be available to re-load
+    from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In modern versions of SQLAlchemy, when a SAVEPOINT initiated by [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is rolled back, in-memory object state
+    that was modified since the SAVEPOINT was created is expired, however other object
+    state that was not altered since the SAVEPOINT began is maintained. This is so
+    that subsequent operations can continue to make use of the otherwise unaffected
+    data without the need for refreshing it from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Connection.begin_nested()`](../core/connections.html#sqlalchemy.engine.Connection.begin_nested
+    "sqlalchemy.engine.Connection.begin_nested") - Core SAVEPOINT API  ### Session-level
+    vs. Engine level transaction control'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    in Core and `_session.Session` in ORM feature equivalent transactional semantics,
+    both at the level of the [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") vs. the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"), as well as the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") vs. the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"). The following sections detail these scenarios
+    based on the following scheme:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Commit as you go
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Both [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    and [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    feature [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") and [`Connection.rollback()`](../core/connections.html#sqlalchemy.engine.Connection.rollback
+    "sqlalchemy.engine.Connection.rollback") methods. Using SQLAlchemy 2.0-style operation,
+    these methods affect the **outermost** transaction in all cases. For the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), it is assumed that [`Session.autobegin`](session_api.html#sqlalchemy.orm.Session.params.autobegin
+    "sqlalchemy.orm.Session") is left at its default value of `True`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Begin Once
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Both [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    and [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    feature a [`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
+    "sqlalchemy.engine.Engine.begin") method that will both procure a new object with
+    which to execute SQL statements (the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") and [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), respectively) and then return a context manager
+    that will maintain a begin/commit/rollback context for that object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nested Transaction
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: When using a SAVEPOINT via the [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") or [`Connection.begin_nested()`](../core/connections.html#sqlalchemy.engine.Connection.begin_nested
+    "sqlalchemy.engine.Connection.begin_nested") methods, the transaction object returned
+    must be used to commit or rollback the SAVEPOINT. Calling the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") methods will always commit the **outermost**
+    transaction; this is a SQLAlchemy 2.0 specific behavior that is reversed from
+    the 1.x series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]  ### Explicit Begin'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    features “autobegin” behavior, meaning that as soon as operations begin to take
+    place, it ensures a [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction") is present to track ongoing operations. This
+    transaction is completed when [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") is called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is often desirable, particularly in framework integrations, to control the
+    point at which the “begin” operation occurs. To suit this, the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") uses an “autobegin” strategy, such that the [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin
+    "sqlalchemy.orm.Session.begin") method may be called directly for a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that has not already had a transaction begun:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above pattern is more idiomatically invoked using a context manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin "sqlalchemy.orm.Session.begin")
+    method and the session’s “autobegin” process use the same sequence of steps to
+    begin the transaction. This includes that the [`SessionEvents.after_transaction_create()`](events.html#sqlalchemy.orm.SessionEvents.after_transaction_create
+    "sqlalchemy.orm.SessionEvents.after_transaction_create") event is invoked when
+    it occurs; this hook is used by frameworks in order to integrate their own transactional
+    processes with that of the ORM [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").  ### Enabling Two-Phase Commit'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For backends which support two-phase operation (currently MySQL and PostgreSQL),
+    the session can be instructed to use two-phase commit semantics. This will coordinate
+    the committing of transactions across databases so that the transaction is either
+    committed or rolled back in all databases. You can also [`Session.prepare()`](session_api.html#sqlalchemy.orm.Session.prepare
+    "sqlalchemy.orm.Session.prepare") the session for interacting with transactions
+    not managed by SQLAlchemy. To use two phase transactions set the flag `twophase=True`
+    on the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]  ### Setting Transaction Isolation Levels / DBAPI AUTOCOMMIT'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most DBAPIs support the concept of configurable transaction [isolation](../glossary.html#term-isolation)
+    levels. These are traditionally the four levels “READ UNCOMMITTED”, “READ COMMITTED”,
+    “REPEATABLE READ” and “SERIALIZABLE”. These are usually applied to a DBAPI connection
+    before it begins a new transaction, noting that most DBAPIs will begin this transaction
+    implicitly when SQL statements are first emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DBAPIs that support isolation levels also usually support the concept of true
+    “autocommit”, which means that the DBAPI connection itself will be placed into
+    a non-transactional autocommit mode. This usually means that the typical DBAPI
+    behavior of emitting “BEGIN” to the database automatically no longer occurs, but
+    it may also include other directives. When using this mode, **the DBAPI does not
+    use a transaction under any circumstances**. SQLAlchemy methods like `.begin()`,
+    `.commit()` and `.rollback()` pass silently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy’s dialects support settable isolation modes on a per-[`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or per-[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") basis, using flags at both the [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") level as well as at the [`Connection.execution_options()`](../core/connections.html#sqlalchemy.engine.Connection.execution_options
+    "sqlalchemy.engine.Connection.execution_options") level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the ORM [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    it acts as a *facade* for engines and connections, but does not expose transaction
+    isolation directly. So in order to affect transaction isolation level, we need
+    to act upon the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    or [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    as appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Setting Transaction Isolation Levels including DBAPI Autocommit](../core/connections.html#dbapi-autocommit)
+    - be sure to review how isolation levels work at the level of the SQLAlchemy [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Setting Isolation For A Sessionmaker / Engine Wide'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set up a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    with a specific isolation level globally, the first technique is that an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") can be constructed against a specific isolation level
+    in all cases, which is then used as the source of connectivity for a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") and/or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another option, useful if there are to be two engines with different isolation
+    levels at once, is to use the [`Engine.execution_options()`](../core/connections.html#sqlalchemy.engine.Engine.execution_options
+    "sqlalchemy.engine.Engine.execution_options") method, which will produce a shallow
+    copy of the original [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") which shares the same connection pool as the parent
+    engine. This is often preferable when operations will be separated into “transactional”
+    and “autocommit” operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, both “`eng`” and `"autocommit_engine"` share the same dialect and connection
+    pool. However the “AUTOCOMMIT” mode will be set upon connections when they are
+    acquired from the `autocommit_engine`. The two [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") objects “`transactional_session`” and “`autocommit_session"`
+    then inherit these characteristics when they work with database connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “`autocommit_session`” **continues to have transactional semantics**, including
+    that [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit")
+    and [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback "sqlalchemy.orm.Session.rollback")
+    still consider themselves to be “committing” and “rolling back” objects, however
+    the transaction will be silently absent. For this reason, **it is typical, though
+    not strictly required, that a Session with AUTOCOMMIT isolation be used in a read-only
+    fashion**, that is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Isolation for Individual Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'When we make a new [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    either using the constructor directly or when we call upon the callable produced
+    by a [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker"),
+    we can pass the `bind` argument directly, overriding the pre-existing bind. We
+    can for example create our [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") from a default [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") and pass an engine set for autocommit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the case where the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") is configured with multiple “binds”, we can either
+    re-specify the `binds` argument fully, or if we want to only replace specific
+    binds, we can use the [`Session.bind_mapper()`](session_api.html#sqlalchemy.orm.Session.bind_mapper
+    "sqlalchemy.orm.Session.bind_mapper") or [`Session.bind_table()`](session_api.html#sqlalchemy.orm.Session.bind_table
+    "sqlalchemy.orm.Session.bind_table") methods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Isolation for Individual Transactions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: A key caveat regarding isolation level is that the setting cannot be safely
+    modified on a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") where a transaction has already started. Databases
+    cannot change the isolation level of a transaction in progress, and some DBAPIs
+    and SQLAlchemy dialects have inconsistent behaviors in this area.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore it is preferable to use a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that is up front bound to an engine with the desired
+    isolation level. However, the isolation level on a per-connection basis can be
+    affected by using the [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection") method at the start of a transaction:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we first produce a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using either the constructor or a [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"). Then we explicitly set up the start of a database-level
+    transaction by calling upon [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection"), which provides for execution options that
+    will be passed to the connection before the database-level transaction is begun.
+    The transaction proceeds with this selected isolation level. When the transaction
+    completes, the isolation level is reset on the connection to its default before
+    the connection is returned to the connection pool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin "sqlalchemy.orm.Session.begin")
+    method may also be used to begin the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") level transaction; calling upon [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection") subsequent to that call may be used to set
+    up the per-connection-transaction isolation level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tracking Transaction State with Events
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: See the section [Transaction Events](session_events.html#session-transaction-events)
+    for an overview of the available event hooks for session transaction state changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using SAVEPOINT'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SAVEPOINT transactions, if supported by the underlying engine, may be delineated
+    using the [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Each time [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is called, a new “BEGIN SAVEPOINT” command
+    is emitted to the database within the scope of the current database transaction
+    (starting one if not already in progress), and an object of type [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction") is returned, which represents a handle to
+    this SAVEPOINT. When the `.commit()` method on this object is called, “RELEASE
+    SAVEPOINT” is emitted to the database, and if instead the `.rollback()` method
+    is called, “ROLLBACK TO SAVEPOINT” is emitted. The enclosing database transaction
+    remains in progress.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is typically used as a context manager
+    where specific per-instance errors may be caught, in conjunction with a rollback
+    emitted for that portion of the transaction’s state, without rolling back the
+    whole transaction, as in the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: When the context manager yielded by [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") completes, it “commits” the savepoint,
+    which includes the usual behavior of flushing all pending state. When an error
+    is raised, the savepoint is rolled back and the state of the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") local to the objects that were changed is expired.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This pattern is ideal for situations such as using PostgreSQL and catching
+    [`IntegrityError`](../core/exceptions.html#sqlalchemy.exc.IntegrityError "sqlalchemy.exc.IntegrityError")
+    to detect duplicate rows; PostgreSQL normally aborts the entire transaction when
+    such an error is raised, however when using SAVEPOINT, the outer transaction is
+    maintained. In the example below a list of data is persisted into the database,
+    with the occasional “duplicate primary key” record skipped, without rolling back
+    the entire operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: When [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is called, the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") first flushes all currently pending state to the database;
+    this occurs unconditionally, regardless of the value of the [`Session.autoflush`](session_api.html#sqlalchemy.orm.Session.params.autoflush
+    "sqlalchemy.orm.Session") parameter which normally may be used to disable automatic
+    flush. The rationale for this behavior is so that when a rollback on this nested
+    transaction occurs, the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    may expire any in-memory state that was created within the scope of the SAVEPOINT,
+    while ensuring that when those expired objects are refreshed, the state of the
+    object graph prior to the beginning of the SAVEPOINT will be available to re-load
+    from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In modern versions of SQLAlchemy, when a SAVEPOINT initiated by [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") is rolled back, in-memory object state
+    that was modified since the SAVEPOINT was created is expired, however other object
+    state that was not altered since the SAVEPOINT began is maintained. This is so
+    that subsequent operations can continue to make use of the otherwise unaffected
+    data without the need for refreshing it from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Connection.begin_nested()`](../core/connections.html#sqlalchemy.engine.Connection.begin_nested
+    "sqlalchemy.engine.Connection.begin_nested") - Core SAVEPOINT API'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Session-level vs. Engine level transaction control'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    in Core and `_session.Session` in ORM feature equivalent transactional semantics,
+    both at the level of the [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") vs. the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"), as well as the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") vs. the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"). The following sections detail these scenarios
+    based on the following scheme:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: Commit as you go
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Both [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    and [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    feature [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") and [`Connection.rollback()`](../core/connections.html#sqlalchemy.engine.Connection.rollback
+    "sqlalchemy.engine.Connection.rollback") methods. Using SQLAlchemy 2.0-style operation,
+    these methods affect the **outermost** transaction in all cases. For the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), it is assumed that [`Session.autobegin`](session_api.html#sqlalchemy.orm.Session.params.autobegin
+    "sqlalchemy.orm.Session") is left at its default value of `True`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: Begin Once
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Both [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    and [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    feature a [`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
+    "sqlalchemy.engine.Engine.begin") method that will both procure a new object with
+    which to execute SQL statements (the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") and [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), respectively) and then return a context manager
+    that will maintain a begin/commit/rollback context for that object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nested Transaction
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: When using a SAVEPOINT via the [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") or [`Connection.begin_nested()`](../core/connections.html#sqlalchemy.engine.Connection.begin_nested
+    "sqlalchemy.engine.Connection.begin_nested") methods, the transaction object returned
+    must be used to commit or rollback the SAVEPOINT. Calling the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") methods will always commit the **outermost**
+    transaction; this is a SQLAlchemy 2.0 specific behavior that is reversed from
+    the 1.x series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: Commit as you go
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Both [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    and [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    feature [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") and [`Connection.rollback()`](../core/connections.html#sqlalchemy.engine.Connection.rollback
+    "sqlalchemy.engine.Connection.rollback") methods. Using SQLAlchemy 2.0-style operation,
+    these methods affect the **outermost** transaction in all cases. For the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), it is assumed that [`Session.autobegin`](session_api.html#sqlalchemy.orm.Session.params.autobegin
+    "sqlalchemy.orm.Session") is left at its default value of `True`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: Begin Once
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Both [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    and [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    feature a [`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
+    "sqlalchemy.engine.Engine.begin") method that will both procure a new object with
+    which to execute SQL statements (the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") and [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), respectively) and then return a context manager
+    that will maintain a begin/commit/rollback context for that object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nested Transaction
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: When using a SAVEPOINT via the [`Session.begin_nested()`](session_api.html#sqlalchemy.orm.Session.begin_nested
+    "sqlalchemy.orm.Session.begin_nested") or [`Connection.begin_nested()`](../core/connections.html#sqlalchemy.engine.Connection.begin_nested
+    "sqlalchemy.engine.Connection.begin_nested") methods, the transaction object returned
+    must be used to commit or rollback the SAVEPOINT. Calling the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") or [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") methods will always commit the **outermost**
+    transaction; this is a SQLAlchemy 2.0 specific behavior that is reversed from
+    the 1.x series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Engine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Explicit Begin'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    features “autobegin” behavior, meaning that as soon as operations begin to take
+    place, it ensures a [`SessionTransaction`](session_api.html#sqlalchemy.orm.SessionTransaction
+    "sqlalchemy.orm.SessionTransaction") is present to track ongoing operations. This
+    transaction is completed when [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") is called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is often desirable, particularly in framework integrations, to control the
+    point at which the “begin” operation occurs. To suit this, the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") uses an “autobegin” strategy, such that the [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin
+    "sqlalchemy.orm.Session.begin") method may be called directly for a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that has not already had a transaction begun:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above pattern is more idiomatically invoked using a context manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin "sqlalchemy.orm.Session.begin")
+    method and the session’s “autobegin” process use the same sequence of steps to
+    begin the transaction. This includes that the [`SessionEvents.after_transaction_create()`](events.html#sqlalchemy.orm.SessionEvents.after_transaction_create
+    "sqlalchemy.orm.SessionEvents.after_transaction_create") event is invoked when
+    it occurs; this hook is used by frameworks in order to integrate their own transactional
+    processes with that of the ORM [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Enabling Two-Phase Commit'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For backends which support two-phase operation (currently MySQL and PostgreSQL),
+    the session can be instructed to use two-phase commit semantics. This will coordinate
+    the committing of transactions across databases so that the transaction is either
+    committed or rolled back in all databases. You can also [`Session.prepare()`](session_api.html#sqlalchemy.orm.Session.prepare
+    "sqlalchemy.orm.Session.prepare") the session for interacting with transactions
+    not managed by SQLAlchemy. To use two phase transactions set the flag `twophase=True`
+    on the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: '### Setting Transaction Isolation Levels / DBAPI AUTOCOMMIT'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most DBAPIs support the concept of configurable transaction [isolation](../glossary.html#term-isolation)
+    levels. These are traditionally the four levels “READ UNCOMMITTED”, “READ COMMITTED”,
+    “REPEATABLE READ” and “SERIALIZABLE”. These are usually applied to a DBAPI connection
+    before it begins a new transaction, noting that most DBAPIs will begin this transaction
+    implicitly when SQL statements are first emitted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DBAPIs that support isolation levels also usually support the concept of true
+    “autocommit”, which means that the DBAPI connection itself will be placed into
+    a non-transactional autocommit mode. This usually means that the typical DBAPI
+    behavior of emitting “BEGIN” to the database automatically no longer occurs, but
+    it may also include other directives. When using this mode, **the DBAPI does not
+    use a transaction under any circumstances**. SQLAlchemy methods like `.begin()`,
+    `.commit()` and `.rollback()` pass silently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy’s dialects support settable isolation modes on a per-[`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or per-[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") basis, using flags at both the [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") level as well as at the [`Connection.execution_options()`](../core/connections.html#sqlalchemy.engine.Connection.execution_options
+    "sqlalchemy.engine.Connection.execution_options") level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the ORM [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    it acts as a *facade* for engines and connections, but does not expose transaction
+    isolation directly. So in order to affect transaction isolation level, we need
+    to act upon the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    or [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    as appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Setting Transaction Isolation Levels including DBAPI Autocommit](../core/connections.html#dbapi-autocommit)
+    - be sure to review how isolation levels work at the level of the SQLAlchemy [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#### Setting Isolation For A Sessionmaker / Engine Wide'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set up a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    with a specific isolation level globally, the first technique is that an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") can be constructed against a specific isolation level
+    in all cases, which is then used as the source of connectivity for a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") and/or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another option, useful if there are to be two engines with different isolation
+    levels at once, is to use the [`Engine.execution_options()`](../core/connections.html#sqlalchemy.engine.Engine.execution_options
+    "sqlalchemy.engine.Engine.execution_options") method, which will produce a shallow
+    copy of the original [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") which shares the same connection pool as the parent
+    engine. This is often preferable when operations will be separated into “transactional”
+    and “autocommit” operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, both “`eng`” and `"autocommit_engine"` share the same dialect and connection
+    pool. However the “AUTOCOMMIT” mode will be set upon connections when they are
+    acquired from the `autocommit_engine`. The two [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") objects “`transactional_session`” and “`autocommit_session"`
+    then inherit these characteristics when they work with database connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “`autocommit_session`” **continues to have transactional semantics**, including
+    that [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit")
+    and [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback "sqlalchemy.orm.Session.rollback")
+    still consider themselves to be “committing” and “rolling back” objects, however
+    the transaction will be silently absent. For this reason, **it is typical, though
+    not strictly required, that a Session with AUTOCOMMIT isolation be used in a read-only
+    fashion**, that is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Isolation for Individual Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'When we make a new [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    either using the constructor directly or when we call upon the callable produced
+    by a [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker"),
+    we can pass the `bind` argument directly, overriding the pre-existing bind. We
+    can for example create our [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") from a default [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") and pass an engine set for autocommit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the case where the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") is configured with multiple “binds”, we can either
+    re-specify the `binds` argument fully, or if we want to only replace specific
+    binds, we can use the [`Session.bind_mapper()`](session_api.html#sqlalchemy.orm.Session.bind_mapper
+    "sqlalchemy.orm.Session.bind_mapper") or [`Session.bind_table()`](session_api.html#sqlalchemy.orm.Session.bind_table
+    "sqlalchemy.orm.Session.bind_table") methods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Isolation for Individual Transactions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: A key caveat regarding isolation level is that the setting cannot be safely
+    modified on a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") where a transaction has already started. Databases
+    cannot change the isolation level of a transaction in progress, and some DBAPIs
+    and SQLAlchemy dialects have inconsistent behaviors in this area.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore it is preferable to use a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that is up front bound to an engine with the desired
+    isolation level. However, the isolation level on a per-connection basis can be
+    affected by using the [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection") method at the start of a transaction:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we first produce a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using either the constructor or a [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"). Then we explicitly set up the start of a database-level
+    transaction by calling upon [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection"), which provides for execution options that
+    will be passed to the connection before the database-level transaction is begun.
+    The transaction proceeds with this selected isolation level. When the transaction
+    completes, the isolation level is reset on the connection to its default before
+    the connection is returned to the connection pool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin "sqlalchemy.orm.Session.begin")
+    method may also be used to begin the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") level transaction; calling upon [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection") subsequent to that call may be used to set
+    up the per-connection-transaction isolation level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Setting Isolation For A Sessionmaker / Engine Wide'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set up a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")
+    with a specific isolation level globally, the first technique is that an [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") can be constructed against a specific isolation level
+    in all cases, which is then used as the source of connectivity for a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") and/or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another option, useful if there are to be two engines with different isolation
+    levels at once, is to use the [`Engine.execution_options()`](../core/connections.html#sqlalchemy.engine.Engine.execution_options
+    "sqlalchemy.engine.Engine.execution_options") method, which will produce a shallow
+    copy of the original [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") which shares the same connection pool as the parent
+    engine. This is often preferable when operations will be separated into “transactional”
+    and “autocommit” operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, both “`eng`” and `"autocommit_engine"` share the same dialect and connection
+    pool. However the “AUTOCOMMIT” mode will be set upon connections when they are
+    acquired from the `autocommit_engine`. The two [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") objects “`transactional_session`” and “`autocommit_session"`
+    then inherit these characteristics when they work with database connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “`autocommit_session`” **continues to have transactional semantics**, including
+    that [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit")
+    and [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback "sqlalchemy.orm.Session.rollback")
+    still consider themselves to be “committing” and “rolling back” objects, however
+    the transaction will be silently absent. For this reason, **it is typical, though
+    not strictly required, that a Session with AUTOCOMMIT isolation be used in a read-only
+    fashion**, that is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Isolation for Individual Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'When we make a new [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    either using the constructor directly or when we call upon the callable produced
+    by a [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker"),
+    we can pass the `bind` argument directly, overriding the pre-existing bind. We
+    can for example create our [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") from a default [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") and pass an engine set for autocommit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the case where the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") or [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") is configured with multiple “binds”, we can either
+    re-specify the `binds` argument fully, or if we want to only replace specific
+    binds, we can use the [`Session.bind_mapper()`](session_api.html#sqlalchemy.orm.Session.bind_mapper
+    "sqlalchemy.orm.Session.bind_mapper") or [`Session.bind_table()`](session_api.html#sqlalchemy.orm.Session.bind_table
+    "sqlalchemy.orm.Session.bind_table") methods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting Isolation for Individual Transactions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: A key caveat regarding isolation level is that the setting cannot be safely
+    modified on a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") where a transaction has already started. Databases
+    cannot change the isolation level of a transaction in progress, and some DBAPIs
+    and SQLAlchemy dialects have inconsistent behaviors in this area.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore it is preferable to use a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that is up front bound to an engine with the desired
+    isolation level. However, the isolation level on a per-connection basis can be
+    affected by using the [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection") method at the start of a transaction:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we first produce a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") using either the constructor or a [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker"). Then we explicitly set up the start of a database-level
+    transaction by calling upon [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection"), which provides for execution options that
+    will be passed to the connection before the database-level transaction is begun.
+    The transaction proceeds with this selected isolation level. When the transaction
+    completes, the isolation level is reset on the connection to its default before
+    the connection is returned to the connection pool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session.begin()`](session_api.html#sqlalchemy.orm.Session.begin "sqlalchemy.orm.Session.begin")
+    method may also be used to begin the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") level transaction; calling upon [`Session.connection()`](session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection") subsequent to that call may be used to set
+    up the per-connection-transaction isolation level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tracking Transaction State with Events
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: See the section [Transaction Events](session_events.html#session-transaction-events)
+    for an overview of the available event hooks for session transaction state changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Joining a Session into an External Transaction (such as for test suites)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    is being used which is already in a transactional state (i.e. has a [`Transaction`](../core/connections.html#sqlalchemy.engine.Transaction
+    "sqlalchemy.engine.Transaction") established), a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") can be made to participate within that transaction by
+    just binding the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    to that [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection").
+    The usual rationale for this is a test suite that allows ORM code to work freely
+    with a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    including the ability to call [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), where afterwards the entire database interaction
+    is rolled back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The “join into an external transaction” recipe is newly
+    improved again in 2.0; event handlers to “reset” the nested transaction are no
+    longer required.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The recipe works by establishing a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") within a transaction and optionally a SAVEPOINT,
+    then passing it to a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    as the “bind”; the [`Session.join_transaction_mode`](session_api.html#sqlalchemy.orm.Session.params.join_transaction_mode
+    "sqlalchemy.orm.Session") parameter is passed with the setting `"create_savepoint"`,
+    which indicates that new SAVEPOINTs should be created in order to implement BEGIN/COMMIT/ROLLBACK
+    for the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    which will leave the external transaction in the same state in which it was passed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When the test tears down, the external transaction is rolled back so that any
+    data changes throughout the test are reverted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above recipe is part of SQLAlchemy’s own CI to ensure that it remains working
+    as expected.
+  prefs: []
+  type: TYPE_NORMAL

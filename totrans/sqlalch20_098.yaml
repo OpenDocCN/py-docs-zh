@@ -1,0 +1,4801 @@
+- en: Engine Configuration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/core/engines.html](https://docs.sqlalchemy.org/en/20/core/engines.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    is the starting point for any SQLAlchemy application. It’s “home base” for the
+    actual database and its [DBAPI](../glossary.html#term-DBAPI), delivered to the
+    SQLAlchemy application through a connection pool and a [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect"), which describes how to talk to a specific kind of
+    database/DBAPI combination.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The general structure can be illustrated as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![../_images/sqla_engine_arch.png](../Images/f551a4dda3e52a3c0fd8a1de0517174e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Where above, an [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    references both a [`Dialect`](internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    and a [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool"), which
+    together interpret the DBAPI’s module functions as well as the behavior of the
+    database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Creating an engine is just a matter of issuing a single call, [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above engine creates a [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") object tailored towards PostgreSQL, as well as a
+    [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool") object which
+    will establish a DBAPI connection at `localhost:5432` when a connection request
+    is first received. Note that the [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") and its underlying [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool") do **not** establish the first actual DBAPI connection
+    until the [`Engine.connect()`](connections.html#sqlalchemy.engine.Engine.connect
+    "sqlalchemy.engine.Engine.connect") or [`Engine.begin()`](connections.html#sqlalchemy.engine.Engine.begin
+    "sqlalchemy.engine.Engine.begin") methods are called. Either of these methods
+    may also be invoked by other SQLAlchemy [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") dependent objects such as the ORM [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object when they first require database connectivity.
+    In this way, [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    and [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool") can be
+    said to have a *lazy initialization* behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine"),
+    once created, can either be used directly to interact with the database, or can
+    be passed to a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object to work with the ORM. This section covers the details of configuring an
+    [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine").
+    The next section, [Working with Engines and Connections](connections.html), will
+    detail the usage API of the [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") and similar, typically for non-ORM applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Supported Databases'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy includes many [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") implementations for various backends. Dialects for
+    the most common databases are included with SQLAlchemy; a handful of others require
+    an additional install of a separate dialect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'See the section [Dialects](../dialects/index.html) for information on the various
+    backends available.  ## Database URLs'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    function produces an [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    object based on a URL. The format of the URL generally follows [RFC-1738](https://www.ietf.org/rfc/rfc1738.txt),
+    with some exceptions, including that underscores, not dashes or periods, are accepted
+    within the “scheme” portion. URLs typically include username, password, hostname,
+    database name fields, as well as optional keyword arguments for additional configuration.
+    In some cases a file path is accepted, and in others a “data source name” replaces
+    the “host” and “database” portions. The typical form of a database URL is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Dialect names include the identifying name of the SQLAlchemy dialect, a name
+    such as `sqlite`, `mysql`, `postgresql`, `oracle`, or `mssql`. The drivername
+    is the name of the DBAPI to be used to connect to the database using all lowercase
+    letters. If not specified, a “default” DBAPI will be imported if available - this
+    default is typically the most widely known driver available for that backend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Escaping Special Characters such as @ signs in Passwords
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When constructing a fully formed URL string to pass to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), **special characters such as those that may be used
+    in the user and password need to be URL encoded to be parsed correctly.**. **This
+    includes the @ sign**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below is an example of a URL that includes the password `"kx@jj5/g"`, where
+    the “at” sign and slash characters are represented as `%40` and `%2F`, respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The encoding for the above password can be generated using [urllib.parse](https://docs.python.org/3/library/urllib.parse.html):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The URL may then be passed as a string to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: As an alternative to escaping special characters in order to create a complete
+    URL string, the object passed to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") may instead be an instance of the [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL") object, which bypasses the parsing phase and can accommodate
+    for unescaped strings directly. See the next section for an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: Support for `@` signs in hostnames and database names
+    has been fixed. As a side effect of this fix, `@` signs in passwords must be escaped.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating URLs Programmatically
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The value passed to [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    may be an instance of [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL"),
+    instead of a plain string, which bypasses the need for string parsing to be used,
+    and therefore does not need an escaped URL string to be provided.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object is created
+    using the [`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create")
+    constructor method, passing all fields individually. Special characters such as
+    those within passwords may be passed without any modification:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The constructed [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    may then be passed directly to [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    in place of a string argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Backend-Specific URLs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Examples for common connection styles follow below. For a full index of detailed
+    information on all included dialects as well as links to third-party dialects,
+    see [Dialects](../dialects/index.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: PostgreSQL
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The PostgreSQL dialect uses psycopg2 as the default DBAPI. Other PostgreSQL
+    DBAPIs include pg8000 and asyncpg:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to PostgreSQL at [PostgreSQL](../dialects/postgresql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: MySQL
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The MySQL dialect uses mysqlclient as the default DBAPI. There are other MySQL
+    DBAPIs available, including PyMySQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to MySQL at [MySQL and MariaDB](../dialects/mysql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The Oracle dialect uses cx_oracle as the default DBAPI:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to Oracle at [Oracle](../dialects/oracle.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Microsoft SQL Server
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The SQL Server dialect uses pyodbc as the default DBAPI. pymssql is also available:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to SQL Server at [Microsoft SQL Server](../dialects/mssql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: SQLite connects to file-based databases, using the Python built-in module `sqlite3`
+    by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As SQLite connects to local files, the URL format is slightly different. The
+    “file” portion of the URL is the filename of the database. For a relative file
+    path, this requires three slashes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And for an absolute file path, the three slashes are followed by the absolute
+    path:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To use a SQLite `:memory:` database, specify an empty URL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to SQLite at [SQLite](../dialects/sqlite.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Others
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'See [Dialects](../dialects/index.html), the top-level page for all additional
+    dialect documentation.  ## Engine Creation API'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [create_engine](#sqlalchemy.create_engine)(url, **kwargs) | Create a new
+    [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    instance. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [create_mock_engine](#sqlalchemy.create_mock_engine)(url, executor, **kw)
+    | Create a “mock” engine used for echoing DDL. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [create_pool_from_url](#sqlalchemy.create_pool_from_url)(url, **kwargs) |
+    Create a pool instance from the given url. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [engine_from_config](#sqlalchemy.engine_from_config)(configuration[, prefix],
+    **kwargs) | Create a new Engine instance using a configuration dictionary. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [make_url](#sqlalchemy.engine.make_url)(name_or_url) | Given a string, produce
+    a new URL instance. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [URL](#sqlalchemy.engine.URL) | Represent the components of a URL used to
+    connect to a database. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The standard calling form is to send the [URL](#database-urls) as the first
+    positional argument, usually a string that indicates database dialect and connection
+    arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Please review [Database URLs](#database-urls) for general guidelines in composing
+    URL strings. In particular, special characters, such as those often part of passwords,
+    must be URL encoded to be properly parsed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Additional keyword arguments may then follow it which establish various options
+    on the resulting [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    and its underlying [`Dialect`](internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    and [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool") constructs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: The string form of the URL is `dialect[+driver]://user:password@host/dbname[?key=value..]`,
+    where `dialect` is a database name such as `mysql`, `oracle`, `postgresql`, etc.,
+    and `driver` the name of a DBAPI, such as `psycopg2`, `pyodbc`, `cx_oracle`, etc.
+    Alternatively, the URL can be an instance of [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.url.URL").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`**kwargs` takes a wide variety of options which are routed towards their appropriate
+    components. Arguments may be specific to the [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"), the underlying [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect"), as well as the [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool"). Specific dialects also accept keyword arguments that
+    are unique to that dialect. Here, we describe the parameters that are common to
+    most [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    usage.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once established, the newly resulting [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") will request a connection from the underlying [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool") once [`Engine.connect()`](connections.html#sqlalchemy.engine.Engine.connect
+    "sqlalchemy.engine.Engine.connect") is called, or a method which depends on it
+    such as `Engine.execute()` is invoked. The [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool") in turn will establish the first actual DBAPI connection
+    when this request is received. The [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") call itself does **not** establish any actual DBAPI
+    connections directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Engine Configuration](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dialects](../dialects/index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Working with Engines and Connections](connections.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`connect_args` – a dictionary of options which will be passed directly to the
+    DBAPI’s `connect()` method as additional keyword arguments. See the example at
+    [Custom DBAPI connect() arguments / on-connect routines](#custom-dbapi-args).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`creator` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: a callable which returns a DBAPI connection. This creation function will be
+    passed to the underlying connection pool and will be used to create all new database
+    connections. Usage of this function causes connection parameters specified in
+    the URL argument to be bypassed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: This hook is not as flexible as the newer [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") hook which allows complete control
+    over how a connection is made to the database, given the full set of URL arguments
+    and state beforehand.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") - event hook that allows full control
+    over DBAPI connection mechanics.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Custom DBAPI connect() arguments / on-connect routines](#custom-dbapi-args)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`echo=False` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, the Engine will log all statements as well as a `repr()` of their parameter
+    lists to the default log handler, which defaults to `sys.stdout` for output. If
+    set to the string `"debug"`, result rows will be printed to the standard output
+    as well. The `echo` attribute of `Engine` can be modified at any time to turn
+    logging on and off; direct control of logging is also available using the standard
+    Python `logging` module.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`echo_pool=False` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, the connection pool will log informational output such as when connections
+    are invalidated as well as when connections are recycled to the default log handler,
+    which defaults to `sys.stdout` for output. If set to the string `"debug"`, the
+    logging will include pool checkouts and checkins. Direct control of logging is
+    also available using the standard Python `logging` module.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`empty_in_strategy` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: No longer used; SQLAlchemy now uses “empty set” behavior for IN in all cases.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 1.4: The [`create_engine.empty_in_strategy`](#sqlalchemy.create_engine.params.empty_in_strategy
+    "sqlalchemy.create_engine") keyword is deprecated, and no longer has any effect.
+    All IN expressions are now rendered using the “expanding parameter” strategy which
+    renders a set of boundexpressions, or an “empty set” SELECT, at statement executiontime.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`enable_from_linting` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: defaults to True. Will emit a warning if a given SELECT statement is found to
+    have un-linked FROM elements which would cause a cartesian product.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Built-in FROM linting will warn for any potential cartesian products in a
+    SELECT statement](../changelog/migration_14.html#change-4737)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`execution_options` – Dictionary execution options which will be applied to
+    all connections. See [`Connection.execution_options()`](connections.html#sqlalchemy.engine.Connection.execution_options
+    "sqlalchemy.engine.Connection.execution_options")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`future` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use the 2.0 style [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    and [`Connection`](connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    API.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: As of SQLAlchemy 2.0, this parameter is present for backwards compatibility
+    only and must remain at its default value of `True`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`create_engine.future`](#sqlalchemy.create_engine.params.future "sqlalchemy.create_engine")
+    parameter will be deprecated in a subsequent 2.x release and eventually removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: All [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") objects are “future” style engines and there is no
+    longer a `future=False` mode of operation.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[SQLAlchemy 2.0 - Major Migration Guide](../changelog/migration_20.html)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`hide_parameters` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Boolean, when set to True, SQL statement parameters will not be displayed in
+    INFO logging nor will they be formatted into the string representation of [`StatementError`](exceptions.html#sqlalchemy.exc.StatementError
+    "sqlalchemy.exc.StatementError") objects.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.3.8.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`implicit_returning=True` – Legacy parameter that may only be set to True.
+    In SQLAlchemy 2.0, this parameter does nothing. In order to disable “implicit
+    returning” for statements invoked by the ORM, configure this on a per-table basis
+    using the [`Table.implicit_returning`](metadata.html#sqlalchemy.schema.Table.params.implicit_returning
+    "sqlalchemy.schema.Table") parameter.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`insertmanyvalues_page_size` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: number of rows to format into an INSERT statement when the statement uses “insertmanyvalues”
+    mode, which is a paged form of bulk insert that is used for many backends when
+    using [executemany](../glossary.html#term-executemany) execution typically in
+    conjunction with RETURNING. Defaults to 1000, but may also be subject to dialect-specific
+    limiting factors which may override this value on a per-statement basis.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[“Insert Many Values” Behavior for INSERT statements](connections.html#engine-insertmanyvalues)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Controlling the Batch Size](connections.html#engine-insertmanyvalues-page-size)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`Connection.execution_options.insertmanyvalues_page_size`](connections.html#sqlalchemy.engine.Connection.execution_options.params.insertmanyvalues_page_size
+    "sqlalchemy.engine.Connection.execution_options")'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`isolation_level` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: optional string name of an isolation level which will be set on all new connections
+    unconditionally. Isolation levels are typically some subset of the string names
+    `"SERIALIZABLE"`, `"REPEATABLE READ"`, `"READ COMMITTED"`, `"READ UNCOMMITTED"`
+    and `"AUTOCOMMIT"` based on backend.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`create_engine.isolation_level`](#sqlalchemy.create_engine.params.isolation_level
+    "sqlalchemy.create_engine") parameter is in contrast to the [`Connection.execution_options.isolation_level`](connections.html#sqlalchemy.engine.Connection.execution_options.params.isolation_level
+    "sqlalchemy.engine.Connection.execution_options") execution option, which may
+    be set on an individual [`Connection`](connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), as well as the same parameter passed to [`Engine.execution_options()`](connections.html#sqlalchemy.engine.Engine.execution_options
+    "sqlalchemy.engine.Engine.execution_options"), where it may be used to create
+    multiple engines with different isolation levels that share a common connection
+    pool and dialect.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`create_engine.isolation_level`](#sqlalchemy.create_engine.params.isolation_level
+    "sqlalchemy.create_engine") parameter has been generalized to work on all dialects
+    which support the concept of isolation level, and is provided as a more succinct,
+    up front configuration switch in contrast to the execution option which is more
+    of an ad-hoc programmatic option.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Setting Transaction Isolation Levels including DBAPI Autocommit](connections.html#dbapi-autocommit)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`json_deserializer` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: for dialects that support the [`JSON`](type_basics.html#sqlalchemy.types.JSON
+    "sqlalchemy.types.JSON") datatype, this is a Python callable that will convert
+    a JSON string to a Python object. By default, the Python `json.loads` function
+    is used.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3.7: The SQLite dialect renamed this from `_json_deserializer`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`json_serializer` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: for dialects that support the [`JSON`](type_basics.html#sqlalchemy.types.JSON
+    "sqlalchemy.types.JSON") datatype, this is a Python callable that will render
+    a given object as JSON. By default, the Python `json.dumps` function is used.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3.7: The SQLite dialect renamed this from `_json_serializer`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`label_length=None` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: optional integer value which limits the size of dynamically generated column
+    labels to that many characters. If less than 6, labels are generated as “_(counter)”.
+    If `None`, the value of `dialect.max_identifier_length`, which may be affected
+    via the [`create_engine.max_identifier_length`](#sqlalchemy.create_engine.params.max_identifier_length
+    "sqlalchemy.create_engine") parameter, is used instead. The value of [`create_engine.label_length`](#sqlalchemy.create_engine.params.label_length
+    "sqlalchemy.create_engine") may not be larger than that of [`create_engine.max_identfier_length`](#sqlalchemy.create_engine.params.max_identfier_length
+    "sqlalchemy.create_engine").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`create_engine.max_identifier_length`](#sqlalchemy.create_engine.params.max_identifier_length
+    "sqlalchemy.create_engine")'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`logging_name` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: String identifier which will be used within the “name” field of logging records
+    generated within the “sqlalchemy.engine” logger. Defaults to a hexstring of the
+    object’s id.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`Connection.execution_options.logging_token`](connections.html#sqlalchemy.engine.Connection.execution_options.params.logging_token
+    "sqlalchemy.engine.Connection.execution_options")'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`max_identifier_length` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: integer; override the max_identifier_length determined by the dialect. if `None`
+    or zero, has no effect. This is the database’s configured maximum number of characters
+    that may be used in a SQL identifier such as a table name, column name, or label
+    name. All dialects determine this value automatically, however in the case of
+    a new database version for which this value has changed but SQLAlchemy’s dialect
+    has not been adjusted, the value may be passed here.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.3.9.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`create_engine.label_length`](#sqlalchemy.create_engine.params.label_length
+    "sqlalchemy.create_engine")'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`max_overflow=10` – the number of connections to allow in connection pool “overflow”,
+    that is connections that can be opened above and beyond the pool_size setting,
+    which defaults to five. this is only used with [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`module=None` – reference to a Python module object (the module itself, not
+    its string name). Specifies an alternate DBAPI module to be used by the engine’s
+    dialect. Each sub-dialect references a specific DBAPI which will be imported before
+    first connect. This parameter causes the import to be bypassed, and the given
+    module to be used instead. Can be used for testing of DBAPIs as well as to inject
+    “mock” DBAPI implementations into the [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`paramstyle=None` – The [paramstyle](https://legacy.python.org/dev/peps/pep-0249/#paramstyle)
+    to use when rendering bound parameters. This style defaults to the one recommended
+    by the DBAPI itself, which is retrieved from the `.paramstyle` attribute of the
+    DBAPI. However, most DBAPIs accept more than one paramstyle, and in particular
+    it may be desirable to change a “named” paramstyle into a “positional” one, or
+    vice versa. When this attribute is passed, it should be one of the values `"qmark"`,
+    `"numeric"`, `"named"`, `"format"` or `"pyformat"`, and should correspond to a
+    parameter style known to be supported by the DBAPI in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pool=None` – an already-constructed instance of [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool"), such as a [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") instance. If non-None, this pool will be used directly
+    as the underlying connection pool for the engine, bypassing whatever connection
+    parameters are present in the URL argument. For information on constructing connection
+    pools manually, see [Connection Pooling](pooling.html).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`poolclass=None` – a [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool")
+    subclass, which will be used to create a connection pool instance using the connection
+    parameters given in the URL. Note this differs from `pool` in that you don’t actually
+    instantiate the pool in this case, you just indicate what type of pool to be used.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pool_logging_name` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: String identifier which will be used within the “name” field of logging records
+    generated within the “sqlalchemy.pool” logger. Defaults to a hexstring of the
+    object’s id.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_pre_ping` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: boolean, if True will enable the connection pool “pre-ping” feature that tests
+    connections for liveness upon each checkout.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Disconnect Handling - Pessimistic](pooling.html#pool-disconnects-pessimistic)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_size=5` – the number of connections to keep open inside the connection
+    pool. This used with [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool "sqlalchemy.pool.QueuePool")
+    as well as [`SingletonThreadPool`](pooling.html#sqlalchemy.pool.SingletonThreadPool
+    "sqlalchemy.pool.SingletonThreadPool"). With [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool"), a `pool_size` setting of 0 indicates no limit; to
+    disable pooling, set `poolclass` to [`NullPool`](pooling.html#sqlalchemy.pool.NullPool
+    "sqlalchemy.pool.NullPool") instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pool_recycle=-1` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: this setting causes the pool to recycle connections after the given number of
+    seconds has passed. It defaults to -1, or no timeout. For example, setting to
+    3600 means connections will be recycled after one hour. Note that MySQL in particular
+    will disconnect automatically if no activity is detected on a connection for eight
+    hours (although this is configurable with the MySQLDB connection itself and the
+    server configuration as well).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Setting Pool Recycle](pooling.html#pool-setting-recycle)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_reset_on_return=''rollback''` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: set the [`Pool.reset_on_return`](pooling.html#sqlalchemy.pool.Pool.params.reset_on_return
+    "sqlalchemy.pool.Pool") parameter of the underlying [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool") object, which can be set to the values `"rollback"`, `"commit"`,
+    or `None`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Reset On Return](pooling.html#pool-reset-on-return)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_timeout=30` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: number of seconds to wait before giving up on getting a connection from the
+    pool. This is only used with [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool"). This can be a float but is subject to the limitations
+    of Python time functions which may not be reliable in the tens of milliseconds.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_use_lifo=False` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: use LIFO (last-in-first-out) when retrieving connections from [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") instead of FIFO (first-in-first-out). Using LIFO,
+    a server-side timeout scheme can reduce the number of connections used during
+    non- peak periods of use. When planning for server-side timeouts, ensure that
+    a recycle or pre-ping strategy is in use to gracefully handle stale connections.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.3.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[Using FIFO vs. LIFO](pooling.html#pool-use-lifo)'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[Dealing with Disconnects](pooling.html#pool-disconnects)'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`plugins` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: string list of plugin names to load. See [`CreateEnginePlugin`](connections.html#sqlalchemy.engine.CreateEnginePlugin
+    "sqlalchemy.engine.CreateEnginePlugin") for background.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.2.3.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`query_cache_size` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: size of the cache used to cache the SQL string form of queries. Set to zero
+    to disable caching.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The cache is pruned of its least recently used items when its size reaches N
+    * 1.5\. Defaults to 500, meaning the cache will always store at least 500 SQL
+    statements when filled, and will grow up to 750 items at which point it is pruned
+    back down to 500 by removing the 250 least recently used items.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Caching is accomplished on a per-statement basis by generating a cache key that
+    represents the statement’s structure, then generating string SQL for the current
+    dialect only if that key is not present in the cache. All statements support caching,
+    however some features such as an INSERT with a large set of parameters will intentionally
+    bypass the cache. SQL logging will indicate statistics for each statement whether
+    or not it were pull from the cache.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: some ORM functions related to unit-of-work persistence as well as some attribute
+    loading strategies will make use of individual per-mapper caches outside of the
+    main cache.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[SQL Compilation Caching](connections.html#sql-caching)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`use_insertmanyvalues` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: True by default, use the “insertmanyvalues” execution style for INSERT..RETURNING
+    statements by default.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[“Insert Many Values” Behavior for INSERT statements](connections.html#engine-insertmanyvalues)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new Engine instance using a configuration dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dictionary is typically produced from a config file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The keys of interest to `engine_from_config()` should be prefixed, e.g. `sqlalchemy.url`,
+    `sqlalchemy.echo`, etc. The ‘prefix’ argument indicates the prefix to be searched
+    for. Each matching key (after the prefix is stripped) is treated as though it
+    were the corresponding keyword argument to a [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") call.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The only required key is (assuming the default prefix) `sqlalchemy.url`, which
+    provides the [database URL](#database-urls).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A select set of keyword arguments will be “coerced” to their expected type based
+    on string values. The set of arguments is extensible per-dialect using the `engine_config_types`
+    accessor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`configuration` – A dictionary (typically produced from a config file, but
+    this is not a requirement). Items whose keys start with the value of ‘prefix’
+    will have that prefix stripped, and will then be passed to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`prefix` – Prefix to match and then strip from keys in ‘configuration’.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`kwargs` – Each keyword argument to `engine_from_config()` itself overrides
+    the corresponding item taken from the ‘configuration’ dictionary. Keyword arguments
+    should *not* be prefixed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a “mock” engine used for echoing DDL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a utility function used for debugging or storing the output of DDL sequences
+    as generated by [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") and related methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The function accepts a URL which is used only to determine the kind of dialect
+    to be used, as well as an “executor” callable function which will receive a SQL
+    expression object and parameters, which can then be echoed or otherwise printed.
+    The executor’s return value is not handled, nor does the engine allow regular
+    string statements to be invoked, and is therefore only useful for DDL that is
+    sent to the database without receiving any results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`url` – A string URL which typically needs to contain only the database backend
+    name.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`executor` – a callable which receives the arguments `sql`, `*multiparams`
+    and `**params`. The `sql` parameter is typically an instance of [`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement"), which can then be compiled into a string
+    using `ExecutableDDLElement.compile()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'New in version 1.4: - the [`create_mock_engine()`](#sqlalchemy.create_mock_engine
+    "sqlalchemy.create_mock_engine") function replaces the previous “mock” engine
+    strategy used with [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[How can I get the CREATE TABLE/ DROP TABLE output as a string?](../faq/metadata_schema.html#faq-ddl-as-string)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given a string, produce a new URL instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The format of the URL generally follows [RFC-1738](https://www.ietf.org/rfc/rfc1738.txt),
+    with some exceptions, including that underscores, and not dashes or periods, are
+    accepted within the “scheme” portion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If a [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object is passed,
+    it is returned as is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Database URLs](#database-urls)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a pool instance from the given url.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If `poolclass` is not provided the pool class used is selected using the dialect
+    specified in the URL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The arguments passed to [`create_pool_from_url()`](#sqlalchemy.create_pool_from_url
+    "sqlalchemy.create_pool_from_url") are identical to the pool argument passed to
+    the [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent the components of a URL used to connect to a database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: URLs are typically constructed from a fully formatted URL string, where the
+    [`make_url()`](#sqlalchemy.engine.make_url "sqlalchemy.engine.make_url") function
+    is used internally by the [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    function in order to parse the URL string into its individual components, which
+    are then used to construct a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    object. When parsing from a formatted URL string, the parsing format generally
+    follows [RFC-1738](https://www.ietf.org/rfc/rfc1738.txt), with some exceptions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object may also be
+    produced directly, either by using the [`make_url()`](#sqlalchemy.engine.make_url
+    "sqlalchemy.engine.make_url") function with a fully formed URL string, or by using
+    the [`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create")
+    constructor in order to construct a [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    programmatically given individual fields. The resulting [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL") object may be passed directly to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") in place of a string argument, which will bypass the
+    usage of [`make_url()`](#sqlalchemy.engine.make_url "sqlalchemy.engine.make_url")
+    within the engine’s creation process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: The [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    object is now an immutable object. To create a URL, use the [`make_url()`](#sqlalchemy.engine.make_url
+    "sqlalchemy.engine.make_url") or [`URL.create()`](#sqlalchemy.engine.URL.create
+    "sqlalchemy.engine.URL.create") function / method. To modify a [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL"), use methods like [`URL.set()`](#sqlalchemy.engine.URL.set
+    "sqlalchemy.engine.URL.set") and [`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict
+    "sqlalchemy.engine.URL.update_query_dict") to return a new [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL") object with modifications. See notes for this change
+    at [The URL object is now immutable](../changelog/migration_14.html#change-5526).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Database URLs](#database-urls)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") contains the following
+    attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.drivername`](#sqlalchemy.engine.URL.drivername "sqlalchemy.engine.URL.drivername"):
+    database backend and driver name, such as `postgresql+psycopg2`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.username`](#sqlalchemy.engine.URL.username "sqlalchemy.engine.URL.username"):
+    username string'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.password`](#sqlalchemy.engine.URL.password "sqlalchemy.engine.URL.password"):
+    password string'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.host`](#sqlalchemy.engine.URL.host "sqlalchemy.engine.URL.host"): string
+    hostname'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.port`](#sqlalchemy.engine.URL.port "sqlalchemy.engine.URL.port"): integer
+    port number'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.database`](#sqlalchemy.engine.URL.database "sqlalchemy.engine.URL.database"):
+    string database name'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query"):
+    an immutable mapping representing the query string. contains strings for keys
+    and either strings or tuples of strings for values.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[create()](#sqlalchemy.engine.URL.create), [database](#sqlalchemy.engine.URL.database),
+    [difference_update_query()](#sqlalchemy.engine.URL.difference_update_query), [drivername](#sqlalchemy.engine.URL.drivername),
+    [get_backend_name()](#sqlalchemy.engine.URL.get_backend_name), [get_dialect()](#sqlalchemy.engine.URL.get_dialect),
+    [get_driver_name()](#sqlalchemy.engine.URL.get_driver_name), [host](#sqlalchemy.engine.URL.host),
+    [normalized_query](#sqlalchemy.engine.URL.normalized_query), [password](#sqlalchemy.engine.URL.password),
+    [port](#sqlalchemy.engine.URL.port), [query](#sqlalchemy.engine.URL.query), [render_as_string()](#sqlalchemy.engine.URL.render_as_string),
+    [set()](#sqlalchemy.engine.URL.set), [translate_connect_args()](#sqlalchemy.engine.URL.translate_connect_args),
+    [update_query_dict()](#sqlalchemy.engine.URL.update_query_dict), [update_query_pairs()](#sqlalchemy.engine.URL.update_query_pairs),
+    [update_query_string()](#sqlalchemy.engine.URL.update_query_string), [username](#sqlalchemy.engine.URL.username)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.engine.URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    (`builtins.tuple`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Database URLs](#database-urls)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`drivername` – the name of the database backend. This name will correspond
+    to a module in sqlalchemy/databases or a third party plug-in.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`username` – The user name.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`password` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: database password. Is typically a string, but may also be an object that can
+    be stringified with `str()`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The password string should **not** be URL encoded when passed as an argument
+    to [`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create");
+    the string should contain the password characters exactly as they would be typed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: A password-producing object will be stringified only **once** per [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object. For dynamic password generation per connect,
+    see [Generating dynamic authentication tokens](#engines-dynamic-tokens).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`host` – The name of the host.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`port` – The port number.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`database` – The database name.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query` – A dictionary of string keys to string values to be passed to the
+    dialect and/or the DBAPI upon connect. To specify non-string parameters to a Python
+    DBAPI directly, use the [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") parameter to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"). See also [`URL.normalized_query`](#sqlalchemy.engine.URL.normalized_query
+    "sqlalchemy.engine.URL.normalized_query") for a dictionary that is consistently
+    string->list of string.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4: The [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    object is now an **immutable named tuple**. In addition, the `query` dictionary
+    is also immutable. To create a URL, use the `make_url()` or [`URL.create()`](#sqlalchemy.engine.URL.create
+    "sqlalchemy.engine.URL.create") function/ method. To modify a [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL"), use the [`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")
+    and `URL.update_query()` methods.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: database name
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remove the given names from the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    dictionary, returning the new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Equivalent to using [`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict "sqlalchemy.engine.URL.update_query_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: database backend and driver name, such as `postgresql+psycopg2`
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the backend name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the name that corresponds to the database backend in use, and is the
+    portion of the [`URL.drivername`](#sqlalchemy.engine.URL.drivername "sqlalchemy.engine.URL.drivername")
+    that is to the left of the plus sign.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the SQLAlchemy [`Dialect`](internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    class corresponding to this URL’s driver name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the backend name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the name that corresponds to the DBAPI driver in use, and is the portion
+    of the [`URL.drivername`](#sqlalchemy.engine.URL.drivername "sqlalchemy.engine.URL.drivername")
+    that is to the right of the plus sign.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the [`URL.drivername`](#sqlalchemy.engine.URL.drivername "sqlalchemy.engine.URL.drivername")
+    does not include a plus sign, then the default [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") for this [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    is imported in order to get the driver name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: hostname or IP number. May also be a data source name for some drivers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    dictionary with values normalized into sequences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    dictionary may contain either string values or sequences of string values to differentiate
+    between parameters that are specified multiple times in the query string, code
+    that needs to handle multiple parameters generically will wish to use this attribute
+    so that all parameters present are presented as sequences. Inspiration is from
+    Python’s `urllib.parse.parse_qs` function. E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: password, which is normally a string but may also be any object that has a `__str__()`
+    method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: integer port number
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'an immutable mapping representing the query string. contains strings for keys
+    and either strings or tuples of strings for values, e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.normalized_query`](#sqlalchemy.engine.URL.normalized_query "sqlalchemy.engine.URL.normalized_query")
+    - normalizes all values into sequences for consistent processing'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Methods for altering the contents of [`URL.query`](#sqlalchemy.engine.URL.query
+    "sqlalchemy.engine.URL.query"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict "sqlalchemy.engine.URL.update_query_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_string()`](#sqlalchemy.engine.URL.update_query_string "sqlalchemy.engine.URL.update_query_string")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_pairs()`](#sqlalchemy.engine.URL.update_query_pairs "sqlalchemy.engine.URL.update_query_pairs")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.difference_update_query()`](#sqlalchemy.engine.URL.difference_update_query
+    "sqlalchemy.engine.URL.difference_update_query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Render this [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object as
+    a string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is used when the `__str__()` or `__repr__()` methods are used. The
+    method directly includes additional options.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**hide_password** – Defaults to True. The password is not shown in the string
+    unless this is set to False.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: return a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    with modifications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Values are used if they are non-None. To set a value to `None` explicitly, use
+    the `URL._replace()` method adapted from `namedtuple`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`drivername` – new drivername'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`username` – new username'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`password` – new password'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`host` – new hostname'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`port` – new port'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query` – new query parameters, passed a dict of string keys referring to string
+    or sequence of string values. Fully replaces the previous list of arguments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict "sqlalchemy.engine.URL.update_query_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Translate url attributes into a dictionary of connection arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns attributes of this url (host, database, username, password, port) as
+    a plain dictionary. The attribute names are used as the keys by default. Unset
+    or false attributes are omitted from the final dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`**kw` – Optional, alternate key names for url attributes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`names` – Deprecated. Same purpose as the keyword-based alternate names, but
+    correlates the name to the original positionally.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    with the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    parameter dictionary updated by the given dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dictionary typically contains string keys and string values. In order to
+    represent a query parameter that is expressed multiple times, pass a sequence
+    of string values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`query_parameters` – A dictionary with string keys and values that are either
+    strings, or sequences of strings.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`append` – if True, parameters in the existing query string will not be removed;
+    new parameters will be in addition to those present. If left at its default of
+    False, keys present in the given query parameters will replace those of the existing
+    query string.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_string()`](#sqlalchemy.engine.URL.update_query_string "sqlalchemy.engine.URL.update_query_string")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_pairs()`](#sqlalchemy.engine.URL.update_query_pairs "sqlalchemy.engine.URL.update_query_pairs")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.difference_update_query()`](#sqlalchemy.engine.URL.difference_update_query
+    "sqlalchemy.engine.URL.difference_update_query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    with the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    parameter dictionary updated by the given sequence of key/value pairs
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`key_value_pairs` – A sequence of tuples containing two strings each.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`append` – if True, parameters in the existing query string will not be removed;
+    new parameters will be in addition to those present. If left at its default of
+    False, keys present in the given query parameters will replace those of the existing
+    query string.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.difference_update_query()`](#sqlalchemy.engine.URL.difference_update_query
+    "sqlalchemy.engine.URL.difference_update_query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    with the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    parameter dictionary updated by the given query string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`query_string` – a URL escaped query string, not including the question mark.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`append` – if True, parameters in the existing query string will not be removed;
+    new parameters will be in addition to those present. If left at its default of
+    False, keys present in the given query parameters will replace those of the existing
+    query string.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict "sqlalchemy.engine.URL.update_query_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: username string
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pooling
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    will ask the connection pool for a connection when the `connect()` or `execute()`
+    methods are called. The default connection pool, [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool"), will open connections to the database on an as-needed
+    basis. As concurrent statements are executed, [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") will grow its pool of connections to a default size
+    of five, and will allow a default “overflow” of ten. Since the [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") is essentially “home base” for the connection pool,
+    it follows that you should keep a single [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") per database established within an application, rather
+    than creating a new one for each connection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool "sqlalchemy.pool.QueuePool")
+    is not used by default for SQLite engines. See [SQLite](../dialects/sqlite.html)
+    for details on SQLite connection pool usage.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more information on connection pooling, see [Connection Pooling](pooling.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Custom DBAPI connect() arguments / on-connect routines'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For cases where special connection methods are needed, in the vast majority
+    of cases, it is most appropriate to use one of several hooks at the [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") level in order to customize this process. These are
+    described in the following sub-sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Special Keyword Arguments Passed to dbapi.connect()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All Python DBAPIs accept additional arguments beyond the basics of connecting.
+    Common parameters include those to specify character set encodings and timeout
+    values; more complex data includes special DBAPI constants and objects and SSL
+    sub-parameters. There are two rudimentary means of passing these arguments without
+    complexity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Add Parameters to the URL Query string
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Simple string values, as well as some numeric values and boolean flags, may
+    be often specified in the query string of the URL directly. A common example of
+    this is DBAPIs that accept an argument `encoding` for character encodings, such
+    as most MySQL DBAPIs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: The advantage of using the query string is that additional DBAPI options may
+    be specified in configuration files in a manner that’s portable to the DBAPI specified
+    in the URL. The specific parameters passed through at this level vary by SQLAlchemy
+    dialect. Some dialects pass all arguments through as strings, while others will
+    parse for specific datatypes and move parameters to different places, such as
+    into driver-level DSNs and connect strings. As per-dialect behavior in this area
+    currently varies, the dialect documentation should be consulted for the specific
+    dialect in use to see if particular parameters are supported at this level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A general technique to display the exact arguments passed to the DBAPI for
+    a given URL may be performed using the [`Dialect.create_connect_args()`](internals.html#sqlalchemy.engine.Dialect.create_connect_args
+    "sqlalchemy.engine.Dialect.create_connect_args") method directly as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above `args, kwargs` pair is normally passed to the DBAPI as `dbapi.connect(*args,
+    **kwargs)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use the connect_args dictionary parameter
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'A more general system of passing any parameter to the `dbapi.connect()` function
+    that is guaranteed to pass all parameters at all times is the [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") dictionary parameter. This may be used for parameters
+    that are otherwise not handled by the dialect when added to the query string,
+    as well as when special sub-structures or objects must be passed to the DBAPI.
+    Sometimes it’s just that a particular flag must be sent as the `True` symbol and
+    the SQLAlchemy dialect is not aware of this keyword argument to coerce it from
+    its string form as presented in the URL. Below illustrates the use of a psycopg2
+    “connection factory” that replaces the underlying implementation the connection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another example is the pyodbc “timeout” parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example also illustrates that both URL “query string” parameters as
+    well as [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") may be used at the same time; in the case of pyodbc,
+    the “driver” keyword has special meaning within the URL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Controlling how parameters are passed to the DBAPI connect() function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Beyond manipulating the parameters passed to `connect()`, we can further customize
+    how the DBAPI `connect()` function itself is called using the [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") event hook. This hook is passed
+    the full `*args, **kwargs` that the dialect would send to `connect()`. These collections
+    can then be modified in place to alter how they are used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Generating dynamic authentication tokens'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") is also an ideal way to dynamically
+    insert an authentication token that might change over the lifespan of an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"). For example, if the token gets generated by `get_authentication_token()`
+    and passed to the DBAPI in a `token` parameter, this could be implemented as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Connecting to databases with access tokens](../dialects/mssql.html#mssql-pyodbc-access-tokens)
+    - a more concrete example involving SQL Server'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modifying the DBAPI connection after connect, or running commands after connect
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For a DBAPI connection that SQLAlchemy creates without issue, but where we
+    would like to modify the completed connection before it’s actually used, such
+    as for setting special flags or running certain commands, the [`PoolEvents.connect()`](events.html#sqlalchemy.events.PoolEvents.connect
+    "sqlalchemy.events.PoolEvents.connect") event hook is the most appropriate hook.
+    This hook is called for every new connection created, before it is used by SQLAlchemy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Fully Replacing the DBAPI `connect()` function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Finally, the [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") event hook can also allow us to
+    take over the connection process entirely by establishing the connection and returning
+    it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") hook supersedes the previous [`create_engine.creator`](#sqlalchemy.create_engine.params.creator
+    "sqlalchemy.create_engine") hook, which remains available. [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") has the distinct advantage that
+    the complete arguments parsed from the URL are also passed to the user-defined
+    function which is not the case with [`create_engine.creator`](#sqlalchemy.create_engine.params.creator
+    "sqlalchemy.create_engine").  ## Configuring Logging'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Python’s standard [logging](https://docs.python.org/library/logging.html) module
+    is used to implement informational and debug log output with SQLAlchemy. This
+    allows SQLAlchemy’s logging to integrate in a standard way with other applications
+    and libraries. There are also two parameters [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine") and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine") present on [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") which allow immediate logging to `sys.stdout` for
+    the purposes of local development; these parameters ultimately interact with the
+    regular Python loggers described below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This section assumes familiarity with the above linked logging module. All
+    logging performed by SQLAlchemy exists underneath the `sqlalchemy` namespace,
+    as used by `logging.getLogger(''sqlalchemy'')`. When logging has been configured
+    (i.e. such as via `logging.basicConfig()`), the general namespace of SA loggers
+    that can be turned on is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.engine` - controls SQL echoing. Set to `logging.INFO` for SQL query
+    output, `logging.DEBUG` for query + result set output. These settings are equivalent
+    to `echo=True` and `echo="debug"` on [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine"), respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.pool` - controls connection pool logging. Set to `logging.INFO`
+    to log connection invalidation and recycle events; set to `logging.DEBUG` to additionally
+    log all pool checkins and checkouts. These settings are equivalent to `pool_echo=True`
+    and `pool_echo="debug"` on [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine"), respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.dialects` - controls custom logging for SQL dialects, to the extent
+    that logging is used within specific dialects, which is generally minimal.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.orm` - controls logging of various ORM functions to the extent
+    that logging is used within the ORM, which is generally minimal. Set to `logging.INFO`
+    to log some top-level information on mapper configurations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, to log SQL queries using Python logging instead of the `echo=True`
+    flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: By default, the log level is set to `logging.WARN` within the entire `sqlalchemy`
+    namespace so that no log operations occur, even within an application that has
+    logging enabled otherwise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SQLAlchemy [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    conserves Python function call overhead by only emitting log statements when the
+    current logging level is detected as `logging.INFO` or `logging.DEBUG`. It only
+    checks this level when a new connection is procured from the connection pool.
+    Therefore when changing the logging configuration for an already-running application,
+    any [`Connection`](connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    that’s currently active, or more commonly a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session") object that’s active in a transaction, won’t
+    log any SQL according to the new configuration until a new [`Connection`](connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") is procured (in the case of [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session"), this is after the current transaction ends
+    and a new one begins).
+  prefs: []
+  type: TYPE_NORMAL
+- en: More on the Echo Flag
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As mentioned previously, the [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine") and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine") parameters are a shortcut to immediate logging to
+    `sys.stdout`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Use of these flags is roughly equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: It’s important to note that these two flags work **independently** of any existing
+    logging configuration, and will make use of `logging.basicConfig()` unconditionally.
+    This has the effect of being configured **in addition** to any existing logger
+    configurations. Therefore, **when configuring logging explicitly, ensure all echo
+    flags are set to False at all times**, to avoid getting duplicate log lines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting the Logging Name
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The logger name of instance such as an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool")
+    defaults to using a truncated hex identifier string. To set this to a specific
+    name, use the [`create_engine.logging_name`](#sqlalchemy.create_engine.params.logging_name
+    "sqlalchemy.create_engine") and [`create_engine.pool_logging_name`](#sqlalchemy.create_engine.params.pool_logging_name
+    "sqlalchemy.create_engine") with [`sqlalchemy.create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"); the name will be appended to the logging name `sqlalchemy.engine.Engine`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`create_engine.logging_name`](#sqlalchemy.create_engine.params.logging_name
+    "sqlalchemy.create_engine") and [`create_engine.pool_logging_name`](#sqlalchemy.create_engine.params.pool_logging_name
+    "sqlalchemy.create_engine") parameters may also be used in conjunction with [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine") and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine"). However, an unavoidable double logging condition
+    will occur if other engines are created with echo flags set to True and **no**
+    logging name. This is because a handler will be added automatically for `sqlalchemy.engine.Engine`
+    which will log messages both for the name-less engine as well as engines with
+    logging names. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above scenario will double log `SELECT 3`. To resolve, ensure all engines
+    have a `logging_name` set, or use explicit logger / handler setup without using
+    [`create_engine.echo`](#sqlalchemy.create_engine.params.echo "sqlalchemy.create_engine")
+    and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool "sqlalchemy.create_engine").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Setting Per-Connection / Sub-Engine Tokens'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the logging name is appropriate to establish on an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object that is long lived, it’s not flexible enough
+    to accommodate for an arbitrarily large list of names, for the case of tracking
+    individual connections and/or transactions in log messages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this use case, the log message itself generated by the [`Connection`](connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") and [`Result`](connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") objects may be augmented with additional tokens such
+    as transaction or request identifiers. The [`Connection.execution_options.logging_token`](connections.html#sqlalchemy.engine.Connection.execution_options.params.logging_token
+    "sqlalchemy.engine.Connection.execution_options") parameter accepts a string argument
+    that may be used to establish per-connection tracking tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Connection.execution_options.logging_token`](connections.html#sqlalchemy.engine.Connection.execution_options.params.logging_token
+    "sqlalchemy.engine.Connection.execution_options") parameter may also be established
+    on engines or sub-engines via [`create_engine.execution_options`](#sqlalchemy.create_engine.params.execution_options
+    "sqlalchemy.create_engine") or [`Engine.execution_options()`](connections.html#sqlalchemy.engine.Engine.execution_options
+    "sqlalchemy.engine.Engine.execution_options"). This may be useful to apply different
+    logging tokens to different components of an application without creating new
+    engines:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hiding Parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The logging emitted by [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") also indicates an excerpt of the SQL parameters that
+    are present for a particular statement. To prevent these parameters from being
+    logged for privacy purposes, enable the [`create_engine.hide_parameters`](#sqlalchemy.create_engine.params.hide_parameters
+    "sqlalchemy.create_engine") flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]  ## Supported Databases'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy includes many [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") implementations for various backends. Dialects for
+    the most common databases are included with SQLAlchemy; a handful of others require
+    an additional install of a separate dialect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the section [Dialects](../dialects/index.html) for information on the various
+    backends available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Database URLs'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    function produces an [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    object based on a URL. The format of the URL generally follows [RFC-1738](https://www.ietf.org/rfc/rfc1738.txt),
+    with some exceptions, including that underscores, not dashes or periods, are accepted
+    within the “scheme” portion. URLs typically include username, password, hostname,
+    database name fields, as well as optional keyword arguments for additional configuration.
+    In some cases a file path is accepted, and in others a “data source name” replaces
+    the “host” and “database” portions. The typical form of a database URL is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: Dialect names include the identifying name of the SQLAlchemy dialect, a name
+    such as `sqlite`, `mysql`, `postgresql`, `oracle`, or `mssql`. The drivername
+    is the name of the DBAPI to be used to connect to the database using all lowercase
+    letters. If not specified, a “default” DBAPI will be imported if available - this
+    default is typically the most widely known driver available for that backend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Escaping Special Characters such as @ signs in Passwords
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When constructing a fully formed URL string to pass to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), **special characters such as those that may be used
+    in the user and password need to be URL encoded to be parsed correctly.**. **This
+    includes the @ sign**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below is an example of a URL that includes the password `"kx@jj5/g"`, where
+    the “at” sign and slash characters are represented as `%40` and `%2F`, respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The encoding for the above password can be generated using [urllib.parse](https://docs.python.org/3/library/urllib.parse.html):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The URL may then be passed as a string to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: As an alternative to escaping special characters in order to create a complete
+    URL string, the object passed to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") may instead be an instance of the [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL") object, which bypasses the parsing phase and can accommodate
+    for unescaped strings directly. See the next section for an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: Support for `@` signs in hostnames and database names
+    has been fixed. As a side effect of this fix, `@` signs in passwords must be escaped.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating URLs Programmatically
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The value passed to [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    may be an instance of [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL"),
+    instead of a plain string, which bypasses the need for string parsing to be used,
+    and therefore does not need an escaped URL string to be provided.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object is created
+    using the [`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create")
+    constructor method, passing all fields individually. Special characters such as
+    those within passwords may be passed without any modification:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The constructed [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    may then be passed directly to [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    in place of a string argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Backend-Specific URLs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Examples for common connection styles follow below. For a full index of detailed
+    information on all included dialects as well as links to third-party dialects,
+    see [Dialects](../dialects/index.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: PostgreSQL
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The PostgreSQL dialect uses psycopg2 as the default DBAPI. Other PostgreSQL
+    DBAPIs include pg8000 and asyncpg:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to PostgreSQL at [PostgreSQL](../dialects/postgresql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: MySQL
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The MySQL dialect uses mysqlclient as the default DBAPI. There are other MySQL
+    DBAPIs available, including PyMySQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to MySQL at [MySQL and MariaDB](../dialects/mysql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The Oracle dialect uses cx_oracle as the default DBAPI:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to Oracle at [Oracle](../dialects/oracle.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Microsoft SQL Server
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The SQL Server dialect uses pyodbc as the default DBAPI. pymssql is also available:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to SQL Server at [Microsoft SQL Server](../dialects/mssql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: SQLite connects to file-based databases, using the Python built-in module `sqlite3`
+    by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As SQLite connects to local files, the URL format is slightly different. The
+    “file” portion of the URL is the filename of the database. For a relative file
+    path, this requires three slashes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And for an absolute file path, the three slashes are followed by the absolute
+    path:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To use a SQLite `:memory:` database, specify an empty URL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to SQLite at [SQLite](../dialects/sqlite.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Others
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: See [Dialects](../dialects/index.html), the top-level page for all additional
+    dialect documentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Escaping Special Characters such as @ signs in Passwords
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When constructing a fully formed URL string to pass to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"), **special characters such as those that may be used
+    in the user and password need to be URL encoded to be parsed correctly.**. **This
+    includes the @ sign**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below is an example of a URL that includes the password `"kx@jj5/g"`, where
+    the “at” sign and slash characters are represented as `%40` and `%2F`, respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The encoding for the above password can be generated using [urllib.parse](https://docs.python.org/3/library/urllib.parse.html):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The URL may then be passed as a string to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: As an alternative to escaping special characters in order to create a complete
+    URL string, the object passed to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") may instead be an instance of the [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL") object, which bypasses the parsing phase and can accommodate
+    for unescaped strings directly. See the next section for an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: Support for `@` signs in hostnames and database names
+    has been fixed. As a side effect of this fix, `@` signs in passwords must be escaped.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating URLs Programmatically
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The value passed to [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    may be an instance of [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL"),
+    instead of a plain string, which bypasses the need for string parsing to be used,
+    and therefore does not need an escaped URL string to be provided.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object is created
+    using the [`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create")
+    constructor method, passing all fields individually. Special characters such as
+    those within passwords may be passed without any modification:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The constructed [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    may then be passed directly to [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    in place of a string argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Backend-Specific URLs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Examples for common connection styles follow below. For a full index of detailed
+    information on all included dialects as well as links to third-party dialects,
+    see [Dialects](../dialects/index.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: PostgreSQL
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The PostgreSQL dialect uses psycopg2 as the default DBAPI. Other PostgreSQL
+    DBAPIs include pg8000 and asyncpg:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to PostgreSQL at [PostgreSQL](../dialects/postgresql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: MySQL
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The MySQL dialect uses mysqlclient as the default DBAPI. There are other MySQL
+    DBAPIs available, including PyMySQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to MySQL at [MySQL and MariaDB](../dialects/mysql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The Oracle dialect uses cx_oracle as the default DBAPI:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to Oracle at [Oracle](../dialects/oracle.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Microsoft SQL Server
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The SQL Server dialect uses pyodbc as the default DBAPI. pymssql is also available:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to SQL Server at [Microsoft SQL Server](../dialects/mssql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: SQLite connects to file-based databases, using the Python built-in module `sqlite3`
+    by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As SQLite connects to local files, the URL format is slightly different. The
+    “file” portion of the URL is the filename of the database. For a relative file
+    path, this requires three slashes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And for an absolute file path, the three slashes are followed by the absolute
+    path:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To use a SQLite `:memory:` database, specify an empty URL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to SQLite at [SQLite](../dialects/sqlite.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Others
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: See [Dialects](../dialects/index.html), the top-level page for all additional
+    dialect documentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PostgreSQL
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The PostgreSQL dialect uses psycopg2 as the default DBAPI. Other PostgreSQL
+    DBAPIs include pg8000 and asyncpg:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to PostgreSQL at [PostgreSQL](../dialects/postgresql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: MySQL
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The MySQL dialect uses mysqlclient as the default DBAPI. There are other MySQL
+    DBAPIs available, including PyMySQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to MySQL at [MySQL and MariaDB](../dialects/mysql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The Oracle dialect uses cx_oracle as the default DBAPI:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to Oracle at [Oracle](../dialects/oracle.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Microsoft SQL Server
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The SQL Server dialect uses pyodbc as the default DBAPI. pymssql is also available:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to SQL Server at [Microsoft SQL Server](../dialects/mssql.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLite
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: SQLite connects to file-based databases, using the Python built-in module `sqlite3`
+    by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As SQLite connects to local files, the URL format is slightly different. The
+    “file” portion of the URL is the filename of the database. For a relative file
+    path, this requires three slashes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And for an absolute file path, the three slashes are followed by the absolute
+    path:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To use a SQLite `:memory:` database, specify an empty URL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: More notes on connecting to SQLite at [SQLite](../dialects/sqlite.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Others
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: See [Dialects](../dialects/index.html), the top-level page for all additional
+    dialect documentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Engine Creation API'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [create_engine](#sqlalchemy.create_engine)(url, **kwargs) | Create a new
+    [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    instance. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [create_mock_engine](#sqlalchemy.create_mock_engine)(url, executor, **kw)
+    | Create a “mock” engine used for echoing DDL. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [create_pool_from_url](#sqlalchemy.create_pool_from_url)(url, **kwargs) |
+    Create a pool instance from the given url. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [engine_from_config](#sqlalchemy.engine_from_config)(configuration[, prefix],
+    **kwargs) | Create a new Engine instance using a configuration dictionary. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [make_url](#sqlalchemy.engine.make_url)(name_or_url) | Given a string, produce
+    a new URL instance. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [URL](#sqlalchemy.engine.URL) | Represent the components of a URL used to
+    connect to a database. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The standard calling form is to send the [URL](#database-urls) as the first
+    positional argument, usually a string that indicates database dialect and connection
+    arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Please review [Database URLs](#database-urls) for general guidelines in composing
+    URL strings. In particular, special characters, such as those often part of passwords,
+    must be URL encoded to be properly parsed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Additional keyword arguments may then follow it which establish various options
+    on the resulting [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    and its underlying [`Dialect`](internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    and [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool") constructs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: The string form of the URL is `dialect[+driver]://user:password@host/dbname[?key=value..]`,
+    where `dialect` is a database name such as `mysql`, `oracle`, `postgresql`, etc.,
+    and `driver` the name of a DBAPI, such as `psycopg2`, `pyodbc`, `cx_oracle`, etc.
+    Alternatively, the URL can be an instance of [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.url.URL").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`**kwargs` takes a wide variety of options which are routed towards their appropriate
+    components. Arguments may be specific to the [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"), the underlying [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect"), as well as the [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool"). Specific dialects also accept keyword arguments that
+    are unique to that dialect. Here, we describe the parameters that are common to
+    most [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    usage.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once established, the newly resulting [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") will request a connection from the underlying [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool") once [`Engine.connect()`](connections.html#sqlalchemy.engine.Engine.connect
+    "sqlalchemy.engine.Engine.connect") is called, or a method which depends on it
+    such as `Engine.execute()` is invoked. The [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool") in turn will establish the first actual DBAPI connection
+    when this request is received. The [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") call itself does **not** establish any actual DBAPI
+    connections directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Engine Configuration](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Dialects](../dialects/index.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Working with Engines and Connections](connections.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`connect_args` – a dictionary of options which will be passed directly to the
+    DBAPI’s `connect()` method as additional keyword arguments. See the example at
+    [Custom DBAPI connect() arguments / on-connect routines](#custom-dbapi-args).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`creator` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: a callable which returns a DBAPI connection. This creation function will be
+    passed to the underlying connection pool and will be used to create all new database
+    connections. Usage of this function causes connection parameters specified in
+    the URL argument to be bypassed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: This hook is not as flexible as the newer [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") hook which allows complete control
+    over how a connection is made to the database, given the full set of URL arguments
+    and state beforehand.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") - event hook that allows full control
+    over DBAPI connection mechanics.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Custom DBAPI connect() arguments / on-connect routines](#custom-dbapi-args)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`echo=False` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, the Engine will log all statements as well as a `repr()` of their parameter
+    lists to the default log handler, which defaults to `sys.stdout` for output. If
+    set to the string `"debug"`, result rows will be printed to the standard output
+    as well. The `echo` attribute of `Engine` can be modified at any time to turn
+    logging on and off; direct control of logging is also available using the standard
+    Python `logging` module.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`echo_pool=False` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, the connection pool will log informational output such as when connections
+    are invalidated as well as when connections are recycled to the default log handler,
+    which defaults to `sys.stdout` for output. If set to the string `"debug"`, the
+    logging will include pool checkouts and checkins. Direct control of logging is
+    also available using the standard Python `logging` module.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`empty_in_strategy` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: No longer used; SQLAlchemy now uses “empty set” behavior for IN in all cases.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 1.4: The [`create_engine.empty_in_strategy`](#sqlalchemy.create_engine.params.empty_in_strategy
+    "sqlalchemy.create_engine") keyword is deprecated, and no longer has any effect.
+    All IN expressions are now rendered using the “expanding parameter” strategy which
+    renders a set of boundexpressions, or an “empty set” SELECT, at statement executiontime.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`enable_from_linting` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: defaults to True. Will emit a warning if a given SELECT statement is found to
+    have un-linked FROM elements which would cause a cartesian product.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Built-in FROM linting will warn for any potential cartesian products in a
+    SELECT statement](../changelog/migration_14.html#change-4737)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`execution_options` – Dictionary execution options which will be applied to
+    all connections. See [`Connection.execution_options()`](connections.html#sqlalchemy.engine.Connection.execution_options
+    "sqlalchemy.engine.Connection.execution_options")'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`future` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use the 2.0 style [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    and [`Connection`](connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    API.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: As of SQLAlchemy 2.0, this parameter is present for backwards compatibility
+    only and must remain at its default value of `True`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`create_engine.future`](#sqlalchemy.create_engine.params.future "sqlalchemy.create_engine")
+    parameter will be deprecated in a subsequent 2.x release and eventually removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: All [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") objects are “future” style engines and there is no
+    longer a `future=False` mode of operation.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[SQLAlchemy 2.0 - Major Migration Guide](../changelog/migration_20.html)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`hide_parameters` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Boolean, when set to True, SQL statement parameters will not be displayed in
+    INFO logging nor will they be formatted into the string representation of [`StatementError`](exceptions.html#sqlalchemy.exc.StatementError
+    "sqlalchemy.exc.StatementError") objects.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.3.8.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`implicit_returning=True` – Legacy parameter that may only be set to True.
+    In SQLAlchemy 2.0, this parameter does nothing. In order to disable “implicit
+    returning” for statements invoked by the ORM, configure this on a per-table basis
+    using the [`Table.implicit_returning`](metadata.html#sqlalchemy.schema.Table.params.implicit_returning
+    "sqlalchemy.schema.Table") parameter.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`insertmanyvalues_page_size` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: number of rows to format into an INSERT statement when the statement uses “insertmanyvalues”
+    mode, which is a paged form of bulk insert that is used for many backends when
+    using [executemany](../glossary.html#term-executemany) execution typically in
+    conjunction with RETURNING. Defaults to 1000, but may also be subject to dialect-specific
+    limiting factors which may override this value on a per-statement basis.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[“Insert Many Values” Behavior for INSERT statements](connections.html#engine-insertmanyvalues)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Controlling the Batch Size](connections.html#engine-insertmanyvalues-page-size)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`Connection.execution_options.insertmanyvalues_page_size`](connections.html#sqlalchemy.engine.Connection.execution_options.params.insertmanyvalues_page_size
+    "sqlalchemy.engine.Connection.execution_options")'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`isolation_level` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: optional string name of an isolation level which will be set on all new connections
+    unconditionally. Isolation levels are typically some subset of the string names
+    `"SERIALIZABLE"`, `"REPEATABLE READ"`, `"READ COMMITTED"`, `"READ UNCOMMITTED"`
+    and `"AUTOCOMMIT"` based on backend.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`create_engine.isolation_level`](#sqlalchemy.create_engine.params.isolation_level
+    "sqlalchemy.create_engine") parameter is in contrast to the [`Connection.execution_options.isolation_level`](connections.html#sqlalchemy.engine.Connection.execution_options.params.isolation_level
+    "sqlalchemy.engine.Connection.execution_options") execution option, which may
+    be set on an individual [`Connection`](connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), as well as the same parameter passed to [`Engine.execution_options()`](connections.html#sqlalchemy.engine.Engine.execution_options
+    "sqlalchemy.engine.Engine.execution_options"), where it may be used to create
+    multiple engines with different isolation levels that share a common connection
+    pool and dialect.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: The [`create_engine.isolation_level`](#sqlalchemy.create_engine.params.isolation_level
+    "sqlalchemy.create_engine") parameter has been generalized to work on all dialects
+    which support the concept of isolation level, and is provided as a more succinct,
+    up front configuration switch in contrast to the execution option which is more
+    of an ad-hoc programmatic option.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Setting Transaction Isolation Levels including DBAPI Autocommit](connections.html#dbapi-autocommit)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`json_deserializer` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: for dialects that support the [`JSON`](type_basics.html#sqlalchemy.types.JSON
+    "sqlalchemy.types.JSON") datatype, this is a Python callable that will convert
+    a JSON string to a Python object. By default, the Python `json.loads` function
+    is used.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3.7: The SQLite dialect renamed this from `_json_deserializer`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`json_serializer` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: for dialects that support the [`JSON`](type_basics.html#sqlalchemy.types.JSON
+    "sqlalchemy.types.JSON") datatype, this is a Python callable that will render
+    a given object as JSON. By default, the Python `json.dumps` function is used.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3.7: The SQLite dialect renamed this from `_json_serializer`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`label_length=None` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: optional integer value which limits the size of dynamically generated column
+    labels to that many characters. If less than 6, labels are generated as “_(counter)”.
+    If `None`, the value of `dialect.max_identifier_length`, which may be affected
+    via the [`create_engine.max_identifier_length`](#sqlalchemy.create_engine.params.max_identifier_length
+    "sqlalchemy.create_engine") parameter, is used instead. The value of [`create_engine.label_length`](#sqlalchemy.create_engine.params.label_length
+    "sqlalchemy.create_engine") may not be larger than that of [`create_engine.max_identfier_length`](#sqlalchemy.create_engine.params.max_identfier_length
+    "sqlalchemy.create_engine").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`create_engine.max_identifier_length`](#sqlalchemy.create_engine.params.max_identifier_length
+    "sqlalchemy.create_engine")'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`logging_name` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: String identifier which will be used within the “name” field of logging records
+    generated within the “sqlalchemy.engine” logger. Defaults to a hexstring of the
+    object’s id.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`Connection.execution_options.logging_token`](connections.html#sqlalchemy.engine.Connection.execution_options.params.logging_token
+    "sqlalchemy.engine.Connection.execution_options")'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`max_identifier_length` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: integer; override the max_identifier_length determined by the dialect. if `None`
+    or zero, has no effect. This is the database’s configured maximum number of characters
+    that may be used in a SQL identifier such as a table name, column name, or label
+    name. All dialects determine this value automatically, however in the case of
+    a new database version for which this value has changed but SQLAlchemy’s dialect
+    has not been adjusted, the value may be passed here.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.3.9.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`create_engine.label_length`](#sqlalchemy.create_engine.params.label_length
+    "sqlalchemy.create_engine")'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`max_overflow=10` – the number of connections to allow in connection pool “overflow”,
+    that is connections that can be opened above and beyond the pool_size setting,
+    which defaults to five. this is only used with [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`module=None` – reference to a Python module object (the module itself, not
+    its string name). Specifies an alternate DBAPI module to be used by the engine’s
+    dialect. Each sub-dialect references a specific DBAPI which will be imported before
+    first connect. This parameter causes the import to be bypassed, and the given
+    module to be used instead. Can be used for testing of DBAPIs as well as to inject
+    “mock” DBAPI implementations into the [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`paramstyle=None` – The [paramstyle](https://legacy.python.org/dev/peps/pep-0249/#paramstyle)
+    to use when rendering bound parameters. This style defaults to the one recommended
+    by the DBAPI itself, which is retrieved from the `.paramstyle` attribute of the
+    DBAPI. However, most DBAPIs accept more than one paramstyle, and in particular
+    it may be desirable to change a “named” paramstyle into a “positional” one, or
+    vice versa. When this attribute is passed, it should be one of the values `"qmark"`,
+    `"numeric"`, `"named"`, `"format"` or `"pyformat"`, and should correspond to a
+    parameter style known to be supported by the DBAPI in use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pool=None` – an already-constructed instance of [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool"), such as a [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") instance. If non-None, this pool will be used directly
+    as the underlying connection pool for the engine, bypassing whatever connection
+    parameters are present in the URL argument. For information on constructing connection
+    pools manually, see [Connection Pooling](pooling.html).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`poolclass=None` – a [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool")
+    subclass, which will be used to create a connection pool instance using the connection
+    parameters given in the URL. Note this differs from `pool` in that you don’t actually
+    instantiate the pool in this case, you just indicate what type of pool to be used.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pool_logging_name` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: String identifier which will be used within the “name” field of logging records
+    generated within the “sqlalchemy.pool” logger. Defaults to a hexstring of the
+    object’s id.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Configuring Logging](#dbengine-logging) - further detail on how to configure
+    logging.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_pre_ping` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: boolean, if True will enable the connection pool “pre-ping” feature that tests
+    connections for liveness upon each checkout.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Disconnect Handling - Pessimistic](pooling.html#pool-disconnects-pessimistic)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_size=5` – the number of connections to keep open inside the connection
+    pool. This used with [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool "sqlalchemy.pool.QueuePool")
+    as well as [`SingletonThreadPool`](pooling.html#sqlalchemy.pool.SingletonThreadPool
+    "sqlalchemy.pool.SingletonThreadPool"). With [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool"), a `pool_size` setting of 0 indicates no limit; to
+    disable pooling, set `poolclass` to [`NullPool`](pooling.html#sqlalchemy.pool.NullPool
+    "sqlalchemy.pool.NullPool") instead.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pool_recycle=-1` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: this setting causes the pool to recycle connections after the given number of
+    seconds has passed. It defaults to -1, or no timeout. For example, setting to
+    3600 means connections will be recycled after one hour. Note that MySQL in particular
+    will disconnect automatically if no activity is detected on a connection for eight
+    hours (although this is configurable with the MySQLDB connection itself and the
+    server configuration as well).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Setting Pool Recycle](pooling.html#pool-setting-recycle)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_reset_on_return=''rollback''` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: set the [`Pool.reset_on_return`](pooling.html#sqlalchemy.pool.Pool.params.reset_on_return
+    "sqlalchemy.pool.Pool") parameter of the underlying [`Pool`](pooling.html#sqlalchemy.pool.Pool
+    "sqlalchemy.pool.Pool") object, which can be set to the values `"rollback"`, `"commit"`,
+    or `None`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Reset On Return](pooling.html#pool-reset-on-return)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_timeout=30` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: number of seconds to wait before giving up on getting a connection from the
+    pool. This is only used with [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool"). This can be a float but is subject to the limitations
+    of Python time functions which may not be reliable in the tens of milliseconds.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`pool_use_lifo=False` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: use LIFO (last-in-first-out) when retrieving connections from [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") instead of FIFO (first-in-first-out). Using LIFO,
+    a server-side timeout scheme can reduce the number of connections used during
+    non- peak periods of use. When planning for server-side timeouts, ensure that
+    a recycle or pre-ping strategy is in use to gracefully handle stale connections.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.3.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[Using FIFO vs. LIFO](pooling.html#pool-use-lifo)'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[Dealing with Disconnects](pooling.html#pool-disconnects)'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`plugins` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: string list of plugin names to load. See [`CreateEnginePlugin`](connections.html#sqlalchemy.engine.CreateEnginePlugin
+    "sqlalchemy.engine.CreateEnginePlugin") for background.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.2.3.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`query_cache_size` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: size of the cache used to cache the SQL string form of queries. Set to zero
+    to disable caching.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The cache is pruned of its least recently used items when its size reaches N
+    * 1.5\. Defaults to 500, meaning the cache will always store at least 500 SQL
+    statements when filled, and will grow up to 750 items at which point it is pruned
+    back down to 500 by removing the 250 least recently used items.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Caching is accomplished on a per-statement basis by generating a cache key that
+    represents the statement’s structure, then generating string SQL for the current
+    dialect only if that key is not present in the cache. All statements support caching,
+    however some features such as an INSERT with a large set of parameters will intentionally
+    bypass the cache. SQL logging will indicate statistics for each statement whether
+    or not it were pull from the cache.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: some ORM functions related to unit-of-work persistence as well as some attribute
+    loading strategies will make use of individual per-mapper caches outside of the
+    main cache.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[SQL Compilation Caching](connections.html#sql-caching)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`use_insertmanyvalues` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: True by default, use the “insertmanyvalues” execution style for INSERT..RETURNING
+    statements by default.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[“Insert Many Values” Behavior for INSERT statements](connections.html#engine-insertmanyvalues)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new Engine instance using a configuration dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dictionary is typically produced from a config file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The keys of interest to `engine_from_config()` should be prefixed, e.g. `sqlalchemy.url`,
+    `sqlalchemy.echo`, etc. The ‘prefix’ argument indicates the prefix to be searched
+    for. Each matching key (after the prefix is stripped) is treated as though it
+    were the corresponding keyword argument to a [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") call.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The only required key is (assuming the default prefix) `sqlalchemy.url`, which
+    provides the [database URL](#database-urls).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A select set of keyword arguments will be “coerced” to their expected type based
+    on string values. The set of arguments is extensible per-dialect using the `engine_config_types`
+    accessor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`configuration` – A dictionary (typically produced from a config file, but
+    this is not a requirement). Items whose keys start with the value of ‘prefix’
+    will have that prefix stripped, and will then be passed to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`prefix` – Prefix to match and then strip from keys in ‘configuration’.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`kwargs` – Each keyword argument to `engine_from_config()` itself overrides
+    the corresponding item taken from the ‘configuration’ dictionary. Keyword arguments
+    should *not* be prefixed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a “mock” engine used for echoing DDL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a utility function used for debugging or storing the output of DDL sequences
+    as generated by [`MetaData.create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all
+    "sqlalchemy.schema.MetaData.create_all") and related methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The function accepts a URL which is used only to determine the kind of dialect
+    to be used, as well as an “executor” callable function which will receive a SQL
+    expression object and parameters, which can then be echoed or otherwise printed.
+    The executor’s return value is not handled, nor does the engine allow regular
+    string statements to be invoked, and is therefore only useful for DDL that is
+    sent to the database without receiving any results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`url` – A string URL which typically needs to contain only the database backend
+    name.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`executor` – a callable which receives the arguments `sql`, `*multiparams`
+    and `**params`. The `sql` parameter is typically an instance of [`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement"), which can then be compiled into a string
+    using `ExecutableDDLElement.compile()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'New in version 1.4: - the [`create_mock_engine()`](#sqlalchemy.create_mock_engine
+    "sqlalchemy.create_mock_engine") function replaces the previous “mock” engine
+    strategy used with [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[How can I get the CREATE TABLE/ DROP TABLE output as a string?](../faq/metadata_schema.html#faq-ddl-as-string)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given a string, produce a new URL instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The format of the URL generally follows [RFC-1738](https://www.ietf.org/rfc/rfc1738.txt),
+    with some exceptions, including that underscores, and not dashes or periods, are
+    accepted within the “scheme” portion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If a [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object is passed,
+    it is returned as is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Database URLs](#database-urls)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a pool instance from the given url.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If `poolclass` is not provided the pool class used is selected using the dialect
+    specified in the URL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The arguments passed to [`create_pool_from_url()`](#sqlalchemy.create_pool_from_url
+    "sqlalchemy.create_pool_from_url") are identical to the pool argument passed to
+    the [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent the components of a URL used to connect to a database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: URLs are typically constructed from a fully formatted URL string, where the
+    [`make_url()`](#sqlalchemy.engine.make_url "sqlalchemy.engine.make_url") function
+    is used internally by the [`create_engine()`](#sqlalchemy.create_engine "sqlalchemy.create_engine")
+    function in order to parse the URL string into its individual components, which
+    are then used to construct a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    object. When parsing from a formatted URL string, the parsing format generally
+    follows [RFC-1738](https://www.ietf.org/rfc/rfc1738.txt), with some exceptions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object may also be
+    produced directly, either by using the [`make_url()`](#sqlalchemy.engine.make_url
+    "sqlalchemy.engine.make_url") function with a fully formed URL string, or by using
+    the [`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create")
+    constructor in order to construct a [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    programmatically given individual fields. The resulting [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL") object may be passed directly to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") in place of a string argument, which will bypass the
+    usage of [`make_url()`](#sqlalchemy.engine.make_url "sqlalchemy.engine.make_url")
+    within the engine’s creation process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: The [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    object is now an immutable object. To create a URL, use the [`make_url()`](#sqlalchemy.engine.make_url
+    "sqlalchemy.engine.make_url") or [`URL.create()`](#sqlalchemy.engine.URL.create
+    "sqlalchemy.engine.URL.create") function / method. To modify a [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL"), use methods like [`URL.set()`](#sqlalchemy.engine.URL.set
+    "sqlalchemy.engine.URL.set") and [`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict
+    "sqlalchemy.engine.URL.update_query_dict") to return a new [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL") object with modifications. See notes for this change
+    at [The URL object is now immutable](../changelog/migration_14.html#change-5526).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Database URLs](#database-urls)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") contains the following
+    attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.drivername`](#sqlalchemy.engine.URL.drivername "sqlalchemy.engine.URL.drivername"):
+    database backend and driver name, such as `postgresql+psycopg2`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.username`](#sqlalchemy.engine.URL.username "sqlalchemy.engine.URL.username"):
+    username string'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.password`](#sqlalchemy.engine.URL.password "sqlalchemy.engine.URL.password"):
+    password string'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.host`](#sqlalchemy.engine.URL.host "sqlalchemy.engine.URL.host"): string
+    hostname'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.port`](#sqlalchemy.engine.URL.port "sqlalchemy.engine.URL.port"): integer
+    port number'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.database`](#sqlalchemy.engine.URL.database "sqlalchemy.engine.URL.database"):
+    string database name'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query"):
+    an immutable mapping representing the query string. contains strings for keys
+    and either strings or tuples of strings for values.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[create()](#sqlalchemy.engine.URL.create), [database](#sqlalchemy.engine.URL.database),
+    [difference_update_query()](#sqlalchemy.engine.URL.difference_update_query), [drivername](#sqlalchemy.engine.URL.drivername),
+    [get_backend_name()](#sqlalchemy.engine.URL.get_backend_name), [get_dialect()](#sqlalchemy.engine.URL.get_dialect),
+    [get_driver_name()](#sqlalchemy.engine.URL.get_driver_name), [host](#sqlalchemy.engine.URL.host),
+    [normalized_query](#sqlalchemy.engine.URL.normalized_query), [password](#sqlalchemy.engine.URL.password),
+    [port](#sqlalchemy.engine.URL.port), [query](#sqlalchemy.engine.URL.query), [render_as_string()](#sqlalchemy.engine.URL.render_as_string),
+    [set()](#sqlalchemy.engine.URL.set), [translate_connect_args()](#sqlalchemy.engine.URL.translate_connect_args),
+    [update_query_dict()](#sqlalchemy.engine.URL.update_query_dict), [update_query_pairs()](#sqlalchemy.engine.URL.update_query_pairs),
+    [update_query_string()](#sqlalchemy.engine.URL.update_query_string), [username](#sqlalchemy.engine.URL.username)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.engine.URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    (`builtins.tuple`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Database URLs](#database-urls)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`drivername` – the name of the database backend. This name will correspond
+    to a module in sqlalchemy/databases or a third party plug-in.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`username` – The user name.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`password` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: database password. Is typically a string, but may also be an object that can
+    be stringified with `str()`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The password string should **not** be URL encoded when passed as an argument
+    to [`URL.create()`](#sqlalchemy.engine.URL.create "sqlalchemy.engine.URL.create");
+    the string should contain the password characters exactly as they would be typed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: A password-producing object will be stringified only **once** per [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object. For dynamic password generation per connect,
+    see [Generating dynamic authentication tokens](#engines-dynamic-tokens).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`host` – The name of the host.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`port` – The port number.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`database` – The database name.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query` – A dictionary of string keys to string values to be passed to the
+    dialect and/or the DBAPI upon connect. To specify non-string parameters to a Python
+    DBAPI directly, use the [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") parameter to [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"). See also [`URL.normalized_query`](#sqlalchemy.engine.URL.normalized_query
+    "sqlalchemy.engine.URL.normalized_query") for a dictionary that is consistently
+    string->list of string.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.4: The [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    object is now an **immutable named tuple**. In addition, the `query` dictionary
+    is also immutable. To create a URL, use the `make_url()` or [`URL.create()`](#sqlalchemy.engine.URL.create
+    "sqlalchemy.engine.URL.create") function/ method. To modify a [`URL`](#sqlalchemy.engine.URL
+    "sqlalchemy.engine.URL"), use the [`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")
+    and `URL.update_query()` methods.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: database name
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remove the given names from the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    dictionary, returning the new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Equivalent to using [`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict "sqlalchemy.engine.URL.update_query_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: database backend and driver name, such as `postgresql+psycopg2`
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the backend name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the name that corresponds to the database backend in use, and is the
+    portion of the [`URL.drivername`](#sqlalchemy.engine.URL.drivername "sqlalchemy.engine.URL.drivername")
+    that is to the left of the plus sign.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the SQLAlchemy [`Dialect`](internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    class corresponding to this URL’s driver name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the backend name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the name that corresponds to the DBAPI driver in use, and is the portion
+    of the [`URL.drivername`](#sqlalchemy.engine.URL.drivername "sqlalchemy.engine.URL.drivername")
+    that is to the right of the plus sign.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the [`URL.drivername`](#sqlalchemy.engine.URL.drivername "sqlalchemy.engine.URL.drivername")
+    does not include a plus sign, then the default [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") for this [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL")
+    is imported in order to get the driver name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: hostname or IP number. May also be a data source name for some drivers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    dictionary with values normalized into sequences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    dictionary may contain either string values or sequences of string values to differentiate
+    between parameters that are specified multiple times in the query string, code
+    that needs to handle multiple parameters generically will wish to use this attribute
+    so that all parameters present are presented as sequences. Inspiration is from
+    Python’s `urllib.parse.parse_qs` function. E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: password, which is normally a string but may also be any object that has a `__str__()`
+    method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: integer port number
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'an immutable mapping representing the query string. contains strings for keys
+    and either strings or tuples of strings for values, e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.normalized_query`](#sqlalchemy.engine.URL.normalized_query "sqlalchemy.engine.URL.normalized_query")
+    - normalizes all values into sequences for consistent processing'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Methods for altering the contents of [`URL.query`](#sqlalchemy.engine.URL.query
+    "sqlalchemy.engine.URL.query"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict "sqlalchemy.engine.URL.update_query_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_string()`](#sqlalchemy.engine.URL.update_query_string "sqlalchemy.engine.URL.update_query_string")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_pairs()`](#sqlalchemy.engine.URL.update_query_pairs "sqlalchemy.engine.URL.update_query_pairs")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.difference_update_query()`](#sqlalchemy.engine.URL.difference_update_query
+    "sqlalchemy.engine.URL.difference_update_query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: Render this [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object as
+    a string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is used when the `__str__()` or `__repr__()` methods are used. The
+    method directly includes additional options.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**hide_password** – Defaults to True. The password is not shown in the string
+    unless this is set to False.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: return a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    with modifications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Values are used if they are non-None. To set a value to `None` explicitly, use
+    the `URL._replace()` method adapted from `namedtuple`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`drivername` – new drivername'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`username` – new username'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`password` – new password'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`host` – new hostname'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`port` – new port'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`query` – new query parameters, passed a dict of string keys referring to string
+    or sequence of string values. Fully replaces the previous list of arguments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict "sqlalchemy.engine.URL.update_query_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: Translate url attributes into a dictionary of connection arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returns attributes of this url (host, database, username, password, port) as
+    a plain dictionary. The attribute names are used as the keys by default. Unset
+    or false attributes are omitted from the final dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`**kw` – Optional, alternate key names for url attributes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`names` – Deprecated. Same purpose as the keyword-based alternate names, but
+    correlates the name to the original positionally.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    with the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    parameter dictionary updated by the given dictionary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dictionary typically contains string keys and string values. In order to
+    represent a query parameter that is expressed multiple times, pass a sequence
+    of string values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`query_parameters` – A dictionary with string keys and values that are either
+    strings, or sequences of strings.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`append` – if True, parameters in the existing query string will not be removed;
+    new parameters will be in addition to those present. If left at its default of
+    False, keys present in the given query parameters will replace those of the existing
+    query string.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_string()`](#sqlalchemy.engine.URL.update_query_string "sqlalchemy.engine.URL.update_query_string")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_pairs()`](#sqlalchemy.engine.URL.update_query_pairs "sqlalchemy.engine.URL.update_query_pairs")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.difference_update_query()`](#sqlalchemy.engine.URL.difference_update_query
+    "sqlalchemy.engine.URL.difference_update_query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    with the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    parameter dictionary updated by the given sequence of key/value pairs
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`key_value_pairs` – A sequence of tuples containing two strings each.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`append` – if True, parameters in the existing query string will not be removed;
+    new parameters will be in addition to those present. If left at its default of
+    False, keys present in the given query parameters will replace those of the existing
+    query string.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.difference_update_query()`](#sqlalchemy.engine.URL.difference_update_query
+    "sqlalchemy.engine.URL.difference_update_query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.set()`](#sqlalchemy.engine.URL.set "sqlalchemy.engine.URL.set")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE129]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a new [`URL`](#sqlalchemy.engine.URL "sqlalchemy.engine.URL") object
+    with the [`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")
+    parameter dictionary updated by the given query string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'E.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE130]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`query_string` – a URL escaped query string, not including the question mark.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`append` – if True, parameters in the existing query string will not be removed;
+    new parameters will be in addition to those present. If left at its default of
+    False, keys present in the given query parameters will replace those of the existing
+    query string.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.query`](#sqlalchemy.engine.URL.query "sqlalchemy.engine.URL.query")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`URL.update_query_dict()`](#sqlalchemy.engine.URL.update_query_dict "sqlalchemy.engine.URL.update_query_dict")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE131]'
+  prefs: []
+  type: TYPE_PRE
+- en: username string
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pooling
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    will ask the connection pool for a connection when the `connect()` or `execute()`
+    methods are called. The default connection pool, [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool"), will open connections to the database on an as-needed
+    basis. As concurrent statements are executed, [`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool
+    "sqlalchemy.pool.QueuePool") will grow its pool of connections to a default size
+    of five, and will allow a default “overflow” of ten. Since the [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") is essentially “home base” for the connection pool,
+    it follows that you should keep a single [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") per database established within an application, rather
+    than creating a new one for each connection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`QueuePool`](pooling.html#sqlalchemy.pool.QueuePool "sqlalchemy.pool.QueuePool")
+    is not used by default for SQLite engines. See [SQLite](../dialects/sqlite.html)
+    for details on SQLite connection pool usage.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more information on connection pooling, see [Connection Pooling](pooling.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Custom DBAPI connect() arguments / on-connect routines'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For cases where special connection methods are needed, in the vast majority
+    of cases, it is most appropriate to use one of several hooks at the [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") level in order to customize this process. These are
+    described in the following sub-sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Special Keyword Arguments Passed to dbapi.connect()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All Python DBAPIs accept additional arguments beyond the basics of connecting.
+    Common parameters include those to specify character set encodings and timeout
+    values; more complex data includes special DBAPI constants and objects and SSL
+    sub-parameters. There are two rudimentary means of passing these arguments without
+    complexity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Add Parameters to the URL Query string
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Simple string values, as well as some numeric values and boolean flags, may
+    be often specified in the query string of the URL directly. A common example of
+    this is DBAPIs that accept an argument `encoding` for character encodings, such
+    as most MySQL DBAPIs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE132]'
+  prefs: []
+  type: TYPE_PRE
+- en: The advantage of using the query string is that additional DBAPI options may
+    be specified in configuration files in a manner that’s portable to the DBAPI specified
+    in the URL. The specific parameters passed through at this level vary by SQLAlchemy
+    dialect. Some dialects pass all arguments through as strings, while others will
+    parse for specific datatypes and move parameters to different places, such as
+    into driver-level DSNs and connect strings. As per-dialect behavior in this area
+    currently varies, the dialect documentation should be consulted for the specific
+    dialect in use to see if particular parameters are supported at this level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A general technique to display the exact arguments passed to the DBAPI for
+    a given URL may be performed using the [`Dialect.create_connect_args()`](internals.html#sqlalchemy.engine.Dialect.create_connect_args
+    "sqlalchemy.engine.Dialect.create_connect_args") method directly as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE133]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above `args, kwargs` pair is normally passed to the DBAPI as `dbapi.connect(*args,
+    **kwargs)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use the connect_args dictionary parameter
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'A more general system of passing any parameter to the `dbapi.connect()` function
+    that is guaranteed to pass all parameters at all times is the [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") dictionary parameter. This may be used for parameters
+    that are otherwise not handled by the dialect when added to the query string,
+    as well as when special sub-structures or objects must be passed to the DBAPI.
+    Sometimes it’s just that a particular flag must be sent as the `True` symbol and
+    the SQLAlchemy dialect is not aware of this keyword argument to coerce it from
+    its string form as presented in the URL. Below illustrates the use of a psycopg2
+    “connection factory” that replaces the underlying implementation the connection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE134]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another example is the pyodbc “timeout” parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE135]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example also illustrates that both URL “query string” parameters as
+    well as [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") may be used at the same time; in the case of pyodbc,
+    the “driver” keyword has special meaning within the URL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Controlling how parameters are passed to the DBAPI connect() function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Beyond manipulating the parameters passed to `connect()`, we can further customize
+    how the DBAPI `connect()` function itself is called using the [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") event hook. This hook is passed
+    the full `*args, **kwargs` that the dialect would send to `connect()`. These collections
+    can then be modified in place to alter how they are used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE136]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Generating dynamic authentication tokens'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") is also an ideal way to dynamically
+    insert an authentication token that might change over the lifespan of an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"). For example, if the token gets generated by `get_authentication_token()`
+    and passed to the DBAPI in a `token` parameter, this could be implemented as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE137]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Connecting to databases with access tokens](../dialects/mssql.html#mssql-pyodbc-access-tokens)
+    - a more concrete example involving SQL Server'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modifying the DBAPI connection after connect, or running commands after connect
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For a DBAPI connection that SQLAlchemy creates without issue, but where we
+    would like to modify the completed connection before it’s actually used, such
+    as for setting special flags or running certain commands, the [`PoolEvents.connect()`](events.html#sqlalchemy.events.PoolEvents.connect
+    "sqlalchemy.events.PoolEvents.connect") event hook is the most appropriate hook.
+    This hook is called for every new connection created, before it is used by SQLAlchemy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE138]'
+  prefs: []
+  type: TYPE_PRE
+- en: Fully Replacing the DBAPI `connect()` function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Finally, the [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") event hook can also allow us to
+    take over the connection process entirely by establishing the connection and returning
+    it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE139]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") hook supersedes the previous [`create_engine.creator`](#sqlalchemy.create_engine.params.creator
+    "sqlalchemy.create_engine") hook, which remains available. [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") has the distinct advantage that
+    the complete arguments parsed from the URL are also passed to the user-defined
+    function which is not the case with [`create_engine.creator`](#sqlalchemy.create_engine.params.creator
+    "sqlalchemy.create_engine").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Special Keyword Arguments Passed to dbapi.connect()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All Python DBAPIs accept additional arguments beyond the basics of connecting.
+    Common parameters include those to specify character set encodings and timeout
+    values; more complex data includes special DBAPI constants and objects and SSL
+    sub-parameters. There are two rudimentary means of passing these arguments without
+    complexity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Add Parameters to the URL Query string
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Simple string values, as well as some numeric values and boolean flags, may
+    be often specified in the query string of the URL directly. A common example of
+    this is DBAPIs that accept an argument `encoding` for character encodings, such
+    as most MySQL DBAPIs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE140]'
+  prefs: []
+  type: TYPE_PRE
+- en: The advantage of using the query string is that additional DBAPI options may
+    be specified in configuration files in a manner that’s portable to the DBAPI specified
+    in the URL. The specific parameters passed through at this level vary by SQLAlchemy
+    dialect. Some dialects pass all arguments through as strings, while others will
+    parse for specific datatypes and move parameters to different places, such as
+    into driver-level DSNs and connect strings. As per-dialect behavior in this area
+    currently varies, the dialect documentation should be consulted for the specific
+    dialect in use to see if particular parameters are supported at this level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A general technique to display the exact arguments passed to the DBAPI for
+    a given URL may be performed using the [`Dialect.create_connect_args()`](internals.html#sqlalchemy.engine.Dialect.create_connect_args
+    "sqlalchemy.engine.Dialect.create_connect_args") method directly as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE141]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above `args, kwargs` pair is normally passed to the DBAPI as `dbapi.connect(*args,
+    **kwargs)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use the connect_args dictionary parameter
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'A more general system of passing any parameter to the `dbapi.connect()` function
+    that is guaranteed to pass all parameters at all times is the [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") dictionary parameter. This may be used for parameters
+    that are otherwise not handled by the dialect when added to the query string,
+    as well as when special sub-structures or objects must be passed to the DBAPI.
+    Sometimes it’s just that a particular flag must be sent as the `True` symbol and
+    the SQLAlchemy dialect is not aware of this keyword argument to coerce it from
+    its string form as presented in the URL. Below illustrates the use of a psycopg2
+    “connection factory” that replaces the underlying implementation the connection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE142]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another example is the pyodbc “timeout” parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE143]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example also illustrates that both URL “query string” parameters as
+    well as [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") may be used at the same time; in the case of pyodbc,
+    the “driver” keyword has special meaning within the URL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Add Parameters to the URL Query string
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Simple string values, as well as some numeric values and boolean flags, may
+    be often specified in the query string of the URL directly. A common example of
+    this is DBAPIs that accept an argument `encoding` for character encodings, such
+    as most MySQL DBAPIs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE144]'
+  prefs: []
+  type: TYPE_PRE
+- en: The advantage of using the query string is that additional DBAPI options may
+    be specified in configuration files in a manner that’s portable to the DBAPI specified
+    in the URL. The specific parameters passed through at this level vary by SQLAlchemy
+    dialect. Some dialects pass all arguments through as strings, while others will
+    parse for specific datatypes and move parameters to different places, such as
+    into driver-level DSNs and connect strings. As per-dialect behavior in this area
+    currently varies, the dialect documentation should be consulted for the specific
+    dialect in use to see if particular parameters are supported at this level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A general technique to display the exact arguments passed to the DBAPI for
+    a given URL may be performed using the [`Dialect.create_connect_args()`](internals.html#sqlalchemy.engine.Dialect.create_connect_args
+    "sqlalchemy.engine.Dialect.create_connect_args") method directly as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE145]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above `args, kwargs` pair is normally passed to the DBAPI as `dbapi.connect(*args,
+    **kwargs)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use the connect_args dictionary parameter
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'A more general system of passing any parameter to the `dbapi.connect()` function
+    that is guaranteed to pass all parameters at all times is the [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") dictionary parameter. This may be used for parameters
+    that are otherwise not handled by the dialect when added to the query string,
+    as well as when special sub-structures or objects must be passed to the DBAPI.
+    Sometimes it’s just that a particular flag must be sent as the `True` symbol and
+    the SQLAlchemy dialect is not aware of this keyword argument to coerce it from
+    its string form as presented in the URL. Below illustrates the use of a psycopg2
+    “connection factory” that replaces the underlying implementation the connection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE146]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another example is the pyodbc “timeout” parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE147]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above example also illustrates that both URL “query string” parameters as
+    well as [`create_engine.connect_args`](#sqlalchemy.create_engine.params.connect_args
+    "sqlalchemy.create_engine") may be used at the same time; in the case of pyodbc,
+    the “driver” keyword has special meaning within the URL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Controlling how parameters are passed to the DBAPI connect() function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Beyond manipulating the parameters passed to `connect()`, we can further customize
+    how the DBAPI `connect()` function itself is called using the [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") event hook. This hook is passed
+    the full `*args, **kwargs` that the dialect would send to `connect()`. These collections
+    can then be modified in place to alter how they are used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE148]'
+  prefs: []
+  type: TYPE_PRE
+- en: '#### Generating dynamic authentication tokens'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") is also an ideal way to dynamically
+    insert an authentication token that might change over the lifespan of an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"). For example, if the token gets generated by `get_authentication_token()`
+    and passed to the DBAPI in a `token` parameter, this could be implemented as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE149]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Connecting to databases with access tokens](../dialects/mssql.html#mssql-pyodbc-access-tokens)
+    - a more concrete example involving SQL Server  #### Generating dynamic authentication
+    tokens'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") is also an ideal way to dynamically
+    insert an authentication token that might change over the lifespan of an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine"). For example, if the token gets generated by `get_authentication_token()`
+    and passed to the DBAPI in a `token` parameter, this could be implemented as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE150]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Connecting to databases with access tokens](../dialects/mssql.html#mssql-pyodbc-access-tokens)
+    - a more concrete example involving SQL Server'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modifying the DBAPI connection after connect, or running commands after connect
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For a DBAPI connection that SQLAlchemy creates without issue, but where we
+    would like to modify the completed connection before it’s actually used, such
+    as for setting special flags or running certain commands, the [`PoolEvents.connect()`](events.html#sqlalchemy.events.PoolEvents.connect
+    "sqlalchemy.events.PoolEvents.connect") event hook is the most appropriate hook.
+    This hook is called for every new connection created, before it is used by SQLAlchemy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE151]'
+  prefs: []
+  type: TYPE_PRE
+- en: Fully Replacing the DBAPI `connect()` function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Finally, the [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") event hook can also allow us to
+    take over the connection process entirely by establishing the connection and returning
+    it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE152]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") hook supersedes the previous [`create_engine.creator`](#sqlalchemy.create_engine.params.creator
+    "sqlalchemy.create_engine") hook, which remains available. [`DialectEvents.do_connect()`](events.html#sqlalchemy.events.DialectEvents.do_connect
+    "sqlalchemy.events.DialectEvents.do_connect") has the distinct advantage that
+    the complete arguments parsed from the URL are also passed to the user-defined
+    function which is not the case with [`create_engine.creator`](#sqlalchemy.create_engine.params.creator
+    "sqlalchemy.create_engine").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Configuring Logging'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Python’s standard [logging](https://docs.python.org/library/logging.html) module
+    is used to implement informational and debug log output with SQLAlchemy. This
+    allows SQLAlchemy’s logging to integrate in a standard way with other applications
+    and libraries. There are also two parameters [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine") and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine") present on [`create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") which allow immediate logging to `sys.stdout` for
+    the purposes of local development; these parameters ultimately interact with the
+    regular Python loggers described below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This section assumes familiarity with the above linked logging module. All
+    logging performed by SQLAlchemy exists underneath the `sqlalchemy` namespace,
+    as used by `logging.getLogger(''sqlalchemy'')`. When logging has been configured
+    (i.e. such as via `logging.basicConfig()`), the general namespace of SA loggers
+    that can be turned on is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.engine` - controls SQL echoing. Set to `logging.INFO` for SQL query
+    output, `logging.DEBUG` for query + result set output. These settings are equivalent
+    to `echo=True` and `echo="debug"` on [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine"), respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.pool` - controls connection pool logging. Set to `logging.INFO`
+    to log connection invalidation and recycle events; set to `logging.DEBUG` to additionally
+    log all pool checkins and checkouts. These settings are equivalent to `pool_echo=True`
+    and `pool_echo="debug"` on [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine"), respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.dialects` - controls custom logging for SQL dialects, to the extent
+    that logging is used within specific dialects, which is generally minimal.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.orm` - controls logging of various ORM functions to the extent
+    that logging is used within the ORM, which is generally minimal. Set to `logging.INFO`
+    to log some top-level information on mapper configurations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, to log SQL queries using Python logging instead of the `echo=True`
+    flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE153]'
+  prefs: []
+  type: TYPE_PRE
+- en: By default, the log level is set to `logging.WARN` within the entire `sqlalchemy`
+    namespace so that no log operations occur, even within an application that has
+    logging enabled otherwise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SQLAlchemy [`Engine`](connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    conserves Python function call overhead by only emitting log statements when the
+    current logging level is detected as `logging.INFO` or `logging.DEBUG`. It only
+    checks this level when a new connection is procured from the connection pool.
+    Therefore when changing the logging configuration for an already-running application,
+    any [`Connection`](connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    that’s currently active, or more commonly a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session") object that’s active in a transaction, won’t
+    log any SQL according to the new configuration until a new [`Connection`](connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") is procured (in the case of [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session"), this is after the current transaction ends
+    and a new one begins).
+  prefs: []
+  type: TYPE_NORMAL
+- en: More on the Echo Flag
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As mentioned previously, the [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine") and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine") parameters are a shortcut to immediate logging to
+    `sys.stdout`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE154]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Use of these flags is roughly equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE155]'
+  prefs: []
+  type: TYPE_PRE
+- en: It’s important to note that these two flags work **independently** of any existing
+    logging configuration, and will make use of `logging.basicConfig()` unconditionally.
+    This has the effect of being configured **in addition** to any existing logger
+    configurations. Therefore, **when configuring logging explicitly, ensure all echo
+    flags are set to False at all times**, to avoid getting duplicate log lines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting the Logging Name
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The logger name of instance such as an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool")
+    defaults to using a truncated hex identifier string. To set this to a specific
+    name, use the [`create_engine.logging_name`](#sqlalchemy.create_engine.params.logging_name
+    "sqlalchemy.create_engine") and [`create_engine.pool_logging_name`](#sqlalchemy.create_engine.params.pool_logging_name
+    "sqlalchemy.create_engine") with [`sqlalchemy.create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"); the name will be appended to the logging name `sqlalchemy.engine.Engine`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE156]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`create_engine.logging_name`](#sqlalchemy.create_engine.params.logging_name
+    "sqlalchemy.create_engine") and [`create_engine.pool_logging_name`](#sqlalchemy.create_engine.params.pool_logging_name
+    "sqlalchemy.create_engine") parameters may also be used in conjunction with [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine") and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine"). However, an unavoidable double logging condition
+    will occur if other engines are created with echo flags set to True and **no**
+    logging name. This is because a handler will be added automatically for `sqlalchemy.engine.Engine`
+    which will log messages both for the name-less engine as well as engines with
+    logging names. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE157]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above scenario will double log `SELECT 3`. To resolve, ensure all engines
+    have a `logging_name` set, or use explicit logger / handler setup without using
+    [`create_engine.echo`](#sqlalchemy.create_engine.params.echo "sqlalchemy.create_engine")
+    and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool "sqlalchemy.create_engine").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Setting Per-Connection / Sub-Engine Tokens'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the logging name is appropriate to establish on an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object that is long lived, it’s not flexible enough
+    to accommodate for an arbitrarily large list of names, for the case of tracking
+    individual connections and/or transactions in log messages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this use case, the log message itself generated by the [`Connection`](connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") and [`Result`](connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") objects may be augmented with additional tokens such
+    as transaction or request identifiers. The [`Connection.execution_options.logging_token`](connections.html#sqlalchemy.engine.Connection.execution_options.params.logging_token
+    "sqlalchemy.engine.Connection.execution_options") parameter accepts a string argument
+    that may be used to establish per-connection tracking tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE158]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Connection.execution_options.logging_token`](connections.html#sqlalchemy.engine.Connection.execution_options.params.logging_token
+    "sqlalchemy.engine.Connection.execution_options") parameter may also be established
+    on engines or sub-engines via [`create_engine.execution_options`](#sqlalchemy.create_engine.params.execution_options
+    "sqlalchemy.create_engine") or [`Engine.execution_options()`](connections.html#sqlalchemy.engine.Engine.execution_options
+    "sqlalchemy.engine.Engine.execution_options"). This may be useful to apply different
+    logging tokens to different components of an application without creating new
+    engines:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE159]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hiding Parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The logging emitted by [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") also indicates an excerpt of the SQL parameters that
+    are present for a particular statement. To prevent these parameters from being
+    logged for privacy purposes, enable the [`create_engine.hide_parameters`](#sqlalchemy.create_engine.params.hide_parameters
+    "sqlalchemy.create_engine") flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE160]'
+  prefs: []
+  type: TYPE_PRE
+- en: More on the Echo Flag
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As mentioned previously, the [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine") and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine") parameters are a shortcut to immediate logging to
+    `sys.stdout`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE161]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Use of these flags is roughly equivalent to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE162]'
+  prefs: []
+  type: TYPE_PRE
+- en: It’s important to note that these two flags work **independently** of any existing
+    logging configuration, and will make use of `logging.basicConfig()` unconditionally.
+    This has the effect of being configured **in addition** to any existing logger
+    configurations. Therefore, **when configuring logging explicitly, ensure all echo
+    flags are set to False at all times**, to avoid getting duplicate log lines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting the Logging Name
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The logger name of instance such as an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or [`Pool`](pooling.html#sqlalchemy.pool.Pool "sqlalchemy.pool.Pool")
+    defaults to using a truncated hex identifier string. To set this to a specific
+    name, use the [`create_engine.logging_name`](#sqlalchemy.create_engine.params.logging_name
+    "sqlalchemy.create_engine") and [`create_engine.pool_logging_name`](#sqlalchemy.create_engine.params.pool_logging_name
+    "sqlalchemy.create_engine") with [`sqlalchemy.create_engine()`](#sqlalchemy.create_engine
+    "sqlalchemy.create_engine"); the name will be appended to the logging name `sqlalchemy.engine.Engine`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE163]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`create_engine.logging_name`](#sqlalchemy.create_engine.params.logging_name
+    "sqlalchemy.create_engine") and [`create_engine.pool_logging_name`](#sqlalchemy.create_engine.params.pool_logging_name
+    "sqlalchemy.create_engine") parameters may also be used in conjunction with [`create_engine.echo`](#sqlalchemy.create_engine.params.echo
+    "sqlalchemy.create_engine") and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool
+    "sqlalchemy.create_engine"). However, an unavoidable double logging condition
+    will occur if other engines are created with echo flags set to True and **no**
+    logging name. This is because a handler will be added automatically for `sqlalchemy.engine.Engine`
+    which will log messages both for the name-less engine as well as engines with
+    logging names. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE164]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above scenario will double log `SELECT 3`. To resolve, ensure all engines
+    have a `logging_name` set, or use explicit logger / handler setup without using
+    [`create_engine.echo`](#sqlalchemy.create_engine.params.echo "sqlalchemy.create_engine")
+    and [`create_engine.echo_pool`](#sqlalchemy.create_engine.params.echo_pool "sqlalchemy.create_engine").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Setting Per-Connection / Sub-Engine Tokens'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the logging name is appropriate to establish on an [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object that is long lived, it’s not flexible enough
+    to accommodate for an arbitrarily large list of names, for the case of tracking
+    individual connections and/or transactions in log messages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this use case, the log message itself generated by the [`Connection`](connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") and [`Result`](connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") objects may be augmented with additional tokens such
+    as transaction or request identifiers. The [`Connection.execution_options.logging_token`](connections.html#sqlalchemy.engine.Connection.execution_options.params.logging_token
+    "sqlalchemy.engine.Connection.execution_options") parameter accepts a string argument
+    that may be used to establish per-connection tracking tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE165]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Connection.execution_options.logging_token`](connections.html#sqlalchemy.engine.Connection.execution_options.params.logging_token
+    "sqlalchemy.engine.Connection.execution_options") parameter may also be established
+    on engines or sub-engines via [`create_engine.execution_options`](#sqlalchemy.create_engine.params.execution_options
+    "sqlalchemy.create_engine") or [`Engine.execution_options()`](connections.html#sqlalchemy.engine.Engine.execution_options
+    "sqlalchemy.engine.Engine.execution_options"). This may be useful to apply different
+    logging tokens to different components of an application without creating new
+    engines:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE166]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hiding Parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The logging emitted by [`Engine`](connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") also indicates an excerpt of the SQL parameters that
+    are present for a particular statement. To prevent these parameters from being
+    logged for privacy purposes, enable the [`create_engine.hide_parameters`](#sqlalchemy.create_engine.params.hide_parameters
+    "sqlalchemy.create_engine") flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE167]'
+  prefs: []
+  type: TYPE_PRE

@@ -1,0 +1,2308 @@
+- en: What’s new in SQLAlchemy 0.4?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/changelog/migration_04.html](https://docs.sqlalchemy.org/en/20/changelog/migration_04.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: About this Document
+  prefs: []
+  type: TYPE_NORMAL
+- en: This document describes changes between SQLAlchemy version 0.3, last released
+    October 14, 2007, and SQLAlchemy version 0.4, last released October 12, 2008.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Document date: March 21, 2008'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First Things First
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'If you’re using any ORM features, make sure you import from `sqlalchemy.orm`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Secondly, anywhere you used to say `engine=`, `connectable=`, `bind_to=`, `something.engine`,
+    `metadata.connect()`, use `bind`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Got those ? Good! You’re now (95%) 0.4 compatible. If you’re using 0.3.10, you
+    can make these changes immediately; they’ll work there too.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Module Imports
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In 0.3, “`from sqlalchemy import *`” would import all of sqlalchemy’s sub-modules
+    into your namespace. Version 0.4 no longer imports sub-modules into the namespace.
+    This may mean you need to add extra imports into your code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In 0.3, this code worked:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In 0.4, one must do:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Object Relational Mapping
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Querying
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: New Query API
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Query is standardized on the generative interface (old interface is still there,
+    just deprecated). While most of the generative interface is available in 0.3,
+    the 0.4 Query has the inner guts to match the generative outside, and has a lot
+    more tricks. All result narrowing is via `filter()` and `filter_by()`, limiting/offset
+    is either through array slices or `limit()`/`offset()`, joining is via `join()`
+    and `outerjoin()` (or more manually, through `select_from()` as well as manually-formed
+    criteria).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To avoid deprecation warnings, you must make some changes to your 03 code
+  prefs: []
+  type: TYPE_NORMAL
+- en: User.query.get_by( **kwargs )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: User.query.select_by( **kwargs )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: User.query.select()
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: New Property-Based Expression Constructs
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'By far the most palpable difference within the ORM is that you can now construct
+    your query criterion using class-based attributes directly. The “.c.” prefix is
+    no longer needed when working with mapped classes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'While simple column-based comparisons are no big deal, the class attributes
+    have some new “higher level” constructs available, including what was previously
+    only available in `filter_by()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `Column` collection remains available on mapped classes in the `.c` attribute.
+    Note that property-based expressions are only available with mapped properties
+    of mapped classes. `.c` is still used to access columns in regular tables and
+    selectable objects produced from SQL Expressions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automatic Join Aliasing
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'We’ve had join() and outerjoin() for a while now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you can alias them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above will create two joins from orders->items using aliases. the `filter()`
+    call subsequent to each will adjust its table criterion to that of the alias.
+    To get at the `Item` objects, use `add_entity()` and target each join with an
+    `id`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Returns tuples in the form: `(Order, Item, Item)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Self-referential Queries
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'So query.join() can make aliases now. What does that give us ? Self-referential
+    queries ! Joins can be done without any `Alias` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To add criterion for each table along the way in an aliased join, you can use
+    `from_joinpoint` to keep joining against the same line of aliases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`query.populate_existing()`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The eager version of `query.load()` (or `session.refresh()`). Every instance
+    loaded from the query, including all eagerly loaded items, get refreshed immediately
+    if already present in the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Relations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQL Clauses Embedded in Updates/Inserts
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'For inline execution of SQL clauses, embedded right in the UPDATE or INSERT,
+    during a `flush()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The column-attribute is set up with a deferred loader after the operation, so
+    that it issues the SQL to load the new value when you next access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Self-referential and Cyclical Eager Loading
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Since our alias-fu has improved, `relation()` can join along the same table
+    *any number of times*; you tell it how deep you want to go. Lets show the self-referential
+    `TreeNode` more clearly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So what happens when we say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '? A join along aliases, three levels deep off the parent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice the nice clean alias names too. The joining doesn’t care if it’s against
+    the same immediate table or some other object which then cycles back to the beginning.
+    Any kind of chain of eager loads can cycle back onto itself when `join_depth`
+    is specified. When not present, eager loading automatically stops when it hits
+    a cycle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Composite Types
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'This is one from the Hibernate camp. Composite Types let you define a custom
+    datatype that is composed of more than one column (or one column, if you wanted).
+    Lets define a new type, `Point`. Stores an x/y coordinate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: The way the `Point` object is defined is specific to a custom type; constructor
+    takes a list of arguments, and the `__composite_values__()` method produces a
+    sequence of those arguments. The order will match up to our mapper, as we’ll see
+    in a moment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s create a table of vertices storing two points per row:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, map it ! We’ll create a `Vertex` object which stores two `Point` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once you’ve set up your composite type, it’s usable just like any other type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you’d like to define the way the mapped attributes generate SQL clauses
+    when used in expressions, create your own `sqlalchemy.orm.PropComparator` subclass,
+    defining any of the common operators (like `__eq__()`, `__le__()`, etc.), and
+    send it in to `composite()`. Composite types work as primary keys too, and are
+    usable in `query.get()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`dynamic_loader()` relations'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: A `relation()` that returns a live `Query` object for all read operations. Write
+    operations are limited to just `append()` and `remove()`, changes to the collection
+    are not visible until the session is flushed. This feature is particularly handy
+    with an “autoflushing” session which will flush before each query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New Options: `undefer_group()`, `eagerload_all()`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'A couple of query options which are handy. `undefer_group()` marks a whole
+    group of “deferred” columns as undeferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and `eagerload_all()` sets a chain of attributes to be eager in one pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: New Collection API
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Collections are no longer proxied by an {{{InstrumentedList}}} proxy, and access
+    to members, methods and attributes is direct. Decorators now intercept objects
+    entering and leaving the collection, and it is now possible to easily write a
+    custom collection class that manages its own membership. Flexible decorators also
+    replace the named method interface of custom collections in 0.3, allowing any
+    class to be easily adapted to use as a collection container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Dictionary-based collections are now much easier to use and fully `dict`-like.
+    Changing `__iter__` is no longer needed for `dict``s, and new built-in ``dict`
+    types cover many needs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Existing 0.3 `dict`-like and freeform object derived collection classes will
+    need to be updated for the new API. In most cases this is simply a matter of adding
+    a couple decorators to the class definition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapped Relations from External Tables/Subqueries
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'This feature quietly appeared in 0.3 but has been improved in 0.4 thanks to
+    better ability to convert subqueries against a table into subqueries against an
+    alias of that table; this is key for eager loading, aliased joins in queries,
+    etc. It reduces the need to create mappers against select statements when you
+    just need to add some extra columns or subqueries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'a typical query looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Horizontal Scaling (Sharding) API
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[browser:/sqlalchemy/trunk/examples/sharding/attribute_shard .py]'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sessions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: New Session Create Paradigm; SessionContext, assignmapper Deprecated
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: That’s right, the whole shebang is being replaced with two configurational functions.
+    Using both will produce the most 0.1-ish feel we’ve had since 0.1 (i.e., the least
+    amount of typing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Configure your own `Session` class right where you define your `engine` (or
+    anywhere):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you need to post-configure your Session, say with an engine, add it later
+    with `configure()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All the behaviors of `SessionContext` and the `query` and `__init__` methods
+    of `assignmapper` are moved into the new `scoped_session()` function, which is
+    compatible with both `sessionmaker` as well as `create_session()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using a thread-local `Session`, the returned class has all of `Session's`
+    interface implemented as classmethods, and “assignmapper“‘s functionality is available
+    using the `mapper` classmethod. Just like the old `objectstore` days….
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sessions are again Weak Referencing By Default
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The weak_identity_map flag is now set to `True` by default on Session. Instances
+    which are externally deferenced and fall out of scope are removed from the session
+    automatically. However, items which have “dirty” changes present will remain strongly
+    referenced until those changes are flushed at which case the object reverts to
+    being weakly referenced (this works for ‘mutable’ types, like picklable attributes,
+    as well). Setting weak_identity_map to `False` restores the old strong-referencing
+    behavior for those of you using the session like a cache.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Auto-Transactional Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: As you might have noticed above, we are calling `commit()` on `Session`. The
+    flag `transactional=True` means the `Session` is always in a transaction, `commit()`
+    persists permanently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Auto-Flushing Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Also, `autoflush=True` means the `Session` will `flush()` before each `query`
+    as well as when you call `flush()` or `commit()`. So now this will work:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transactional methods moved onto sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '`commit()` and `rollback()`, as well as `begin()` are now directly on `Session`.
+    No more need to use `SessionTransaction` for anything (it remains in the background).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Sharing a `Session` with an enclosing engine-level (i.e. non-ORM) transaction
+    is easy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nested Session Transactions with SAVEPOINT
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Available at the Engine and ORM level. ORM docs so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing](https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two-Phase Commit Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Available at the Engine and ORM level. ORM docs so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing](https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Polymorphic Inheritance with No Joins or Unions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'New docs for inheritance: [https://www.sqlalchemy.org/docs/04](https://www.sqlalchemy.org/docs/04)
+    /mappers.html#advdatamapping_mapper_inheritance_joined'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Better Polymorphic Behavior with `get()`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: All classes within a joined-table inheritance hierarchy get an `_instance_key`
+    using the base class, i.e. `(BaseClass, (1, ), None)`. That way when you call
+    `get()` a `Query` against the base class, it can locate subclass instances in
+    the current identity map without querying the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Custom Subclasses of `sqlalchemy.types.TypeDecorator`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: There is a [New API](https://www.sqlalchemy.org/docs/04/types.html#types_custom)
+    for subclassing a TypeDecorator. Using the 0.3 API causes compilation errors in
+    some cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQL Expressions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: All New, Deterministic Label/Alias Generation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'All the “anonymous” labels and aliases use a simple <name>_<number> format
+    now. SQL is much easier to read and is compatible with plan optimizer caches.
+    Just check out some of the examples in the tutorials: [https://www.sqlalchemy.org/docs/04/ormtutorial.html](https://www.sqlalchemy.org/docs/04/ormtutorial.html)
+    [https://www.sqlalchemy.org/docs/04/sqlexpression.html](https://www.sqlalchemy.org/docs/04/sqlexpression.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generative select() Constructs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is definitely the way to go with `select()`. See htt p://www.sqlalchemy.org/docs/04/sqlexpression.html#sql_transf
+    orm .
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Operator System
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'SQL operators and more or less every SQL keyword there is are now abstracted
+    into the compiler layer. They now act intelligently and are type/backend aware,
+    see: [https://www.sqlalchemy.org/docs/04/sqlexpression.html#sql_operators](https://www.sqlalchemy.org/docs/04/sqlexpression.html#sql_operators)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: All `type` Keyword Arguments Renamed to `type_`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Just like it says:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: in_ Function Changed to Accept Sequence or Selectable
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The in_ function now takes a sequence of values or a selectable as its sole
+    argument. The previous API of passing in values as positional arguments still
+    works, but is now deprecated. This means that
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: should be changed to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Schema and Reflection
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`MetaData`, `BoundMetaData`, `DynamicMetaData`…'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the 0.3.x series, `BoundMetaData` and `DynamicMetaData` were deprecated
+    in favor of `MetaData` and `ThreadLocalMetaData`. The older names have been removed
+    in 0.4\. Updating is simple:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: The seldom-used `name` parameter to `MetaData` types has been removed. The `ThreadLocalMetaData`
+    constructor now takes no arguments. Both types can now be bound to an `Engine`
+    or a single `Connection`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One Step Multi-Table Reflection
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You can now load table definitions and automatically create `Table` objects
+    from an entire database or schema in one pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`MetaData` also gains a `.reflect()` method enabling finer control over the
+    loading process, including specification of a subset of available tables to load.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQL Execution
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`engine`, `connectable`, and `bind_to` are all now `bind`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`Transactions`, `NestedTransactions` and `TwoPhaseTransactions`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Connection Pool Events
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The connection pool now fires events when new DB-API connections are created,
+    checked out and checked back into the pool. You can use these to execute session-scoped
+    SQL setup statements on fresh connections, for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle Engine Fixed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In 0.3.11, there were bugs in the Oracle Engine on how Primary Keys are handled.
+    These bugs could cause programs that worked fine with other engines, such as sqlite,
+    to fail when using the Oracle Engine. In 0.4, the Oracle Engine has been reworked,
+    fixing these Primary Key problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Out Parameters for Oracle
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Connection-bound `MetaData`, `Sessions`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`MetaData` and `Session` can be explicitly bound to a connection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Faster, More Foolproof `ResultProxy` Objects
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: First Things First
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'If you’re using any ORM features, make sure you import from `sqlalchemy.orm`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Secondly, anywhere you used to say `engine=`, `connectable=`, `bind_to=`, `something.engine`,
+    `metadata.connect()`, use `bind`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Got those ? Good! You’re now (95%) 0.4 compatible. If you’re using 0.3.10, you
+    can make these changes immediately; they’ll work there too.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Module Imports
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In 0.3, “`from sqlalchemy import *`” would import all of sqlalchemy’s sub-modules
+    into your namespace. Version 0.4 no longer imports sub-modules into the namespace.
+    This may mean you need to add extra imports into your code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In 0.3, this code worked:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In 0.4, one must do:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: Object Relational Mapping
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Querying
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: New Query API
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Query is standardized on the generative interface (old interface is still there,
+    just deprecated). While most of the generative interface is available in 0.3,
+    the 0.4 Query has the inner guts to match the generative outside, and has a lot
+    more tricks. All result narrowing is via `filter()` and `filter_by()`, limiting/offset
+    is either through array slices or `limit()`/`offset()`, joining is via `join()`
+    and `outerjoin()` (or more manually, through `select_from()` as well as manually-formed
+    criteria).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To avoid deprecation warnings, you must make some changes to your 03 code
+  prefs: []
+  type: TYPE_NORMAL
+- en: User.query.get_by( **kwargs )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: User.query.select_by( **kwargs )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: User.query.select()
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: New Property-Based Expression Constructs
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'By far the most palpable difference within the ORM is that you can now construct
+    your query criterion using class-based attributes directly. The “.c.” prefix is
+    no longer needed when working with mapped classes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'While simple column-based comparisons are no big deal, the class attributes
+    have some new “higher level” constructs available, including what was previously
+    only available in `filter_by()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `Column` collection remains available on mapped classes in the `.c` attribute.
+    Note that property-based expressions are only available with mapped properties
+    of mapped classes. `.c` is still used to access columns in regular tables and
+    selectable objects produced from SQL Expressions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automatic Join Aliasing
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'We’ve had join() and outerjoin() for a while now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you can alias them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above will create two joins from orders->items using aliases. the `filter()`
+    call subsequent to each will adjust its table criterion to that of the alias.
+    To get at the `Item` objects, use `add_entity()` and target each join with an
+    `id`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Returns tuples in the form: `(Order, Item, Item)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Self-referential Queries
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'So query.join() can make aliases now. What does that give us ? Self-referential
+    queries ! Joins can be done without any `Alias` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To add criterion for each table along the way in an aliased join, you can use
+    `from_joinpoint` to keep joining against the same line of aliases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`query.populate_existing()`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The eager version of `query.load()` (or `session.refresh()`). Every instance
+    loaded from the query, including all eagerly loaded items, get refreshed immediately
+    if already present in the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: Relations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQL Clauses Embedded in Updates/Inserts
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'For inline execution of SQL clauses, embedded right in the UPDATE or INSERT,
+    during a `flush()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: The column-attribute is set up with a deferred loader after the operation, so
+    that it issues the SQL to load the new value when you next access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Self-referential and Cyclical Eager Loading
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Since our alias-fu has improved, `relation()` can join along the same table
+    *any number of times*; you tell it how deep you want to go. Lets show the self-referential
+    `TreeNode` more clearly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So what happens when we say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: '? A join along aliases, three levels deep off the parent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice the nice clean alias names too. The joining doesn’t care if it’s against
+    the same immediate table or some other object which then cycles back to the beginning.
+    Any kind of chain of eager loads can cycle back onto itself when `join_depth`
+    is specified. When not present, eager loading automatically stops when it hits
+    a cycle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Composite Types
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'This is one from the Hibernate camp. Composite Types let you define a custom
+    datatype that is composed of more than one column (or one column, if you wanted).
+    Lets define a new type, `Point`. Stores an x/y coordinate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: The way the `Point` object is defined is specific to a custom type; constructor
+    takes a list of arguments, and the `__composite_values__()` method produces a
+    sequence of those arguments. The order will match up to our mapper, as we’ll see
+    in a moment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s create a table of vertices storing two points per row:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, map it ! We’ll create a `Vertex` object which stores two `Point` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once you’ve set up your composite type, it’s usable just like any other type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you’d like to define the way the mapped attributes generate SQL clauses
+    when used in expressions, create your own `sqlalchemy.orm.PropComparator` subclass,
+    defining any of the common operators (like `__eq__()`, `__le__()`, etc.), and
+    send it in to `composite()`. Composite types work as primary keys too, and are
+    usable in `query.get()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`dynamic_loader()` relations'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: A `relation()` that returns a live `Query` object for all read operations. Write
+    operations are limited to just `append()` and `remove()`, changes to the collection
+    are not visible until the session is flushed. This feature is particularly handy
+    with an “autoflushing” session which will flush before each query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New Options: `undefer_group()`, `eagerload_all()`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'A couple of query options which are handy. `undefer_group()` marks a whole
+    group of “deferred” columns as undeferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and `eagerload_all()` sets a chain of attributes to be eager in one pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: New Collection API
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Collections are no longer proxied by an {{{InstrumentedList}}} proxy, and access
+    to members, methods and attributes is direct. Decorators now intercept objects
+    entering and leaving the collection, and it is now possible to easily write a
+    custom collection class that manages its own membership. Flexible decorators also
+    replace the named method interface of custom collections in 0.3, allowing any
+    class to be easily adapted to use as a collection container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Dictionary-based collections are now much easier to use and fully `dict`-like.
+    Changing `__iter__` is no longer needed for `dict``s, and new built-in ``dict`
+    types cover many needs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: Existing 0.3 `dict`-like and freeform object derived collection classes will
+    need to be updated for the new API. In most cases this is simply a matter of adding
+    a couple decorators to the class definition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapped Relations from External Tables/Subqueries
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'This feature quietly appeared in 0.3 but has been improved in 0.4 thanks to
+    better ability to convert subqueries against a table into subqueries against an
+    alias of that table; this is key for eager loading, aliased joins in queries,
+    etc. It reduces the need to create mappers against select statements when you
+    just need to add some extra columns or subqueries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'a typical query looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: Horizontal Scaling (Sharding) API
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[browser:/sqlalchemy/trunk/examples/sharding/attribute_shard .py]'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sessions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: New Session Create Paradigm; SessionContext, assignmapper Deprecated
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: That’s right, the whole shebang is being replaced with two configurational functions.
+    Using both will produce the most 0.1-ish feel we’ve had since 0.1 (i.e., the least
+    amount of typing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Configure your own `Session` class right where you define your `engine` (or
+    anywhere):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you need to post-configure your Session, say with an engine, add it later
+    with `configure()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All the behaviors of `SessionContext` and the `query` and `__init__` methods
+    of `assignmapper` are moved into the new `scoped_session()` function, which is
+    compatible with both `sessionmaker` as well as `create_session()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using a thread-local `Session`, the returned class has all of `Session's`
+    interface implemented as classmethods, and “assignmapper“‘s functionality is available
+    using the `mapper` classmethod. Just like the old `objectstore` days….
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sessions are again Weak Referencing By Default
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The weak_identity_map flag is now set to `True` by default on Session. Instances
+    which are externally deferenced and fall out of scope are removed from the session
+    automatically. However, items which have “dirty” changes present will remain strongly
+    referenced until those changes are flushed at which case the object reverts to
+    being weakly referenced (this works for ‘mutable’ types, like picklable attributes,
+    as well). Setting weak_identity_map to `False` restores the old strong-referencing
+    behavior for those of you using the session like a cache.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Auto-Transactional Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: As you might have noticed above, we are calling `commit()` on `Session`. The
+    flag `transactional=True` means the `Session` is always in a transaction, `commit()`
+    persists permanently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Auto-Flushing Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Also, `autoflush=True` means the `Session` will `flush()` before each `query`
+    as well as when you call `flush()` or `commit()`. So now this will work:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transactional methods moved onto sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '`commit()` and `rollback()`, as well as `begin()` are now directly on `Session`.
+    No more need to use `SessionTransaction` for anything (it remains in the background).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Sharing a `Session` with an enclosing engine-level (i.e. non-ORM) transaction
+    is easy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nested Session Transactions with SAVEPOINT
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Available at the Engine and ORM level. ORM docs so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing](https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two-Phase Commit Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Available at the Engine and ORM level. ORM docs so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing](https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Polymorphic Inheritance with No Joins or Unions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'New docs for inheritance: [https://www.sqlalchemy.org/docs/04](https://www.sqlalchemy.org/docs/04)
+    /mappers.html#advdatamapping_mapper_inheritance_joined'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Better Polymorphic Behavior with `get()`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: All classes within a joined-table inheritance hierarchy get an `_instance_key`
+    using the base class, i.e. `(BaseClass, (1, ), None)`. That way when you call
+    `get()` a `Query` against the base class, it can locate subclass instances in
+    the current identity map without querying the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Custom Subclasses of `sqlalchemy.types.TypeDecorator`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: There is a [New API](https://www.sqlalchemy.org/docs/04/types.html#types_custom)
+    for subclassing a TypeDecorator. Using the 0.3 API causes compilation errors in
+    some cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Querying
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: New Query API
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Query is standardized on the generative interface (old interface is still there,
+    just deprecated). While most of the generative interface is available in 0.3,
+    the 0.4 Query has the inner guts to match the generative outside, and has a lot
+    more tricks. All result narrowing is via `filter()` and `filter_by()`, limiting/offset
+    is either through array slices or `limit()`/`offset()`, joining is via `join()`
+    and `outerjoin()` (or more manually, through `select_from()` as well as manually-formed
+    criteria).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To avoid deprecation warnings, you must make some changes to your 03 code
+  prefs: []
+  type: TYPE_NORMAL
+- en: User.query.get_by( **kwargs )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: User.query.select_by( **kwargs )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: User.query.select()
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: New Property-Based Expression Constructs
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'By far the most palpable difference within the ORM is that you can now construct
+    your query criterion using class-based attributes directly. The “.c.” prefix is
+    no longer needed when working with mapped classes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'While simple column-based comparisons are no big deal, the class attributes
+    have some new “higher level” constructs available, including what was previously
+    only available in `filter_by()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `Column` collection remains available on mapped classes in the `.c` attribute.
+    Note that property-based expressions are only available with mapped properties
+    of mapped classes. `.c` is still used to access columns in regular tables and
+    selectable objects produced from SQL Expressions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automatic Join Aliasing
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'We’ve had join() and outerjoin() for a while now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you can alias them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above will create two joins from orders->items using aliases. the `filter()`
+    call subsequent to each will adjust its table criterion to that of the alias.
+    To get at the `Item` objects, use `add_entity()` and target each join with an
+    `id`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Returns tuples in the form: `(Order, Item, Item)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Self-referential Queries
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'So query.join() can make aliases now. What does that give us ? Self-referential
+    queries ! Joins can be done without any `Alias` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To add criterion for each table along the way in an aliased join, you can use
+    `from_joinpoint` to keep joining against the same line of aliases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`query.populate_existing()`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The eager version of `query.load()` (or `session.refresh()`). Every instance
+    loaded from the query, including all eagerly loaded items, get refreshed immediately
+    if already present in the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: New Query API
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Query is standardized on the generative interface (old interface is still there,
+    just deprecated). While most of the generative interface is available in 0.3,
+    the 0.4 Query has the inner guts to match the generative outside, and has a lot
+    more tricks. All result narrowing is via `filter()` and `filter_by()`, limiting/offset
+    is either through array slices or `limit()`/`offset()`, joining is via `join()`
+    and `outerjoin()` (or more manually, through `select_from()` as well as manually-formed
+    criteria).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To avoid deprecation warnings, you must make some changes to your 03 code
+  prefs: []
+  type: TYPE_NORMAL
+- en: User.query.get_by( **kwargs )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: User.query.select_by( **kwargs )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: User.query.select()
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: New Property-Based Expression Constructs
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'By far the most palpable difference within the ORM is that you can now construct
+    your query criterion using class-based attributes directly. The “.c.” prefix is
+    no longer needed when working with mapped classes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'While simple column-based comparisons are no big deal, the class attributes
+    have some new “higher level” constructs available, including what was previously
+    only available in `filter_by()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `Column` collection remains available on mapped classes in the `.c` attribute.
+    Note that property-based expressions are only available with mapped properties
+    of mapped classes. `.c` is still used to access columns in regular tables and
+    selectable objects produced from SQL Expressions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automatic Join Aliasing
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'We’ve had join() and outerjoin() for a while now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you can alias them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above will create two joins from orders->items using aliases. the `filter()`
+    call subsequent to each will adjust its table criterion to that of the alias.
+    To get at the `Item` objects, use `add_entity()` and target each join with an
+    `id`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Returns tuples in the form: `(Order, Item, Item)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Self-referential Queries
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'So query.join() can make aliases now. What does that give us ? Self-referential
+    queries ! Joins can be done without any `Alias` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To add criterion for each table along the way in an aliased join, you can use
+    `from_joinpoint` to keep joining against the same line of aliases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`query.populate_existing()`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The eager version of `query.load()` (or `session.refresh()`). Every instance
+    loaded from the query, including all eagerly loaded items, get refreshed immediately
+    if already present in the session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: Relations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SQL Clauses Embedded in Updates/Inserts
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'For inline execution of SQL clauses, embedded right in the UPDATE or INSERT,
+    during a `flush()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: The column-attribute is set up with a deferred loader after the operation, so
+    that it issues the SQL to load the new value when you next access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Self-referential and Cyclical Eager Loading
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Since our alias-fu has improved, `relation()` can join along the same table
+    *any number of times*; you tell it how deep you want to go. Lets show the self-referential
+    `TreeNode` more clearly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So what happens when we say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: '? A join along aliases, three levels deep off the parent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice the nice clean alias names too. The joining doesn’t care if it’s against
+    the same immediate table or some other object which then cycles back to the beginning.
+    Any kind of chain of eager loads can cycle back onto itself when `join_depth`
+    is specified. When not present, eager loading automatically stops when it hits
+    a cycle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Composite Types
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'This is one from the Hibernate camp. Composite Types let you define a custom
+    datatype that is composed of more than one column (or one column, if you wanted).
+    Lets define a new type, `Point`. Stores an x/y coordinate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: The way the `Point` object is defined is specific to a custom type; constructor
+    takes a list of arguments, and the `__composite_values__()` method produces a
+    sequence of those arguments. The order will match up to our mapper, as we’ll see
+    in a moment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s create a table of vertices storing two points per row:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, map it ! We’ll create a `Vertex` object which stores two `Point` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once you’ve set up your composite type, it’s usable just like any other type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you’d like to define the way the mapped attributes generate SQL clauses
+    when used in expressions, create your own `sqlalchemy.orm.PropComparator` subclass,
+    defining any of the common operators (like `__eq__()`, `__le__()`, etc.), and
+    send it in to `composite()`. Composite types work as primary keys too, and are
+    usable in `query.get()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`dynamic_loader()` relations'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: A `relation()` that returns a live `Query` object for all read operations. Write
+    operations are limited to just `append()` and `remove()`, changes to the collection
+    are not visible until the session is flushed. This feature is particularly handy
+    with an “autoflushing” session which will flush before each query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New Options: `undefer_group()`, `eagerload_all()`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'A couple of query options which are handy. `undefer_group()` marks a whole
+    group of “deferred” columns as undeferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and `eagerload_all()` sets a chain of attributes to be eager in one pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: New Collection API
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Collections are no longer proxied by an {{{InstrumentedList}}} proxy, and access
+    to members, methods and attributes is direct. Decorators now intercept objects
+    entering and leaving the collection, and it is now possible to easily write a
+    custom collection class that manages its own membership. Flexible decorators also
+    replace the named method interface of custom collections in 0.3, allowing any
+    class to be easily adapted to use as a collection container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Dictionary-based collections are now much easier to use and fully `dict`-like.
+    Changing `__iter__` is no longer needed for `dict``s, and new built-in ``dict`
+    types cover many needs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: Existing 0.3 `dict`-like and freeform object derived collection classes will
+    need to be updated for the new API. In most cases this is simply a matter of adding
+    a couple decorators to the class definition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapped Relations from External Tables/Subqueries
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'This feature quietly appeared in 0.3 but has been improved in 0.4 thanks to
+    better ability to convert subqueries against a table into subqueries against an
+    alias of that table; this is key for eager loading, aliased joins in queries,
+    etc. It reduces the need to create mappers against select statements when you
+    just need to add some extra columns or subqueries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'a typical query looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: SQL Clauses Embedded in Updates/Inserts
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'For inline execution of SQL clauses, embedded right in the UPDATE or INSERT,
+    during a `flush()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: The column-attribute is set up with a deferred loader after the operation, so
+    that it issues the SQL to load the new value when you next access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Self-referential and Cyclical Eager Loading
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Since our alias-fu has improved, `relation()` can join along the same table
+    *any number of times*; you tell it how deep you want to go. Lets show the self-referential
+    `TreeNode` more clearly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So what happens when we say:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: '? A join along aliases, three levels deep off the parent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice the nice clean alias names too. The joining doesn’t care if it’s against
+    the same immediate table or some other object which then cycles back to the beginning.
+    Any kind of chain of eager loads can cycle back onto itself when `join_depth`
+    is specified. When not present, eager loading automatically stops when it hits
+    a cycle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Composite Types
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'This is one from the Hibernate camp. Composite Types let you define a custom
+    datatype that is composed of more than one column (or one column, if you wanted).
+    Lets define a new type, `Point`. Stores an x/y coordinate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: The way the `Point` object is defined is specific to a custom type; constructor
+    takes a list of arguments, and the `__composite_values__()` method produces a
+    sequence of those arguments. The order will match up to our mapper, as we’ll see
+    in a moment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s create a table of vertices storing two points per row:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, map it ! We’ll create a `Vertex` object which stores two `Point` objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once you’ve set up your composite type, it’s usable just like any other type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you’d like to define the way the mapped attributes generate SQL clauses
+    when used in expressions, create your own `sqlalchemy.orm.PropComparator` subclass,
+    defining any of the common operators (like `__eq__()`, `__le__()`, etc.), and
+    send it in to `composite()`. Composite types work as primary keys too, and are
+    usable in `query.get()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`dynamic_loader()` relations'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: A `relation()` that returns a live `Query` object for all read operations. Write
+    operations are limited to just `append()` and `remove()`, changes to the collection
+    are not visible until the session is flushed. This feature is particularly handy
+    with an “autoflushing” session which will flush before each query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New Options: `undefer_group()`, `eagerload_all()`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'A couple of query options which are handy. `undefer_group()` marks a whole
+    group of “deferred” columns as undeferred:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and `eagerload_all()` sets a chain of attributes to be eager in one pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE129]'
+  prefs: []
+  type: TYPE_PRE
+- en: New Collection API
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Collections are no longer proxied by an {{{InstrumentedList}}} proxy, and access
+    to members, methods and attributes is direct. Decorators now intercept objects
+    entering and leaving the collection, and it is now possible to easily write a
+    custom collection class that manages its own membership. Flexible decorators also
+    replace the named method interface of custom collections in 0.3, allowing any
+    class to be easily adapted to use as a collection container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Dictionary-based collections are now much easier to use and fully `dict`-like.
+    Changing `__iter__` is no longer needed for `dict``s, and new built-in ``dict`
+    types cover many needs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE130]'
+  prefs: []
+  type: TYPE_PRE
+- en: Existing 0.3 `dict`-like and freeform object derived collection classes will
+    need to be updated for the new API. In most cases this is simply a matter of adding
+    a couple decorators to the class definition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mapped Relations from External Tables/Subqueries
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'This feature quietly appeared in 0.3 but has been improved in 0.4 thanks to
+    better ability to convert subqueries against a table into subqueries against an
+    alias of that table; this is key for eager loading, aliased joins in queries,
+    etc. It reduces the need to create mappers against select statements when you
+    just need to add some extra columns or subqueries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE131]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'a typical query looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE132]'
+  prefs: []
+  type: TYPE_PRE
+- en: Horizontal Scaling (Sharding) API
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[browser:/sqlalchemy/trunk/examples/sharding/attribute_shard .py]'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sessions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: New Session Create Paradigm; SessionContext, assignmapper Deprecated
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: That’s right, the whole shebang is being replaced with two configurational functions.
+    Using both will produce the most 0.1-ish feel we’ve had since 0.1 (i.e., the least
+    amount of typing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Configure your own `Session` class right where you define your `engine` (or
+    anywhere):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE133]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you need to post-configure your Session, say with an engine, add it later
+    with `configure()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE134]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All the behaviors of `SessionContext` and the `query` and `__init__` methods
+    of `assignmapper` are moved into the new `scoped_session()` function, which is
+    compatible with both `sessionmaker` as well as `create_session()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE135]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using a thread-local `Session`, the returned class has all of `Session's`
+    interface implemented as classmethods, and “assignmapper“‘s functionality is available
+    using the `mapper` classmethod. Just like the old `objectstore` days….
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE136]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sessions are again Weak Referencing By Default
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The weak_identity_map flag is now set to `True` by default on Session. Instances
+    which are externally deferenced and fall out of scope are removed from the session
+    automatically. However, items which have “dirty” changes present will remain strongly
+    referenced until those changes are flushed at which case the object reverts to
+    being weakly referenced (this works for ‘mutable’ types, like picklable attributes,
+    as well). Setting weak_identity_map to `False` restores the old strong-referencing
+    behavior for those of you using the session like a cache.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Auto-Transactional Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: As you might have noticed above, we are calling `commit()` on `Session`. The
+    flag `transactional=True` means the `Session` is always in a transaction, `commit()`
+    persists permanently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Auto-Flushing Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Also, `autoflush=True` means the `Session` will `flush()` before each `query`
+    as well as when you call `flush()` or `commit()`. So now this will work:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE137]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transactional methods moved onto sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '`commit()` and `rollback()`, as well as `begin()` are now directly on `Session`.
+    No more need to use `SessionTransaction` for anything (it remains in the background).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE138]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Sharing a `Session` with an enclosing engine-level (i.e. non-ORM) transaction
+    is easy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE139]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nested Session Transactions with SAVEPOINT
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Available at the Engine and ORM level. ORM docs so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing](https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two-Phase Commit Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Available at the Engine and ORM level. ORM docs so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing](https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Session Create Paradigm; SessionContext, assignmapper Deprecated
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: That’s right, the whole shebang is being replaced with two configurational functions.
+    Using both will produce the most 0.1-ish feel we’ve had since 0.1 (i.e., the least
+    amount of typing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Configure your own `Session` class right where you define your `engine` (or
+    anywhere):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE140]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you need to post-configure your Session, say with an engine, add it later
+    with `configure()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE141]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All the behaviors of `SessionContext` and the `query` and `__init__` methods
+    of `assignmapper` are moved into the new `scoped_session()` function, which is
+    compatible with both `sessionmaker` as well as `create_session()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE142]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using a thread-local `Session`, the returned class has all of `Session's`
+    interface implemented as classmethods, and “assignmapper“‘s functionality is available
+    using the `mapper` classmethod. Just like the old `objectstore` days….
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE143]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sessions are again Weak Referencing By Default
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The weak_identity_map flag is now set to `True` by default on Session. Instances
+    which are externally deferenced and fall out of scope are removed from the session
+    automatically. However, items which have “dirty” changes present will remain strongly
+    referenced until those changes are flushed at which case the object reverts to
+    being weakly referenced (this works for ‘mutable’ types, like picklable attributes,
+    as well). Setting weak_identity_map to `False` restores the old strong-referencing
+    behavior for those of you using the session like a cache.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Auto-Transactional Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: As you might have noticed above, we are calling `commit()` on `Session`. The
+    flag `transactional=True` means the `Session` is always in a transaction, `commit()`
+    persists permanently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Auto-Flushing Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Also, `autoflush=True` means the `Session` will `flush()` before each `query`
+    as well as when you call `flush()` or `commit()`. So now this will work:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE144]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transactional methods moved onto sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '`commit()` and `rollback()`, as well as `begin()` are now directly on `Session`.
+    No more need to use `SessionTransaction` for anything (it remains in the background).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE145]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Sharing a `Session` with an enclosing engine-level (i.e. non-ORM) transaction
+    is easy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE146]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nested Session Transactions with SAVEPOINT
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Available at the Engine and ORM level. ORM docs so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing](https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two-Phase Commit Sessions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Available at the Engine and ORM level. ORM docs so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing](https://www.sqlalchemy.org/docs/04/session.html#unitofwork_managing)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Polymorphic Inheritance with No Joins or Unions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'New docs for inheritance: [https://www.sqlalchemy.org/docs/04](https://www.sqlalchemy.org/docs/04)
+    /mappers.html#advdatamapping_mapper_inheritance_joined'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Better Polymorphic Behavior with `get()`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: All classes within a joined-table inheritance hierarchy get an `_instance_key`
+    using the base class, i.e. `(BaseClass, (1, ), None)`. That way when you call
+    `get()` a `Query` against the base class, it can locate subclass instances in
+    the current identity map without querying the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Polymorphic Inheritance with No Joins or Unions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'New docs for inheritance: [https://www.sqlalchemy.org/docs/04](https://www.sqlalchemy.org/docs/04)
+    /mappers.html#advdatamapping_mapper_inheritance_joined'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Better Polymorphic Behavior with `get()`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: All classes within a joined-table inheritance hierarchy get an `_instance_key`
+    using the base class, i.e. `(BaseClass, (1, ), None)`. That way when you call
+    `get()` a `Query` against the base class, it can locate subclass instances in
+    the current identity map without querying the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Custom Subclasses of `sqlalchemy.types.TypeDecorator`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: There is a [New API](https://www.sqlalchemy.org/docs/04/types.html#types_custom)
+    for subclassing a TypeDecorator. Using the 0.3 API causes compilation errors in
+    some cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom Subclasses of `sqlalchemy.types.TypeDecorator`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: There is a [New API](https://www.sqlalchemy.org/docs/04/types.html#types_custom)
+    for subclassing a TypeDecorator. Using the 0.3 API causes compilation errors in
+    some cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQL Expressions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: All New, Deterministic Label/Alias Generation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'All the “anonymous” labels and aliases use a simple <name>_<number> format
+    now. SQL is much easier to read and is compatible with plan optimizer caches.
+    Just check out some of the examples in the tutorials: [https://www.sqlalchemy.org/docs/04/ormtutorial.html](https://www.sqlalchemy.org/docs/04/ormtutorial.html)
+    [https://www.sqlalchemy.org/docs/04/sqlexpression.html](https://www.sqlalchemy.org/docs/04/sqlexpression.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generative select() Constructs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is definitely the way to go with `select()`. See htt p://www.sqlalchemy.org/docs/04/sqlexpression.html#sql_transf
+    orm .
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Operator System
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'SQL operators and more or less every SQL keyword there is are now abstracted
+    into the compiler layer. They now act intelligently and are type/backend aware,
+    see: [https://www.sqlalchemy.org/docs/04/sqlexpression.html#sql_operators](https://www.sqlalchemy.org/docs/04/sqlexpression.html#sql_operators)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: All `type` Keyword Arguments Renamed to `type_`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Just like it says:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE147]'
+  prefs: []
+  type: TYPE_PRE
+- en: in_ Function Changed to Accept Sequence or Selectable
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The in_ function now takes a sequence of values or a selectable as its sole
+    argument. The previous API of passing in values as positional arguments still
+    works, but is now deprecated. This means that
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE148]'
+  prefs: []
+  type: TYPE_PRE
+- en: should be changed to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE149]'
+  prefs: []
+  type: TYPE_PRE
+- en: All New, Deterministic Label/Alias Generation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'All the “anonymous” labels and aliases use a simple <name>_<number> format
+    now. SQL is much easier to read and is compatible with plan optimizer caches.
+    Just check out some of the examples in the tutorials: [https://www.sqlalchemy.org/docs/04/ormtutorial.html](https://www.sqlalchemy.org/docs/04/ormtutorial.html)
+    [https://www.sqlalchemy.org/docs/04/sqlexpression.html](https://www.sqlalchemy.org/docs/04/sqlexpression.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generative select() Constructs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This is definitely the way to go with `select()`. See htt p://www.sqlalchemy.org/docs/04/sqlexpression.html#sql_transf
+    orm .
+  prefs: []
+  type: TYPE_NORMAL
+- en: New Operator System
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'SQL operators and more or less every SQL keyword there is are now abstracted
+    into the compiler layer. They now act intelligently and are type/backend aware,
+    see: [https://www.sqlalchemy.org/docs/04/sqlexpression.html#sql_operators](https://www.sqlalchemy.org/docs/04/sqlexpression.html#sql_operators)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: All `type` Keyword Arguments Renamed to `type_`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Just like it says:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE150]'
+  prefs: []
+  type: TYPE_PRE
+- en: in_ Function Changed to Accept Sequence or Selectable
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The in_ function now takes a sequence of values or a selectable as its sole
+    argument. The previous API of passing in values as positional arguments still
+    works, but is now deprecated. This means that
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE151]'
+  prefs: []
+  type: TYPE_PRE
+- en: should be changed to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE152]'
+  prefs: []
+  type: TYPE_PRE
+- en: Schema and Reflection
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`MetaData`, `BoundMetaData`, `DynamicMetaData`…'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the 0.3.x series, `BoundMetaData` and `DynamicMetaData` were deprecated
+    in favor of `MetaData` and `ThreadLocalMetaData`. The older names have been removed
+    in 0.4\. Updating is simple:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE153]'
+  prefs: []
+  type: TYPE_PRE
+- en: The seldom-used `name` parameter to `MetaData` types has been removed. The `ThreadLocalMetaData`
+    constructor now takes no arguments. Both types can now be bound to an `Engine`
+    or a single `Connection`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One Step Multi-Table Reflection
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You can now load table definitions and automatically create `Table` objects
+    from an entire database or schema in one pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE154]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`MetaData` also gains a `.reflect()` method enabling finer control over the
+    loading process, including specification of a subset of available tables to load.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`MetaData`, `BoundMetaData`, `DynamicMetaData`…'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the 0.3.x series, `BoundMetaData` and `DynamicMetaData` were deprecated
+    in favor of `MetaData` and `ThreadLocalMetaData`. The older names have been removed
+    in 0.4\. Updating is simple:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE155]'
+  prefs: []
+  type: TYPE_PRE
+- en: The seldom-used `name` parameter to `MetaData` types has been removed. The `ThreadLocalMetaData`
+    constructor now takes no arguments. Both types can now be bound to an `Engine`
+    or a single `Connection`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One Step Multi-Table Reflection
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You can now load table definitions and automatically create `Table` objects
+    from an entire database or schema in one pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE156]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`MetaData` also gains a `.reflect()` method enabling finer control over the
+    loading process, including specification of a subset of available tables to load.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQL Execution
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`engine`, `connectable`, and `bind_to` are all now `bind`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`Transactions`, `NestedTransactions` and `TwoPhaseTransactions`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Connection Pool Events
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The connection pool now fires events when new DB-API connections are created,
+    checked out and checked back into the pool. You can use these to execute session-scoped
+    SQL setup statements on fresh connections, for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle Engine Fixed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In 0.3.11, there were bugs in the Oracle Engine on how Primary Keys are handled.
+    These bugs could cause programs that worked fine with other engines, such as sqlite,
+    to fail when using the Oracle Engine. In 0.4, the Oracle Engine has been reworked,
+    fixing these Primary Key problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Out Parameters for Oracle
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE157]'
+  prefs: []
+  type: TYPE_PRE
+- en: Connection-bound `MetaData`, `Sessions`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`MetaData` and `Session` can be explicitly bound to a connection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE158]'
+  prefs: []
+  type: TYPE_PRE
+- en: Faster, More Foolproof `ResultProxy` Objects
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`engine`, `connectable`, and `bind_to` are all now `bind`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`Transactions`, `NestedTransactions` and `TwoPhaseTransactions`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Connection Pool Events
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The connection pool now fires events when new DB-API connections are created,
+    checked out and checked back into the pool. You can use these to execute session-scoped
+    SQL setup statements on fresh connections, for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oracle Engine Fixed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In 0.3.11, there were bugs in the Oracle Engine on how Primary Keys are handled.
+    These bugs could cause programs that worked fine with other engines, such as sqlite,
+    to fail when using the Oracle Engine. In 0.4, the Oracle Engine has been reworked,
+    fixing these Primary Key problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Out Parameters for Oracle
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE159]'
+  prefs: []
+  type: TYPE_PRE
+- en: Connection-bound `MetaData`, `Sessions`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`MetaData` and `Session` can be explicitly bound to a connection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE160]'
+  prefs: []
+  type: TYPE_PRE
+- en: Faster, More Foolproof `ResultProxy` Objects
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL

@@ -1,0 +1,2452 @@
+- en: Customizing DDL
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/core/ddl.html](https://docs.sqlalchemy.org/en/20/core/ddl.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: In the preceding sections we’ve discussed a variety of schema constructs including
+    [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table"), [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint"), [`CheckConstraint`](constraints.html#sqlalchemy.schema.CheckConstraint
+    "sqlalchemy.schema.CheckConstraint"), and [`Sequence`](defaults.html#sqlalchemy.schema.Sequence
+    "sqlalchemy.schema.Sequence"). Throughout, we’ve relied upon the `create()` and
+    [`create_all()`](metadata.html#sqlalchemy.schema.MetaData.create_all "sqlalchemy.schema.MetaData.create_all")
+    methods of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    and [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    in order to issue data definition language (DDL) for all constructs. When issued,
+    a pre-determined order of operations is invoked, and DDL to create each table
+    is created unconditionally including all constraints and other objects associated
+    with it. For more complex scenarios where database-specific DDL is required, SQLAlchemy
+    offers two techniques which can be used to add any DDL based on any condition,
+    either accompanying the standard generation of tables or by itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom DDL
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Custom DDL phrases are most easily achieved using the [`DDL`](#sqlalchemy.schema.DDL
+    "sqlalchemy.schema.DDL") construct. This construct works like all the other DDL
+    elements except it accepts a string which is the text to be emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: A more comprehensive method of creating libraries of DDL constructs is to use
+    custom compilation - see [Custom SQL Constructs and Compilation Extension](compiler.html)
+    for details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Controlling DDL Sequences'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL") construct introduced
+    previously also has the ability to be invoked conditionally based on inspection
+    of the database. This feature is available using the [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") method. For example, if we
+    wanted to create a trigger but only on the PostgreSQL backend, we could invoke
+    this as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`ExecutableDDLElement.execute_if.dialect`](#sqlalchemy.schema.ExecutableDDLElement.execute_if.params.dialect
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") keyword also accepts a tuple
+    of string dialect names:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") method can also work against
+    a callable function that will receive the database connection in use. In the example
+    below, we use this to conditionally create a CHECK constraint, first looking within
+    the PostgreSQL catalogs to see if it exists:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using the built-in DDLElement Classes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `sqlalchemy.schema` package contains SQL expression constructs that provide
+    DDL expressions, all of which extend from the common base [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement"). For example, to produce a `CREATE TABLE`
+    statement, one can use the [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    construct works like any other expression construct (such as `select()`, `table.insert()`,
+    etc.). All of SQLAlchemy’s DDL oriented constructs are subclasses of the [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") base class; this is the base of all
+    the objects corresponding to CREATE and DROP as well as ALTER, not only in SQLAlchemy
+    but in Alembic Migrations as well. A full reference of available constructs is
+    in [DDL Expression Constructs API](#schema-api-ddl).
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined DDL constructs may also be created as subclasses of [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") itself. The documentation in [Custom
+    SQL Constructs and Compilation Extension](compiler.html) has several examples
+    of this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Controlling DDL Generation of Constraints and Indexes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While the previously mentioned [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") method is useful for custom
+    [`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL") classes which need to
+    invoke conditionally, there is also a common need for elements that are typically
+    related to a particular [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table"),
+    namely constraints and indexes, to also be subject to “conditional” rules, such
+    as an index that includes features that are specific to a particular backend such
+    as PostgreSQL or SQL Server. For this use case, the [`Constraint.ddl_if()`](constraints.html#sqlalchemy.schema.Constraint.ddl_if
+    "sqlalchemy.schema.Constraint.ddl_if") and [`Index.ddl_if()`](constraints.html#sqlalchemy.schema.Index.ddl_if
+    "sqlalchemy.schema.Index.ddl_if") methods may be used against constructs such
+    as [`CheckConstraint`](constraints.html#sqlalchemy.schema.CheckConstraint "sqlalchemy.schema.CheckConstraint"),
+    [`UniqueConstraint`](constraints.html#sqlalchemy.schema.UniqueConstraint "sqlalchemy.schema.UniqueConstraint")
+    and [`Index`](constraints.html#sqlalchemy.schema.Index "sqlalchemy.schema.Index"),
+    accepting the same arguments as the [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") method in order to control
+    whether or not their DDL will be emitted in terms of their parent [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object. These methods may be used inline when creating
+    the definition for a [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    (or similarly, when using the `__table_args__` collection in an ORM declarative
+    mapping), such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the above example, the [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    construct refers to both an [`Index`](constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index") and a [`CheckConstraint`](constraints.html#sqlalchemy.schema.CheckConstraint
+    "sqlalchemy.schema.CheckConstraint") construct, both which indicate `.ddl_if(dialect="postgresql")`,
+    which indicates that these elements will be included in the CREATE TABLE sequence
+    only against the PostgreSQL dialect. If we run `meta.create_all()` against the
+    SQLite dialect, for example, neither construct will be included:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, if we run the same commands against a PostgreSQL database, we will
+    see inline DDL for the CHECK constraint as well as a separate CREATE statement
+    emitted for the index:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Constraint.ddl_if()`](constraints.html#sqlalchemy.schema.Constraint.ddl_if
+    "sqlalchemy.schema.Constraint.ddl_if") and [`Index.ddl_if()`](constraints.html#sqlalchemy.schema.Index.ddl_if
+    "sqlalchemy.schema.Index.ddl_if") methods create an event hook that may be consulted
+    not just at DDL execution time, as is the behavior with [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if"), but also within the SQL
+    compilation phase of the [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    object, which is responsible for rendering the `CHECK (num > 5)` DDL inline within
+    the CREATE TABLE statement. As such, the event hook that is received by the `ddl_if.callable_()`
+    parameter has a richer argument set present, including that there is a `dialect`
+    keyword argument passed, as well as an instance of [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") via the `compiler` keyword argument for
+    the “inline rendering” portion of the sequence. The `bind` argument is **not**
+    present when the event is triggered within the [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") sequence, so a modern event hook that wishes
+    to inspect the database versioning information would best use the given [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") object, such as to test PostgreSQL versioning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Constraint.ddl_if()`](constraints.html#sqlalchemy.schema.Constraint.ddl_if
+    "sqlalchemy.schema.Constraint.ddl_if")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Index.ddl_if()`](constraints.html#sqlalchemy.schema.Index.ddl_if "sqlalchemy.schema.Index.ddl_if")  ##
+    DDL Expression Constructs API'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [_CreateDropBase](#sqlalchemy.schema._CreateDropBase) | Base class for DDL
+    constructs that represent CREATE and DROP or equivalents. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [AddConstraint](#sqlalchemy.schema.AddConstraint) | Represent an ALTER TABLE
+    ADD CONSTRAINT statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BaseDDLElement](#sqlalchemy.schema.BaseDDLElement) | The root of DDL constructs,
+    including those that are sub-elements within the “create table” and other processes.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateColumn](#sqlalchemy.schema.CreateColumn) | Represent a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") as rendered in a CREATE TABLE statement, via the [`CreateTable`](#sqlalchemy.schema.CreateTable
+    "sqlalchemy.schema.CreateTable") construct. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateIndex](#sqlalchemy.schema.CreateIndex) | Represent a CREATE INDEX
+    statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateSchema](#sqlalchemy.schema.CreateSchema) | Represent a CREATE SCHEMA
+    statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateSequence](#sqlalchemy.schema.CreateSequence) | Represent a CREATE
+    SEQUENCE statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateTable](#sqlalchemy.schema.CreateTable) | Represent a CREATE TABLE
+    statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DDL](#sqlalchemy.schema.DDL) | A literal DDL statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropConstraint](#sqlalchemy.schema.DropConstraint) | Represent an ALTER
+    TABLE DROP CONSTRAINT statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropIndex](#sqlalchemy.schema.DropIndex) | Represent a DROP INDEX statement.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropSchema](#sqlalchemy.schema.DropSchema) | Represent a DROP SCHEMA statement.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropSequence](#sqlalchemy.schema.DropSequence) | Represent a DROP SEQUENCE
+    statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropTable](#sqlalchemy.schema.DropTable) | Represent a DROP TABLE statement.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ExecutableDDLElement](#sqlalchemy.schema.ExecutableDDLElement) | Base class
+    for standalone executable DDL expression constructs. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [sort_tables](#sqlalchemy.schema.sort_tables)(tables[, skip_fn, extra_dependencies])
+    | Sort a collection of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects based on dependency. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [sort_tables_and_constraints](#sqlalchemy.schema.sort_tables_and_constraints)(tables[,
+    filter_fn, extra_dependencies, _warn_for_cycles]) | Sort a collection of [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") / [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sort a collection of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects based on dependency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a dependency-ordered sort which will emit [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects such that they will follow their dependent
+    [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table") objects.
+    Tables are dependent on another based on the presence of [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects as well as explicit dependencies
+    added by [`Table.add_is_dependent_on()`](metadata.html#sqlalchemy.schema.Table.add_is_dependent_on
+    "sqlalchemy.schema.Table.add_is_dependent_on").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`sort_tables()`](#sqlalchemy.schema.sort_tables "sqlalchemy.schema.sort_tables")
+    function cannot by itself accommodate automatic resolution of dependency cycles
+    between tables, which are usually caused by mutually dependent foreign key constraints.
+    When these cycles are detected, the foreign keys of these tables are omitted from
+    consideration in the sort. A warning is emitted when this condition occurs, which
+    will be an exception raise in a future release. Tables which are not part of the
+    cycle will still be returned in dependency order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To resolve these cycles, the [`ForeignKeyConstraint.use_alter`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint.params.use_alter
+    "sqlalchemy.schema.ForeignKeyConstraint") parameter may be applied to those constraints
+    which create a cycle. Alternatively, the [`sort_tables_and_constraints()`](#sqlalchemy.schema.sort_tables_and_constraints
+    "sqlalchemy.schema.sort_tables_and_constraints") function will automatically return
+    foreign key constraints in a separate collection when cycles are detected so that
+    they may be applied to a schema separately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3.17: - a warning is emitted when [`sort_tables()`](#sqlalchemy.schema.sort_tables
+    "sqlalchemy.schema.sort_tables") cannot perform a proper sort due to cyclical
+    dependencies. This will be an exception in a future release. Additionally, the
+    sort will continue to return other tables not involved in the cycle in dependency
+    order which was not the case previously.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`tables` – a sequence of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`skip_fn` – optional callable which will be passed a [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") object; if it returns True, this constraint
+    will not be considered as a dependency. Note this is `different` from the same
+    parameter in [`sort_tables_and_constraints()`](#sqlalchemy.schema.sort_tables_and_constraints
+    "sqlalchemy.schema.sort_tables_and_constraints"), which is instead passed the
+    owning [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") object.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`extra_dependencies` – a sequence of 2-tuples of tables which will also be
+    considered as dependent on each other.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`sort_tables_and_constraints()`](#sqlalchemy.schema.sort_tables_and_constraints
+    "sqlalchemy.schema.sort_tables_and_constraints")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`MetaData.sorted_tables`](metadata.html#sqlalchemy.schema.MetaData.sorted_tables
+    "sqlalchemy.schema.MetaData.sorted_tables") - uses this function to sort'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sort a collection of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    / [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a dependency-ordered sort which will emit tuples of `(Table, [ForeignKeyConstraint,
+    ...])` such that each [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    follows its dependent [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects. Remaining [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects that are separate due to dependency
+    rules not satisfied by the sort are emitted afterwards as `(None, [ForeignKeyConstraint
+    ...])`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tables are dependent on another based on the presence of [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, explicit dependencies added
+    by [`Table.add_is_dependent_on()`](metadata.html#sqlalchemy.schema.Table.add_is_dependent_on
+    "sqlalchemy.schema.Table.add_is_dependent_on"), as well as dependencies stated
+    here using the [`sort_tables_and_constraints.skip_fn`](#sqlalchemy.schema.sort_tables_and_constraints.params.skip_fn
+    "sqlalchemy.schema.sort_tables_and_constraints") and/or [`sort_tables_and_constraints.extra_dependencies`](#sqlalchemy.schema.sort_tables_and_constraints.params.extra_dependencies
+    "sqlalchemy.schema.sort_tables_and_constraints") parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`tables` – a sequence of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`filter_fn` – optional callable which will be passed a [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") object, and returns a value based on
+    whether this constraint should definitely be included or excluded as an inline
+    constraint, or neither. If it returns False, the constraint will definitely be
+    included as a dependency that cannot be subject to ALTER; if True, it will `only`
+    be included as an ALTER result at the end. Returning None means the constraint
+    is included in the table-based result unless it is detected as part of a dependency
+    cycle.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`extra_dependencies` – a sequence of 2-tuples of tables which will also be
+    considered as dependent on each other.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`sort_tables()`](#sqlalchemy.schema.sort_tables "sqlalchemy.schema.sort_tables")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The root of DDL constructs, including those that are sub-elements within the
+    “create table” and other processes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.BaseDDLElement`](#sqlalchemy.schema.BaseDDLElement
+    "sqlalchemy.schema.BaseDDLElement") ([`sqlalchemy.sql.expression.ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base class for standalone executable DDL expression constructs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This class is the base for the general purpose [`DDL`](#sqlalchemy.schema.DDL
+    "sqlalchemy.schema.DDL") class, as well as the various create/drop clause constructs
+    such as [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable"),
+    [`DropTable`](#sqlalchemy.schema.DropTable "sqlalchemy.schema.DropTable"), [`AddConstraint`](#sqlalchemy.schema.AddConstraint
+    "sqlalchemy.schema.AddConstraint"), etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") is renamed from `DDLElement`, which
+    still exists for backwards compatibility.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    integrates closely with SQLAlchemy events, introduced in [Events](event.html).
+    An instance of one is itself an event receiving callable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDLEvents`](events.html#sqlalchemy.events.DDLEvents "sqlalchemy.events.DDLEvents")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Events](event.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Controlling DDL Sequences](#schema-ddl-sequences)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__call__()](#sqlalchemy.schema.ExecutableDDLElement.__call__), [against()](#sqlalchemy.schema.ExecutableDDLElement.against),
+    [execute_if()](#sqlalchemy.schema.ExecutableDDLElement.execute_if)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") (`sqlalchemy.sql.roles.DDLRole`, [`sqlalchemy.sql.expression.Executable`](selectable.html#sqlalchemy.sql.expression.Executable
+    "sqlalchemy.sql.expression.Executable"), [`sqlalchemy.schema.BaseDDLElement`](#sqlalchemy.schema.BaseDDLElement
+    "sqlalchemy.schema.BaseDDLElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Execute the DDL as a ddl_listener.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a copy of this [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") which will include the given target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This essentially applies the given item to the `.target` attribute of the returned
+    [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    object. This target is then usable by event handlers and compilation routines
+    in order to provide services such as tokenization of a DDL string in terms of
+    a particular [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    object is established as an event handler for the [`DDLEvents.before_create()`](events.html#sqlalchemy.events.DDLEvents.before_create
+    "sqlalchemy.events.DDLEvents.before_create") or [`DDLEvents.after_create()`](events.html#sqlalchemy.events.DDLEvents.after_create
+    "sqlalchemy.events.DDLEvents.after_create") events, and the event then occurs
+    for a given target such as a [`Constraint`](constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") or [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), that target is established with a copy of the [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") object using this method, which then
+    proceeds to the `ExecutableDDLElement.execute()` method in order to invoke the
+    actual DDL instruction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**target** – a [`SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem "sqlalchemy.schema.SchemaItem")
+    that will be the subject of a DDL operation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: a copy of this [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") with the `.target` attribute assigned
+    to the given [`SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem "sqlalchemy.schema.SchemaItem").
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL") - uses tokenization
+    against the “target” when processing the DDL string.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a callable that will execute this [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") conditionally within an event handler.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Used to provide a wrapper for event listening:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`dialect` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'May be a string or tuple of strings. If a string, it will be compared to the
+    name of the executing database dialect:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If a tuple, specifies multiple dialect names:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`callable_` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A callable, which will be invoked with three positional arguments as well as
+    optional keyword arguments:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'ddl:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This DDL element.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'target:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    or [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    object which is the target of this event. May be None if the DDL is executed explicitly.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'bind:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The [`Connection`](connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    being used for DDL execution. May be None if this construct is being created inline
+    within a table, in which case `compiler` will be present.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'tables:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Optional keyword argument - a list of Table objects which are to be created/
+    dropped within a MetaData.create_all() or drop_all() method call.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'dialect:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: keyword argument, but always present - the [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") involved in the operation.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'compiler:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: keyword argument. Will be `None` for an engine level DDL invocation, but will
+    refer to a [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") if this DDL element is being created inline
+    within a table.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'state:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Optional keyword argument - will be the `state` argument passed to this function.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'checkfirst:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Keyword argument, will be True if the ‘checkfirst’ flag was set during the call
+    to `create()`, `create_all()`, `drop()`, `drop_all()`.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: If the callable returns a True value, the DDL statement will be executed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`state` – any value which will be passed to the callable_ as the `state` keyword
+    argument.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SchemaItem.ddl_if()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDLEvents`](events.html#sqlalchemy.events.DDLEvents "sqlalchemy.events.DDLEvents")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Events](event.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: A literal DDL statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifies literal SQL DDL to be executed by the database. DDL objects function
+    as DDL event listeners, and can be subscribed to those events listed in [`DDLEvents`](events.html#sqlalchemy.events.DDLEvents
+    "sqlalchemy.events.DDLEvents"), using either [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") or [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") objects as targets. Basic templating support allows
+    a single DDL instance to handle repetitive tasks for multiple tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When operating on Table events, the following `statement` string substitutions
+    are available:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: The DDL’s “context”, if any, will be combined with the standard substitutions
+    noted above. Keys present in the context will override the standard substitutions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.DDL.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL")
+    ([`sqlalchemy.schema.ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a DDL statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`statement` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A string or unicode string to be executed. Statements will be processed with
+    Python’s string formatting operator using a fixed set of string substitutions,
+    as well as additional substitutions provided by the optional [`DDL.context`](#sqlalchemy.schema.DDL.params.context
+    "sqlalchemy.schema.DDL") parameter.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: A literal ‘%’ in a statement must be escaped as ‘%%’.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: SQL bind parameters are not available in DDL statements.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`context` – Optional dictionary, defaults to None. These values will be available
+    for use in string substitutions on the DDL statement.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDLEvents`](events.html#sqlalchemy.events.DDLEvents "sqlalchemy.events.DDLEvents")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Events](event.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base class for DDL constructs that represent CREATE and DROP or equivalents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The common theme of _CreateDropBase is a single `element` attribute which refers
+    to the element to be created or dropped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class `sqlalchemy.schema._CreateDropBase` ([`sqlalchemy.schema.ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a CREATE TABLE statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.CreateTable.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`element` – a [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that’s the subject of the CREATE'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`on` – See the description for ‘on’ in [`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`include_foreign_key_constraints` – optional sequence of [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects that will be included inline
+    within the CREATE construct; if omitted, all foreign key constraints that do not
+    specify use_alter=True are included.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`if_not_exists` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, an IF NOT EXISTS operator will be applied to the construct.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a DROP TABLE statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.DropTable.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropTable`](#sqlalchemy.schema.DropTable "sqlalchemy.schema.DropTable")
+    (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a [`DropTable`](#sqlalchemy.schema.DropTable "sqlalchemy.schema.DropTable")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`element` – a [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that’s the subject of the DROP.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`on` – See the description for ‘on’ in [`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`if_exists` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, an IF EXISTS operator will be applied to the construct.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    as rendered in a CREATE TABLE statement, via the [`CreateTable`](#sqlalchemy.schema.CreateTable
+    "sqlalchemy.schema.CreateTable") construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is provided to support custom column DDL within the generation of CREATE
+    TABLE statements, by using the compiler extension documented in [Custom SQL Constructs
+    and Compilation Extension](compiler.html) to extend [`CreateColumn`](#sqlalchemy.schema.CreateColumn
+    "sqlalchemy.schema.CreateColumn").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Typical integration is to examine the incoming [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object, and to redirect compilation if a particular
+    flag or condition is found:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above construct can be applied to a [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the directives we’ve added to the [`Column.info`](metadata.html#sqlalchemy.schema.Column.info
+    "sqlalchemy.schema.Column.info") collection will be detected by our custom compilation
+    scheme:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`CreateColumn`](#sqlalchemy.schema.CreateColumn "sqlalchemy.schema.CreateColumn")
+    construct can also be used to skip certain columns when producing a `CREATE TABLE`.
+    This is accomplished by creating a compilation rule that conditionally returns
+    `None`. This is essentially how to produce the same effect as using the `system=True`
+    argument on [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column"),
+    which marks a column as an implicitly-present “system” column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, suppose we wish to produce a [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") which skips rendering of the PostgreSQL `xmin` column
+    against the PostgreSQL backend, but on other backends does render it, in anticipation
+    of a triggered rule. A conditional compilation rule could skip this name only
+    on PostgreSQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, a [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    construct will generate a `CREATE TABLE` which only includes the `id` column in
+    the string; the `xmin` column will be omitted, but only against the PostgreSQL
+    backend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateColumn`](#sqlalchemy.schema.CreateColumn "sqlalchemy.schema.CreateColumn")
+    ([`sqlalchemy.schema.BaseDDLElement`](#sqlalchemy.schema.BaseDDLElement "sqlalchemy.schema.BaseDDLElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a CREATE SEQUENCE statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateSequence`](#sqlalchemy.schema.CreateSequence
+    "sqlalchemy.schema.CreateSequence") (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a DROP SEQUENCE statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropSequence`](#sqlalchemy.schema.DropSequence "sqlalchemy.schema.DropSequence")
+    (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a CREATE INDEX statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.CreateIndex.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateIndex`](#sqlalchemy.schema.CreateIndex "sqlalchemy.schema.CreateIndex")
+    (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a `Createindex` construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`element` – a [`Index`](constraints.html#sqlalchemy.schema.Index "sqlalchemy.schema.Index")
+    that’s the subject of the CREATE.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`if_not_exists` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, an IF NOT EXISTS operator will be applied to the construct.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a DROP INDEX statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.DropIndex.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropIndex`](#sqlalchemy.schema.DropIndex "sqlalchemy.schema.DropIndex")
+    (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a [`DropIndex`](#sqlalchemy.schema.DropIndex "sqlalchemy.schema.DropIndex")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`element` – a [`Index`](constraints.html#sqlalchemy.schema.Index "sqlalchemy.schema.Index")
+    that’s the subject of the DROP.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`if_exists` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, an IF EXISTS operator will be applied to the construct.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent an ALTER TABLE ADD CONSTRAINT statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.AddConstraint`](#sqlalchemy.schema.AddConstraint "sqlalchemy.schema.AddConstraint")
+    (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent an ALTER TABLE DROP CONSTRAINT statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropConstraint`](#sqlalchemy.schema.DropConstraint
+    "sqlalchemy.schema.DropConstraint") (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a CREATE SCHEMA statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The argument here is the string name of the schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.CreateSchema.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateSchema`](#sqlalchemy.schema.CreateSchema "sqlalchemy.schema.CreateSchema")
+    (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`CreateSchema`](#sqlalchemy.schema.CreateSchema "sqlalchemy.schema.CreateSchema")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a DROP SCHEMA statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The argument here is the string name of the schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.DropSchema.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropSchema`](#sqlalchemy.schema.DropSchema "sqlalchemy.schema.DropSchema")
+    (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`DropSchema`](#sqlalchemy.schema.DropSchema "sqlalchemy.schema.DropSchema")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom DDL
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Custom DDL phrases are most easily achieved using the [`DDL`](#sqlalchemy.schema.DDL
+    "sqlalchemy.schema.DDL") construct. This construct works like all the other DDL
+    elements except it accepts a string which is the text to be emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: A more comprehensive method of creating libraries of DDL constructs is to use
+    custom compilation - see [Custom SQL Constructs and Compilation Extension](compiler.html)
+    for details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Controlling DDL Sequences'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL") construct introduced
+    previously also has the ability to be invoked conditionally based on inspection
+    of the database. This feature is available using the [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") method. For example, if we
+    wanted to create a trigger but only on the PostgreSQL backend, we could invoke
+    this as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`ExecutableDDLElement.execute_if.dialect`](#sqlalchemy.schema.ExecutableDDLElement.execute_if.params.dialect
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") keyword also accepts a tuple
+    of string dialect names:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") method can also work against
+    a callable function that will receive the database connection in use. In the example
+    below, we use this to conditionally create a CHECK constraint, first looking within
+    the PostgreSQL catalogs to see if it exists:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using the built-in DDLElement Classes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `sqlalchemy.schema` package contains SQL expression constructs that provide
+    DDL expressions, all of which extend from the common base [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement"). For example, to produce a `CREATE TABLE`
+    statement, one can use the [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    construct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    construct works like any other expression construct (such as `select()`, `table.insert()`,
+    etc.). All of SQLAlchemy’s DDL oriented constructs are subclasses of the [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") base class; this is the base of all
+    the objects corresponding to CREATE and DROP as well as ALTER, not only in SQLAlchemy
+    but in Alembic Migrations as well. A full reference of available constructs is
+    in [DDL Expression Constructs API](#schema-api-ddl).
+  prefs: []
+  type: TYPE_NORMAL
+- en: User-defined DDL constructs may also be created as subclasses of [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") itself. The documentation in [Custom
+    SQL Constructs and Compilation Extension](compiler.html) has several examples
+    of this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Controlling DDL Generation of Constraints and Indexes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While the previously mentioned [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") method is useful for custom
+    [`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL") classes which need to
+    invoke conditionally, there is also a common need for elements that are typically
+    related to a particular [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table"),
+    namely constraints and indexes, to also be subject to “conditional” rules, such
+    as an index that includes features that are specific to a particular backend such
+    as PostgreSQL or SQL Server. For this use case, the [`Constraint.ddl_if()`](constraints.html#sqlalchemy.schema.Constraint.ddl_if
+    "sqlalchemy.schema.Constraint.ddl_if") and [`Index.ddl_if()`](constraints.html#sqlalchemy.schema.Index.ddl_if
+    "sqlalchemy.schema.Index.ddl_if") methods may be used against constructs such
+    as [`CheckConstraint`](constraints.html#sqlalchemy.schema.CheckConstraint "sqlalchemy.schema.CheckConstraint"),
+    [`UniqueConstraint`](constraints.html#sqlalchemy.schema.UniqueConstraint "sqlalchemy.schema.UniqueConstraint")
+    and [`Index`](constraints.html#sqlalchemy.schema.Index "sqlalchemy.schema.Index"),
+    accepting the same arguments as the [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if") method in order to control
+    whether or not their DDL will be emitted in terms of their parent [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object. These methods may be used inline when creating
+    the definition for a [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    (or similarly, when using the `__table_args__` collection in an ORM declarative
+    mapping), such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the above example, the [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    construct refers to both an [`Index`](constraints.html#sqlalchemy.schema.Index
+    "sqlalchemy.schema.Index") and a [`CheckConstraint`](constraints.html#sqlalchemy.schema.CheckConstraint
+    "sqlalchemy.schema.CheckConstraint") construct, both which indicate `.ddl_if(dialect="postgresql")`,
+    which indicates that these elements will be included in the CREATE TABLE sequence
+    only against the PostgreSQL dialect. If we run `meta.create_all()` against the
+    SQLite dialect, for example, neither construct will be included:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, if we run the same commands against a PostgreSQL database, we will
+    see inline DDL for the CHECK constraint as well as a separate CREATE statement
+    emitted for the index:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`Constraint.ddl_if()`](constraints.html#sqlalchemy.schema.Constraint.ddl_if
+    "sqlalchemy.schema.Constraint.ddl_if") and [`Index.ddl_if()`](constraints.html#sqlalchemy.schema.Index.ddl_if
+    "sqlalchemy.schema.Index.ddl_if") methods create an event hook that may be consulted
+    not just at DDL execution time, as is the behavior with [`ExecutableDDLElement.execute_if()`](#sqlalchemy.schema.ExecutableDDLElement.execute_if
+    "sqlalchemy.schema.ExecutableDDLElement.execute_if"), but also within the SQL
+    compilation phase of the [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    object, which is responsible for rendering the `CHECK (num > 5)` DDL inline within
+    the CREATE TABLE statement. As such, the event hook that is received by the `ddl_if.callable_()`
+    parameter has a richer argument set present, including that there is a `dialect`
+    keyword argument passed, as well as an instance of [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") via the `compiler` keyword argument for
+    the “inline rendering” portion of the sequence. The `bind` argument is **not**
+    present when the event is triggered within the [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") sequence, so a modern event hook that wishes
+    to inspect the database versioning information would best use the given [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") object, such as to test PostgreSQL versioning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Constraint.ddl_if()`](constraints.html#sqlalchemy.schema.Constraint.ddl_if
+    "sqlalchemy.schema.Constraint.ddl_if")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Index.ddl_if()`](constraints.html#sqlalchemy.schema.Index.ddl_if "sqlalchemy.schema.Index.ddl_if")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## DDL Expression Constructs API'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [_CreateDropBase](#sqlalchemy.schema._CreateDropBase) | Base class for DDL
+    constructs that represent CREATE and DROP or equivalents. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [AddConstraint](#sqlalchemy.schema.AddConstraint) | Represent an ALTER TABLE
+    ADD CONSTRAINT statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BaseDDLElement](#sqlalchemy.schema.BaseDDLElement) | The root of DDL constructs,
+    including those that are sub-elements within the “create table” and other processes.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateColumn](#sqlalchemy.schema.CreateColumn) | Represent a [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") as rendered in a CREATE TABLE statement, via the [`CreateTable`](#sqlalchemy.schema.CreateTable
+    "sqlalchemy.schema.CreateTable") construct. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateIndex](#sqlalchemy.schema.CreateIndex) | Represent a CREATE INDEX
+    statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateSchema](#sqlalchemy.schema.CreateSchema) | Represent a CREATE SCHEMA
+    statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateSequence](#sqlalchemy.schema.CreateSequence) | Represent a CREATE
+    SEQUENCE statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [CreateTable](#sqlalchemy.schema.CreateTable) | Represent a CREATE TABLE
+    statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DDL](#sqlalchemy.schema.DDL) | A literal DDL statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropConstraint](#sqlalchemy.schema.DropConstraint) | Represent an ALTER
+    TABLE DROP CONSTRAINT statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropIndex](#sqlalchemy.schema.DropIndex) | Represent a DROP INDEX statement.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropSchema](#sqlalchemy.schema.DropSchema) | Represent a DROP SCHEMA statement.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropSequence](#sqlalchemy.schema.DropSequence) | Represent a DROP SEQUENCE
+    statement. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [DropTable](#sqlalchemy.schema.DropTable) | Represent a DROP TABLE statement.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [ExecutableDDLElement](#sqlalchemy.schema.ExecutableDDLElement) | Base class
+    for standalone executable DDL expression constructs. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [sort_tables](#sqlalchemy.schema.sort_tables)(tables[, skip_fn, extra_dependencies])
+    | Sort a collection of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects based on dependency. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [sort_tables_and_constraints](#sqlalchemy.schema.sort_tables_and_constraints)(tables[,
+    filter_fn, extra_dependencies, _warn_for_cycles]) | Sort a collection of [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") / [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sort a collection of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects based on dependency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a dependency-ordered sort which will emit [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects such that they will follow their dependent
+    [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table") objects.
+    Tables are dependent on another based on the presence of [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects as well as explicit dependencies
+    added by [`Table.add_is_dependent_on()`](metadata.html#sqlalchemy.schema.Table.add_is_dependent_on
+    "sqlalchemy.schema.Table.add_is_dependent_on").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`sort_tables()`](#sqlalchemy.schema.sort_tables "sqlalchemy.schema.sort_tables")
+    function cannot by itself accommodate automatic resolution of dependency cycles
+    between tables, which are usually caused by mutually dependent foreign key constraints.
+    When these cycles are detected, the foreign keys of these tables are omitted from
+    consideration in the sort. A warning is emitted when this condition occurs, which
+    will be an exception raise in a future release. Tables which are not part of the
+    cycle will still be returned in dependency order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To resolve these cycles, the [`ForeignKeyConstraint.use_alter`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint.params.use_alter
+    "sqlalchemy.schema.ForeignKeyConstraint") parameter may be applied to those constraints
+    which create a cycle. Alternatively, the [`sort_tables_and_constraints()`](#sqlalchemy.schema.sort_tables_and_constraints
+    "sqlalchemy.schema.sort_tables_and_constraints") function will automatically return
+    foreign key constraints in a separate collection when cycles are detected so that
+    they may be applied to a schema separately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.3.17: - a warning is emitted when [`sort_tables()`](#sqlalchemy.schema.sort_tables
+    "sqlalchemy.schema.sort_tables") cannot perform a proper sort due to cyclical
+    dependencies. This will be an exception in a future release. Additionally, the
+    sort will continue to return other tables not involved in the cycle in dependency
+    order which was not the case previously.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`tables` – a sequence of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`skip_fn` – optional callable which will be passed a [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") object; if it returns True, this constraint
+    will not be considered as a dependency. Note this is `different` from the same
+    parameter in [`sort_tables_and_constraints()`](#sqlalchemy.schema.sort_tables_and_constraints
+    "sqlalchemy.schema.sort_tables_and_constraints"), which is instead passed the
+    owning [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") object.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`extra_dependencies` – a sequence of 2-tuples of tables which will also be
+    considered as dependent on each other.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`sort_tables_and_constraints()`](#sqlalchemy.schema.sort_tables_and_constraints
+    "sqlalchemy.schema.sort_tables_and_constraints")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`MetaData.sorted_tables`](metadata.html#sqlalchemy.schema.MetaData.sorted_tables
+    "sqlalchemy.schema.MetaData.sorted_tables") - uses this function to sort'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sort a collection of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    / [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a dependency-ordered sort which will emit tuples of `(Table, [ForeignKeyConstraint,
+    ...])` such that each [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    follows its dependent [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects. Remaining [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects that are separate due to dependency
+    rules not satisfied by the sort are emitted afterwards as `(None, [ForeignKeyConstraint
+    ...])`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tables are dependent on another based on the presence of [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, explicit dependencies added
+    by [`Table.add_is_dependent_on()`](metadata.html#sqlalchemy.schema.Table.add_is_dependent_on
+    "sqlalchemy.schema.Table.add_is_dependent_on"), as well as dependencies stated
+    here using the [`sort_tables_and_constraints.skip_fn`](#sqlalchemy.schema.sort_tables_and_constraints.params.skip_fn
+    "sqlalchemy.schema.sort_tables_and_constraints") and/or [`sort_tables_and_constraints.extra_dependencies`](#sqlalchemy.schema.sort_tables_and_constraints.params.extra_dependencies
+    "sqlalchemy.schema.sort_tables_and_constraints") parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`tables` – a sequence of [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`filter_fn` – optional callable which will be passed a [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") object, and returns a value based on
+    whether this constraint should definitely be included or excluded as an inline
+    constraint, or neither. If it returns False, the constraint will definitely be
+    included as a dependency that cannot be subject to ALTER; if True, it will `only`
+    be included as an ALTER result at the end. Returning None means the constraint
+    is included in the table-based result unless it is detected as part of a dependency
+    cycle.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`extra_dependencies` – a sequence of 2-tuples of tables which will also be
+    considered as dependent on each other.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`sort_tables()`](#sqlalchemy.schema.sort_tables "sqlalchemy.schema.sort_tables")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: The root of DDL constructs, including those that are sub-elements within the
+    “create table” and other processes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.BaseDDLElement`](#sqlalchemy.schema.BaseDDLElement
+    "sqlalchemy.schema.BaseDDLElement") ([`sqlalchemy.sql.expression.ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base class for standalone executable DDL expression constructs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This class is the base for the general purpose [`DDL`](#sqlalchemy.schema.DDL
+    "sqlalchemy.schema.DDL") class, as well as the various create/drop clause constructs
+    such as [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable"),
+    [`DropTable`](#sqlalchemy.schema.DropTable "sqlalchemy.schema.DropTable"), [`AddConstraint`](#sqlalchemy.schema.AddConstraint
+    "sqlalchemy.schema.AddConstraint"), etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Changed in version 2.0: [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") is renamed from `DDLElement`, which
+    still exists for backwards compatibility.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    integrates closely with SQLAlchemy events, introduced in [Events](event.html).
+    An instance of one is itself an event receiving callable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDLEvents`](events.html#sqlalchemy.events.DDLEvents "sqlalchemy.events.DDLEvents")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Events](event.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Controlling DDL Sequences](#schema-ddl-sequences)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__call__()](#sqlalchemy.schema.ExecutableDDLElement.__call__), [against()](#sqlalchemy.schema.ExecutableDDLElement.against),
+    [execute_if()](#sqlalchemy.schema.ExecutableDDLElement.execute_if)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") (`sqlalchemy.sql.roles.DDLRole`, [`sqlalchemy.sql.expression.Executable`](selectable.html#sqlalchemy.sql.expression.Executable
+    "sqlalchemy.sql.expression.Executable"), [`sqlalchemy.schema.BaseDDLElement`](#sqlalchemy.schema.BaseDDLElement
+    "sqlalchemy.schema.BaseDDLElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: Execute the DDL as a ddl_listener.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a copy of this [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") which will include the given target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This essentially applies the given item to the `.target` attribute of the returned
+    [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    object. This target is then usable by event handlers and compilation routines
+    in order to provide services such as tokenization of a DDL string in terms of
+    a particular [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table").
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    object is established as an event handler for the [`DDLEvents.before_create()`](events.html#sqlalchemy.events.DDLEvents.before_create
+    "sqlalchemy.events.DDLEvents.before_create") or [`DDLEvents.after_create()`](events.html#sqlalchemy.events.DDLEvents.after_create
+    "sqlalchemy.events.DDLEvents.after_create") events, and the event then occurs
+    for a given target such as a [`Constraint`](constraints.html#sqlalchemy.schema.Constraint
+    "sqlalchemy.schema.Constraint") or [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table"), that target is established with a copy of the [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") object using this method, which then
+    proceeds to the `ExecutableDDLElement.execute()` method in order to invoke the
+    actual DDL instruction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**target** – a [`SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem "sqlalchemy.schema.SchemaItem")
+    that will be the subject of a DDL operation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: a copy of this [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") with the `.target` attribute assigned
+    to the given [`SchemaItem`](metadata.html#sqlalchemy.schema.SchemaItem "sqlalchemy.schema.SchemaItem").
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL") - uses tokenization
+    against the “target” when processing the DDL string.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a callable that will execute this [`ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") conditionally within an event handler.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Used to provide a wrapper for event listening:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`dialect` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'May be a string or tuple of strings. If a string, it will be compared to the
+    name of the executing database dialect:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If a tuple, specifies multiple dialect names:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`callable_` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A callable, which will be invoked with three positional arguments as well as
+    optional keyword arguments:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'ddl:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This DDL element.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'target:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    or [`MetaData`](metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    object which is the target of this event. May be None if the DDL is executed explicitly.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'bind:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The [`Connection`](connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    being used for DDL execution. May be None if this construct is being created inline
+    within a table, in which case `compiler` will be present.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'tables:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Optional keyword argument - a list of Table objects which are to be created/
+    dropped within a MetaData.create_all() or drop_all() method call.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'dialect:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: keyword argument, but always present - the [`Dialect`](internals.html#sqlalchemy.engine.Dialect
+    "sqlalchemy.engine.Dialect") involved in the operation.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'compiler:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: keyword argument. Will be `None` for an engine level DDL invocation, but will
+    refer to a [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") if this DDL element is being created inline
+    within a table.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'state:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Optional keyword argument - will be the `state` argument passed to this function.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'checkfirst:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Keyword argument, will be True if the ‘checkfirst’ flag was set during the call
+    to `create()`, `create_all()`, `drop()`, `drop_all()`.
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: If the callable returns a True value, the DDL statement will be executed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`state` – any value which will be passed to the callable_ as the `state` keyword
+    argument.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SchemaItem.ddl_if()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDLEvents`](events.html#sqlalchemy.events.DDLEvents "sqlalchemy.events.DDLEvents")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Events](event.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: A literal DDL statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifies literal SQL DDL to be executed by the database. DDL objects function
+    as DDL event listeners, and can be subscribed to those events listed in [`DDLEvents`](events.html#sqlalchemy.events.DDLEvents
+    "sqlalchemy.events.DDLEvents"), using either [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") or [`MetaData`](metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") objects as targets. Basic templating support allows
+    a single DDL instance to handle repetitive tasks for multiple tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When operating on Table events, the following `statement` string substitutions
+    are available:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: The DDL’s “context”, if any, will be combined with the standard substitutions
+    noted above. Keys present in the context will override the standard substitutions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.DDL.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL")
+    ([`sqlalchemy.schema.ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a DDL statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`statement` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A string or unicode string to be executed. Statements will be processed with
+    Python’s string formatting operator using a fixed set of string substitutions,
+    as well as additional substitutions provided by the optional [`DDL.context`](#sqlalchemy.schema.DDL.params.context
+    "sqlalchemy.schema.DDL") parameter.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: A literal ‘%’ in a statement must be escaped as ‘%%’.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: SQL bind parameters are not available in DDL statements.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`context` – Optional dictionary, defaults to None. These values will be available
+    for use in string substitutions on the DDL statement.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDLEvents`](events.html#sqlalchemy.events.DDLEvents "sqlalchemy.events.DDLEvents")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Events](event.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base class for DDL constructs that represent CREATE and DROP or equivalents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The common theme of _CreateDropBase is a single `element` attribute which refers
+    to the element to be created or dropped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class `sqlalchemy.schema._CreateDropBase` ([`sqlalchemy.schema.ExecutableDDLElement`](#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a CREATE TABLE statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.CreateTable.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`element` – a [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that’s the subject of the CREATE'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`on` – See the description for ‘on’ in [`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`include_foreign_key_constraints` – optional sequence of [`ForeignKeyConstraint`](constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects that will be included inline
+    within the CREATE construct; if omitted, all foreign key constraints that do not
+    specify use_alter=True are included.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`if_not_exists` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, an IF NOT EXISTS operator will be applied to the construct.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a DROP TABLE statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.DropTable.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropTable`](#sqlalchemy.schema.DropTable "sqlalchemy.schema.DropTable")
+    (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a [`DropTable`](#sqlalchemy.schema.DropTable "sqlalchemy.schema.DropTable")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`element` – a [`Table`](metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    that’s the subject of the DROP.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`on` – See the description for ‘on’ in [`DDL`](#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`if_exists` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, an IF EXISTS operator will be applied to the construct.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    as rendered in a CREATE TABLE statement, via the [`CreateTable`](#sqlalchemy.schema.CreateTable
+    "sqlalchemy.schema.CreateTable") construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is provided to support custom column DDL within the generation of CREATE
+    TABLE statements, by using the compiler extension documented in [Custom SQL Constructs
+    and Compilation Extension](compiler.html) to extend [`CreateColumn`](#sqlalchemy.schema.CreateColumn
+    "sqlalchemy.schema.CreateColumn").
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Typical integration is to examine the incoming [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object, and to redirect compilation if a particular
+    flag or condition is found:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above construct can be applied to a [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the directives we’ve added to the [`Column.info`](metadata.html#sqlalchemy.schema.Column.info
+    "sqlalchemy.schema.Column.info") collection will be detected by our custom compilation
+    scheme:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [`CreateColumn`](#sqlalchemy.schema.CreateColumn "sqlalchemy.schema.CreateColumn")
+    construct can also be used to skip certain columns when producing a `CREATE TABLE`.
+    This is accomplished by creating a compilation rule that conditionally returns
+    `None`. This is essentially how to produce the same effect as using the `system=True`
+    argument on [`Column`](metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column"),
+    which marks a column as an implicitly-present “system” column.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, suppose we wish to produce a [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") which skips rendering of the PostgreSQL `xmin` column
+    against the PostgreSQL backend, but on other backends does render it, in anticipation
+    of a triggered rule. A conditional compilation rule could skip this name only
+    on PostgreSQL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, a [`CreateTable`](#sqlalchemy.schema.CreateTable "sqlalchemy.schema.CreateTable")
+    construct will generate a `CREATE TABLE` which only includes the `id` column in
+    the string; the `xmin` column will be omitted, but only against the PostgreSQL
+    backend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateColumn`](#sqlalchemy.schema.CreateColumn "sqlalchemy.schema.CreateColumn")
+    ([`sqlalchemy.schema.BaseDDLElement`](#sqlalchemy.schema.BaseDDLElement "sqlalchemy.schema.BaseDDLElement"))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a CREATE SEQUENCE statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateSequence`](#sqlalchemy.schema.CreateSequence
+    "sqlalchemy.schema.CreateSequence") (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a DROP SEQUENCE statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropSequence`](#sqlalchemy.schema.DropSequence "sqlalchemy.schema.DropSequence")
+    (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a CREATE INDEX statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.CreateIndex.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateIndex`](#sqlalchemy.schema.CreateIndex "sqlalchemy.schema.CreateIndex")
+    (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a `Createindex` construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`element` – a [`Index`](constraints.html#sqlalchemy.schema.Index "sqlalchemy.schema.Index")
+    that’s the subject of the CREATE.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`if_not_exists` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, an IF NOT EXISTS operator will be applied to the construct.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a DROP INDEX statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.DropIndex.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropIndex`](#sqlalchemy.schema.DropIndex "sqlalchemy.schema.DropIndex")
+    (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a [`DropIndex`](#sqlalchemy.schema.DropIndex "sqlalchemy.schema.DropIndex")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`element` – a [`Index`](constraints.html#sqlalchemy.schema.Index "sqlalchemy.schema.Index")
+    that’s the subject of the DROP.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`if_exists` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: if True, an IF EXISTS operator will be applied to the construct.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.0b2.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent an ALTER TABLE ADD CONSTRAINT statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.AddConstraint`](#sqlalchemy.schema.AddConstraint "sqlalchemy.schema.AddConstraint")
+    (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent an ALTER TABLE DROP CONSTRAINT statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropConstraint`](#sqlalchemy.schema.DropConstraint
+    "sqlalchemy.schema.DropConstraint") (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a CREATE SCHEMA statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The argument here is the string name of the schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.CreateSchema.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.CreateSchema`](#sqlalchemy.schema.CreateSchema "sqlalchemy.schema.CreateSchema")
+    (`sqlalchemy.schema._CreateBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`CreateSchema`](#sqlalchemy.schema.CreateSchema "sqlalchemy.schema.CreateSchema")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: Represent a DROP SCHEMA statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The argument here is the string name of the schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[__init__()](#sqlalchemy.schema.DropSchema.__init__)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Class signature**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: class [`sqlalchemy.schema.DropSchema`](#sqlalchemy.schema.DropSchema "sqlalchemy.schema.DropSchema")
+    (`sqlalchemy.schema._DropBase`)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create a new [`DropSchema`](#sqlalchemy.schema.DropSchema "sqlalchemy.schema.DropSchema")
+    construct.
+  prefs: []
+  type: TYPE_NORMAL

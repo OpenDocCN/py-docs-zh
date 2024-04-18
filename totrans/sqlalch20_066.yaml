@@ -1,0 +1,1434 @@
+- en: Baked Queries
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/extensions/baked.html](https://docs.sqlalchemy.org/en/20/orm/extensions/baked.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`baked` provides an alternative creational pattern for [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") objects, which allows for caching of the object’s
+    construction and string-compilation steps. This means that for a particular [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") building scenario that is used more than once, all
+    of the Python function invocation involved in building the query from its initial
+    construction up through generating a SQL string will only occur **once**, rather
+    than for each time that query is built up and executed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The rationale for this system is to greatly reduce Python interpreter overhead
+    for everything that occurs **before the SQL is emitted**. The caching of the “baked”
+    system does **not** in any way reduce SQL calls or cache the **return results**
+    from the database. A technique that demonstrates the caching of the SQL calls
+    and result sets themselves is available in [Dogpile Caching](../examples.html#examples-caching).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 1.4: SQLAlchemy 1.4 and 2.0 feature an all-new direct
+    query caching system that removes the need for the [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") system. Caching is now transparently active
+    for all Core and ORM queries with no action taken by the user, using the system
+    described at [SQL Compilation Caching](../../core/connections.html#sql-caching).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep Alchemy
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`sqlalchemy.ext.baked`](#module-sqlalchemy.ext.baked "sqlalchemy.ext.baked")
+    extension is **not for beginners**. Using it correctly requires a good high level
+    understanding of how SQLAlchemy, the database driver, and the backend database
+    interact with each other. This extension presents a very specific kind of optimization
+    that is not ordinarily needed. As noted above, it **does not cache queries**,
+    only the string formulation of the SQL itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Synopsis
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Usage of the baked system starts by producing a so-called “bakery”, which represents
+    storage for a particular series of query objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above “bakery” will store cached data in an LRU cache that defaults to 200
+    elements, noting that an ORM query will typically contain one entry for the ORM
+    query as invoked, as well as one entry per database dialect for the SQL string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The bakery allows us to build up a [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") object by specifying its construction as a series
+    of Python callables, which are typically lambdas. For succinct usage, it overrides
+    the `+=` operator so that a typical query build-up looks like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following are some observations about the above code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `baked_query` object is an instance of [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery"). This object is essentially the “builder” for
+    a real orm [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query")
+    object, but it is not itself the *actual* [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") object.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The actual [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query")
+    object is not built at all, until the very end of the function when `Result.all()`
+    is called.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The steps that are added to the `baked_query` object are all expressed as Python
+    functions, typically lambdas. The first lambda given to the [`bakery()`](#sqlalchemy.ext.baked.bakery
+    "sqlalchemy.ext.baked.bakery") function receives a [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") as its argument. The remaining lambdas each receive
+    a [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query")
+    as their argument.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the above code, even though our application may call upon `search_for_user()`
+    many times, and even though within each invocation we build up an entirely new
+    [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery")
+    object, *all of the lambdas are only called once*. Each lambda is **never** called
+    a second time for as long as this query is cached in the bakery.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The caching is achieved by storing references to the **lambda objects themselves**
+    in order to formulate a cache key; that is, the fact that the Python interpreter
+    assigns an in-Python identity to these functions is what determines how to identify
+    the query on successive runs. For those invocations of `search_for_user()` where
+    the `email` parameter is specified, the callable `lambda q: q.filter(User.email
+    == bindparam(''email''))` will be part of the cache key that’s retrieved; when
+    `email` is `None`, this callable is not part of the cache key.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Because the lambdas are all called only once, it is essential that no variables
+    which may change across calls are referenced **within** the lambdas; instead,
+    assuming these are values to be bound into the SQL string, we use [`bindparam()`](../../core/sqlelement.html#sqlalchemy.sql.expression.bindparam
+    "sqlalchemy.sql.expression.bindparam") to construct named parameters, where we
+    apply their actual values later using `Result.params()`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Performance
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The baked query probably looks a little odd, a little bit awkward and a little
+    bit verbose. However, the savings in Python performance for a query which is invoked
+    lots of times in an application are very dramatic. The example suite `short_selects`
+    demonstrated in [Performance](../examples.html#examples-performance) illustrates
+    a comparison of queries which each return only one row, such as the following
+    regular query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'compared to the equivalent “baked” query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The difference in Python function call count for an iteration of 10000 calls
+    to each block are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In terms of number of seconds on a powerful laptop, this comes out as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that this test very intentionally features queries that only return one
+    row. For queries that return many rows, the performance advantage of the baked
+    query will have less and less of an impact, proportional to the time spent fetching
+    rows. It is critical to keep in mind that the **baked query feature only applies
+    to building the query itself, not the fetching of results**. Using the baked feature
+    is by no means a guarantee to a much faster application; it is only a potentially
+    useful feature for those applications that have been measured as being impacted
+    by this particular form of overhead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rationale
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The “lambda” approach above is a superset of what would be a more traditional
+    “parameterized” approach. Suppose we wished to build a simple system where we
+    build a [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query")
+    just once, then store it in a dictionary for re-use. This is possible right now
+    by just building up the query, and removing its [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") by calling `my_cached_query = query.with_session(None)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above approach gets us a very minimal performance benefit. By re-using a
+    [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query"),
+    we save on the Python work within the `session.query(Model)` constructor as well
+    as calling upon `filter(Model.id == bindparam('id'))`, which will skip for us
+    the building up of the Core expression as well as sending it to [`Query.filter()`](../queryguide/query.html#sqlalchemy.orm.Query.filter
+    "sqlalchemy.orm.Query.filter"). However, the approach still regenerates the full
+    [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    object every time when [`Query.all()`](../queryguide/query.html#sqlalchemy.orm.Query.all
+    "sqlalchemy.orm.Query.all") is called and additionally this brand new [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") is sent off to the string compilation step
+    every time, which for a simple case like the above is probably about 70% of the
+    overhead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To reduce the additional overhead, we need some more specialized logic, some
+    way to memoize the construction of the select object and the construction of the
+    SQL. There is an example of this on the wiki in the section [BakedQuery](https://bitbucket.org/zzzeek/sqlalchemy/wiki/UsageRecipes/BakedQuery),
+    a precursor to this feature, however in that system, we aren’t caching the *construction*
+    of the query. In order to remove all the overhead, we need to cache both the construction
+    of the query as well as the SQL compilation. Let’s assume we adapted the recipe
+    in this way and made ourselves a method `.bake()` that pre-compiles the SQL for
+    the query, producing a new object that can be invoked with minimal overhead. Our
+    example becomes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we’ve fixed the performance situation, but we still have this string
+    cache key to deal with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can use the “bakery” approach to re-frame the above in a way that looks
+    less unusual than the “building up lambdas” approach, and more like a simple improvement
+    upon the simple “reuse a query” approach:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we use the “baked” system in a manner that is very similar to the simplistic
+    “cache a query” system. However, it uses two fewer lines of code, does not need
+    to manufacture a cache key of “my_key”, and also includes the same feature as
+    our custom “bake” function that caches 100% of the Python invocation work from
+    the constructor of the query, to the filter call, to the production of the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object, to the string compilation step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the above, if we ask ourselves, “what if lookup needs to make conditional
+    decisions as to the structure of the query?”, this is where hopefully it becomes
+    apparent why “baked” is the way it is. Instead of a parameterized query building
+    off from exactly one function (which is how we thought baked might work originally),
+    we can build it from *any number* of functions. Consider our naive example, if
+    we needed to have an additional clause in our query on a conditional basis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our “simple” parameterized system must now be tasked with generating cache
+    keys which take into account whether or not the “include_frobnizzle” flag was
+    passed, as the presence of this flag means that the generated SQL would be entirely
+    different. It should be apparent that as the complexity of query building goes
+    up, the task of caching these queries becomes burdensome very quickly. We can
+    convert the above example into a direct use of “bakery” as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we again cache not just the query object but all the work it needs to
+    do in order to generate SQL. We also no longer need to deal with making sure we
+    generate a cache key that accurately takes into account all of the structural
+    modifications we’ve made; this is now handled automatically and without the chance
+    of mistakes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This code sample is a few lines shorter than the naive example, removes the
+    need to deal with cache keys, and has the vast performance benefits of the full
+    so-called “baked” feature. But still a little verbose! Hence we take methods like
+    [`BakedQuery.add_criteria()`](#sqlalchemy.ext.baked.BakedQuery.add_criteria "sqlalchemy.ext.baked.BakedQuery.add_criteria")
+    and [`BakedQuery.with_criteria()`](#sqlalchemy.ext.baked.BakedQuery.with_criteria
+    "sqlalchemy.ext.baked.BakedQuery.with_criteria") and shorten them into operators,
+    and encourage (though certainly not require!) using simple lambdas, only as a
+    means to reduce verbosity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, the approach is simpler to implement and much more similar in code
+    flow to what a non-cached querying function would look like, hence making code
+    easier to port.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above description is essentially a summary of the design process used to
+    arrive at the current “baked” approach. Starting from the “normal” approaches,
+    the additional issues of cache key construction and management, removal of all
+    redundant Python execution, and queries built up with conditionals needed to be
+    addressed, leading to the final approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Special Query Techniques
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section will describe some techniques for specific query situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using IN expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`ColumnOperators.in_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") method in SQLAlchemy historically
+    renders a variable set of bound parameters based on the list of items that’s passed
+    to the method. This doesn’t work for baked queries as the length of that list
+    can change on different calls. To solve this problem, the [`bindparam.expanding`](../../core/sqlelement.html#sqlalchemy.sql.expression.bindparam.params.expanding
+    "sqlalchemy.sql.expression.bindparam") parameter supports a late-rendered IN expression
+    that is safe to be cached inside of baked query. The actual list of elements is
+    rendered at statement execution time, rather than at statement compilation time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`bindparam.expanding`](../../core/sqlelement.html#sqlalchemy.sql.expression.bindparam.params.expanding
+    "sqlalchemy.sql.expression.bindparam")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ColumnOperators.in_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Subqueries
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When using [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    objects, it is often needed that one [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object is used to generate a subquery within another.
+    In the case where the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") is currently in baked form, an interim method may be used
+    to retrieve the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    object, using the [`BakedQuery.to_query()`](#sqlalchemy.ext.baked.BakedQuery.to_query
+    "sqlalchemy.ext.baked.BakedQuery.to_query") method. This method is passed the
+    [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    or [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    that is the argument to the lambda callable used to generate a particular step
+    of the baked query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using the before_compile event'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As of SQLAlchemy 1.3.11, the use of the [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event against a particular [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") will disallow the baked query system from caching the
+    query, if the event hook returns a new [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object that is different from the one passed in. This
+    is so that the [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") hook may be invoked against a particular
+    [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    every time it is used, to accommodate for hooks that alter the query differently
+    each time. To allow a [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") to alter a [`sqlalchemy.orm.Query()`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object, but still to allow the result to be cached, the
+    event can be registered passing the `bake_ok=True` flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above strategy is appropriate for an event that will modify a given [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") in exactly the same way every time, not dependent on specific
+    parameters or external state that changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3.11: - added the “bake_ok” flag to the [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event and disallowed caching via
+    the “baked” extension from occurring for event handlers that return a new [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object if this flag is not set.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Disabling Baked Queries Session-wide
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The flag [`Session.enable_baked_queries`](../session_api.html#sqlalchemy.orm.Session.params.enable_baked_queries
+    "sqlalchemy.orm.Session") may be set to False, causing all baked queries to not
+    use the cache when used against that [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Like all session flags, it is also accepted by factory objects like [`sessionmaker`](../session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") and methods like [`sessionmaker.configure()`](../session_api.html#sqlalchemy.orm.sessionmaker.configure
+    "sqlalchemy.orm.sessionmaker.configure").
+  prefs: []
+  type: TYPE_NORMAL
+- en: The immediate rationale for this flag is so that an application which is seeing
+    issues potentially due to cache key conflicts from user-defined baked queries
+    or other baked query issues can turn the behavior off, in order to identify or
+    eliminate baked queries as the cause of an issue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lazy Loading Integration
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: As of SQLAlchemy 1.4, the “baked query” system is no
+    longer part of the relationship loading system. The [native caching](../../core/connections.html#sql-caching)
+    system is used instead.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: API Documentation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BakedQuery](#sqlalchemy.ext.baked.BakedQuery) | A builder object for [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") objects. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [bakery](#sqlalchemy.ext.baked.bakery) | Construct a new bakery. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Bakery](#sqlalchemy.ext.baked.Bakery) | Callable which returns a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery"). |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a new bakery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: an instance of [`Bakery`](#sqlalchemy.ext.baked.Bakery "sqlalchemy.ext.baked.Bakery")
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[add_criteria()](#sqlalchemy.ext.baked.BakedQuery.add_criteria), [bakery()](#sqlalchemy.ext.baked.BakedQuery.bakery),
+    [for_session()](#sqlalchemy.ext.baked.BakedQuery.for_session), [spoil()](#sqlalchemy.ext.baked.BakedQuery.spoil),
+    [to_query()](#sqlalchemy.ext.baked.BakedQuery.to_query), [with_criteria()](#sqlalchemy.ext.baked.BakedQuery.with_criteria)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A builder object for [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Add a criteria function to this [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is equivalent to using the `+=` operator to modify a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") in-place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a new bakery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: an instance of [`Bakery`](#sqlalchemy.ext.baked.Bakery "sqlalchemy.ext.baked.Bakery")
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a `Result` object for this [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is equivalent to calling the [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") as a Python callable, e.g. `result = my_baked_query(session)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Cancel any query caching that will occur on this BakedQuery object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The BakedQuery can continue to be used normally, however additional creational
+    functions will not be cached; they will be called on every invocation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is to support the case where a particular step in constructing a baked
+    query disqualifies the query from being cacheable, such as a variant that relies
+    upon some uncacheable value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**full** – if False, only functions added to this [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") object subsequent to the spoil step will be
+    non-cached; the state of the [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery")
+    up until this point will be pulled from the cache. If True, then the entire [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object is built from scratch each time, with all creational
+    functions being called on each invocation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    object for use as a subquery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This method should be used within the lambda callable being used to generate
+    a step of an enclosing [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery").
+    The parameter should normally be the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object that is passed to the lambda:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the case where the subquery is used in the first callable against a [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is also accepted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**query_or_session** –'
+  prefs: []
+  type: TYPE_NORMAL
+- en: a [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    object or a class [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object, that is assumed to be within the context of an enclosing [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") callable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Add a criteria function to a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") cloned from this one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is equivalent to using the `+` operator to produce a new [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") with modifications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Callable which returns a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This object is returned by the class method [`BakedQuery.bakery()`](#sqlalchemy.ext.baked.BakedQuery.bakery
+    "sqlalchemy.ext.baked.BakedQuery.bakery"). It exists as an object so that the
+    “cache” can be easily inspected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Invokes a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery")
+    against a [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `Result` object is where the actual [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") object gets created, or retrieved from the cache,
+    against a target [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    and is then invoked for results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return all rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.all()`](../queryguide/query.html#sqlalchemy.orm.Query.all
+    "sqlalchemy.orm.Query.all").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: return the ‘count’.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.count()`](../queryguide/query.html#sqlalchemy.orm.Query.count
+    "sqlalchemy.orm.Query.count").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note this uses a subquery to ensure an accurate count regardless of the structure
+    of the original statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the first row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.first()`](../queryguide/query.html#sqlalchemy.orm.Query.first
+    "sqlalchemy.orm.Query.first").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Retrieve an object based on identity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.get()`](../queryguide/query.html#sqlalchemy.orm.Query.get
+    "sqlalchemy.orm.Query.get").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return exactly one result or raise an exception.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.one()`](../queryguide/query.html#sqlalchemy.orm.Query.one
+    "sqlalchemy.orm.Query.one").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return one or zero results, or raise an exception for multiple rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.one_or_none()`](../queryguide/query.html#sqlalchemy.orm.Query.one_or_none
+    "sqlalchemy.orm.Query.one_or_none").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Specify parameters to be replaced into the string SQL statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the first element of the first result or None if no rows present. If
+    multiple rows are returned, raises MultipleResultsFound.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.scalar()`](../queryguide/query.html#sqlalchemy.orm.Query.scalar
+    "sqlalchemy.orm.Query.scalar").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Add a criteria function that will be applied post-cache.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This adds a function that will be run against the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object after it is retrieved from the cache. This currently
+    includes **only** the [`Query.params()`](../queryguide/query.html#sqlalchemy.orm.Query.params
+    "sqlalchemy.orm.Query.params") and [`Query.execution_options()`](../queryguide/query.html#sqlalchemy.orm.Query.execution_options
+    "sqlalchemy.orm.Query.execution_options") methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Result.with_post_criteria()` functions are applied to the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object **after** the query’s SQL statement object has
+    been retrieved from the cache. Only [`Query.params()`](../queryguide/query.html#sqlalchemy.orm.Query.params
+    "sqlalchemy.orm.Query.params") and [`Query.execution_options()`](../queryguide/query.html#sqlalchemy.orm.Query.execution_options
+    "sqlalchemy.orm.Query.execution_options") methods should be used.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Synopsis
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Usage of the baked system starts by producing a so-called “bakery”, which represents
+    storage for a particular series of query objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above “bakery” will store cached data in an LRU cache that defaults to 200
+    elements, noting that an ORM query will typically contain one entry for the ORM
+    query as invoked, as well as one entry per database dialect for the SQL string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The bakery allows us to build up a [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") object by specifying its construction as a series
+    of Python callables, which are typically lambdas. For succinct usage, it overrides
+    the `+=` operator so that a typical query build-up looks like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following are some observations about the above code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `baked_query` object is an instance of [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery"). This object is essentially the “builder” for
+    a real orm [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query")
+    object, but it is not itself the *actual* [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") object.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The actual [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query")
+    object is not built at all, until the very end of the function when `Result.all()`
+    is called.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The steps that are added to the `baked_query` object are all expressed as Python
+    functions, typically lambdas. The first lambda given to the [`bakery()`](#sqlalchemy.ext.baked.bakery
+    "sqlalchemy.ext.baked.bakery") function receives a [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") as its argument. The remaining lambdas each receive
+    a [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query")
+    as their argument.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the above code, even though our application may call upon `search_for_user()`
+    many times, and even though within each invocation we build up an entirely new
+    [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery")
+    object, *all of the lambdas are only called once*. Each lambda is **never** called
+    a second time for as long as this query is cached in the bakery.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The caching is achieved by storing references to the **lambda objects themselves**
+    in order to formulate a cache key; that is, the fact that the Python interpreter
+    assigns an in-Python identity to these functions is what determines how to identify
+    the query on successive runs. For those invocations of `search_for_user()` where
+    the `email` parameter is specified, the callable `lambda q: q.filter(User.email
+    == bindparam(''email''))` will be part of the cache key that’s retrieved; when
+    `email` is `None`, this callable is not part of the cache key.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Because the lambdas are all called only once, it is essential that no variables
+    which may change across calls are referenced **within** the lambdas; instead,
+    assuming these are values to be bound into the SQL string, we use [`bindparam()`](../../core/sqlelement.html#sqlalchemy.sql.expression.bindparam
+    "sqlalchemy.sql.expression.bindparam") to construct named parameters, where we
+    apply their actual values later using `Result.params()`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Performance
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The baked query probably looks a little odd, a little bit awkward and a little
+    bit verbose. However, the savings in Python performance for a query which is invoked
+    lots of times in an application are very dramatic. The example suite `short_selects`
+    demonstrated in [Performance](../examples.html#examples-performance) illustrates
+    a comparison of queries which each return only one row, such as the following
+    regular query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'compared to the equivalent “baked” query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The difference in Python function call count for an iteration of 10000 calls
+    to each block are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In terms of number of seconds on a powerful laptop, this comes out as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that this test very intentionally features queries that only return one
+    row. For queries that return many rows, the performance advantage of the baked
+    query will have less and less of an impact, proportional to the time spent fetching
+    rows. It is critical to keep in mind that the **baked query feature only applies
+    to building the query itself, not the fetching of results**. Using the baked feature
+    is by no means a guarantee to a much faster application; it is only a potentially
+    useful feature for those applications that have been measured as being impacted
+    by this particular form of overhead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rationale
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The “lambda” approach above is a superset of what would be a more traditional
+    “parameterized” approach. Suppose we wished to build a simple system where we
+    build a [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query")
+    just once, then store it in a dictionary for re-use. This is possible right now
+    by just building up the query, and removing its [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") by calling `my_cached_query = query.with_session(None)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above approach gets us a very minimal performance benefit. By re-using a
+    [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.query.Query"),
+    we save on the Python work within the `session.query(Model)` constructor as well
+    as calling upon `filter(Model.id == bindparam('id'))`, which will skip for us
+    the building up of the Core expression as well as sending it to [`Query.filter()`](../queryguide/query.html#sqlalchemy.orm.Query.filter
+    "sqlalchemy.orm.Query.filter"). However, the approach still regenerates the full
+    [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    object every time when [`Query.all()`](../queryguide/query.html#sqlalchemy.orm.Query.all
+    "sqlalchemy.orm.Query.all") is called and additionally this brand new [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") is sent off to the string compilation step
+    every time, which for a simple case like the above is probably about 70% of the
+    overhead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To reduce the additional overhead, we need some more specialized logic, some
+    way to memoize the construction of the select object and the construction of the
+    SQL. There is an example of this on the wiki in the section [BakedQuery](https://bitbucket.org/zzzeek/sqlalchemy/wiki/UsageRecipes/BakedQuery),
+    a precursor to this feature, however in that system, we aren’t caching the *construction*
+    of the query. In order to remove all the overhead, we need to cache both the construction
+    of the query as well as the SQL compilation. Let’s assume we adapted the recipe
+    in this way and made ourselves a method `.bake()` that pre-compiles the SQL for
+    the query, producing a new object that can be invoked with minimal overhead. Our
+    example becomes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we’ve fixed the performance situation, but we still have this string
+    cache key to deal with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can use the “bakery” approach to re-frame the above in a way that looks
+    less unusual than the “building up lambdas” approach, and more like a simple improvement
+    upon the simple “reuse a query” approach:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we use the “baked” system in a manner that is very similar to the simplistic
+    “cache a query” system. However, it uses two fewer lines of code, does not need
+    to manufacture a cache key of “my_key”, and also includes the same feature as
+    our custom “bake” function that caches 100% of the Python invocation work from
+    the constructor of the query, to the filter call, to the production of the [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") object, to the string compilation step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the above, if we ask ourselves, “what if lookup needs to make conditional
+    decisions as to the structure of the query?”, this is where hopefully it becomes
+    apparent why “baked” is the way it is. Instead of a parameterized query building
+    off from exactly one function (which is how we thought baked might work originally),
+    we can build it from *any number* of functions. Consider our naive example, if
+    we needed to have an additional clause in our query on a conditional basis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our “simple” parameterized system must now be tasked with generating cache
+    keys which take into account whether or not the “include_frobnizzle” flag was
+    passed, as the presence of this flag means that the generated SQL would be entirely
+    different. It should be apparent that as the complexity of query building goes
+    up, the task of caching these queries becomes burdensome very quickly. We can
+    convert the above example into a direct use of “bakery” as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we again cache not just the query object but all the work it needs to
+    do in order to generate SQL. We also no longer need to deal with making sure we
+    generate a cache key that accurately takes into account all of the structural
+    modifications we’ve made; this is now handled automatically and without the chance
+    of mistakes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This code sample is a few lines shorter than the naive example, removes the
+    need to deal with cache keys, and has the vast performance benefits of the full
+    so-called “baked” feature. But still a little verbose! Hence we take methods like
+    [`BakedQuery.add_criteria()`](#sqlalchemy.ext.baked.BakedQuery.add_criteria "sqlalchemy.ext.baked.BakedQuery.add_criteria")
+    and [`BakedQuery.with_criteria()`](#sqlalchemy.ext.baked.BakedQuery.with_criteria
+    "sqlalchemy.ext.baked.BakedQuery.with_criteria") and shorten them into operators,
+    and encourage (though certainly not require!) using simple lambdas, only as a
+    means to reduce verbosity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, the approach is simpler to implement and much more similar in code
+    flow to what a non-cached querying function would look like, hence making code
+    easier to port.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above description is essentially a summary of the design process used to
+    arrive at the current “baked” approach. Starting from the “normal” approaches,
+    the additional issues of cache key construction and management, removal of all
+    redundant Python execution, and queries built up with conditionals needed to be
+    addressed, leading to the final approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Special Query Techniques
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section will describe some techniques for specific query situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using IN expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`ColumnOperators.in_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") method in SQLAlchemy historically
+    renders a variable set of bound parameters based on the list of items that’s passed
+    to the method. This doesn’t work for baked queries as the length of that list
+    can change on different calls. To solve this problem, the [`bindparam.expanding`](../../core/sqlelement.html#sqlalchemy.sql.expression.bindparam.params.expanding
+    "sqlalchemy.sql.expression.bindparam") parameter supports a late-rendered IN expression
+    that is safe to be cached inside of baked query. The actual list of elements is
+    rendered at statement execution time, rather than at statement compilation time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`bindparam.expanding`](../../core/sqlelement.html#sqlalchemy.sql.expression.bindparam.params.expanding
+    "sqlalchemy.sql.expression.bindparam")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ColumnOperators.in_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Subqueries
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When using [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    objects, it is often needed that one [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object is used to generate a subquery within another.
+    In the case where the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") is currently in baked form, an interim method may be used
+    to retrieve the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    object, using the [`BakedQuery.to_query()`](#sqlalchemy.ext.baked.BakedQuery.to_query
+    "sqlalchemy.ext.baked.BakedQuery.to_query") method. This method is passed the
+    [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    or [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    that is the argument to the lambda callable used to generate a particular step
+    of the baked query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using the before_compile event'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As of SQLAlchemy 1.3.11, the use of the [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event against a particular [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") will disallow the baked query system from caching the
+    query, if the event hook returns a new [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object that is different from the one passed in. This
+    is so that the [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") hook may be invoked against a particular
+    [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    every time it is used, to accommodate for hooks that alter the query differently
+    each time. To allow a [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") to alter a [`sqlalchemy.orm.Query()`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object, but still to allow the result to be cached, the
+    event can be registered passing the `bake_ok=True` flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above strategy is appropriate for an event that will modify a given [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") in exactly the same way every time, not dependent on specific
+    parameters or external state that changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3.11: - added the “bake_ok” flag to the [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event and disallowed caching via
+    the “baked” extension from occurring for event handlers that return a new [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object if this flag is not set.  ### Using IN expressions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`ColumnOperators.in_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_") method in SQLAlchemy historically
+    renders a variable set of bound parameters based on the list of items that’s passed
+    to the method. This doesn’t work for baked queries as the length of that list
+    can change on different calls. To solve this problem, the [`bindparam.expanding`](../../core/sqlelement.html#sqlalchemy.sql.expression.bindparam.params.expanding
+    "sqlalchemy.sql.expression.bindparam") parameter supports a late-rendered IN expression
+    that is safe to be cached inside of baked query. The actual list of elements is
+    rendered at statement execution time, rather than at statement compilation time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`bindparam.expanding`](../../core/sqlelement.html#sqlalchemy.sql.expression.bindparam.params.expanding
+    "sqlalchemy.sql.expression.bindparam")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ColumnOperators.in_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.ColumnOperators.in_
+    "sqlalchemy.sql.expression.ColumnOperators.in_")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Subqueries
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When using [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    objects, it is often needed that one [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object is used to generate a subquery within another.
+    In the case where the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") is currently in baked form, an interim method may be used
+    to retrieve the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    object, using the [`BakedQuery.to_query()`](#sqlalchemy.ext.baked.BakedQuery.to_query
+    "sqlalchemy.ext.baked.BakedQuery.to_query") method. This method is passed the
+    [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    or [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    that is the argument to the lambda callable used to generate a particular step
+    of the baked query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 1.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Using the before_compile event'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As of SQLAlchemy 1.3.11, the use of the [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event against a particular [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") will disallow the baked query system from caching the
+    query, if the event hook returns a new [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object that is different from the one passed in. This
+    is so that the [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") hook may be invoked against a particular
+    [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    every time it is used, to accommodate for hooks that alter the query differently
+    each time. To allow a [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") to alter a [`sqlalchemy.orm.Query()`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object, but still to allow the result to be cached, the
+    event can be registered passing the `bake_ok=True` flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above strategy is appropriate for an event that will modify a given [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") in exactly the same way every time, not dependent on specific
+    parameters or external state that changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3.11: - added the “bake_ok” flag to the [`QueryEvents.before_compile()`](../events.html#sqlalchemy.orm.QueryEvents.before_compile
+    "sqlalchemy.orm.QueryEvents.before_compile") event and disallowed caching via
+    the “baked” extension from occurring for event handlers that return a new [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object if this flag is not set.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Disabling Baked Queries Session-wide
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The flag [`Session.enable_baked_queries`](../session_api.html#sqlalchemy.orm.Session.params.enable_baked_queries
+    "sqlalchemy.orm.Session") may be set to False, causing all baked queries to not
+    use the cache when used against that [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Like all session flags, it is also accepted by factory objects like [`sessionmaker`](../session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker") and methods like [`sessionmaker.configure()`](../session_api.html#sqlalchemy.orm.sessionmaker.configure
+    "sqlalchemy.orm.sessionmaker.configure").
+  prefs: []
+  type: TYPE_NORMAL
+- en: The immediate rationale for this flag is so that an application which is seeing
+    issues potentially due to cache key conflicts from user-defined baked queries
+    or other baked query issues can turn the behavior off, in order to identify or
+    eliminate baked queries as the cause of an issue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lazy Loading Integration
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Changed in version 1.4: As of SQLAlchemy 1.4, the “baked query” system is no
+    longer part of the relationship loading system. The [native caching](../../core/connections.html#sql-caching)
+    system is used instead.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: API Documentation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [BakedQuery](#sqlalchemy.ext.baked.BakedQuery) | A builder object for [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") objects. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [bakery](#sqlalchemy.ext.baked.bakery) | Construct a new bakery. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [Bakery](#sqlalchemy.ext.baked.Bakery) | Callable which returns a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery"). |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a new bakery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: an instance of [`Bakery`](#sqlalchemy.ext.baked.Bakery "sqlalchemy.ext.baked.Bakery")
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[add_criteria()](#sqlalchemy.ext.baked.BakedQuery.add_criteria), [bakery()](#sqlalchemy.ext.baked.BakedQuery.bakery),
+    [for_session()](#sqlalchemy.ext.baked.BakedQuery.for_session), [spoil()](#sqlalchemy.ext.baked.BakedQuery.spoil),
+    [to_query()](#sqlalchemy.ext.baked.BakedQuery.to_query), [with_criteria()](#sqlalchemy.ext.baked.BakedQuery.with_criteria)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A builder object for [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: Add a criteria function to this [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is equivalent to using the `+=` operator to modify a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") in-place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: Construct a new bakery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: an instance of [`Bakery`](#sqlalchemy.ext.baked.Bakery "sqlalchemy.ext.baked.Bakery")
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return a `Result` object for this [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is equivalent to calling the [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") as a Python callable, e.g. `result = my_baked_query(session)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: Cancel any query caching that will occur on this BakedQuery object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The BakedQuery can continue to be used normally, however additional creational
+    functions will not be cached; they will be called on every invocation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is to support the case where a particular step in constructing a baked
+    query disqualifies the query from being cacheable, such as a variant that relies
+    upon some uncacheable value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**full** – if False, only functions added to this [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") object subsequent to the spoil step will be
+    non-cached; the state of the [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery")
+    up until this point will be pulled from the cache. If True, then the entire [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object is built from scratch each time, with all creational
+    functions being called on each invocation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    object for use as a subquery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This method should be used within the lambda callable being used to generate
+    a step of an enclosing [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery").
+    The parameter should normally be the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object that is passed to the lambda:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the case where the subquery is used in the first callable against a [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"), the [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is also accepted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**query_or_session** –'
+  prefs: []
+  type: TYPE_NORMAL
+- en: a [`Query`](../queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    object or a class [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    object, that is assumed to be within the context of an enclosing [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") callable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: Add a criteria function to a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") cloned from this one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is equivalent to using the `+` operator to produce a new [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery
+    "sqlalchemy.ext.baked.BakedQuery") with modifications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: Callable which returns a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery").
+  prefs: []
+  type: TYPE_NORMAL
+- en: This object is returned by the class method [`BakedQuery.bakery()`](#sqlalchemy.ext.baked.BakedQuery.bakery
+    "sqlalchemy.ext.baked.BakedQuery.bakery"). It exists as an object so that the
+    “cache” can be easily inspected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: Invokes a [`BakedQuery`](#sqlalchemy.ext.baked.BakedQuery "sqlalchemy.ext.baked.BakedQuery")
+    against a [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `Result` object is where the actual [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.query.Query") object gets created, or retrieved from the cache,
+    against a target [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
+    and is then invoked for results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return all rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.all()`](../queryguide/query.html#sqlalchemy.orm.Query.all
+    "sqlalchemy.orm.Query.all").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: return the ‘count’.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.count()`](../queryguide/query.html#sqlalchemy.orm.Query.count
+    "sqlalchemy.orm.Query.count").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note this uses a subquery to ensure an accurate count regardless of the structure
+    of the original statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the first row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.first()`](../queryguide/query.html#sqlalchemy.orm.Query.first
+    "sqlalchemy.orm.Query.first").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: Retrieve an object based on identity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.get()`](../queryguide/query.html#sqlalchemy.orm.Query.get
+    "sqlalchemy.orm.Query.get").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return exactly one result or raise an exception.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.one()`](../queryguide/query.html#sqlalchemy.orm.Query.one
+    "sqlalchemy.orm.Query.one").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return one or zero results, or raise an exception for multiple rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.one_or_none()`](../queryguide/query.html#sqlalchemy.orm.Query.one_or_none
+    "sqlalchemy.orm.Query.one_or_none").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: Specify parameters to be replaced into the string SQL statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the first element of the first result or None if no rows present. If
+    multiple rows are returned, raises MultipleResultsFound.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Equivalent to [`Query.scalar()`](../queryguide/query.html#sqlalchemy.orm.Query.scalar
+    "sqlalchemy.orm.Query.scalar").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: Add a criteria function that will be applied post-cache.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This adds a function that will be run against the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object after it is retrieved from the cache. This currently
+    includes **only** the [`Query.params()`](../queryguide/query.html#sqlalchemy.orm.Query.params
+    "sqlalchemy.orm.Query.params") and [`Query.execution_options()`](../queryguide/query.html#sqlalchemy.orm.Query.execution_options
+    "sqlalchemy.orm.Query.execution_options") methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Result.with_post_criteria()` functions are applied to the [`Query`](../queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") object **after** the query’s SQL statement object has
+    been retrieved from the cache. Only [`Query.params()`](../queryguide/query.html#sqlalchemy.orm.Query.params
+    "sqlalchemy.orm.Query.params") and [`Query.execution_options()`](../queryguide/query.html#sqlalchemy.orm.Query.execution_options
+    "sqlalchemy.orm.Query.execution_options") methods should be used.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in version 1.2.
+  prefs: []
+  type: TYPE_NORMAL

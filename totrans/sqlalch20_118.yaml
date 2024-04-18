@@ -1,0 +1,627 @@
+- en: ORM Configuration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/faq/ormconfiguration.html](https://docs.sqlalchemy.org/en/20/faq/ormconfiguration.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[How do I map a table that has no primary key?](#how-do-i-map-a-table-that-has-no-primary-key)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[How do I configure a Column that is a Python reserved word or similar?](#how-do-i-configure-a-column-that-is-a-python-reserved-word-or-similar)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[How do I get a list of all columns, relationships, mapped attributes, etc.
+    given a mapped class?](#how-do-i-get-a-list-of-all-columns-relationships-mapped-attributes-etc-given-a-mapped-class)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[I’m getting a warning or error about “Implicitly combining column X under
+    attribute Y”](#i-m-getting-a-warning-or-error-about-implicitly-combining-column-x-under-attribute-y)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[I’m using Declarative and setting primaryjoin/secondaryjoin using an `and_()`
+    or `or_()`, and I am getting an error message about foreign keys.](#i-m-using-declarative-and-setting-primaryjoin-secondaryjoin-using-an-and-or-or-and-i-am-getting-an-error-message-about-foreign-keys)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Why is `ORDER BY` recommended with `LIMIT` (especially with `subqueryload()`)?](#why-is-order-by-recommended-with-limit-especially-with-subqueryload)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## How do I map a table that has no primary key?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SQLAlchemy ORM, in order to map to a particular table, needs there to be
+    at least one column denoted as a primary key column; multiple-column, i.e. composite,
+    primary keys are of course entirely feasible as well. These columns do **not**
+    need to be actually known to the database as primary key columns, though it’s
+    a good idea that they are. It’s only necessary that the columns *behave* as a
+    primary key does, e.g. as a unique and not nullable identifier for a row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most ORMs require that objects have some kind of primary key defined because
+    the object in memory must correspond to a uniquely identifiable row in the database
+    table; at the very least, this allows the object can be targeted for UPDATE and
+    DELETE statements which will affect only that object’s row and no other. However,
+    the importance of the primary key goes far beyond that. In SQLAlchemy, all ORM-mapped
+    objects are at all times linked uniquely within a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") to their specific database row using a pattern called
+    the [identity map](../glossary.html#term-identity-map), a pattern that’s central
+    to the unit of work system employed by SQLAlchemy, and is also key to the most
+    common (and not-so-common) patterns of ORM usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s important to note that we’re only talking about the SQLAlchemy ORM; an
+    application which builds on Core and deals only with [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects, [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") constructs and the like, **does not** need
+    any primary key to be present on or associated with a table in any way (though
+    again, in SQL, all tables should really have some kind of primary key, lest you
+    need to actually update or delete specific rows).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In almost all cases, a table does have a so-called [candidate key](../glossary.html#term-candidate-key),
+    which is a column or series of columns that uniquely identify a row. If a table
+    truly doesn’t have this, and has actual fully duplicate rows, the table is not
+    corresponding to [first normal form](https://en.wikipedia.org/wiki/First_normal_form)
+    and cannot be mapped. Otherwise, whatever columns comprise the best candidate
+    key can be applied directly to the mapper:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Better yet is when using fully declared table metadata, use the `primary_key=True`
+    flag on those columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All tables in a relational database should have primary keys. Even a many-to-many
+    association table - the primary key would be the composite of the two association
+    columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: How do I configure a Column that is a Python reserved word or similar?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Column-based attributes can be given any name desired in the mapping. See [Naming
+    Declarative Mapped Columns Explicitly](../orm/declarative_tables.html#mapper-column-distinct-names).
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do I get a list of all columns, relationships, mapped attributes, etc. given
+    a mapped class?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This information is all available from the [`Mapper`](../orm/mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To get at the [`Mapper`](../orm/mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    for a particular mapped class, call the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function on it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'From there, all information about the class can be accessed through properties
+    such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper.attrs`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.attrs "sqlalchemy.orm.Mapper.attrs")
+    - a namespace of all mapped attributes. The attributes themselves are instances
+    of [`MapperProperty`](../orm/internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty"),
+    which contain additional attributes that can lead to the mapped SQL expression
+    or column, if applicable.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.column_attrs`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.column_attrs
+    "sqlalchemy.orm.Mapper.column_attrs") - the mapped attribute namespace limited
+    to column and SQL expression attributes. You might want to use [`Mapper.columns`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.columns
+    "sqlalchemy.orm.Mapper.columns") to get at the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects directly.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.relationships`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.relationships
+    "sqlalchemy.orm.Mapper.relationships") - namespace of all [`RelationshipProperty`](../orm/internals.html#sqlalchemy.orm.RelationshipProperty
+    "sqlalchemy.orm.RelationshipProperty") attributes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.all_orm_descriptors`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors") - namespace of all mapped attributes,
+    plus user-defined attributes defined using systems such as [`hybrid_property`](../orm/extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property"), [`AssociationProxy`](../orm/extensions/associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxy
+    "sqlalchemy.ext.associationproxy.AssociationProxy") and others.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.columns`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.columns "sqlalchemy.orm.Mapper.columns")
+    - A namespace of [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects and other named SQL expressions associated with the mapping.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.mapped_table`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.mapped_table
+    "sqlalchemy.orm.Mapper.mapped_table") - The [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") or other selectable to which this mapper is mapped.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.local_table`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.local_table
+    "sqlalchemy.orm.Mapper.local_table") - The [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") that is “local” to this mapper; this differs from [`Mapper.mapped_table`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.mapped_table
+    "sqlalchemy.orm.Mapper.mapped_table") in the case of a mapper mapped using inheritance
+    to a composed selectable.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## I’m getting a warning or error about “Implicitly combining column X under
+    attribute Y”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This condition refers to when a mapping contains two columns that are being
+    mapped under the same attribute name due to their name, but there’s no indication
+    that this is intentional. A mapped class needs to have explicit names for every
+    attribute that is to store an independent value; when two columns have the same
+    name and aren’t disambiguated, they fall under the same attribute and the effect
+    is that the value from one column is **copied** into the other, based on which
+    column was assigned to the attribute first.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This behavior is often desirable and is allowed without warning in the case
+    where the two columns are linked together via a foreign key relationship within
+    an inheritance mapping. When the warning or exception occurs, the issue can be
+    resolved by either assigning the columns to differently-named attributes, or if
+    combining them together is desired, by using [`column_property()`](../orm/mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") to make this explicit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given the example as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: As of SQLAlchemy version 0.9.5, the above condition is detected, and will warn
+    that the `id` column of `A` and `B` is being combined under the same-named attribute
+    `id`, which above is a serious issue since it means that a `B` object’s primary
+    key will always mirror that of its `A`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A mapping which resolves this is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Suppose we did want `A.id` and `B.id` to be mirrors of each other, despite
+    the fact that `B.a_id` is where `A.id` is related. We could combine them together
+    using [`column_property()`](../orm/mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: I’m using Declarative and setting primaryjoin/secondaryjoin using an `and_()`
+    or `or_()`, and I am getting an error message about foreign keys.
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Are you doing this?:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That’s an `and_()` of two string expressions, which SQLAlchemy cannot apply
+    any mapping towards. Declarative allows [`relationship()`](../orm/relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") arguments to be specified as strings, which are
+    converted into expression objects using `eval()`. But this doesn’t occur inside
+    of an `and_()` expression - it’s a special operation declarative applies only
+    to the *entirety* of what’s passed to primaryjoin or other arguments as a string:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or if the objects you need are already available, skip the strings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same idea applies to all the other arguments, such as `foreign_keys`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Why is `ORDER BY` recommended with `LIMIT` (especially with `subqueryload()`)?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When ORDER BY is not used for a SELECT statement that returns rows, the relational
+    database is free to returned matched rows in any arbitrary order. While this ordering
+    very often corresponds to the natural order of rows within a table, this is not
+    the case for all databases and all queries. The consequence of this is that any
+    query that limits rows using `LIMIT` or `OFFSET`, or which merely selects the
+    first row of the result, discarding the rest, will not be deterministic in terms
+    of what result row is returned, assuming there’s more than one row that matches
+    the query’s criteria.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While we may not notice this for simple queries on databases that usually returns
+    rows in their natural order, it becomes more of an issue if we also use [`subqueryload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") to load related collections, and we may not be
+    loading the collections as intended.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy implements [`subqueryload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") by issuing a separate query, the results of which
+    are matched up to the results from the first query. We see two queries emitted
+    like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The second query embeds the first query as a source of rows. When the inner
+    query uses `OFFSET` and/or `LIMIT` without ordering, the two queries may not see
+    the same results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Depending on database specifics, there is a chance we may get a result like
+    the following for the two queries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we receive two `addresses` rows for `user.id` of 2, and none for 1\.
+    We’ve wasted two rows and failed to actually load the collection. This is an insidious
+    error because without looking at the SQL and the results, the ORM will not show
+    that there’s any issue; if we access the `addresses` for the `User` we have, it
+    will emit a lazy load for the collection and we won’t see that anything actually
+    went wrong.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The solution to this problem is to always specify a deterministic sort order,
+    so that the main query always returns the same set of rows. This generally means
+    that you should [`Select.order_by()`](../core/selectable.html#sqlalchemy.sql.expression.Select.order_by
+    "sqlalchemy.sql.expression.Select.order_by") on a unique column on the table.
+    The primary key is a good choice for this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the [`joinedload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") eager loader strategy does not suffer from the same
+    problem because only one query is ever issued, so the load query cannot be different
+    from the main query. Similarly, the [`selectinload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") eager loader strategy also does not have this issue
+    as it links its collection loads directly to primary key values just loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Subquery Eager Loading](../orm/queryguide/relationships.html#subquery-eager-loading)  ##
+    How do I map a table that has no primary key?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SQLAlchemy ORM, in order to map to a particular table, needs there to be
+    at least one column denoted as a primary key column; multiple-column, i.e. composite,
+    primary keys are of course entirely feasible as well. These columns do **not**
+    need to be actually known to the database as primary key columns, though it’s
+    a good idea that they are. It’s only necessary that the columns *behave* as a
+    primary key does, e.g. as a unique and not nullable identifier for a row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most ORMs require that objects have some kind of primary key defined because
+    the object in memory must correspond to a uniquely identifiable row in the database
+    table; at the very least, this allows the object can be targeted for UPDATE and
+    DELETE statements which will affect only that object’s row and no other. However,
+    the importance of the primary key goes far beyond that. In SQLAlchemy, all ORM-mapped
+    objects are at all times linked uniquely within a [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") to their specific database row using a pattern called
+    the [identity map](../glossary.html#term-identity-map), a pattern that’s central
+    to the unit of work system employed by SQLAlchemy, and is also key to the most
+    common (and not-so-common) patterns of ORM usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s important to note that we’re only talking about the SQLAlchemy ORM; an
+    application which builds on Core and deals only with [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects, [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") constructs and the like, **does not** need
+    any primary key to be present on or associated with a table in any way (though
+    again, in SQL, all tables should really have some kind of primary key, lest you
+    need to actually update or delete specific rows).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In almost all cases, a table does have a so-called [candidate key](../glossary.html#term-candidate-key),
+    which is a column or series of columns that uniquely identify a row. If a table
+    truly doesn’t have this, and has actual fully duplicate rows, the table is not
+    corresponding to [first normal form](https://en.wikipedia.org/wiki/First_normal_form)
+    and cannot be mapped. Otherwise, whatever columns comprise the best candidate
+    key can be applied directly to the mapper:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Better yet is when using fully declared table metadata, use the `primary_key=True`
+    flag on those columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All tables in a relational database should have primary keys. Even a many-to-many
+    association table - the primary key would be the composite of the two association
+    columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: How do I configure a Column that is a Python reserved word or similar?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Column-based attributes can be given any name desired in the mapping. See [Naming
+    Declarative Mapped Columns Explicitly](../orm/declarative_tables.html#mapper-column-distinct-names).
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do I get a list of all columns, relationships, mapped attributes, etc. given
+    a mapped class?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This information is all available from the [`Mapper`](../orm/mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To get at the [`Mapper`](../orm/mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    for a particular mapped class, call the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") function on it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'From there, all information about the class can be accessed through properties
+    such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Mapper.attrs`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.attrs "sqlalchemy.orm.Mapper.attrs")
+    - a namespace of all mapped attributes. The attributes themselves are instances
+    of [`MapperProperty`](../orm/internals.html#sqlalchemy.orm.MapperProperty "sqlalchemy.orm.MapperProperty"),
+    which contain additional attributes that can lead to the mapped SQL expression
+    or column, if applicable.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.column_attrs`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.column_attrs
+    "sqlalchemy.orm.Mapper.column_attrs") - the mapped attribute namespace limited
+    to column and SQL expression attributes. You might want to use [`Mapper.columns`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.columns
+    "sqlalchemy.orm.Mapper.columns") to get at the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects directly.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.relationships`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.relationships
+    "sqlalchemy.orm.Mapper.relationships") - namespace of all [`RelationshipProperty`](../orm/internals.html#sqlalchemy.orm.RelationshipProperty
+    "sqlalchemy.orm.RelationshipProperty") attributes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.all_orm_descriptors`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.all_orm_descriptors
+    "sqlalchemy.orm.Mapper.all_orm_descriptors") - namespace of all mapped attributes,
+    plus user-defined attributes defined using systems such as [`hybrid_property`](../orm/extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property"), [`AssociationProxy`](../orm/extensions/associationproxy.html#sqlalchemy.ext.associationproxy.AssociationProxy
+    "sqlalchemy.ext.associationproxy.AssociationProxy") and others.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.columns`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.columns "sqlalchemy.orm.Mapper.columns")
+    - A namespace of [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    objects and other named SQL expressions associated with the mapping.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.mapped_table`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.mapped_table
+    "sqlalchemy.orm.Mapper.mapped_table") - The [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") or other selectable to which this mapper is mapped.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`Mapper.local_table`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.local_table
+    "sqlalchemy.orm.Mapper.local_table") - The [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") that is “local” to this mapper; this differs from [`Mapper.mapped_table`](../orm/mapping_api.html#sqlalchemy.orm.Mapper.mapped_table
+    "sqlalchemy.orm.Mapper.mapped_table") in the case of a mapper mapped using inheritance
+    to a composed selectable.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## I’m getting a warning or error about “Implicitly combining column X under
+    attribute Y”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This condition refers to when a mapping contains two columns that are being
+    mapped under the same attribute name due to their name, but there’s no indication
+    that this is intentional. A mapped class needs to have explicit names for every
+    attribute that is to store an independent value; when two columns have the same
+    name and aren’t disambiguated, they fall under the same attribute and the effect
+    is that the value from one column is **copied** into the other, based on which
+    column was assigned to the attribute first.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This behavior is often desirable and is allowed without warning in the case
+    where the two columns are linked together via a foreign key relationship within
+    an inheritance mapping. When the warning or exception occurs, the issue can be
+    resolved by either assigning the columns to differently-named attributes, or if
+    combining them together is desired, by using [`column_property()`](../orm/mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") to make this explicit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given the example as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: As of SQLAlchemy version 0.9.5, the above condition is detected, and will warn
+    that the `id` column of `A` and `B` is being combined under the same-named attribute
+    `id`, which above is a serious issue since it means that a `B` object’s primary
+    key will always mirror that of its `A`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A mapping which resolves this is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Suppose we did want `A.id` and `B.id` to be mirrors of each other, despite
+    the fact that `B.a_id` is where `A.id` is related. We could combine them together
+    using [`column_property()`](../orm/mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: I’m using Declarative and setting primaryjoin/secondaryjoin using an `and_()`
+    or `or_()`, and I am getting an error message about foreign keys.
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Are you doing this?:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That’s an `and_()` of two string expressions, which SQLAlchemy cannot apply
+    any mapping towards. Declarative allows [`relationship()`](../orm/relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") arguments to be specified as strings, which are
+    converted into expression objects using `eval()`. But this doesn’t occur inside
+    of an `and_()` expression - it’s a special operation declarative applies only
+    to the *entirety* of what’s passed to primaryjoin or other arguments as a string:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or if the objects you need are already available, skip the strings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The same idea applies to all the other arguments, such as `foreign_keys`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Why is `ORDER BY` recommended with `LIMIT` (especially with `subqueryload()`)?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When ORDER BY is not used for a SELECT statement that returns rows, the relational
+    database is free to returned matched rows in any arbitrary order. While this ordering
+    very often corresponds to the natural order of rows within a table, this is not
+    the case for all databases and all queries. The consequence of this is that any
+    query that limits rows using `LIMIT` or `OFFSET`, or which merely selects the
+    first row of the result, discarding the rest, will not be deterministic in terms
+    of what result row is returned, assuming there’s more than one row that matches
+    the query’s criteria.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While we may not notice this for simple queries on databases that usually returns
+    rows in their natural order, it becomes more of an issue if we also use [`subqueryload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") to load related collections, and we may not be
+    loading the collections as intended.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SQLAlchemy implements [`subqueryload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload") by issuing a separate query, the results of which
+    are matched up to the results from the first query. We see two queries emitted
+    like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The second query embeds the first query as a source of rows. When the inner
+    query uses `OFFSET` and/or `LIMIT` without ordering, the two queries may not see
+    the same results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Depending on database specifics, there is a chance we may get a result like
+    the following for the two queries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we receive two `addresses` rows for `user.id` of 2, and none for 1\.
+    We’ve wasted two rows and failed to actually load the collection. This is an insidious
+    error because without looking at the SQL and the results, the ORM will not show
+    that there’s any issue; if we access the `addresses` for the `User` we have, it
+    will emit a lazy load for the collection and we won’t see that anything actually
+    went wrong.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The solution to this problem is to always specify a deterministic sort order,
+    so that the main query always returns the same set of rows. This generally means
+    that you should [`Select.order_by()`](../core/selectable.html#sqlalchemy.sql.expression.Select.order_by
+    "sqlalchemy.sql.expression.Select.order_by") on a unique column on the table.
+    The primary key is a good choice for this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the [`joinedload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload") eager loader strategy does not suffer from the same
+    problem because only one query is ever issued, so the load query cannot be different
+    from the main query. Similarly, the [`selectinload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") eager loader strategy also does not have this issue
+    as it links its collection loads directly to primary key values just loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Subquery Eager Loading](../orm/queryguide/relationships.html#subquery-eager-loading)'
+  prefs: []
+  type: TYPE_NORMAL

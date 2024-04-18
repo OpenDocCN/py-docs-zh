@@ -1,0 +1,810 @@
+- en: Custom SQL Constructs and Compilation Extension
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/core/compiler.html](https://docs.sqlalchemy.org/en/20/core/compiler.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Provides an API for creation of custom ClauseElements and compilers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Synopsis
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Usage involves the creation of one or more [`ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement") subclasses and one or more callables
+    defining its compilation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, `MyColumn` extends [`ColumnClause`](sqlelement.html#sqlalchemy.sql.expression.ColumnClause
+    "sqlalchemy.sql.expression.ColumnClause"), the base expression element for named
+    column objects. The `compiles` decorator registers itself with the `MyColumn`
+    class so that it is invoked when the object is compiled to a string:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Produces:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Dialect-specific compilation rules
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Compilers can also be made dialect-specific. The appropriate compiler will
+    be invoked for the dialect in use:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The second `visit_alter_table` will be invoked when any `postgresql` dialect
+    is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Compiling sub-elements of a custom expression construct'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `compiler` argument is the `Compiled` object in use. This object can be
+    inspected for any information about the in-progress compilation, including `compiler.dialect`,
+    `compiler.statement` etc. The [`SQLCompiler`](internals.html#sqlalchemy.sql.compiler.SQLCompiler
+    "sqlalchemy.sql.compiler.SQLCompiler") and [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") both include a `process()` method which
+    can be used for compilation of embedded attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Produces:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above `InsertFromSelect` construct is only an example, this actual functionality
+    is already available using the [`Insert.from_select()`](dml.html#sqlalchemy.sql.expression.Insert.from_select
+    "sqlalchemy.sql.expression.Insert.from_select") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Cross Compiling between SQL and DDL compilers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'SQL and DDL constructs are each compiled using different base compilers - `SQLCompiler`
+    and `DDLCompiler`. A common need is to access the compilation rules of SQL expressions
+    from within a DDL expression. The `DDLCompiler` includes an accessor `sql_compiler`
+    for this reason, such as below where we generate a CHECK constraint that embeds
+    a SQL expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we add an additional flag to the process step as called by `SQLCompiler.process()`,
+    which is the `literal_binds` flag. This indicates that any SQL expression which
+    refers to a [`BindParameter`](sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") object or other “literal” object such
+    as those which refer to strings or integers should be rendered **in-place**, rather
+    than being referred to as a bound parameter; when emitting DDL, bound parameters
+    are typically not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Changing the default compilation of existing constructs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The compiler extension applies just as well to the existing constructs. When
+    overriding the compilation of a built in SQL construct, the @compiles decorator
+    is invoked upon the appropriate class (be sure to use the class, i.e. `Insert`
+    or `Select`, instead of the creation function such as `insert()` or `select()`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Within the new compilation function, to get at the “original” compilation routine,
+    use the appropriate visit_XXX method - this because compiler.process() will call
+    upon the overriding routine and cause an endless loop. Such as, to add “prefix”
+    to all insert statements:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above compiler will prefix all INSERT statements with “some prefix” when
+    compiled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Changing Compilation of Types'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`compiler` works for types, too, such as below where we implement the MS-SQL
+    specific ‘max’ keyword for `String`/`VARCHAR`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Subclassing Guidelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A big part of using the compiler extension is subclassing SQLAlchemy expression
+    constructs. To make this easier, the expression and schema packages feature a
+    set of “bases” intended for common tasks. A synopsis is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement "sqlalchemy.sql.expression.ClauseElement")
+    - This is the root expression class. Any SQL expression can be derived from this
+    base, and is probably the best choice for longer constructs such as specialized
+    INSERT statements.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement "sqlalchemy.sql.expression.ColumnElement")
+    - The root of all “column-like” elements. Anything that you’d place in the “columns”
+    clause of a SELECT statement (as well as order by and group by) can derive from
+    this - the object will automatically have Python “comparison” behavior.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement "sqlalchemy.sql.expression.ColumnElement")
+    classes want to have a `type` member which is expression’s return type. This can
+    be established at the instance level in the constructor, or at the class level
+    if its generally constant:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[`FunctionElement`](functions.html#sqlalchemy.sql.functions.FunctionElement
+    "sqlalchemy.sql.functions.FunctionElement") - This is a hybrid of a `ColumnElement`
+    and a “from clause” like object, and represents a SQL function or stored procedure
+    type of call. Since most databases support statements along the line of “SELECT
+    FROM <some function>” `FunctionElement` adds in the ability to be used in the
+    FROM clause of a `select()` construct:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    - The root of all DDL expressions, like CREATE TABLE, ALTER TABLE, etc. Compilation
+    of [`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    subclasses is issued by a [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") instead of a [`SQLCompiler`](internals.html#sqlalchemy.sql.compiler.SQLCompiler
+    "sqlalchemy.sql.compiler.SQLCompiler"). [`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") can also be used as an event hook in
+    conjunction with event hooks like [`DDLEvents.before_create()`](events.html#sqlalchemy.events.DDLEvents.before_create
+    "sqlalchemy.events.DDLEvents.before_create") and [`DDLEvents.after_create()`](events.html#sqlalchemy.events.DDLEvents.after_create
+    "sqlalchemy.events.DDLEvents.after_create"), allowing the construct to be invoked
+    automatically during CREATE TABLE and DROP TABLE sequences.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Customizing DDL](ddl.html) - contains examples of associating [`DDL`](ddl.html#sqlalchemy.schema.DDL
+    "sqlalchemy.schema.DDL") objects (which are themselves [`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") instances) with [`DDLEvents`](events.html#sqlalchemy.events.DDLEvents
+    "sqlalchemy.events.DDLEvents") event hooks.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`Executable`](selectable.html#sqlalchemy.sql.expression.Executable "sqlalchemy.sql.expression.Executable")
+    - This is a mixin which should be used with any expression class that represents
+    a “standalone” SQL statement that can be passed directly to an `execute()` method.
+    It is already implicit within `DDLElement` and `FunctionElement`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Most of the above constructs also respond to SQL statement caching. A subclassed
+    construct will want to define the caching behavior for the object, which usually
+    means setting the flag `inherit_cache` to the value of `False` or `True`. See
+    the next section [Enabling Caching Support for Custom Constructs](#compilerext-caching)
+    for background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Enabling Caching Support for Custom Constructs'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy as of version 1.4 includes a [SQL compilation caching facility](connections.html#sql-caching)
+    which will allow equivalent SQL constructs to cache their stringified form, along
+    with other structural information used to fetch results from the statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For reasons discussed at [Object will not produce a cache key, Performance
+    Implications](../errors.html#caching-caveats), the implementation of this caching
+    system takes a conservative approach towards including custom SQL constructs and/or
+    subclasses within the caching system. This includes that any user-defined SQL
+    constructs, including all the examples for this extension, will not participate
+    in caching by default unless they positively assert that they are able to do so.
+    The [`HasCacheKey.inherit_cache`](foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute when set to `True`
+    at the class level of a specific subclass will indicate that instances of this
+    class may be safely cached, using the cache key generation scheme of the immediate
+    superclass. This applies for example to the “synopsis” example indicated previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the `MyColumn` class does not include any new state that affects its
+    SQL compilation; the cache key of `MyColumn` instances will make use of that of
+    the `ColumnClause` superclass, meaning it will take into account the class of
+    the object (`MyColumn`), the string name and datatype of the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: For objects that are likely to be **used liberally as components within many
+    larger statements**, such as [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") subclasses and custom SQL datatypes, it’s important
+    that **caching be enabled as much as possible**, as this may otherwise negatively
+    affect performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of an object that **does** contain state which affects its SQL compilation
+    is the one illustrated at [Compiling sub-elements of a custom expression construct](#compilerext-compiling-subelements);
+    this is an “INSERT FROM SELECT” construct that combines together a [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") as well as a [`Select`](selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct, each of which independently affect
+    the SQL string generation of the construct. For this class, the example illustrates
+    that it simply does not participate in caching:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: While it is also possible that the above `InsertFromSelect` could be made to
+    produce a cache key that is composed of that of the [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") and [`Select`](selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") components together, the API for this is not
+    at the moment fully public. However, for an “INSERT FROM SELECT” construct, which
+    is only used by itself for specific operations, caching is not as critical as
+    in the previous example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For objects that are **used in relative isolation and are generally standalone**,
+    such as custom [DML](../glossary.html#term-DML) constructs like an “INSERT FROM
+    SELECT”, **caching is generally less critical** as the lack of caching for such
+    a construct will have only localized implications for that specific operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further Examples
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: “UTC timestamp” function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A function that works like “CURRENT_TIMESTAMP” except applies the appropriate
+    conversions so that the time is in UTC time. Timestamps are best stored in relational
+    databases as UTC, without time zones. UTC so that your database doesn’t think
+    time has gone backwards in the hour when daylight savings ends, without timezones
+    because timezones are like character encodings - they’re best applied only at
+    the endpoints of an application (i.e. convert to UTC upon user input, re-apply
+    desired timezone upon display).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For PostgreSQL and Microsoft SQL Server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: “GREATEST” function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The “GREATEST” function is given any number of arguments and returns the one
+    that is of the highest value - its equivalent to Python’s `max` function. A SQL
+    standard version versus a CASE based version which only accommodates two arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: “false” expression
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Render a “false” constant expression, rendering as “0” on platforms that don’t
+    have a “false” constant:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [compiles](#sqlalchemy.ext.compiler.compiles)(class_, *specs) | Register
+    a function as a compiler for a given [`ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement") type. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [deregister](#sqlalchemy.ext.compiler.deregister)(class_) | Remove all custom
+    compilers associated with a given [`ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement") type. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Register a function as a compiler for a given [`ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement") type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remove all custom compilers associated with a given [`ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement") type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Synopsis
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Usage involves the creation of one or more [`ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement
+    "sqlalchemy.sql.expression.ClauseElement") subclasses and one or more callables
+    defining its compilation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, `MyColumn` extends [`ColumnClause`](sqlelement.html#sqlalchemy.sql.expression.ColumnClause
+    "sqlalchemy.sql.expression.ColumnClause"), the base expression element for named
+    column objects. The `compiles` decorator registers itself with the `MyColumn`
+    class so that it is invoked when the object is compiled to a string:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Produces:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Dialect-specific compilation rules
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Compilers can also be made dialect-specific. The appropriate compiler will
+    be invoked for the dialect in use:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: The second `visit_alter_table` will be invoked when any `postgresql` dialect
+    is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Compiling sub-elements of a custom expression construct'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `compiler` argument is the `Compiled` object in use. This object can be
+    inspected for any information about the in-progress compilation, including `compiler.dialect`,
+    `compiler.statement` etc. The [`SQLCompiler`](internals.html#sqlalchemy.sql.compiler.SQLCompiler
+    "sqlalchemy.sql.compiler.SQLCompiler") and [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") both include a `process()` method which
+    can be used for compilation of embedded attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Produces:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The above `InsertFromSelect` construct is only an example, this actual functionality
+    is already available using the [`Insert.from_select()`](dml.html#sqlalchemy.sql.expression.Insert.from_select
+    "sqlalchemy.sql.expression.Insert.from_select") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Cross Compiling between SQL and DDL compilers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'SQL and DDL constructs are each compiled using different base compilers - `SQLCompiler`
+    and `DDLCompiler`. A common need is to access the compilation rules of SQL expressions
+    from within a DDL expression. The `DDLCompiler` includes an accessor `sql_compiler`
+    for this reason, such as below where we generate a CHECK constraint that embeds
+    a SQL expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we add an additional flag to the process step as called by `SQLCompiler.process()`,
+    which is the `literal_binds` flag. This indicates that any SQL expression which
+    refers to a [`BindParameter`](sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") object or other “literal” object such
+    as those which refer to strings or integers should be rendered **in-place**, rather
+    than being referred to as a bound parameter; when emitting DDL, bound parameters
+    are typically not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Cross Compiling between SQL and DDL compilers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'SQL and DDL constructs are each compiled using different base compilers - `SQLCompiler`
+    and `DDLCompiler`. A common need is to access the compilation rules of SQL expressions
+    from within a DDL expression. The `DDLCompiler` includes an accessor `sql_compiler`
+    for this reason, such as below where we generate a CHECK constraint that embeds
+    a SQL expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we add an additional flag to the process step as called by `SQLCompiler.process()`,
+    which is the `literal_binds` flag. This indicates that any SQL expression which
+    refers to a [`BindParameter`](sqlelement.html#sqlalchemy.sql.expression.BindParameter
+    "sqlalchemy.sql.expression.BindParameter") object or other “literal” object such
+    as those which refer to strings or integers should be rendered **in-place**, rather
+    than being referred to as a bound parameter; when emitting DDL, bound parameters
+    are typically not supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Changing the default compilation of existing constructs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The compiler extension applies just as well to the existing constructs. When
+    overriding the compilation of a built in SQL construct, the @compiles decorator
+    is invoked upon the appropriate class (be sure to use the class, i.e. `Insert`
+    or `Select`, instead of the creation function such as `insert()` or `select()`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Within the new compilation function, to get at the “original” compilation routine,
+    use the appropriate visit_XXX method - this because compiler.process() will call
+    upon the overriding routine and cause an endless loop. Such as, to add “prefix”
+    to all insert statements:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above compiler will prefix all INSERT statements with “some prefix” when
+    compiled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Changing Compilation of Types'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`compiler` works for types, too, such as below where we implement the MS-SQL
+    specific ‘max’ keyword for `String`/`VARCHAR`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Subclassing Guidelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A big part of using the compiler extension is subclassing SQLAlchemy expression
+    constructs. To make this easier, the expression and schema packages feature a
+    set of “bases” intended for common tasks. A synopsis is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`ClauseElement`](foundation.html#sqlalchemy.sql.expression.ClauseElement "sqlalchemy.sql.expression.ClauseElement")
+    - This is the root expression class. Any SQL expression can be derived from this
+    base, and is probably the best choice for longer constructs such as specialized
+    INSERT statements.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement "sqlalchemy.sql.expression.ColumnElement")
+    - The root of all “column-like” elements. Anything that you’d place in the “columns”
+    clause of a SELECT statement (as well as order by and group by) can derive from
+    this - the object will automatically have Python “comparison” behavior.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`ColumnElement`](sqlelement.html#sqlalchemy.sql.expression.ColumnElement "sqlalchemy.sql.expression.ColumnElement")
+    classes want to have a `type` member which is expression’s return type. This can
+    be established at the instance level in the constructor, or at the class level
+    if its generally constant:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[`FunctionElement`](functions.html#sqlalchemy.sql.functions.FunctionElement
+    "sqlalchemy.sql.functions.FunctionElement") - This is a hybrid of a `ColumnElement`
+    and a “from clause” like object, and represents a SQL function or stored procedure
+    type of call. Since most databases support statements along the line of “SELECT
+    FROM <some function>” `FunctionElement` adds in the ability to be used in the
+    FROM clause of a `select()` construct:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    - The root of all DDL expressions, like CREATE TABLE, ALTER TABLE, etc. Compilation
+    of [`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement "sqlalchemy.schema.ExecutableDDLElement")
+    subclasses is issued by a [`DDLCompiler`](internals.html#sqlalchemy.sql.compiler.DDLCompiler
+    "sqlalchemy.sql.compiler.DDLCompiler") instead of a [`SQLCompiler`](internals.html#sqlalchemy.sql.compiler.SQLCompiler
+    "sqlalchemy.sql.compiler.SQLCompiler"). [`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") can also be used as an event hook in
+    conjunction with event hooks like [`DDLEvents.before_create()`](events.html#sqlalchemy.events.DDLEvents.before_create
+    "sqlalchemy.events.DDLEvents.before_create") and [`DDLEvents.after_create()`](events.html#sqlalchemy.events.DDLEvents.after_create
+    "sqlalchemy.events.DDLEvents.after_create"), allowing the construct to be invoked
+    automatically during CREATE TABLE and DROP TABLE sequences.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Customizing DDL](ddl.html) - contains examples of associating [`DDL`](ddl.html#sqlalchemy.schema.DDL
+    "sqlalchemy.schema.DDL") objects (which are themselves [`ExecutableDDLElement`](ddl.html#sqlalchemy.schema.ExecutableDDLElement
+    "sqlalchemy.schema.ExecutableDDLElement") instances) with [`DDLEvents`](events.html#sqlalchemy.events.DDLEvents
+    "sqlalchemy.events.DDLEvents") event hooks.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[`Executable`](selectable.html#sqlalchemy.sql.expression.Executable "sqlalchemy.sql.expression.Executable")
+    - This is a mixin which should be used with any expression class that represents
+    a “standalone” SQL statement that can be passed directly to an `execute()` method.
+    It is already implicit within `DDLElement` and `FunctionElement`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Most of the above constructs also respond to SQL statement caching. A subclassed
+    construct will want to define the caching behavior for the object, which usually
+    means setting the flag `inherit_cache` to the value of `False` or `True`. See
+    the next section [Enabling Caching Support for Custom Constructs](#compilerext-caching)
+    for background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Enabling Caching Support for Custom Constructs'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQLAlchemy as of version 1.4 includes a [SQL compilation caching facility](connections.html#sql-caching)
+    which will allow equivalent SQL constructs to cache their stringified form, along
+    with other structural information used to fetch results from the statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For reasons discussed at [Object will not produce a cache key, Performance
+    Implications](../errors.html#caching-caveats), the implementation of this caching
+    system takes a conservative approach towards including custom SQL constructs and/or
+    subclasses within the caching system. This includes that any user-defined SQL
+    constructs, including all the examples for this extension, will not participate
+    in caching by default unless they positively assert that they are able to do so.
+    The [`HasCacheKey.inherit_cache`](foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute when set to `True`
+    at the class level of a specific subclass will indicate that instances of this
+    class may be safely cached, using the cache key generation scheme of the immediate
+    superclass. This applies for example to the “synopsis” example indicated previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the `MyColumn` class does not include any new state that affects its
+    SQL compilation; the cache key of `MyColumn` instances will make use of that of
+    the `ColumnClause` superclass, meaning it will take into account the class of
+    the object (`MyColumn`), the string name and datatype of the object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: For objects that are likely to be **used liberally as components within many
+    larger statements**, such as [`Column`](metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") subclasses and custom SQL datatypes, it’s important
+    that **caching be enabled as much as possible**, as this may otherwise negatively
+    affect performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of an object that **does** contain state which affects its SQL compilation
+    is the one illustrated at [Compiling sub-elements of a custom expression construct](#compilerext-compiling-subelements);
+    this is an “INSERT FROM SELECT” construct that combines together a [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") as well as a [`Select`](selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct, each of which independently affect
+    the SQL string generation of the construct. For this class, the example illustrates
+    that it simply does not participate in caching:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: While it is also possible that the above `InsertFromSelect` could be made to
+    produce a cache key that is composed of that of the [`Table`](metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") and [`Select`](selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") components together, the API for this is not
+    at the moment fully public. However, for an “INSERT FROM SELECT” construct, which
+    is only used by itself for specific operations, caching is not as critical as
+    in the previous example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For objects that are **used in relative isolation and are generally standalone**,
+    such as custom [DML](../glossary.html#term-DML) constructs like an “INSERT FROM
+    SELECT”, **caching is generally less critical** as the lack of caching for such
+    a construct will have only localized implications for that specific operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further Examples
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: “UTC timestamp” function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A function that works like “CURRENT_TIMESTAMP” except applies the appropriate
+    conversions so that the time is in UTC time. Timestamps are best stored in relational
+    databases as UTC, without time zones. UTC so that your database doesn’t think
+    time has gone backwards in the hour when daylight savings ends, without timezones
+    because timezones are like character encodings - they’re best applied only at
+    the endpoints of an application (i.e. convert to UTC upon user input, re-apply
+    desired timezone upon display).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For PostgreSQL and Microsoft SQL Server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: “GREATEST” function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The “GREATEST” function is given any number of arguments and returns the one
+    that is of the highest value - its equivalent to Python’s `max` function. A SQL
+    standard version versus a CASE based version which only accommodates two arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: “false” expression
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Render a “false” constant expression, rendering as “0” on platforms that don’t
+    have a “false” constant:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: “UTC timestamp” function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A function that works like “CURRENT_TIMESTAMP” except applies the appropriate
+    conversions so that the time is in UTC time. Timestamps are best stored in relational
+    databases as UTC, without time zones. UTC so that your database doesn’t think
+    time has gone backwards in the hour when daylight savings ends, without timezones
+    because timezones are like character encodings - they’re best applied only at
+    the endpoints of an application (i.e. convert to UTC upon user input, re-apply
+    desired timezone upon display).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For PostgreSQL and Microsoft SQL Server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: “GREATEST” function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The “GREATEST” function is given any number of arguments and returns the one
+    that is of the highest value - its equivalent to Python’s `max` function. A SQL
+    standard version versus a CASE based version which only accommodates two arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: “false” expression
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Render a “false” constant expression, rendering as “0” on platforms that don’t
+    have a “false” constant:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE

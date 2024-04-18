@@ -1,0 +1,1909 @@
+- en: Configuring how Relationship Joins
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/join_conditions.html](https://docs.sqlalchemy.org/en/20/orm/join_conditions.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    will normally create a join between two tables by examining the foreign key relationship
+    between the two tables to determine which columns should be compared. There are
+    a variety of situations where this behavior needs to be customized.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Handling Multiple Join Paths'
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the most common situations to deal with is when there are more than one
+    foreign key path between two tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider a `Customer` class that contains two foreign keys to an `Address`
+    class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above mapping, when we attempt to use it, will produce the error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above message is pretty long. There are many potential messages that [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") can return, which have been carefully tailored
+    to detect a variety of common configurational issues; most will suggest the additional
+    configuration that’s needed to resolve the ambiguity or other missing information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this case, the message wants us to qualify each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") by instructing for each one which foreign key column
+    should be considered, and the appropriate form is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we specify the `foreign_keys` argument, which is a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") or list of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects which indicate those columns to be considered
+    “foreign”, or in other words, the columns that contain a value referring to a
+    parent table. Loading the `Customer.billing_address` relationship from a `Customer`
+    object will use the value present in `billing_address_id` in order to identify
+    the row in `Address` to be loaded; similarly, `shipping_address_id` is used for
+    the `shipping_address` relationship. The linkage of the two columns also plays
+    a role during persistence; the newly generated primary key of a just-inserted
+    `Address` object will be copied into the appropriate foreign key column of an
+    associated `Customer` object during a flush.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When specifying `foreign_keys` with Declarative, we can also use string names
+    to specify, however it is important that if using a list, the **list is part of
+    the string**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this specific example, the list is not necessary in any case as there’s
+    only one [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    we need:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When passed as a Python-evaluable string, the [`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship") argument is interpreted using Python’s `eval()`
+    function. **DO NOT PASS UNTRUSTED INPUT TO THIS STRING**. See [Evaluation of relationship
+    arguments](extensions/declarative/relationships.html#declarative-relationship-eval)
+    for details on declarative evaluation of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") arguments.  ## Specifying Alternate Join Conditions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The default behavior of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") when constructing a join is that it equates the
+    value of primary key columns on one side to that of foreign-key-referring columns
+    on the other. We can change this criterion to be anything we’d like using the
+    [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") argument, as well as the [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") argument in the case when a “secondary” table is
+    used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example below, using the `User` class as well as an `Address` class
+    which stores a street address, we create a relationship `boston_addresses` which
+    will only load those `Address` objects which specify a city of “Boston”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Within this string SQL expression, we made use of the [`and_()`](../core/sqlelement.html#sqlalchemy.sql.expression.and_
+    "sqlalchemy.sql.expression.and_") conjunction construct to establish two distinct
+    predicates for the join condition - joining both the `User.id` and `Address.user_id`
+    columns to each other, as well as limiting rows in `Address` to just `city='Boston'`.
+    When using Declarative, rudimentary SQL functions like [`and_()`](../core/sqlelement.html#sqlalchemy.sql.expression.and_
+    "sqlalchemy.sql.expression.and_") are automatically available in the evaluated
+    namespace of a string [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a Python-evaluable string, the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") argument is interpreted using Python’s `eval()`
+    function. **DO NOT PASS UNTRUSTED INPUT TO THIS STRING**. See [Evaluation of relationship
+    arguments](extensions/declarative/relationships.html#declarative-relationship-eval)
+    for details on declarative evaluation of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The custom criteria we use in a [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") is generally only significant when SQLAlchemy is
+    rendering SQL in order to load or represent this relationship. That is, it’s used
+    in the SQL statement that’s emitted in order to perform a per-attribute lazy load,
+    or when a join is constructed at query time, such as via `Select.join()`, or via
+    the eager “joined” or “subquery” styles of loading. When in-memory objects are
+    being manipulated, we can place any `Address` object we’d like into the `boston_addresses`
+    collection, regardless of what the value of the `.city` attribute is. The objects
+    will remain present in the collection until the attribute is expired and re-loaded
+    from the database where the criterion is applied. When a flush occurs, the objects
+    inside of `boston_addresses` will be flushed unconditionally, assigning value
+    of the primary key `user.id` column onto the foreign-key-holding `address.user_id`
+    column for each row. The `city` criteria has no effect here, as the flush process
+    only cares about synchronizing primary key values into referencing foreign key
+    values.  ## Creating Custom Foreign Conditions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another element of the primary join condition is how those columns considered
+    “foreign” are determined. Usually, some subset of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects will specify [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey"), or otherwise be part of a [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") that’s relevant to the join condition.
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    looks to this foreign key status as it decides how it should load and persist
+    data for this relationship. However, the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") argument can be used to create a join condition
+    that doesn’t involve any “schema” level foreign keys. We can combine [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") along with [`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship") and [`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship") explicitly in order to establish such a join.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below, a class `HostEntry` joins to itself, equating the string `content` column
+    to the `ip_address` column, which is a PostgreSQL type called `INET`. We need
+    to use [`cast()`](../core/sqlelement.html#sqlalchemy.sql.expression.cast "sqlalchemy.sql.expression.cast")
+    in order to cast one side of the join to the type of the other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above relationship will produce a join like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An alternative syntax to the above is to use the [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign
+    "sqlalchemy.orm.foreign") and [`remote()`](relationship_api.html#sqlalchemy.orm.remote
+    "sqlalchemy.orm.remote") [annotations](../glossary.html#term-annotations), inline
+    within the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") expression. This syntax represents the annotations
+    that [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    normally applies by itself to the join condition given the [`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship") and [`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship") arguments. These functions may be more succinct
+    when an explicit join condition is present, and additionally serve to mark exactly
+    the column that is “foreign” or “remote” independent of whether that column is
+    stated multiple times or within complex SQL expressions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]  ## Using custom operators in join conditions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another use case for relationships is the use of custom operators, such as
+    PostgreSQL’s “is contained within” `<<` operator when joining with types such
+    as [`INET`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.INET "sqlalchemy.dialects.postgresql.INET")
+    and [`CIDR`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.CIDR "sqlalchemy.dialects.postgresql.CIDR").
+    For custom boolean operators we use the [`Operators.bool_op()`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.bool_op
+    "sqlalchemy.sql.expression.Operators.bool_op") function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A comparison like the above may be used directly with [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") when constructing a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, a query such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Will render as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]  ## Custom operators based on SQL functions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A variant to the use case for [`Operators.op.is_comparison`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op.params.is_comparison
+    "sqlalchemy.sql.expression.Operators.op") is when we aren’t using an operator,
+    but a SQL function. The typical example of this use case is the PostgreSQL PostGIS
+    functions however any SQL function on any database that resolves to a binary condition
+    may apply. To suit this use case, the [`FunctionElement.as_comparison()`](../core/functions.html#sqlalchemy.sql.functions.FunctionElement.as_comparison
+    "sqlalchemy.sql.functions.FunctionElement.as_comparison") method can modify any
+    SQL function, such as those invoked from the [`func`](../core/sqlelement.html#sqlalchemy.sql.expression.func
+    "sqlalchemy.sql.expression.func") namespace, to indicate to the ORM that the function
+    produces a comparison of two expressions. The below example illustrates this with
+    the [Geoalchemy2](https://geoalchemy-2.readthedocs.io/) library:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the [`FunctionElement.as_comparison()`](../core/functions.html#sqlalchemy.sql.functions.FunctionElement.as_comparison
+    "sqlalchemy.sql.functions.FunctionElement.as_comparison") indicates that the `func.ST_Contains()`
+    SQL function is comparing the `Polygon.geom` and `Point.geom` expressions. The
+    [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign "sqlalchemy.orm.foreign")
+    annotation additionally notes which column takes on the “foreign key” role in
+    this particular relationship.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3: Added [`FunctionElement.as_comparison()`](../core/functions.html#sqlalchemy.sql.functions.FunctionElement.as_comparison
+    "sqlalchemy.sql.functions.FunctionElement.as_comparison").  ## Overlapping Foreign
+    Keys'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A rare scenario can arise when composite foreign keys are used, such that a
+    single column may be the subject of more than one column referred to via foreign
+    key constraint.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider an (admittedly complex) mapping such as the `Magazine` object, referred
+    to both by the `Writer` object and the `Article` object using a composite primary
+    key scheme that includes `magazine_id` for both; then to make `Article` refer
+    to `Writer` as well, `Article.magazine_id` is involved in two separate relationships;
+    `Article.magazine` and `Article.writer`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the above mapping is configured, we will see this warning emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: What this refers to originates from the fact that `Article.magazine_id` is the
+    subject of two different foreign key constraints; it refers to `Magazine.id` directly
+    as a source column, but also refers to `Writer.magazine_id` as a source column
+    in the context of the composite key to `Writer`. If we associate an `Article`
+    with a particular `Magazine`, but then associate the `Article` with a `Writer`
+    that’s associated with a *different* `Magazine`, the ORM will overwrite `Article.magazine_id`
+    non-deterministically, silently changing which magazine to which we refer; it
+    may also attempt to place NULL into this column if we de-associate a `Writer`
+    from an `Article`. The warning lets us know this is the case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To solve this, we need to break out the behavior of `Article` to include all
+    three of the following features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Article` first and foremost writes to `Article.magazine_id` based on data
+    persisted in the `Article.magazine` relationship only, that is a value copied
+    from `Magazine.id`.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`Article` can write to `Article.writer_id` on behalf of data persisted in the
+    `Article.writer` relationship, but only the `Writer.id` column; the `Writer.magazine_id`
+    column should not be written into `Article.magazine_id` as it ultimately is sourced
+    from `Magazine.id`.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`Article` takes `Article.magazine_id` into account when loading `Article.writer`,
+    even though it *doesn’t* write to it on behalf of this relationship.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'To get just #1 and #2, we could specify only `Article.writer_id` as the “foreign
+    keys” for `Article.writer`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, this has the effect of `Article.writer` not taking `Article.magazine_id`
+    into account when querying against `Writer`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Therefore, to get at all of #1, #2, and #3, we express the join condition as
+    well as which columns to be written by combining [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") fully, along with either the [`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship") argument, or more succinctly by annotating with
+    [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign "sqlalchemy.orm.foreign"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Non-relational Comparisons / Materialized Path
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: this section details an experimental feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using custom expressions means we can produce unorthodox join conditions that
+    don’t obey the usual primary/foreign key model. One such example is the materialized
+    path pattern, where we compare strings for overlapping path tokens in order to
+    produce a tree structure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Through careful use of [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign
+    "sqlalchemy.orm.foreign") and [`remote()`](relationship_api.html#sqlalchemy.orm.remote
+    "sqlalchemy.orm.remote"), we can build a relationship that effectively produces
+    a rudimentary materialized path system. Essentially, when [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign
+    "sqlalchemy.orm.foreign") and [`remote()`](relationship_api.html#sqlalchemy.orm.remote
+    "sqlalchemy.orm.remote") are on the *same* side of the comparison expression,
+    the relationship is considered to be “one to many”; when they are on *different*
+    sides, the relationship is considered to be “many to one”. For the comparison
+    we’ll use here, we’ll be dealing with collections so we keep things configured
+    as “one to many”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if given an `Element` object with a path attribute of `"/foo/bar2"`,
+    we seek for a load of `Element.descendants` to look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Self-Referential Many-to-Many Relationship'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section documents a two-table variant of the “adjacency list” pattern,
+    which is documented at [Adjacency List Relationships](self_referential.html#self-referential).
+    Be sure to review the self-referential querying patterns in subsections [Self-Referential
+    Query Strategies](self_referential.html#self-referential-query) and [Configuring
+    Self-Referential Eager Loading](self_referential.html#self-referential-eager-loading)
+    which apply equally well to the mapping pattern discussed here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many to many relationships can be customized by one or both of [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") - the latter is significant for a relationship
+    that specifies a many-to-many reference using the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument. A common situation which involves the
+    usage of [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") is when establishing a many-to-many relationship
+    from a class to itself, as shown below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, SQLAlchemy can’t know automatically which columns should connect
+    to which for the `right_nodes` and `left_nodes` relationships. The [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") arguments establish how we’d like to join to the
+    association table. In the Declarative form above, as we are declaring these conditions
+    within the Python block that corresponds to the `Node` class, the `id` variable
+    is available directly as the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object we wish to join with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Alternatively, we can define the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") arguments using strings, which is suitable in the
+    case that our configuration does not have either the `Node.id` column object available
+    yet or the `node_to_node` table perhaps isn’t yet available. When referring to
+    a plain [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object in a declarative string, we use the string name of the table as it is present
+    in the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a Python-evaluable string, the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") arguments are interpreted using Python’s `eval()`
+    function. **DO NOT PASS UNTRUSTED INPUT TO THESE STRINGS**. See [Evaluation of
+    relationship arguments](extensions/declarative/relationships.html#declarative-relationship-eval)
+    for details on declarative evaluation of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A classical mapping situation here is similar, where `node_to_node` can be
+    joined to `node.c.id`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that in both examples, the [`relationship.backref`](relationship_api.html#sqlalchemy.orm.relationship.params.backref
+    "sqlalchemy.orm.relationship") keyword specifies a `left_nodes` backref - when
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    creates the second relationship in the reverse direction, it’s smart enough to
+    reverse the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Adjacency List Relationships](self_referential.html#self-referential) - single
+    table version'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Self-Referential Query Strategies](self_referential.html#self-referential-query)
+    - tips on querying with self-referential mappings'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Configuring Self-Referential Eager Loading](self_referential.html#self-referential-eager-loading)
+    - tips on eager loading with self- referential mapping  ## Composite “Secondary”
+    Joins'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section features far edge cases that are somewhat supported by SQLAlchemy,
+    however it is recommended to solve problems like these in simpler ways whenever
+    possible, by using reasonable relational layouts and / or [in-Python attributes](mapped_attributes.html#mapper-hybrids).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sometimes, when one seeks to build a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") between two tables there is a need for more than
+    just two or three tables to be involved in order to join them. This is an area
+    of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    where one seeks to push the boundaries of what’s possible, and often the ultimate
+    solution to many of these exotic use cases needs to be hammered out on the SQLAlchemy
+    mailing list.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In more recent versions of SQLAlchemy, the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter can be used in some of these cases in
+    order to provide a composite target consisting of multiple tables. Below is an
+    example of such a join condition (requires version 0.9.2 at least to function
+    as is):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the above example, we provide all three of [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship"), [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship"), and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship"), in the declarative style referring to the named
+    tables `a`, `b`, `c`, `d` directly. A query from `A` to `D` looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, we take advantage of being able to stuff multiple tables
+    into a “secondary” container, so that we can join across many tables while still
+    keeping things “simple” for [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), in that there’s just “one” table on both the “left”
+    and the “right” side; the complexity is kept within the middle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: A relationship like the above is typically marked as `viewonly=True`, using
+    [`relationship.viewonly`](relationship_api.html#sqlalchemy.orm.relationship.params.viewonly
+    "sqlalchemy.orm.relationship"), and should be considered as read-only. While there
+    are sometimes ways to make relationships like the above writable, this is generally
+    complicated and error prone.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Notes on using the viewonly relationship parameter](#relationship-viewonly-notes)  ##
+    Relationship to Aliased Class'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the previous section, we illustrated a technique where we used [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") in order to place additional tables within a join
+    condition. There is one complex join case where even this technique is not sufficient;
+    when we seek to join from `A` to `B`, making use of any number of `C`, `D`, etc.
+    in between, however there are also join conditions between `A` and `B` *directly*.
+    In this case, the join from `A` to `B` may be difficult to express with just a
+    complex [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") condition, as the intermediary tables may need
+    special handling, and it is also not expressible with a [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") object, since the `A->secondary->B` pattern does
+    not support any references between `A` and `B` directly. When this **extremely
+    advanced** case arises, we can resort to creating a second mapping as a target
+    for the relationship. This is where we use [`AliasedClass`](queryguide/api.html#sqlalchemy.orm.util.AliasedClass
+    "sqlalchemy.orm.util.AliasedClass") in order to make a mapping to a class that
+    includes all the additional tables we need for this join. In order to produce
+    this mapper as an “alternative” mapping for our class, we use the [`aliased()`](queryguide/api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") function to produce the new construct, then use [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") against the object as though it were a plain mapped
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below illustrates a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") with a simple join from `A` to `B`, however the
+    primaryjoin condition is augmented with two additional entities `C` and `D`, which
+    also must have rows that line up with the rows in both `A` and `B` simultaneously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, a simple join looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Integrating AliasedClass Mappings with Typing and Avoiding Early Mapper Configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The creation of the [`aliased()`](queryguide/api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct against a mapped class forces the [`configure_mappers()`](mapping_api.html#sqlalchemy.orm.configure_mappers
+    "sqlalchemy.orm.configure_mappers") step to proceed, which will resolve all current
+    classes and their relationships. This may be problematic if unrelated mapped classes
+    needed by the current mappings have not yet been declared, or if the configuration
+    of the relationship itself needs access to as-yet undeclared classes. Additionally,
+    SQLAlchemy’s Declarative pattern works with Python typing most effectively when
+    relationships are declared up front.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To organize the construction of the relationship to work with these issues,
+    a configure level event hook like [`MapperEvents.before_mapper_configured()`](events.html#sqlalchemy.orm.MapperEvents.before_mapper_configured
+    "sqlalchemy.orm.MapperEvents.before_mapper_configured") may be used, which will
+    invoke the configuration code only when all mappings are ready for configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the function `_configure_ab_relationship()` will be invoked only when
+    a fully configured version of `A` is requested, at which point the classes `B`,
+    `D` and `C` would be available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For an approach that integrates with inline typing, a similar technique can
+    be used to effectively generate a “singleton” creation pattern for the aliased
+    class where it is late-initialized as a global variable, which can then be used
+    in the relationship inline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using the AliasedClass target in Queries
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the previous example, the `A.b` relationship refers to the `B_viacd` entity
+    as the target, and **not** the `B` class directly. To add additional criteria
+    involving the `A.b` relationship, it’s typically necessary to reference the `B_viacd`
+    directly rather than using `B`, especially in a case where the target entity of
+    `A.b` is to be transformed into an alias or a subquery. Below illustrates the
+    same relationship using a subquery, rather than a join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A query using the above `A.b` relationship will render a subquery:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we want to add additional criteria based on the `A.b` join, we must do so
+    in terms of `B_viacd_subquery` rather than `B` directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]  ## Row-Limited Relationships with Window Functions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another interesting use case for relationships to [`AliasedClass`](queryguide/api.html#sqlalchemy.orm.util.AliasedClass
+    "sqlalchemy.orm.util.AliasedClass") objects are situations where the relationship
+    needs to join to a specialized SELECT of any form. One scenario is when the use
+    of a window function is desired, such as to limit how many rows should be returned
+    for a relationship. The example below illustrates a non-primary mapper relationship
+    that will load the first ten items for each collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can use the above `partitioned_bs` relationship with most of the loader
+    strategies, such as [`selectinload()`](queryguide/relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the “selectinload” query looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, for each matching primary key in “a”, we will get the first ten “bs”
+    as ordered by “b.id”. By partitioning on “a_id” we ensure that each “row number”
+    is local to the parent “a_id”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Such a mapping would ordinarily also include a “plain” relationship from “A”
+    to “B”, for persistence operations as well as when the full set of “B” objects
+    per “A” is desired.  ## Building Query-Enabled Properties'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Very ambitious custom join conditions may fail to be directly persistable,
+    and in some cases may not even load correctly. To remove the persistence part
+    of the equation, use the flag [`relationship.viewonly`](relationship_api.html#sqlalchemy.orm.relationship.params.viewonly
+    "sqlalchemy.orm.relationship") on the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), which establishes it as a read-only attribute
+    (data written to the collection will be ignored on flush()). However, in extreme
+    cases, consider using a regular Python property in conjunction with [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: In other cases, the descriptor can be built to make use of existing in-Python
+    data. See the section on [Using Descriptors and Hybrids](mapped_attributes.html#mapper-hybrids)
+    for more general discussion of special Python attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using Descriptors and Hybrids](mapped_attributes.html#mapper-hybrids)  ##
+    Notes on using the viewonly relationship parameter'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`relationship.viewonly`](relationship_api.html#sqlalchemy.orm.relationship.params.viewonly
+    "sqlalchemy.orm.relationship") parameter when applied to a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct indicates that this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") will not take part in any ORM [unit of work](../glossary.html#term-unit-of-work)
+    operations, and additionally that the attribute does not expect to participate
+    within in-Python mutations of its represented collection. This means that while
+    the viewonly relationship may refer to a mutable Python collection like a list
+    or set, making changes to that list or set as present on a mapped instance will
+    have **no effect** on the ORM flush process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To explore this scenario consider this mapping:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: The following sections will note different aspects of this configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In-Python mutations including backrefs are not appropriate with viewonly=True
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The above mapping targets the `User.current_week_tasks` viewonly relationship
+    as the [backref](../glossary.html#term-backref) target of the `Task.user` attribute.
+    This is not currently flagged by SQLAlchemy’s ORM configuration process, however
+    is a configuration error. Changing the `.user` attribute on a `Task` will not
+    affect the `.current_week_tasks` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: There is another parameter called [`relationship.sync_backrefs`](relationship_api.html#sqlalchemy.orm.relationship.params.sync_backrefs
+    "sqlalchemy.orm.relationship") which can be turned on here to allow `.current_week_tasks`
+    to be mutated in this case, however this is not considered to be a best practice
+    with a viewonly relationship, which instead should not be relied upon for in-Python
+    mutations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this mapping, backrefs can be configured between `User.all_tasks` and `Task.user`,
+    as these are both not viewonly and will synchronize normally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beyond the issue of backref mutations being disabled for viewonly relationships,
+    plain changes to the `User.all_tasks` collection in Python are also not reflected
+    in the `User.current_week_tasks` collection until changes have been flushed to
+    the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Overall, for a use case where a custom collection should respond immediately
+    to in-Python mutations, the viewonly relationship is generally not appropriate.
+    A better approach is to use the [Hybrid Attributes](extensions/hybrid.html) feature
+    of SQLAlchemy, or for instance-only cases to use a Python `@property`, where a
+    user-defined collection that is generated in terms of the current Python instance
+    can be implemented. To change our example to work this way, we repair the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") parameter on `Task.user` to reference `User.all_tasks`,
+    and then illustrate a simple `@property` that will deliver results in terms of
+    the immediate `User.all_tasks` collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using an in-Python collection calculated on the fly each time, we are guaranteed
+    to have the correct answer at all times, without the need to use a database at
+    all:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: viewonly=True collections / attributes do not get re-queried until expired
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Continuing with the original viewonly attribute, if we do in fact make changes
+    to the `User.all_tasks` collection on a [persistent](../glossary.html#term-persistent)
+    object, the viewonly collection can only show the net result of this change after
+    **two** things occur. The first is that the change to `User.all_tasks` is [flushed](../glossary.html#term-flushed),
+    so that the new data is available in the database, at least within the scope of
+    the local transaction. The second is that the `User.current_week_tasks` attribute
+    is [expired](../glossary.html#term-expired) and reloaded via a new SQL query to
+    the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To support this requirement, the simplest flow to use is one where the **viewonly
+    relationship is consumed only in operations that are primarily read only to start
+    with**. Such as below, if we retrieve a `User` fresh from the database, the collection
+    will be current:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we make modifications to `u1.all_tasks`, if we want to see these changes
+    reflected in the `u1.current_week_tasks` viewonly relationship, these changes
+    need to be flushed and the `u1.current_week_tasks` attribute needs to be expired,
+    so that it will [lazy load](../glossary.html#term-lazy-load) on next access. The
+    simplest approach to this is to use [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), keeping the [`Session.expire_on_commit`](session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session") parameter set at its default of `True`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the call to [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") flushed the changes to `u1.all_tasks` to the
+    database, then expired all objects, so that when we accessed `u1.current_week_tasks`,
+    a :term:` lazy load` occurred which fetched the contents for this attribute freshly
+    from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To intercept operations without actually committing the transaction, the attribute
+    needs to be explicitly [expired](../glossary.html#term-expired) first. A simplistic
+    way to do this is to just call it directly. In the example below, [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") sends pending changes to the database, then [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") is used to expire the `u1.current_week_tasks`
+    collection so that it re-fetches on next access:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can in fact skip the call to [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush"), assuming a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that keeps [`Session.autoflush`](session_api.html#sqlalchemy.orm.Session.params.autoflush
+    "sqlalchemy.orm.Session") at its default value of `True`, as the expired `current_week_tasks`
+    attribute will trigger autoflush when accessed after expiration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Continuing with the above approach to something more elaborate, we can apply
+    the expiration programmatically when the related `User.all_tasks` collection changes,
+    using [event hooks](../core/event.html). This an **advanced technique**, where
+    simpler architectures like `@property` or sticking to read-only use cases should
+    be examined first. In our simple example, this would be configured as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above hooks, mutation operations are intercepted and result in the
+    `User.current_week_tasks` collection to be expired automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`AttributeEvents`](events.html#sqlalchemy.orm.AttributeEvents "sqlalchemy.orm.AttributeEvents")
+    event hooks used above are also triggered by backref mutations, so with the above
+    hooks a change to `Task.user` is also intercepted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]  ## Handling Multiple Join Paths'
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the most common situations to deal with is when there are more than one
+    foreign key path between two tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider a `Customer` class that contains two foreign keys to an `Address`
+    class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above mapping, when we attempt to use it, will produce the error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above message is pretty long. There are many potential messages that [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") can return, which have been carefully tailored
+    to detect a variety of common configurational issues; most will suggest the additional
+    configuration that’s needed to resolve the ambiguity or other missing information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this case, the message wants us to qualify each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") by instructing for each one which foreign key column
+    should be considered, and the appropriate form is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we specify the `foreign_keys` argument, which is a [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") or list of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects which indicate those columns to be considered
+    “foreign”, or in other words, the columns that contain a value referring to a
+    parent table. Loading the `Customer.billing_address` relationship from a `Customer`
+    object will use the value present in `billing_address_id` in order to identify
+    the row in `Address` to be loaded; similarly, `shipping_address_id` is used for
+    the `shipping_address` relationship. The linkage of the two columns also plays
+    a role during persistence; the newly generated primary key of a just-inserted
+    `Address` object will be copied into the appropriate foreign key column of an
+    associated `Customer` object during a flush.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When specifying `foreign_keys` with Declarative, we can also use string names
+    to specify, however it is important that if using a list, the **list is part of
+    the string**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this specific example, the list is not necessary in any case as there’s
+    only one [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    we need:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a Python-evaluable string, the [`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship") argument is interpreted using Python’s `eval()`
+    function. **DO NOT PASS UNTRUSTED INPUT TO THIS STRING**. See [Evaluation of relationship
+    arguments](extensions/declarative/relationships.html#declarative-relationship-eval)
+    for details on declarative evaluation of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Specifying Alternate Join Conditions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The default behavior of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") when constructing a join is that it equates the
+    value of primary key columns on one side to that of foreign-key-referring columns
+    on the other. We can change this criterion to be anything we’d like using the
+    [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") argument, as well as the [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") argument in the case when a “secondary” table is
+    used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example below, using the `User` class as well as an `Address` class
+    which stores a street address, we create a relationship `boston_addresses` which
+    will only load those `Address` objects which specify a city of “Boston”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: Within this string SQL expression, we made use of the [`and_()`](../core/sqlelement.html#sqlalchemy.sql.expression.and_
+    "sqlalchemy.sql.expression.and_") conjunction construct to establish two distinct
+    predicates for the join condition - joining both the `User.id` and `Address.user_id`
+    columns to each other, as well as limiting rows in `Address` to just `city='Boston'`.
+    When using Declarative, rudimentary SQL functions like [`and_()`](../core/sqlelement.html#sqlalchemy.sql.expression.and_
+    "sqlalchemy.sql.expression.and_") are automatically available in the evaluated
+    namespace of a string [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a Python-evaluable string, the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") argument is interpreted using Python’s `eval()`
+    function. **DO NOT PASS UNTRUSTED INPUT TO THIS STRING**. See [Evaluation of relationship
+    arguments](extensions/declarative/relationships.html#declarative-relationship-eval)
+    for details on declarative evaluation of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The custom criteria we use in a [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") is generally only significant when SQLAlchemy is
+    rendering SQL in order to load or represent this relationship. That is, it’s used
+    in the SQL statement that’s emitted in order to perform a per-attribute lazy load,
+    or when a join is constructed at query time, such as via `Select.join()`, or via
+    the eager “joined” or “subquery” styles of loading. When in-memory objects are
+    being manipulated, we can place any `Address` object we’d like into the `boston_addresses`
+    collection, regardless of what the value of the `.city` attribute is. The objects
+    will remain present in the collection until the attribute is expired and re-loaded
+    from the database where the criterion is applied. When a flush occurs, the objects
+    inside of `boston_addresses` will be flushed unconditionally, assigning value
+    of the primary key `user.id` column onto the foreign-key-holding `address.user_id`
+    column for each row. The `city` criteria has no effect here, as the flush process
+    only cares about synchronizing primary key values into referencing foreign key
+    values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Creating Custom Foreign Conditions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another element of the primary join condition is how those columns considered
+    “foreign” are determined. Usually, some subset of [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") objects will specify [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey"), or otherwise be part of a [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") that’s relevant to the join condition.
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    looks to this foreign key status as it decides how it should load and persist
+    data for this relationship. However, the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") argument can be used to create a join condition
+    that doesn’t involve any “schema” level foreign keys. We can combine [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") along with [`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship") and [`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship") explicitly in order to establish such a join.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below, a class `HostEntry` joins to itself, equating the string `content` column
+    to the `ip_address` column, which is a PostgreSQL type called `INET`. We need
+    to use [`cast()`](../core/sqlelement.html#sqlalchemy.sql.expression.cast "sqlalchemy.sql.expression.cast")
+    in order to cast one side of the join to the type of the other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above relationship will produce a join like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An alternative syntax to the above is to use the [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign
+    "sqlalchemy.orm.foreign") and [`remote()`](relationship_api.html#sqlalchemy.orm.remote
+    "sqlalchemy.orm.remote") [annotations](../glossary.html#term-annotations), inline
+    within the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") expression. This syntax represents the annotations
+    that [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    normally applies by itself to the join condition given the [`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship") and [`relationship.remote_side`](relationship_api.html#sqlalchemy.orm.relationship.params.remote_side
+    "sqlalchemy.orm.relationship") arguments. These functions may be more succinct
+    when an explicit join condition is present, and additionally serve to mark exactly
+    the column that is “foreign” or “remote” independent of whether that column is
+    stated multiple times or within complex SQL expressions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Using custom operators in join conditions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another use case for relationships is the use of custom operators, such as
+    PostgreSQL’s “is contained within” `<<` operator when joining with types such
+    as [`INET`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.INET "sqlalchemy.dialects.postgresql.INET")
+    and [`CIDR`](../dialects/postgresql.html#sqlalchemy.dialects.postgresql.CIDR "sqlalchemy.dialects.postgresql.CIDR").
+    For custom boolean operators we use the [`Operators.bool_op()`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.bool_op
+    "sqlalchemy.sql.expression.Operators.bool_op") function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A comparison like the above may be used directly with [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") when constructing a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, a query such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Will render as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Custom operators based on SQL functions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A variant to the use case for [`Operators.op.is_comparison`](../core/sqlelement.html#sqlalchemy.sql.expression.Operators.op.params.is_comparison
+    "sqlalchemy.sql.expression.Operators.op") is when we aren’t using an operator,
+    but a SQL function. The typical example of this use case is the PostgreSQL PostGIS
+    functions however any SQL function on any database that resolves to a binary condition
+    may apply. To suit this use case, the [`FunctionElement.as_comparison()`](../core/functions.html#sqlalchemy.sql.functions.FunctionElement.as_comparison
+    "sqlalchemy.sql.functions.FunctionElement.as_comparison") method can modify any
+    SQL function, such as those invoked from the [`func`](../core/sqlelement.html#sqlalchemy.sql.expression.func
+    "sqlalchemy.sql.expression.func") namespace, to indicate to the ORM that the function
+    produces a comparison of two expressions. The below example illustrates this with
+    the [Geoalchemy2](https://geoalchemy-2.readthedocs.io/) library:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the [`FunctionElement.as_comparison()`](../core/functions.html#sqlalchemy.sql.functions.FunctionElement.as_comparison
+    "sqlalchemy.sql.functions.FunctionElement.as_comparison") indicates that the `func.ST_Contains()`
+    SQL function is comparing the `Polygon.geom` and `Point.geom` expressions. The
+    [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign "sqlalchemy.orm.foreign")
+    annotation additionally notes which column takes on the “foreign key” role in
+    this particular relationship.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.3: Added [`FunctionElement.as_comparison()`](../core/functions.html#sqlalchemy.sql.functions.FunctionElement.as_comparison
+    "sqlalchemy.sql.functions.FunctionElement.as_comparison").'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Overlapping Foreign Keys'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A rare scenario can arise when composite foreign keys are used, such that a
+    single column may be the subject of more than one column referred to via foreign
+    key constraint.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider an (admittedly complex) mapping such as the `Magazine` object, referred
+    to both by the `Writer` object and the `Article` object using a composite primary
+    key scheme that includes `magazine_id` for both; then to make `Article` refer
+    to `Writer` as well, `Article.magazine_id` is involved in two separate relationships;
+    `Article.magazine` and `Article.writer`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the above mapping is configured, we will see this warning emitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: What this refers to originates from the fact that `Article.magazine_id` is the
+    subject of two different foreign key constraints; it refers to `Magazine.id` directly
+    as a source column, but also refers to `Writer.magazine_id` as a source column
+    in the context of the composite key to `Writer`. If we associate an `Article`
+    with a particular `Magazine`, but then associate the `Article` with a `Writer`
+    that’s associated with a *different* `Magazine`, the ORM will overwrite `Article.magazine_id`
+    non-deterministically, silently changing which magazine to which we refer; it
+    may also attempt to place NULL into this column if we de-associate a `Writer`
+    from an `Article`. The warning lets us know this is the case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To solve this, we need to break out the behavior of `Article` to include all
+    three of the following features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Article` first and foremost writes to `Article.magazine_id` based on data
+    persisted in the `Article.magazine` relationship only, that is a value copied
+    from `Magazine.id`.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`Article` can write to `Article.writer_id` on behalf of data persisted in the
+    `Article.writer` relationship, but only the `Writer.id` column; the `Writer.magazine_id`
+    column should not be written into `Article.magazine_id` as it ultimately is sourced
+    from `Magazine.id`.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`Article` takes `Article.magazine_id` into account when loading `Article.writer`,
+    even though it *doesn’t* write to it on behalf of this relationship.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'To get just #1 and #2, we could specify only `Article.writer_id` as the “foreign
+    keys” for `Article.writer`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, this has the effect of `Article.writer` not taking `Article.magazine_id`
+    into account when querying against `Writer`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Therefore, to get at all of #1, #2, and #3, we express the join condition as
+    well as which columns to be written by combining [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") fully, along with either the [`relationship.foreign_keys`](relationship_api.html#sqlalchemy.orm.relationship.params.foreign_keys
+    "sqlalchemy.orm.relationship") argument, or more succinctly by annotating with
+    [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign "sqlalchemy.orm.foreign"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: Non-relational Comparisons / Materialized Path
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: this section details an experimental feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using custom expressions means we can produce unorthodox join conditions that
+    don’t obey the usual primary/foreign key model. One such example is the materialized
+    path pattern, where we compare strings for overlapping path tokens in order to
+    produce a tree structure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Through careful use of [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign
+    "sqlalchemy.orm.foreign") and [`remote()`](relationship_api.html#sqlalchemy.orm.remote
+    "sqlalchemy.orm.remote"), we can build a relationship that effectively produces
+    a rudimentary materialized path system. Essentially, when [`foreign()`](relationship_api.html#sqlalchemy.orm.foreign
+    "sqlalchemy.orm.foreign") and [`remote()`](relationship_api.html#sqlalchemy.orm.remote
+    "sqlalchemy.orm.remote") are on the *same* side of the comparison expression,
+    the relationship is considered to be “one to many”; when they are on *different*
+    sides, the relationship is considered to be “many to one”. For the comparison
+    we’ll use here, we’ll be dealing with collections so we keep things configured
+    as “one to many”:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, if given an `Element` object with a path attribute of `"/foo/bar2"`,
+    we seek for a load of `Element.descendants` to look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Self-Referential Many-to-Many Relationship'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section documents a two-table variant of the “adjacency list” pattern,
+    which is documented at [Adjacency List Relationships](self_referential.html#self-referential).
+    Be sure to review the self-referential querying patterns in subsections [Self-Referential
+    Query Strategies](self_referential.html#self-referential-query) and [Configuring
+    Self-Referential Eager Loading](self_referential.html#self-referential-eager-loading)
+    which apply equally well to the mapping pattern discussed here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many to many relationships can be customized by one or both of [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") - the latter is significant for a relationship
+    that specifies a many-to-many reference using the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") argument. A common situation which involves the
+    usage of [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") is when establishing a many-to-many relationship
+    from a class to itself, as shown below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where above, SQLAlchemy can’t know automatically which columns should connect
+    to which for the `right_nodes` and `left_nodes` relationships. The [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") arguments establish how we’d like to join to the
+    association table. In the Declarative form above, as we are declaring these conditions
+    within the Python block that corresponds to the `Node` class, the `id` variable
+    is available directly as the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object we wish to join with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Alternatively, we can define the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") arguments using strings, which is suitable in the
+    case that our configuration does not have either the `Node.id` column object available
+    yet or the `node_to_node` table perhaps isn’t yet available. When referring to
+    a plain [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object in a declarative string, we use the string name of the table as it is present
+    in the [`MetaData`](../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: When passed as a Python-evaluable string, the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") arguments are interpreted using Python’s `eval()`
+    function. **DO NOT PASS UNTRUSTED INPUT TO THESE STRINGS**. See [Evaluation of
+    relationship arguments](extensions/declarative/relationships.html#declarative-relationship-eval)
+    for details on declarative evaluation of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A classical mapping situation here is similar, where `node_to_node` can be
+    joined to `node.c.id`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that in both examples, the [`relationship.backref`](relationship_api.html#sqlalchemy.orm.relationship.params.backref
+    "sqlalchemy.orm.relationship") keyword specifies a `left_nodes` backref - when
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    creates the second relationship in the reverse direction, it’s smart enough to
+    reverse the [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship") arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Adjacency List Relationships](self_referential.html#self-referential) - single
+    table version'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Self-Referential Query Strategies](self_referential.html#self-referential-query)
+    - tips on querying with self-referential mappings'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Configuring Self-Referential Eager Loading](self_referential.html#self-referential-eager-loading)
+    - tips on eager loading with self- referential mapping'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '## Composite “Secondary” Joins'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section features far edge cases that are somewhat supported by SQLAlchemy,
+    however it is recommended to solve problems like these in simpler ways whenever
+    possible, by using reasonable relational layouts and / or [in-Python attributes](mapped_attributes.html#mapper-hybrids).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sometimes, when one seeks to build a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") between two tables there is a need for more than
+    just two or three tables to be involved in order to join them. This is an area
+    of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    where one seeks to push the boundaries of what’s possible, and often the ultimate
+    solution to many of these exotic use cases needs to be hammered out on the SQLAlchemy
+    mailing list.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In more recent versions of SQLAlchemy, the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") parameter can be used in some of these cases in
+    order to provide a composite target consisting of multiple tables. Below is an
+    example of such a join condition (requires version 0.9.2 at least to function
+    as is):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the above example, we provide all three of [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship"), [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship"), and [`relationship.secondaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.secondaryjoin
+    "sqlalchemy.orm.relationship"), in the declarative style referring to the named
+    tables `a`, `b`, `c`, `d` directly. A query from `A` to `D` looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, we take advantage of being able to stuff multiple tables
+    into a “secondary” container, so that we can join across many tables while still
+    keeping things “simple” for [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), in that there’s just “one” table on both the “left”
+    and the “right” side; the complexity is kept within the middle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: A relationship like the above is typically marked as `viewonly=True`, using
+    [`relationship.viewonly`](relationship_api.html#sqlalchemy.orm.relationship.params.viewonly
+    "sqlalchemy.orm.relationship"), and should be considered as read-only. While there
+    are sometimes ways to make relationships like the above writable, this is generally
+    complicated and error prone.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Notes on using the viewonly relationship parameter](#relationship-viewonly-notes)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Relationship to Aliased Class'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the previous section, we illustrated a technique where we used [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") in order to place additional tables within a join
+    condition. There is one complex join case where even this technique is not sufficient;
+    when we seek to join from `A` to `B`, making use of any number of `C`, `D`, etc.
+    in between, however there are also join conditions between `A` and `B` *directly*.
+    In this case, the join from `A` to `B` may be difficult to express with just a
+    complex [`relationship.primaryjoin`](relationship_api.html#sqlalchemy.orm.relationship.params.primaryjoin
+    "sqlalchemy.orm.relationship") condition, as the intermediary tables may need
+    special handling, and it is also not expressible with a [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") object, since the `A->secondary->B` pattern does
+    not support any references between `A` and `B` directly. When this **extremely
+    advanced** case arises, we can resort to creating a second mapping as a target
+    for the relationship. This is where we use [`AliasedClass`](queryguide/api.html#sqlalchemy.orm.util.AliasedClass
+    "sqlalchemy.orm.util.AliasedClass") in order to make a mapping to a class that
+    includes all the additional tables we need for this join. In order to produce
+    this mapper as an “alternative” mapping for our class, we use the [`aliased()`](queryguide/api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") function to produce the new construct, then use [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") against the object as though it were a plain mapped
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below illustrates a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") with a simple join from `A` to `B`, however the
+    primaryjoin condition is augmented with two additional entities `C` and `D`, which
+    also must have rows that line up with the rows in both `A` and `B` simultaneously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above mapping, a simple join looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: Integrating AliasedClass Mappings with Typing and Avoiding Early Mapper Configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The creation of the [`aliased()`](queryguide/api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct against a mapped class forces the [`configure_mappers()`](mapping_api.html#sqlalchemy.orm.configure_mappers
+    "sqlalchemy.orm.configure_mappers") step to proceed, which will resolve all current
+    classes and their relationships. This may be problematic if unrelated mapped classes
+    needed by the current mappings have not yet been declared, or if the configuration
+    of the relationship itself needs access to as-yet undeclared classes. Additionally,
+    SQLAlchemy’s Declarative pattern works with Python typing most effectively when
+    relationships are declared up front.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To organize the construction of the relationship to work with these issues,
+    a configure level event hook like [`MapperEvents.before_mapper_configured()`](events.html#sqlalchemy.orm.MapperEvents.before_mapper_configured
+    "sqlalchemy.orm.MapperEvents.before_mapper_configured") may be used, which will
+    invoke the configuration code only when all mappings are ready for configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the function `_configure_ab_relationship()` will be invoked only when
+    a fully configured version of `A` is requested, at which point the classes `B`,
+    `D` and `C` would be available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For an approach that integrates with inline typing, a similar technique can
+    be used to effectively generate a “singleton” creation pattern for the aliased
+    class where it is late-initialized as a global variable, which can then be used
+    in the relationship inline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using the AliasedClass target in Queries
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the previous example, the `A.b` relationship refers to the `B_viacd` entity
+    as the target, and **not** the `B` class directly. To add additional criteria
+    involving the `A.b` relationship, it’s typically necessary to reference the `B_viacd`
+    directly rather than using `B`, especially in a case where the target entity of
+    `A.b` is to be transformed into an alias or a subquery. Below illustrates the
+    same relationship using a subquery, rather than a join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A query using the above `A.b` relationship will render a subquery:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we want to add additional criteria based on the `A.b` join, we must do so
+    in terms of `B_viacd_subquery` rather than `B` directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: Integrating AliasedClass Mappings with Typing and Avoiding Early Mapper Configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The creation of the [`aliased()`](queryguide/api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased") construct against a mapped class forces the [`configure_mappers()`](mapping_api.html#sqlalchemy.orm.configure_mappers
+    "sqlalchemy.orm.configure_mappers") step to proceed, which will resolve all current
+    classes and their relationships. This may be problematic if unrelated mapped classes
+    needed by the current mappings have not yet been declared, or if the configuration
+    of the relationship itself needs access to as-yet undeclared classes. Additionally,
+    SQLAlchemy’s Declarative pattern works with Python typing most effectively when
+    relationships are declared up front.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To organize the construction of the relationship to work with these issues,
+    a configure level event hook like [`MapperEvents.before_mapper_configured()`](events.html#sqlalchemy.orm.MapperEvents.before_mapper_configured
+    "sqlalchemy.orm.MapperEvents.before_mapper_configured") may be used, which will
+    invoke the configuration code only when all mappings are ready for configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the function `_configure_ab_relationship()` will be invoked only when
+    a fully configured version of `A` is requested, at which point the classes `B`,
+    `D` and `C` would be available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For an approach that integrates with inline typing, a similar technique can
+    be used to effectively generate a “singleton” creation pattern for the aliased
+    class where it is late-initialized as a global variable, which can then be used
+    in the relationship inline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using the AliasedClass target in Queries
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the previous example, the `A.b` relationship refers to the `B_viacd` entity
+    as the target, and **not** the `B` class directly. To add additional criteria
+    involving the `A.b` relationship, it’s typically necessary to reference the `B_viacd`
+    directly rather than using `B`, especially in a case where the target entity of
+    `A.b` is to be transformed into an alias or a subquery. Below illustrates the
+    same relationship using a subquery, rather than a join:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A query using the above `A.b` relationship will render a subquery:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we want to add additional criteria based on the `A.b` join, we must do so
+    in terms of `B_viacd_subquery` rather than `B` directly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Row-Limited Relationships with Window Functions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another interesting use case for relationships to [`AliasedClass`](queryguide/api.html#sqlalchemy.orm.util.AliasedClass
+    "sqlalchemy.orm.util.AliasedClass") objects are situations where the relationship
+    needs to join to a specialized SELECT of any form. One scenario is when the use
+    of a window function is desired, such as to limit how many rows should be returned
+    for a relationship. The example below illustrates a non-primary mapper relationship
+    that will load the first ten items for each collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can use the above `partitioned_bs` relationship with most of the loader
+    strategies, such as [`selectinload()`](queryguide/relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Where above, the “selectinload” query looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, for each matching primary key in “a”, we will get the first ten “bs”
+    as ordered by “b.id”. By partitioning on “a_id” we ensure that each “row number”
+    is local to the parent “a_id”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Such a mapping would ordinarily also include a “plain” relationship from “A”
+    to “B”, for persistence operations as well as when the full set of “B” objects
+    per “A” is desired.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Building Query-Enabled Properties'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Very ambitious custom join conditions may fail to be directly persistable,
+    and in some cases may not even load correctly. To remove the persistence part
+    of the equation, use the flag [`relationship.viewonly`](relationship_api.html#sqlalchemy.orm.relationship.params.viewonly
+    "sqlalchemy.orm.relationship") on the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"), which establishes it as a read-only attribute
+    (data written to the collection will be ignored on flush()). However, in extreme
+    cases, consider using a regular Python property in conjunction with [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: In other cases, the descriptor can be built to make use of existing in-Python
+    data. See the section on [Using Descriptors and Hybrids](mapped_attributes.html#mapper-hybrids)
+    for more general discussion of special Python attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using Descriptors and Hybrids](mapped_attributes.html#mapper-hybrids)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Notes on using the viewonly relationship parameter'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`relationship.viewonly`](relationship_api.html#sqlalchemy.orm.relationship.params.viewonly
+    "sqlalchemy.orm.relationship") parameter when applied to a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") construct indicates that this [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") will not take part in any ORM [unit of work](../glossary.html#term-unit-of-work)
+    operations, and additionally that the attribute does not expect to participate
+    within in-Python mutations of its represented collection. This means that while
+    the viewonly relationship may refer to a mutable Python collection like a list
+    or set, making changes to that list or set as present on a mapped instance will
+    have **no effect** on the ORM flush process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To explore this scenario consider this mapping:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: The following sections will note different aspects of this configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In-Python mutations including backrefs are not appropriate with viewonly=True
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The above mapping targets the `User.current_week_tasks` viewonly relationship
+    as the [backref](../glossary.html#term-backref) target of the `Task.user` attribute.
+    This is not currently flagged by SQLAlchemy’s ORM configuration process, however
+    is a configuration error. Changing the `.user` attribute on a `Task` will not
+    affect the `.current_week_tasks` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: There is another parameter called [`relationship.sync_backrefs`](relationship_api.html#sqlalchemy.orm.relationship.params.sync_backrefs
+    "sqlalchemy.orm.relationship") which can be turned on here to allow `.current_week_tasks`
+    to be mutated in this case, however this is not considered to be a best practice
+    with a viewonly relationship, which instead should not be relied upon for in-Python
+    mutations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this mapping, backrefs can be configured between `User.all_tasks` and `Task.user`,
+    as these are both not viewonly and will synchronize normally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beyond the issue of backref mutations being disabled for viewonly relationships,
+    plain changes to the `User.all_tasks` collection in Python are also not reflected
+    in the `User.current_week_tasks` collection until changes have been flushed to
+    the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Overall, for a use case where a custom collection should respond immediately
+    to in-Python mutations, the viewonly relationship is generally not appropriate.
+    A better approach is to use the [Hybrid Attributes](extensions/hybrid.html) feature
+    of SQLAlchemy, or for instance-only cases to use a Python `@property`, where a
+    user-defined collection that is generated in terms of the current Python instance
+    can be implemented. To change our example to work this way, we repair the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") parameter on `Task.user` to reference `User.all_tasks`,
+    and then illustrate a simple `@property` that will deliver results in terms of
+    the immediate `User.all_tasks` collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using an in-Python collection calculated on the fly each time, we are guaranteed
+    to have the correct answer at all times, without the need to use a database at
+    all:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: viewonly=True collections / attributes do not get re-queried until expired
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Continuing with the original viewonly attribute, if we do in fact make changes
+    to the `User.all_tasks` collection on a [persistent](../glossary.html#term-persistent)
+    object, the viewonly collection can only show the net result of this change after
+    **two** things occur. The first is that the change to `User.all_tasks` is [flushed](../glossary.html#term-flushed),
+    so that the new data is available in the database, at least within the scope of
+    the local transaction. The second is that the `User.current_week_tasks` attribute
+    is [expired](../glossary.html#term-expired) and reloaded via a new SQL query to
+    the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To support this requirement, the simplest flow to use is one where the **viewonly
+    relationship is consumed only in operations that are primarily read only to start
+    with**. Such as below, if we retrieve a `User` fresh from the database, the collection
+    will be current:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we make modifications to `u1.all_tasks`, if we want to see these changes
+    reflected in the `u1.current_week_tasks` viewonly relationship, these changes
+    need to be flushed and the `u1.current_week_tasks` attribute needs to be expired,
+    so that it will [lazy load](../glossary.html#term-lazy-load) on next access. The
+    simplest approach to this is to use [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), keeping the [`Session.expire_on_commit`](session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session") parameter set at its default of `True`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the call to [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") flushed the changes to `u1.all_tasks` to the
+    database, then expired all objects, so that when we accessed `u1.current_week_tasks`,
+    a :term:` lazy load` occurred which fetched the contents for this attribute freshly
+    from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To intercept operations without actually committing the transaction, the attribute
+    needs to be explicitly [expired](../glossary.html#term-expired) first. A simplistic
+    way to do this is to just call it directly. In the example below, [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") sends pending changes to the database, then [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") is used to expire the `u1.current_week_tasks`
+    collection so that it re-fetches on next access:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can in fact skip the call to [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush"), assuming a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that keeps [`Session.autoflush`](session_api.html#sqlalchemy.orm.Session.params.autoflush
+    "sqlalchemy.orm.Session") at its default value of `True`, as the expired `current_week_tasks`
+    attribute will trigger autoflush when accessed after expiration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Continuing with the above approach to something more elaborate, we can apply
+    the expiration programmatically when the related `User.all_tasks` collection changes,
+    using [event hooks](../core/event.html). This an **advanced technique**, where
+    simpler architectures like `@property` or sticking to read-only use cases should
+    be examined first. In our simple example, this would be configured as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above hooks, mutation operations are intercepted and result in the
+    `User.current_week_tasks` collection to be expired automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`AttributeEvents`](events.html#sqlalchemy.orm.AttributeEvents "sqlalchemy.orm.AttributeEvents")
+    event hooks used above are also triggered by backref mutations, so with the above
+    hooks a change to `Task.user` is also intercepted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: In-Python mutations including backrefs are not appropriate with viewonly=True
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The above mapping targets the `User.current_week_tasks` viewonly relationship
+    as the [backref](../glossary.html#term-backref) target of the `Task.user` attribute.
+    This is not currently flagged by SQLAlchemy’s ORM configuration process, however
+    is a configuration error. Changing the `.user` attribute on a `Task` will not
+    affect the `.current_week_tasks` attribute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: There is another parameter called [`relationship.sync_backrefs`](relationship_api.html#sqlalchemy.orm.relationship.params.sync_backrefs
+    "sqlalchemy.orm.relationship") which can be turned on here to allow `.current_week_tasks`
+    to be mutated in this case, however this is not considered to be a best practice
+    with a viewonly relationship, which instead should not be relied upon for in-Python
+    mutations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this mapping, backrefs can be configured between `User.all_tasks` and `Task.user`,
+    as these are both not viewonly and will synchronize normally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beyond the issue of backref mutations being disabled for viewonly relationships,
+    plain changes to the `User.all_tasks` collection in Python are also not reflected
+    in the `User.current_week_tasks` collection until changes have been flushed to
+    the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Overall, for a use case where a custom collection should respond immediately
+    to in-Python mutations, the viewonly relationship is generally not appropriate.
+    A better approach is to use the [Hybrid Attributes](extensions/hybrid.html) feature
+    of SQLAlchemy, or for instance-only cases to use a Python `@property`, where a
+    user-defined collection that is generated in terms of the current Python instance
+    can be implemented. To change our example to work this way, we repair the [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") parameter on `Task.user` to reference `User.all_tasks`,
+    and then illustrate a simple `@property` that will deliver results in terms of
+    the immediate `User.all_tasks` collection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using an in-Python collection calculated on the fly each time, we are guaranteed
+    to have the correct answer at all times, without the need to use a database at
+    all:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: viewonly=True collections / attributes do not get re-queried until expired
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Continuing with the original viewonly attribute, if we do in fact make changes
+    to the `User.all_tasks` collection on a [persistent](../glossary.html#term-persistent)
+    object, the viewonly collection can only show the net result of this change after
+    **two** things occur. The first is that the change to `User.all_tasks` is [flushed](../glossary.html#term-flushed),
+    so that the new data is available in the database, at least within the scope of
+    the local transaction. The second is that the `User.current_week_tasks` attribute
+    is [expired](../glossary.html#term-expired) and reloaded via a new SQL query to
+    the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To support this requirement, the simplest flow to use is one where the **viewonly
+    relationship is consumed only in operations that are primarily read only to start
+    with**. Such as below, if we retrieve a `User` fresh from the database, the collection
+    will be current:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we make modifications to `u1.all_tasks`, if we want to see these changes
+    reflected in the `u1.current_week_tasks` viewonly relationship, these changes
+    need to be flushed and the `u1.current_week_tasks` attribute needs to be expired,
+    so that it will [lazy load](../glossary.html#term-lazy-load) on next access. The
+    simplest approach to this is to use [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit"), keeping the [`Session.expire_on_commit`](session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session") parameter set at its default of `True`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the call to [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") flushed the changes to `u1.all_tasks` to the
+    database, then expired all objects, so that when we accessed `u1.current_week_tasks`,
+    a :term:` lazy load` occurred which fetched the contents for this attribute freshly
+    from the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To intercept operations without actually committing the transaction, the attribute
+    needs to be explicitly [expired](../glossary.html#term-expired) first. A simplistic
+    way to do this is to just call it directly. In the example below, [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush") sends pending changes to the database, then [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") is used to expire the `u1.current_week_tasks`
+    collection so that it re-fetches on next access:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can in fact skip the call to [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush"), assuming a [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") that keeps [`Session.autoflush`](session_api.html#sqlalchemy.orm.Session.params.autoflush
+    "sqlalchemy.orm.Session") at its default value of `True`, as the expired `current_week_tasks`
+    attribute will trigger autoflush when accessed after expiration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Continuing with the above approach to something more elaborate, we can apply
+    the expiration programmatically when the related `User.all_tasks` collection changes,
+    using [event hooks](../core/event.html). This an **advanced technique**, where
+    simpler architectures like `@property` or sticking to read-only use cases should
+    be examined first. In our simple example, this would be configured as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the above hooks, mutation operations are intercepted and result in the
+    `User.current_week_tasks` collection to be expired automatically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The [`AttributeEvents`](events.html#sqlalchemy.orm.AttributeEvents "sqlalchemy.orm.AttributeEvents")
+    event hooks used above are also triggered by backref mutations, so with the above
+    hooks a change to `Task.user` is also intercepted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE

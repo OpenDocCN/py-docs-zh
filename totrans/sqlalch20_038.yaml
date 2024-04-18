@@ -1,0 +1,451 @@
+- en: Special Relationship Persistence Patterns
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/relationship_persistence.html](https://docs.sqlalchemy.org/en/20/orm/relationship_persistence.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '## Rows that point to themselves / Mutually Dependent Rows'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is a very specific case where relationship() must perform an INSERT and
+    a second UPDATE in order to properly populate a row (and vice versa an UPDATE
+    and DELETE in order to delete without violating foreign key constraints). The
+    two use cases are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A table contains a foreign key to itself, and a single row will have a foreign
+    key value pointing to its own primary key.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Two tables each contain a foreign key referencing the other table, with a row
+    in each table referencing the other.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the first case, a row points to itself. Technically, a database that uses
+    sequences such as PostgreSQL or Oracle can INSERT the row at once using a previously
+    generated value, but databases which rely upon autoincrement-style primary key
+    identifiers cannot. The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") always assumes a “parent/child” model of row population
+    during flush, so unless you are populating the primary key/foreign key columns
+    directly, [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") needs to use two statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the second case, the “widget” row must be inserted before any referring “entry”
+    rows, but then the “favorite_entry_id” column of that “widget” row cannot be set
+    until the “entry” rows have been generated. In this case, it’s typically impossible
+    to insert the “widget” and “entry” rows using just two INSERT statements; an UPDATE
+    must be performed in order to keep foreign key constraints fulfilled. The exception
+    is if the foreign keys are configured as “deferred until commit” (a feature some
+    databases support) and if the identifiers were populated manually (again essentially
+    bypassing [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable the usage of a supplementary UPDATE statement, we use the [`relationship.post_update`](relationship_api.html#sqlalchemy.orm.relationship.params.post_update
+    "sqlalchemy.orm.relationship") option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). This specifies that the linkage between the two
+    rows should be created using an UPDATE statement after both rows have been INSERTED;
+    it also causes the rows to be de-associated with each other via UPDATE before
+    a DELETE is emitted. The flag should be placed on just *one* of the relationships,
+    preferably the many-to-one side. Below we illustrate a complete example, including
+    two [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")
+    constructs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When a structure against the above configuration is flushed, the “widget” row
+    will be INSERTed minus the “favorite_entry_id” value, then all the “entry” rows
+    will be INSERTed referencing the parent “widget” row, and then an UPDATE statement
+    will populate the “favorite_entry_id” column of the “widget” table (it’s one row
+    at a time for the time being):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An additional configuration we can specify is to supply a more comprehensive
+    foreign key constraint on `Widget`, such that it’s guaranteed that `favorite_entry_id`
+    refers to an `Entry` that also refers to this `Widget`. We can use a composite
+    foreign key, as illustrated below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The above mapping features a composite [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") bridging the `widget_id` and `favorite_entry_id`
+    columns. To ensure that `Widget.widget_id` remains an “autoincrementing” column
+    we specify [`Column.autoincrement`](../core/metadata.html#sqlalchemy.schema.Column.params.autoincrement
+    "sqlalchemy.schema.Column") to the value `"ignore_fk"` on [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), and additionally on each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") we must limit those columns considered as part
+    of the foreign key for the purposes of joining and cross-population.  ## Mutable
+    Primary Keys / Update Cascades'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the primary key of an entity changes, related items which reference the
+    primary key must also be updated as well. For databases which enforce referential
+    integrity, the best strategy is to use the database’s ON UPDATE CASCADE functionality
+    in order to propagate primary key changes to referenced foreign keys - the values
+    cannot be out of sync for any moment unless the constraints are marked as “deferrable”,
+    that is, not enforced until the transaction completes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is **highly recommended** that an application which seeks to employ natural
+    primary keys with mutable values to use the `ON UPDATE CASCADE` capabilities of
+    the database. An example mapping which illustrates this is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we illustrate `onupdate="cascade"` on the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") object, and we also illustrate the `mysql_engine='InnoDB'`
+    setting which, on a MySQL backend, ensures that the `InnoDB` engine supporting
+    referential integrity is used. When using SQLite, referential integrity should
+    be enabled, using the configuration described at [Foreign Key Support](../dialects/sqlite.html#sqlite-foreign-keys).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes)
+    - supporting ON DELETE CASCADE with relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mapper.passive_updates` - similar feature on [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simulating limited ON UPDATE CASCADE without foreign key support
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In those cases when a database that does not support referential integrity is
+    used, and natural primary keys with mutable values are in play, SQLAlchemy offers
+    a feature in order to allow propagation of primary key values to already-referenced
+    foreign keys to a **limited** extent, by emitting an UPDATE statement against
+    foreign key columns that immediately reference a primary key column whose value
+    has changed. The primary platforms without referential integrity features are
+    MySQL when the `MyISAM` storage engine is used, and SQLite when the `PRAGMA foreign_keys=ON`
+    pragma is not used. The Oracle database also has no support for `ON UPDATE CASCADE`,
+    but because it still enforces referential integrity, needs constraints to be marked
+    as deferrable so that SQLAlchemy can emit UPDATE statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The feature is enabled by setting the [`relationship.passive_updates`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_updates
+    "sqlalchemy.orm.relationship") flag to `False`, most preferably on a one-to-many
+    or many-to-many [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). When “updates” are no longer “passive” this indicates
+    that SQLAlchemy will issue UPDATE statements individually for objects referenced
+    in the collection referred to by the parent object with a changing primary key
+    value. This also implies that collections will be fully loaded into memory if
+    not already locally present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our previous mapping using `passive_updates=False` looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Key limitations of `passive_updates=False` include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: it performs much more poorly than direct database ON UPDATE CASCADE, because
+    it needs to fully pre-load affected collections using SELECT and also must emit
+    UPDATE statements against those values, which it will attempt to run in “batches”
+    but still runs on a per-row basis at the DBAPI level.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the feature cannot “cascade” more than one level. That is, if mapping X has
+    a foreign key which refers to the primary key of mapping Y, but then mapping Y’s
+    primary key is itself a foreign key to mapping Z, `passive_updates=False` cannot
+    cascade a change in primary key value from `Z` to `X`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuring `passive_updates=False` only on the many-to-one side of a relationship
+    will not have a full effect, as the unit of work searches only through the current
+    identity map for objects that may be referencing the one with a mutating primary
+    key, not throughout the database.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'As virtually all databases other than Oracle now support `ON UPDATE CASCADE`,
+    it is highly recommended that traditional `ON UPDATE CASCADE` support be used
+    in the case that natural and mutable primary key values are in use.  ## Rows that
+    point to themselves / Mutually Dependent Rows'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is a very specific case where relationship() must perform an INSERT and
+    a second UPDATE in order to properly populate a row (and vice versa an UPDATE
+    and DELETE in order to delete without violating foreign key constraints). The
+    two use cases are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A table contains a foreign key to itself, and a single row will have a foreign
+    key value pointing to its own primary key.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Two tables each contain a foreign key referencing the other table, with a row
+    in each table referencing the other.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the first case, a row points to itself. Technically, a database that uses
+    sequences such as PostgreSQL or Oracle can INSERT the row at once using a previously
+    generated value, but databases which rely upon autoincrement-style primary key
+    identifiers cannot. The [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") always assumes a “parent/child” model of row population
+    during flush, so unless you are populating the primary key/foreign key columns
+    directly, [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") needs to use two statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the second case, the “widget” row must be inserted before any referring “entry”
+    rows, but then the “favorite_entry_id” column of that “widget” row cannot be set
+    until the “entry” rows have been generated. In this case, it’s typically impossible
+    to insert the “widget” and “entry” rows using just two INSERT statements; an UPDATE
+    must be performed in order to keep foreign key constraints fulfilled. The exception
+    is if the foreign keys are configured as “deferred until commit” (a feature some
+    databases support) and if the identifiers were populated manually (again essentially
+    bypassing [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable the usage of a supplementary UPDATE statement, we use the [`relationship.post_update`](relationship_api.html#sqlalchemy.orm.relationship.params.post_update
+    "sqlalchemy.orm.relationship") option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). This specifies that the linkage between the two
+    rows should be created using an UPDATE statement after both rows have been INSERTED;
+    it also causes the rows to be de-associated with each other via UPDATE before
+    a DELETE is emitted. The flag should be placed on just *one* of the relationships,
+    preferably the many-to-one side. Below we illustrate a complete example, including
+    two [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")
+    constructs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When a structure against the above configuration is flushed, the “widget” row
+    will be INSERTed minus the “favorite_entry_id” value, then all the “entry” rows
+    will be INSERTed referencing the parent “widget” row, and then an UPDATE statement
+    will populate the “favorite_entry_id” column of the “widget” table (it’s one row
+    at a time for the time being):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An additional configuration we can specify is to supply a more comprehensive
+    foreign key constraint on `Widget`, such that it’s guaranteed that `favorite_entry_id`
+    refers to an `Entry` that also refers to this `Widget`. We can use a composite
+    foreign key, as illustrated below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above mapping features a composite [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") bridging the `widget_id` and `favorite_entry_id`
+    columns. To ensure that `Widget.widget_id` remains an “autoincrementing” column
+    we specify [`Column.autoincrement`](../core/metadata.html#sqlalchemy.schema.Column.params.autoincrement
+    "sqlalchemy.schema.Column") to the value `"ignore_fk"` on [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column"), and additionally on each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") we must limit those columns considered as part
+    of the foreign key for the purposes of joining and cross-population.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Mutable Primary Keys / Update Cascades'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the primary key of an entity changes, related items which reference the
+    primary key must also be updated as well. For databases which enforce referential
+    integrity, the best strategy is to use the database’s ON UPDATE CASCADE functionality
+    in order to propagate primary key changes to referenced foreign keys - the values
+    cannot be out of sync for any moment unless the constraints are marked as “deferrable”,
+    that is, not enforced until the transaction completes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is **highly recommended** that an application which seeks to employ natural
+    primary keys with mutable values to use the `ON UPDATE CASCADE` capabilities of
+    the database. An example mapping which illustrates this is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we illustrate `onupdate="cascade"` on the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") object, and we also illustrate the `mysql_engine='InnoDB'`
+    setting which, on a MySQL backend, ensures that the `InnoDB` engine supporting
+    referential integrity is used. When using SQLite, referential integrity should
+    be enabled, using the configuration described at [Foreign Key Support](../dialects/sqlite.html#sqlite-foreign-keys).
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes)
+    - supporting ON DELETE CASCADE with relationships'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mapper.passive_updates` - similar feature on [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simulating limited ON UPDATE CASCADE without foreign key support
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In those cases when a database that does not support referential integrity is
+    used, and natural primary keys with mutable values are in play, SQLAlchemy offers
+    a feature in order to allow propagation of primary key values to already-referenced
+    foreign keys to a **limited** extent, by emitting an UPDATE statement against
+    foreign key columns that immediately reference a primary key column whose value
+    has changed. The primary platforms without referential integrity features are
+    MySQL when the `MyISAM` storage engine is used, and SQLite when the `PRAGMA foreign_keys=ON`
+    pragma is not used. The Oracle database also has no support for `ON UPDATE CASCADE`,
+    but because it still enforces referential integrity, needs constraints to be marked
+    as deferrable so that SQLAlchemy can emit UPDATE statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The feature is enabled by setting the [`relationship.passive_updates`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_updates
+    "sqlalchemy.orm.relationship") flag to `False`, most preferably on a one-to-many
+    or many-to-many [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). When “updates” are no longer “passive” this indicates
+    that SQLAlchemy will issue UPDATE statements individually for objects referenced
+    in the collection referred to by the parent object with a changing primary key
+    value. This also implies that collections will be fully loaded into memory if
+    not already locally present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our previous mapping using `passive_updates=False` looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Key limitations of `passive_updates=False` include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: it performs much more poorly than direct database ON UPDATE CASCADE, because
+    it needs to fully pre-load affected collections using SELECT and also must emit
+    UPDATE statements against those values, which it will attempt to run in “batches”
+    but still runs on a per-row basis at the DBAPI level.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the feature cannot “cascade” more than one level. That is, if mapping X has
+    a foreign key which refers to the primary key of mapping Y, but then mapping Y’s
+    primary key is itself a foreign key to mapping Z, `passive_updates=False` cannot
+    cascade a change in primary key value from `Z` to `X`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuring `passive_updates=False` only on the many-to-one side of a relationship
+    will not have a full effect, as the unit of work searches only through the current
+    identity map for objects that may be referencing the one with a mutating primary
+    key, not throughout the database.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As virtually all databases other than Oracle now support `ON UPDATE CASCADE`,
+    it is highly recommended that traditional `ON UPDATE CASCADE` support be used
+    in the case that natural and mutable primary key values are in use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simulating limited ON UPDATE CASCADE without foreign key support
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In those cases when a database that does not support referential integrity is
+    used, and natural primary keys with mutable values are in play, SQLAlchemy offers
+    a feature in order to allow propagation of primary key values to already-referenced
+    foreign keys to a **limited** extent, by emitting an UPDATE statement against
+    foreign key columns that immediately reference a primary key column whose value
+    has changed. The primary platforms without referential integrity features are
+    MySQL when the `MyISAM` storage engine is used, and SQLite when the `PRAGMA foreign_keys=ON`
+    pragma is not used. The Oracle database also has no support for `ON UPDATE CASCADE`,
+    but because it still enforces referential integrity, needs constraints to be marked
+    as deferrable so that SQLAlchemy can emit UPDATE statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The feature is enabled by setting the [`relationship.passive_updates`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_updates
+    "sqlalchemy.orm.relationship") flag to `False`, most preferably on a one-to-many
+    or many-to-many [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship"). When “updates” are no longer “passive” this indicates
+    that SQLAlchemy will issue UPDATE statements individually for objects referenced
+    in the collection referred to by the parent object with a changing primary key
+    value. This also implies that collections will be fully loaded into memory if
+    not already locally present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our previous mapping using `passive_updates=False` looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Key limitations of `passive_updates=False` include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: it performs much more poorly than direct database ON UPDATE CASCADE, because
+    it needs to fully pre-load affected collections using SELECT and also must emit
+    UPDATE statements against those values, which it will attempt to run in “batches”
+    but still runs on a per-row basis at the DBAPI level.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the feature cannot “cascade” more than one level. That is, if mapping X has
+    a foreign key which refers to the primary key of mapping Y, but then mapping Y’s
+    primary key is itself a foreign key to mapping Z, `passive_updates=False` cannot
+    cascade a change in primary key value from `Z` to `X`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuring `passive_updates=False` only on the many-to-one side of a relationship
+    will not have a full effect, as the unit of work searches only through the current
+    identity map for objects that may be referencing the one with a mutating primary
+    key, not throughout the database.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As virtually all databases other than Oracle now support `ON UPDATE CASCADE`,
+    it is highly recommended that traditional `ON UPDATE CASCADE` support be used
+    in the case that natural and mutable primary key values are in use.
+  prefs: []
+  type: TYPE_NORMAL

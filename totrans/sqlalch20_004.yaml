@@ -1,0 +1,873 @@
+- en: Working with Transactions and the DBAPI
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: With the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    object ready to go, we may now proceed to dive into the basic operation of an
+    [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    and its primary interactive endpoints, the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") and [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result"). We will additionally introduce the ORM’s [facade](../glossary.html#term-facade)
+    for these objects, known as the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session").
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Note to ORM readers**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the ORM, the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") is managed by another object called the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session"). The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") in modern SQLAlchemy emphasizes a transactional and
+    SQL execution pattern that is largely identical to that of the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") discussed below, so while this subsection is Core-centric,
+    all of the concepts here are essentially relevant to ORM use as well and is recommended
+    for all ORM learners. The execution pattern used by the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") will be contrasted with that of the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") at the end of this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we have yet to introduce the SQLAlchemy Expression Language that is the primary
+    feature of SQLAlchemy, we will make use of one simple construct within this package
+    called the [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text "sqlalchemy.sql.expression.text")
+    construct, which allows us to write SQL statements as **textual SQL**. Rest assured
+    that textual SQL in day-to-day SQLAlchemy use is by far the exception rather than
+    the rule for most tasks, even though it always remains fully available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Getting a Connection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The sole purpose of the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object from a user-facing perspective is to provide
+    a unit of connectivity to the database called the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"). When working with the Core directly, the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object is how all interaction with the database
+    is done. As the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") represents an open resource against the database,
+    we want to always limit the scope of our use of this object to a specific context,
+    and the best way to do that is by using Python context manager form, also known
+    as [the with statement](https://docs.python.org/3/reference/compound_stmts.html#with).
+    Below we illustrate “Hello World”, using a textual SQL statement. Textual SQL
+    is emitted using a construct called [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") that will be discussed in more detail later:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the context manager provided for a database connection
+    and also framed the operation inside of a transaction. The default behavior of
+    the Python DBAPI includes that a transaction is always in progress; when the scope
+    of the connection is [released](../glossary.html#term-released), a ROLLBACK is
+    emitted to end the transaction. The transaction is **not committed automatically**;
+    when we want to commit data we normally need to call [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") as we’ll see in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: “autocommit” mode is available for special cases. The section [Setting Transaction
+    Isolation Levels including DBAPI Autocommit](../core/connections.html#dbapi-autocommit)
+    discusses this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The result of our SELECT was also returned in an object called [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") that will be discussed later, however for the moment
+    we’ll add that it’s best to ensure this object is consumed within the “connect”
+    block, and is not passed along outside of the scope of our connection.  ## Committing
+    Changes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We just learned that the DBAPI connection is non-autocommitting. What if we
+    want to commit some data? We can alter our above example to create a table and
+    insert some data, and the transaction is then committed using the [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") method, invoked **inside** the block where
+    we acquired the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we emitted two SQL statements that are generally transactional, a “CREATE
+    TABLE” statement [[1]](#id2) and an “INSERT” statement that’s parameterized (the
+    parameterization syntax above is discussed a few sections below in [Sending Multiple
+    Parameters](#tutorial-multiple-parameters)). As we want the work we’ve done to
+    be committed within our block, we invoke the [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") method which commits the transaction. After
+    we call this method inside the block, we can continue to run more SQL statements
+    and if we choose we may call [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") again for subsequent statements. SQLAlchemy
+    refers to this style as **commit as you go**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is also another style of committing data, which is that we can declare
+    our “connect” block to be a transaction block up front. For this mode of operation,
+    we use the [`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
+    "sqlalchemy.engine.Engine.begin") method to acquire the connection, rather than
+    the [`Engine.connect()`](../core/connections.html#sqlalchemy.engine.Engine.connect
+    "sqlalchemy.engine.Engine.connect") method. This method will both manage the scope
+    of the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    and also enclose everything inside of a transaction with COMMIT at the end, assuming
+    a successful block, or ROLLBACK in case of exception raise. This style is known
+    as **begin once**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '“Begin once” style is often preferred as it is more succinct and indicates
+    the intention of the entire block up front. However, within this tutorial we will
+    normally use “commit as you go” style as it is more flexible for demonstration
+    purposes.  ## Basics of Statement Execution'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have seen a few examples that run SQL statements against a database, making
+    use of a method called [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute"), in conjunction with an object called
+    [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text "sqlalchemy.sql.expression.text"),
+    and returning an object called [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result"). In this section we’ll illustrate more closely the
+    mechanics and interactions of these components.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most of the content in this section applies equally well to modern ORM use when
+    using the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method, which works very similarly to that of
+    [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute"), including that ORM result rows are delivered
+    using the same [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    interface used by Core.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Fetching Rows'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ll first illustrate the [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object more closely by making use of the rows we’ve
+    inserted previously, running a textual SELECT statement on the table we’ve created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the “SELECT” string we executed selected all rows from our table. The
+    object returned is called [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") and represents an iterable object of result rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    has lots of methods for fetching and transforming rows, such as the [`Result.all()`](../core/connections.html#sqlalchemy.engine.Result.all
+    "sqlalchemy.engine.Result.all") method illustrated previously, which returns a
+    list of all [`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    objects. It also implements the Python iterator interface so that we can iterate
+    over the collection of [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects directly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    objects themselves are intended to act like Python [named tuples](https://docs.python.org/3/library/collections.html#collections.namedtuple).
+    Below we illustrate a variety of ways to access rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Tuple Assignment** - This is the most Python-idiomatic style, which is to
+    assign variables to each row positionally as they are received:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Integer Index** - Tuples are Python sequences, so regular integer access
+    is available too:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Attribute Name** - As these are Python named tuples, the tuples have dynamic
+    attribute names matching the names of each column. These names are normally the
+    names that the SQL statement assigns to the columns in each row. While they are
+    usually fairly predictable and can also be controlled by labels, in less defined
+    cases they may be subject to database-specific behaviors:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Mapping Access** - To receive rows as Python **mapping** objects, which is
+    essentially a read-only version of Python’s interface to the common `dict` object,
+    the [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    may be **transformed** into a [`MappingResult`](../core/connections.html#sqlalchemy.engine.MappingResult
+    "sqlalchemy.engine.MappingResult") object using the [`Result.mappings()`](../core/connections.html#sqlalchemy.engine.Result.mappings
+    "sqlalchemy.engine.Result.mappings") modifier; this is a result object that yields
+    dictionary-like [`RowMapping`](../core/connections.html#sqlalchemy.engine.RowMapping
+    "sqlalchemy.engine.RowMapping") objects rather than [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE7]  ### Sending Parameters'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: SQL statements are usually accompanied by data that is to be passed with the
+    statement itself, as we saw in the INSERT example previously. The [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method therefore also accepts parameters,
+    which are known as [bound parameters](../glossary.html#term-bound-parameters).
+    A rudimentary example might be if we wanted to limit our SELECT statement only
+    to rows that meet a certain criteria, such as rows where the “y” value were greater
+    than a certain value that is passed in to a function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In order to achieve this such that the SQL statement can remain fixed and that
+    the driver can properly sanitize the value, we add a WHERE criteria to our statement
+    that names a new parameter called “y”; the [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct accepts these using a colon format
+    “`:y`”. The actual value for “`:y`” is then passed as the second argument to [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") in the form of a dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the logged SQL output, we can see that the bound parameter `:y` was converted
+    into a question mark when it was sent to the SQLite database. This is because
+    the SQLite database driver uses a format called “qmark parameter style”, which
+    is one of six different formats allowed by the DBAPI specification. SQLAlchemy
+    abstracts these formats into just one, which is the “named” format using a colon.  ###
+    Sending Multiple Parameters'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example at [Committing Changes](#tutorial-committing-data), we executed
+    an INSERT statement where it appeared that we were able to INSERT multiple rows
+    into the database at once. For [DML](../glossary.html#term-DML) statements such
+    as “INSERT”, “UPDATE” and “DELETE”, we can send **multiple parameter sets** to
+    the [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method by passing a list of dictionaries
+    instead of a single dictionary, which indicates that the single SQL statement
+    should be invoked multiple times, once for each parameter set. This style of execution
+    is known as [executemany](../glossary.html#term-executemany):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above operation is equivalent to running the given INSERT statement once
+    for each parameter set, except that the operation will be optimized for better
+    performance across many rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A key behavioral difference between “execute” and “executemany” is that the
+    latter doesn’t support returning of result rows, even if the statement includes
+    the RETURNING clause. The one exception to this is when using a Core [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
+    "sqlalchemy.sql.expression.insert") construct, introduced later in this tutorial
+    at [Using INSERT Statements](data_insert.html#tutorial-core-insert), which also
+    indicates RETURNING using the [`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning") method. In that case, SQLAlchemy
+    makes use of special logic to reorganize the INSERT statement so that it can be
+    invoked for many rows while still supporting RETURNING.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[executemany](../glossary.html#term-executemany) - in the [Glossary](../glossary.html),
+    describes the DBAPI-level [cursor.executemany()](https://peps.python.org/pep-0249/#executemany)
+    method that’s used for most “executemany” executions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[“Insert Many Values” Behavior for INSERT statements](../core/connections.html#engine-insertmanyvalues)
+    - in [Working with Engines and Connections](../core/connections.html), describes
+    the specialized logic used by [`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning") to deliver result sets with “executemany”
+    executions.  ## Executing with an ORM Session'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned previously, most of the patterns and examples above apply to use
+    with the ORM as well, so here we will introduce this usage so that as the tutorial
+    proceeds, we will be able to illustrate each pattern in terms of Core and ORM
+    use together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The fundamental transactional / database interactive object when using the ORM
+    is called the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    In modern SQLAlchemy, this object is used in a manner very similar to that of
+    the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection"),
+    and in fact as the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is used, it refers to a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") internally which it uses to emit SQL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    is used with non-ORM constructs, it passes through the SQL statements we give
+    it and does not generally do things much differently from how the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") does directly, so we can illustrate it here in
+    terms of the simple textual SQL operations we’ve already learned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    has a few different creational patterns, but here we will illustrate the most
+    basic one that tracks exactly with how the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") is used which is to construct it within a context
+    manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The example above can be compared to the example in the preceding section in
+    [Sending Parameters](#tutorial-sending-parameters) - we directly replace the call
+    to `with engine.connect() as conn` with `with Session(engine) as session`, and
+    then make use of the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method just like we do with the [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Also, like the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") features “commit as you go” behavior using the [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") method, illustrated below using a textual UPDATE
+    statement to alter some of our data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we invoked an UPDATE statement using the bound-parameter, “executemany”
+    style of execution introduced at [Sending Multiple Parameters](#tutorial-multiple-parameters),
+    ending the block with a “commit as you go” commit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    doesn’t actually hold onto the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object after it ends the transaction. It gets
+    a new [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    from the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    the next time it needs to execute SQL against the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    obviously has a lot more tricks up its sleeve than that, however understanding
+    that it has a [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method that’s used the same way as [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") will get us started with the examples
+    that follow later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Basics of Using a Session](../orm/session_basics.html#id1) - presents basic
+    creational and usage patterns with the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object.  ## Getting a Connection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The sole purpose of the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") object from a user-facing perspective is to provide
+    a unit of connectivity to the database called the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"). When working with the Core directly, the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object is how all interaction with the database
+    is done. As the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") represents an open resource against the database,
+    we want to always limit the scope of our use of this object to a specific context,
+    and the best way to do that is by using Python context manager form, also known
+    as [the with statement](https://docs.python.org/3/reference/compound_stmts.html#with).
+    Below we illustrate “Hello World”, using a textual SQL statement. Textual SQL
+    is emitted using a construct called [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") that will be discussed in more detail later:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above example, the context manager provided for a database connection
+    and also framed the operation inside of a transaction. The default behavior of
+    the Python DBAPI includes that a transaction is always in progress; when the scope
+    of the connection is [released](../glossary.html#term-released), a ROLLBACK is
+    emitted to end the transaction. The transaction is **not committed automatically**;
+    when we want to commit data we normally need to call [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") as we’ll see in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: “autocommit” mode is available for special cases. The section [Setting Transaction
+    Isolation Levels including DBAPI Autocommit](../core/connections.html#dbapi-autocommit)
+    discusses this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The result of our SELECT was also returned in an object called [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") that will be discussed later, however for the moment
+    we’ll add that it’s best to ensure this object is consumed within the “connect”
+    block, and is not passed along outside of the scope of our connection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Committing Changes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We just learned that the DBAPI connection is non-autocommitting. What if we
+    want to commit some data? We can alter our above example to create a table and
+    insert some data, and the transaction is then committed using the [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") method, invoked **inside** the block where
+    we acquired the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we emitted two SQL statements that are generally transactional, a “CREATE
+    TABLE” statement [[1]](#id2) and an “INSERT” statement that’s parameterized (the
+    parameterization syntax above is discussed a few sections below in [Sending Multiple
+    Parameters](#tutorial-multiple-parameters)). As we want the work we’ve done to
+    be committed within our block, we invoke the [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") method which commits the transaction. After
+    we call this method inside the block, we can continue to run more SQL statements
+    and if we choose we may call [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit") again for subsequent statements. SQLAlchemy
+    refers to this style as **commit as you go**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is also another style of committing data, which is that we can declare
+    our “connect” block to be a transaction block up front. For this mode of operation,
+    we use the [`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
+    "sqlalchemy.engine.Engine.begin") method to acquire the connection, rather than
+    the [`Engine.connect()`](../core/connections.html#sqlalchemy.engine.Engine.connect
+    "sqlalchemy.engine.Engine.connect") method. This method will both manage the scope
+    of the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    and also enclose everything inside of a transaction with COMMIT at the end, assuming
+    a successful block, or ROLLBACK in case of exception raise. This style is known
+    as **begin once**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: “Begin once” style is often preferred as it is more succinct and indicates the
+    intention of the entire block up front. However, within this tutorial we will
+    normally use “commit as you go” style as it is more flexible for demonstration
+    purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Basics of Statement Execution'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have seen a few examples that run SQL statements against a database, making
+    use of a method called [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute"), in conjunction with an object called
+    [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text "sqlalchemy.sql.expression.text"),
+    and returning an object called [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result"). In this section we’ll illustrate more closely the
+    mechanics and interactions of these components.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most of the content in this section applies equally well to modern ORM use when
+    using the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method, which works very similarly to that of
+    [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute"), including that ORM result rows are delivered
+    using the same [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    interface used by Core.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Fetching Rows'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ll first illustrate the [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object more closely by making use of the rows we’ve
+    inserted previously, running a textual SELECT statement on the table we’ve created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the “SELECT” string we executed selected all rows from our table. The
+    object returned is called [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") and represents an iterable object of result rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    has lots of methods for fetching and transforming rows, such as the [`Result.all()`](../core/connections.html#sqlalchemy.engine.Result.all
+    "sqlalchemy.engine.Result.all") method illustrated previously, which returns a
+    list of all [`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    objects. It also implements the Python iterator interface so that we can iterate
+    over the collection of [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects directly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    objects themselves are intended to act like Python [named tuples](https://docs.python.org/3/library/collections.html#collections.namedtuple).
+    Below we illustrate a variety of ways to access rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Tuple Assignment** - This is the most Python-idiomatic style, which is to
+    assign variables to each row positionally as they are received:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Integer Index** - Tuples are Python sequences, so regular integer access
+    is available too:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Attribute Name** - As these are Python named tuples, the tuples have dynamic
+    attribute names matching the names of each column. These names are normally the
+    names that the SQL statement assigns to the columns in each row. While they are
+    usually fairly predictable and can also be controlled by labels, in less defined
+    cases they may be subject to database-specific behaviors:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Mapping Access** - To receive rows as Python **mapping** objects, which is
+    essentially a read-only version of Python’s interface to the common `dict` object,
+    the [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    may be **transformed** into a [`MappingResult`](../core/connections.html#sqlalchemy.engine.MappingResult
+    "sqlalchemy.engine.MappingResult") object using the [`Result.mappings()`](../core/connections.html#sqlalchemy.engine.Result.mappings
+    "sqlalchemy.engine.Result.mappings") modifier; this is a result object that yields
+    dictionary-like [`RowMapping`](../core/connections.html#sqlalchemy.engine.RowMapping
+    "sqlalchemy.engine.RowMapping") objects rather than [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE19]  ### Sending Parameters'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: SQL statements are usually accompanied by data that is to be passed with the
+    statement itself, as we saw in the INSERT example previously. The [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method therefore also accepts parameters,
+    which are known as [bound parameters](../glossary.html#term-bound-parameters).
+    A rudimentary example might be if we wanted to limit our SELECT statement only
+    to rows that meet a certain criteria, such as rows where the “y” value were greater
+    than a certain value that is passed in to a function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In order to achieve this such that the SQL statement can remain fixed and that
+    the driver can properly sanitize the value, we add a WHERE criteria to our statement
+    that names a new parameter called “y”; the [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct accepts these using a colon format
+    “`:y`”. The actual value for “`:y`” is then passed as the second argument to [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") in the form of a dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the logged SQL output, we can see that the bound parameter `:y` was converted
+    into a question mark when it was sent to the SQLite database. This is because
+    the SQLite database driver uses a format called “qmark parameter style”, which
+    is one of six different formats allowed by the DBAPI specification. SQLAlchemy
+    abstracts these formats into just one, which is the “named” format using a colon.  ###
+    Sending Multiple Parameters'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example at [Committing Changes](#tutorial-committing-data), we executed
+    an INSERT statement where it appeared that we were able to INSERT multiple rows
+    into the database at once. For [DML](../glossary.html#term-DML) statements such
+    as “INSERT”, “UPDATE” and “DELETE”, we can send **multiple parameter sets** to
+    the [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method by passing a list of dictionaries
+    instead of a single dictionary, which indicates that the single SQL statement
+    should be invoked multiple times, once for each parameter set. This style of execution
+    is known as [executemany](../glossary.html#term-executemany):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above operation is equivalent to running the given INSERT statement once
+    for each parameter set, except that the operation will be optimized for better
+    performance across many rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A key behavioral difference between “execute” and “executemany” is that the
+    latter doesn’t support returning of result rows, even if the statement includes
+    the RETURNING clause. The one exception to this is when using a Core [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
+    "sqlalchemy.sql.expression.insert") construct, introduced later in this tutorial
+    at [Using INSERT Statements](data_insert.html#tutorial-core-insert), which also
+    indicates RETURNING using the [`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning") method. In that case, SQLAlchemy
+    makes use of special logic to reorganize the INSERT statement so that it can be
+    invoked for many rows while still supporting RETURNING.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[executemany](../glossary.html#term-executemany) - in the [Glossary](../glossary.html),
+    describes the DBAPI-level [cursor.executemany()](https://peps.python.org/pep-0249/#executemany)
+    method that’s used for most “executemany” executions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[“Insert Many Values” Behavior for INSERT statements](../core/connections.html#engine-insertmanyvalues)
+    - in [Working with Engines and Connections](../core/connections.html), describes
+    the specialized logic used by [`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning") to deliver result sets with “executemany”
+    executions.  ### Fetching Rows'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ll first illustrate the [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") object more closely by making use of the rows we’ve
+    inserted previously, running a textual SELECT statement on the table we’ve created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, the “SELECT” string we executed selected all rows from our table. The
+    object returned is called [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") and represents an iterable object of result rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    has lots of methods for fetching and transforming rows, such as the [`Result.all()`](../core/connections.html#sqlalchemy.engine.Result.all
+    "sqlalchemy.engine.Result.all") method illustrated previously, which returns a
+    list of all [`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    objects. It also implements the Python iterator interface so that we can iterate
+    over the collection of [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects directly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    objects themselves are intended to act like Python [named tuples](https://docs.python.org/3/library/collections.html#collections.namedtuple).
+    Below we illustrate a variety of ways to access rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Tuple Assignment** - This is the most Python-idiomatic style, which is to
+    assign variables to each row positionally as they are received:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Integer Index** - Tuples are Python sequences, so regular integer access
+    is available too:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Attribute Name** - As these are Python named tuples, the tuples have dynamic
+    attribute names matching the names of each column. These names are normally the
+    names that the SQL statement assigns to the columns in each row. While they are
+    usually fairly predictable and can also be controlled by labels, in less defined
+    cases they may be subject to database-specific behaviors:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Mapping Access** - To receive rows as Python **mapping** objects, which is
+    essentially a read-only version of Python’s interface to the common `dict` object,
+    the [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    may be **transformed** into a [`MappingResult`](../core/connections.html#sqlalchemy.engine.MappingResult
+    "sqlalchemy.engine.MappingResult") object using the [`Result.mappings()`](../core/connections.html#sqlalchemy.engine.Result.mappings
+    "sqlalchemy.engine.Result.mappings") modifier; this is a result object that yields
+    dictionary-like [`RowMapping`](../core/connections.html#sqlalchemy.engine.RowMapping
+    "sqlalchemy.engine.RowMapping") objects rather than [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") objects:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '### Sending Parameters'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SQL statements are usually accompanied by data that is to be passed with the
+    statement itself, as we saw in the INSERT example previously. The [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method therefore also accepts parameters,
+    which are known as [bound parameters](../glossary.html#term-bound-parameters).
+    A rudimentary example might be if we wanted to limit our SELECT statement only
+    to rows that meet a certain criteria, such as rows where the “y” value were greater
+    than a certain value that is passed in to a function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In order to achieve this such that the SQL statement can remain fixed and that
+    the driver can properly sanitize the value, we add a WHERE criteria to our statement
+    that names a new parameter called “y”; the [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") construct accepts these using a colon format
+    “`:y`”. The actual value for “`:y`” is then passed as the second argument to [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") in the form of a dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the logged SQL output, we can see that the bound parameter `:y` was converted
+    into a question mark when it was sent to the SQLite database. This is because
+    the SQLite database driver uses a format called “qmark parameter style”, which
+    is one of six different formats allowed by the DBAPI specification. SQLAlchemy
+    abstracts these formats into just one, which is the “named” format using a colon.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Sending Multiple Parameters'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example at [Committing Changes](#tutorial-committing-data), we executed
+    an INSERT statement where it appeared that we were able to INSERT multiple rows
+    into the database at once. For [DML](../glossary.html#term-DML) statements such
+    as “INSERT”, “UPDATE” and “DELETE”, we can send **multiple parameter sets** to
+    the [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method by passing a list of dictionaries
+    instead of a single dictionary, which indicates that the single SQL statement
+    should be invoked multiple times, once for each parameter set. This style of execution
+    is known as [executemany](../glossary.html#term-executemany):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above operation is equivalent to running the given INSERT statement once
+    for each parameter set, except that the operation will be optimized for better
+    performance across many rows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A key behavioral difference between “execute” and “executemany” is that the
+    latter doesn’t support returning of result rows, even if the statement includes
+    the RETURNING clause. The one exception to this is when using a Core [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
+    "sqlalchemy.sql.expression.insert") construct, introduced later in this tutorial
+    at [Using INSERT Statements](data_insert.html#tutorial-core-insert), which also
+    indicates RETURNING using the [`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning") method. In that case, SQLAlchemy
+    makes use of special logic to reorganize the INSERT statement so that it can be
+    invoked for many rows while still supporting RETURNING.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[executemany](../glossary.html#term-executemany) - in the [Glossary](../glossary.html),
+    describes the DBAPI-level [cursor.executemany()](https://peps.python.org/pep-0249/#executemany)
+    method that’s used for most “executemany” executions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[“Insert Many Values” Behavior for INSERT statements](../core/connections.html#engine-insertmanyvalues)
+    - in [Working with Engines and Connections](../core/connections.html), describes
+    the specialized logic used by [`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning") to deliver result sets with “executemany”
+    executions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Executing with an ORM Session'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned previously, most of the patterns and examples above apply to use
+    with the ORM as well, so here we will introduce this usage so that as the tutorial
+    proceeds, we will be able to illustrate each pattern in terms of Core and ORM
+    use together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The fundamental transactional / database interactive object when using the ORM
+    is called the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
+    In modern SQLAlchemy, this object is used in a manner very similar to that of
+    the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection"),
+    and in fact as the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") is used, it refers to a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") internally which it uses to emit SQL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    is used with non-ORM constructs, it passes through the SQL statements we give
+    it and does not generally do things much differently from how the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") does directly, so we can illustrate it here in
+    terms of the simple textual SQL operations we’ve already learned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    has a few different creational patterns, but here we will illustrate the most
+    basic one that tracks exactly with how the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") is used which is to construct it within a context
+    manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: The example above can be compared to the example in the preceding section in
+    [Sending Parameters](#tutorial-sending-parameters) - we directly replace the call
+    to `with engine.connect() as conn` with `with Session(engine) as session`, and
+    then make use of the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method just like we do with the [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Also, like the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection"), the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") features “commit as you go” behavior using the [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") method, illustrated below using a textual UPDATE
+    statement to alter some of our data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we invoked an UPDATE statement using the bound-parameter, “executemany”
+    style of execution introduced at [Sending Multiple Parameters](#tutorial-multiple-parameters),
+    ending the block with a “commit as you go” commit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    doesn’t actually hold onto the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") object after it ends the transaction. It gets
+    a new [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
+    from the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    the next time it needs to execute SQL against the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    obviously has a lot more tricks up its sleeve than that, however understanding
+    that it has a [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") method that’s used the same way as [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") will get us started with the examples
+    that follow later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Basics of Using a Session](../orm/session_basics.html#id1) - presents basic
+    creational and usage patterns with the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") object.'
+  prefs: []
+  type: TYPE_NORMAL

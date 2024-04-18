@@ -1,0 +1,604 @@
+- en: SQL Expressions as Mapped Attributes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/mapped_sql_expr.html](https://docs.sqlalchemy.org/en/20/orm/mapped_sql_expr.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Attributes on a mapped class can be linked to SQL expressions, which can be
+    used in queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a Hybrid
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The easiest and most flexible way to link relatively simple SQL expressions
+    to a class is to use a so-called “hybrid attribute”, described in the section
+    [Hybrid Attributes](extensions/hybrid.html). The hybrid provides for an expression
+    that works at both the Python level as well as at the SQL expression level. For
+    example, below we map a class `User`, containing attributes `firstname` and `lastname`,
+    and include a hybrid that will provide for us the `fullname`, which is the string
+    concatenation of the two:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the `fullname` attribute is interpreted at both the instance and class
+    level, so that it is available from an instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'as well as usable within queries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The string concatenation example is a simple one, where the Python expression
+    can be dual purposed at the instance and class level. Often, the SQL expression
+    must be distinguished from the Python expression, which can be achieved using
+    [`hybrid_property.expression()`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression"). Below we illustrate the case
+    where a conditional needs to be present inside the hybrid, using the `if` statement
+    in Python and the [`case()`](../core/sqlelement.html#sqlalchemy.sql.expression.case
+    "sqlalchemy.sql.expression.case") construct for SQL expressions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Using column_property'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property "sqlalchemy.orm.column_property")
+    function can be used to map a SQL expression in a manner similar to a regularly
+    mapped [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column").
+    With this technique, the attribute is loaded along with all other column-mapped
+    attributes at load time. This is in some cases an advantage over the usage of
+    hybrids, as the value can be loaded up front at the same time as the parent row
+    of the object, particularly if the expression is one which links to other tables
+    (typically as a correlated subquery) to access data that wouldn’t normally be
+    available on an already loaded object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Disadvantages to using [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") for SQL expressions include that the expression
+    must be compatible with the SELECT statement emitted for the class as a whole,
+    and there are also some configurational quirks which can occur when using [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") from declarative mixins.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our “fullname” example can be expressed using [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Correlated subqueries may be used as well. Below we use the [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct to create a [`ScalarSelect`](../core/selectable.html#sqlalchemy.sql.expression.ScalarSelect
+    "sqlalchemy.sql.expression.ScalarSelect"), representing a column-oriented SELECT
+    statement, that links together the count of `Address` objects available for a
+    particular `User`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the above example, we define a [`ScalarSelect()`](../core/selectable.html#sqlalchemy.sql.expression.ScalarSelect
+    "sqlalchemy.sql.expression.ScalarSelect") construct like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we first use [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") to create a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct, which we then convert into a [scalar
+    subquery](../glossary.html#term-scalar-subquery) using the [`Select.scalar_subquery()`](../core/selectable.html#sqlalchemy.sql.expression.Select.scalar_subquery
+    "sqlalchemy.sql.expression.Select.scalar_subquery") method, indicating our intent
+    to use this [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") statement in a column expression context.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within the [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") itself, we select the count of `Address.id`
+    rows where the `Address.user_id` column is equated to `id`, which in the context
+    of the `User` class is the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") named `id` (note that `id` is also the name of a Python
+    built in function, which is not what we want to use here - if we were outside
+    of the `User` class definition, we’d use `User.id`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Select.correlate_except()`](../core/selectable.html#sqlalchemy.sql.expression.Select.correlate_except
+    "sqlalchemy.sql.expression.Select.correlate_except") method indicates that each
+    element in the FROM clause of this [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") may be omitted from the FROM list (that is,
+    correlated to the enclosing SELECT statement against `User`) except for the one
+    corresponding to `Address`. This isn’t strictly necessary, but prevents `Address`
+    from being inadvertently omitted from the FROM list in the case of a long string
+    of joins between `User` and `Address` tables where SELECT statements against `Address`
+    are nested.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") that refers to columns linked from a many-to-many
+    relationship, use [`and_()`](../core/sqlelement.html#sqlalchemy.sql.expression.and_
+    "sqlalchemy.sql.expression.and_") to join the fields of the association table
+    to both tables in a relationship:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Adding column_property() to an existing Declarative mapped class
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If import issues prevent the [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") from being defined inline with the class, it
+    can be assigned to the class after both are configured. When using mappings that
+    make use of a Declarative base class (i.e. produced by the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") superclass or legacy functions such as [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base
+    "sqlalchemy.orm.declarative_base")), this attribute assignment has the effect
+    of calling [`Mapper.add_property()`](mapping_api.html#sqlalchemy.orm.Mapper.add_property
+    "sqlalchemy.orm.Mapper.add_property") to add an additional property after the
+    fact:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using mapping styles that don’t use Declarative base classes such as the
+    [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped "sqlalchemy.orm.registry.mapped")
+    decorator, the [`Mapper.add_property()`](mapping_api.html#sqlalchemy.orm.Mapper.add_property
+    "sqlalchemy.orm.Mapper.add_property") method may be invoked explicitly on the
+    underlying [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    object, which can be obtained using [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Appending additional columns to an existing Declarative mapped class](declarative_tables.html#orm-declarative-table-adding-columns)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Composing from Column Properties at Mapping Time'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is possible to create mappings that combine multiple [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") objects together. The [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") will be interpreted as a SQL expression when
+    used in a Core expression context, provided that it is targeted by an existing
+    expression object; this works by the Core detecting that the object has a `__clause_element__()`
+    method which returns a SQL expression. However, if the [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") is used as a lead object in an expression where
+    there is no other Core SQL expression object to target it, the [`ColumnProperty.expression`](internals.html#sqlalchemy.orm.ColumnProperty.expression
+    "sqlalchemy.orm.ColumnProperty.expression") attribute will return the underlying
+    SQL expression so that it can be used to build SQL expressions consistently. Below,
+    the `File` class contains an attribute `File.path` that concatenates a string
+    token to the `File.filename` attribute, which is itself a [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the `File` class is used in expressions normally, the attributes assigned
+    to `filename` and `path` are usable directly. The use of the [`ColumnProperty.expression`](internals.html#sqlalchemy.orm.ColumnProperty.expression
+    "sqlalchemy.orm.ColumnProperty.expression") attribute is only necessary when using
+    the [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty "sqlalchemy.orm.ColumnProperty")
+    directly within the mapping definition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using Column Deferral with `column_property()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The column deferral feature introduced in the [ORM Querying Guide](queryguide/index.html)
+    at [Limiting which Columns Load with Column Deferral](queryguide/columns.html#orm-queryguide-column-deferral)
+    may be applied at mapping time to a SQL expression mapped by [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") by using the [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") function in place of [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using deferred() for imperative mappers, mapped SQL expressions](queryguide/columns.html#orm-queryguide-deferred-imperative)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a plain descriptor
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In cases where a SQL query more elaborate than what [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") or [`hybrid_property`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") can provide must be emitted, a regular
+    Python function accessed as an attribute can be used, assuming the expression
+    only needs to be available on an already-loaded instance. The function is decorated
+    with Python’s own `@property` decorator to mark it as a read-only attribute. Within
+    the function, [`object_session()`](session_api.html#sqlalchemy.orm.object_session
+    "sqlalchemy.orm.object_session") is used to locate the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") corresponding to the current object, which is then used
+    to emit a query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The plain descriptor approach is useful as a last resort, but is less performant
+    in the usual case than both the hybrid and column property approaches, in that
+    it needs to emit a SQL query upon each access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Query-time SQL expressions as mapped attributes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to being able to configure fixed SQL expressions on mapped classes,
+    the SQLAlchemy ORM also includes a feature wherein objects may be loaded with
+    the results of arbitrary SQL expressions which are set up at query time as part
+    of their state. This behavior is available by configuring an ORM mapped attribute
+    using [`query_expression()`](queryguide/columns.html#sqlalchemy.orm.query_expression
+    "sqlalchemy.orm.query_expression") and then using the [`with_expression()`](queryguide/columns.html#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") loader option at query time. See the section
+    [Loading Arbitrary SQL Expressions onto Objects](queryguide/columns.html#orm-queryguide-with-expression)
+    for an example mapping and usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a Hybrid
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The easiest and most flexible way to link relatively simple SQL expressions
+    to a class is to use a so-called “hybrid attribute”, described in the section
+    [Hybrid Attributes](extensions/hybrid.html). The hybrid provides for an expression
+    that works at both the Python level as well as at the SQL expression level. For
+    example, below we map a class `User`, containing attributes `firstname` and `lastname`,
+    and include a hybrid that will provide for us the `fullname`, which is the string
+    concatenation of the two:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Above, the `fullname` attribute is interpreted at both the instance and class
+    level, so that it is available from an instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'as well as usable within queries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The string concatenation example is a simple one, where the Python expression
+    can be dual purposed at the instance and class level. Often, the SQL expression
+    must be distinguished from the Python expression, which can be achieved using
+    [`hybrid_property.expression()`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property.expression
+    "sqlalchemy.ext.hybrid.hybrid_property.expression"). Below we illustrate the case
+    where a conditional needs to be present inside the hybrid, using the `if` statement
+    in Python and the [`case()`](../core/sqlelement.html#sqlalchemy.sql.expression.case
+    "sqlalchemy.sql.expression.case") construct for SQL expressions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Using column_property'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property "sqlalchemy.orm.column_property")
+    function can be used to map a SQL expression in a manner similar to a regularly
+    mapped [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column").
+    With this technique, the attribute is loaded along with all other column-mapped
+    attributes at load time. This is in some cases an advantage over the usage of
+    hybrids, as the value can be loaded up front at the same time as the parent row
+    of the object, particularly if the expression is one which links to other tables
+    (typically as a correlated subquery) to access data that wouldn’t normally be
+    available on an already loaded object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Disadvantages to using [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") for SQL expressions include that the expression
+    must be compatible with the SELECT statement emitted for the class as a whole,
+    and there are also some configurational quirks which can occur when using [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") from declarative mixins.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our “fullname” example can be expressed using [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Correlated subqueries may be used as well. Below we use the [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") construct to create a [`ScalarSelect`](../core/selectable.html#sqlalchemy.sql.expression.ScalarSelect
+    "sqlalchemy.sql.expression.ScalarSelect"), representing a column-oriented SELECT
+    statement, that links together the count of `Address` objects available for a
+    particular `User`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the above example, we define a [`ScalarSelect()`](../core/selectable.html#sqlalchemy.sql.expression.ScalarSelect
+    "sqlalchemy.sql.expression.ScalarSelect") construct like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, we first use [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") to create a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") construct, which we then convert into a [scalar
+    subquery](../glossary.html#term-scalar-subquery) using the [`Select.scalar_subquery()`](../core/selectable.html#sqlalchemy.sql.expression.Select.scalar_subquery
+    "sqlalchemy.sql.expression.Select.scalar_subquery") method, indicating our intent
+    to use this [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") statement in a column expression context.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within the [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") itself, we select the count of `Address.id`
+    rows where the `Address.user_id` column is equated to `id`, which in the context
+    of the `User` class is the [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") named `id` (note that `id` is also the name of a Python
+    built in function, which is not what we want to use here - if we were outside
+    of the `User` class definition, we’d use `User.id`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`Select.correlate_except()`](../core/selectable.html#sqlalchemy.sql.expression.Select.correlate_except
+    "sqlalchemy.sql.expression.Select.correlate_except") method indicates that each
+    element in the FROM clause of this [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") may be omitted from the FROM list (that is,
+    correlated to the enclosing SELECT statement against `User`) except for the one
+    corresponding to `Address`. This isn’t strictly necessary, but prevents `Address`
+    from being inadvertently omitted from the FROM list in the case of a long string
+    of joins between `User` and `Address` tables where SELECT statements against `Address`
+    are nested.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") that refers to columns linked from a many-to-many
+    relationship, use [`and_()`](../core/sqlelement.html#sqlalchemy.sql.expression.and_
+    "sqlalchemy.sql.expression.and_") to join the fields of the association table
+    to both tables in a relationship:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Adding column_property() to an existing Declarative mapped class
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If import issues prevent the [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") from being defined inline with the class, it
+    can be assigned to the class after both are configured. When using mappings that
+    make use of a Declarative base class (i.e. produced by the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") superclass or legacy functions such as [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base
+    "sqlalchemy.orm.declarative_base")), this attribute assignment has the effect
+    of calling [`Mapper.add_property()`](mapping_api.html#sqlalchemy.orm.Mapper.add_property
+    "sqlalchemy.orm.Mapper.add_property") to add an additional property after the
+    fact:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using mapping styles that don’t use Declarative base classes such as the
+    [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped "sqlalchemy.orm.registry.mapped")
+    decorator, the [`Mapper.add_property()`](mapping_api.html#sqlalchemy.orm.Mapper.add_property
+    "sqlalchemy.orm.Mapper.add_property") method may be invoked explicitly on the
+    underlying [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    object, which can be obtained using [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Appending additional columns to an existing Declarative mapped class](declarative_tables.html#orm-declarative-table-adding-columns)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Composing from Column Properties at Mapping Time'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is possible to create mappings that combine multiple [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") objects together. The [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") will be interpreted as a SQL expression when
+    used in a Core expression context, provided that it is targeted by an existing
+    expression object; this works by the Core detecting that the object has a `__clause_element__()`
+    method which returns a SQL expression. However, if the [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") is used as a lead object in an expression where
+    there is no other Core SQL expression object to target it, the [`ColumnProperty.expression`](internals.html#sqlalchemy.orm.ColumnProperty.expression
+    "sqlalchemy.orm.ColumnProperty.expression") attribute will return the underlying
+    SQL expression so that it can be used to build SQL expressions consistently. Below,
+    the `File` class contains an attribute `File.path` that concatenates a string
+    token to the `File.filename` attribute, which is itself a [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the `File` class is used in expressions normally, the attributes assigned
+    to `filename` and `path` are usable directly. The use of the [`ColumnProperty.expression`](internals.html#sqlalchemy.orm.ColumnProperty.expression
+    "sqlalchemy.orm.ColumnProperty.expression") attribute is only necessary when using
+    the [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty "sqlalchemy.orm.ColumnProperty")
+    directly within the mapping definition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using Column Deferral with `column_property()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The column deferral feature introduced in the [ORM Querying Guide](queryguide/index.html)
+    at [Limiting which Columns Load with Column Deferral](queryguide/columns.html#orm-queryguide-column-deferral)
+    may be applied at mapping time to a SQL expression mapped by [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") by using the [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") function in place of [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using deferred() for imperative mappers, mapped SQL expressions](queryguide/columns.html#orm-queryguide-deferred-imperative)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding column_property() to an existing Declarative mapped class
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If import issues prevent the [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") from being defined inline with the class, it
+    can be assigned to the class after both are configured. When using mappings that
+    make use of a Declarative base class (i.e. produced by the [`DeclarativeBase`](mapping_api.html#sqlalchemy.orm.DeclarativeBase
+    "sqlalchemy.orm.DeclarativeBase") superclass or legacy functions such as [`declarative_base()`](mapping_api.html#sqlalchemy.orm.declarative_base
+    "sqlalchemy.orm.declarative_base")), this attribute assignment has the effect
+    of calling [`Mapper.add_property()`](mapping_api.html#sqlalchemy.orm.Mapper.add_property
+    "sqlalchemy.orm.Mapper.add_property") to add an additional property after the
+    fact:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using mapping styles that don’t use Declarative base classes such as the
+    [`registry.mapped()`](mapping_api.html#sqlalchemy.orm.registry.mapped "sqlalchemy.orm.registry.mapped")
+    decorator, the [`Mapper.add_property()`](mapping_api.html#sqlalchemy.orm.Mapper.add_property
+    "sqlalchemy.orm.Mapper.add_property") method may be invoked explicitly on the
+    underlying [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    object, which can be obtained using [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Appending additional columns to an existing Declarative mapped class](declarative_tables.html#orm-declarative-table-adding-columns)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Composing from Column Properties at Mapping Time'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is possible to create mappings that combine multiple [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") objects together. The [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") will be interpreted as a SQL expression when
+    used in a Core expression context, provided that it is targeted by an existing
+    expression object; this works by the Core detecting that the object has a `__clause_element__()`
+    method which returns a SQL expression. However, if the [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty") is used as a lead object in an expression where
+    there is no other Core SQL expression object to target it, the [`ColumnProperty.expression`](internals.html#sqlalchemy.orm.ColumnProperty.expression
+    "sqlalchemy.orm.ColumnProperty.expression") attribute will return the underlying
+    SQL expression so that it can be used to build SQL expressions consistently. Below,
+    the `File` class contains an attribute `File.path` that concatenates a string
+    token to the `File.filename` attribute, which is itself a [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty
+    "sqlalchemy.orm.ColumnProperty"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the `File` class is used in expressions normally, the attributes assigned
+    to `filename` and `path` are usable directly. The use of the [`ColumnProperty.expression`](internals.html#sqlalchemy.orm.ColumnProperty.expression
+    "sqlalchemy.orm.ColumnProperty.expression") attribute is only necessary when using
+    the [`ColumnProperty`](internals.html#sqlalchemy.orm.ColumnProperty "sqlalchemy.orm.ColumnProperty")
+    directly within the mapping definition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using Column Deferral with `column_property()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The column deferral feature introduced in the [ORM Querying Guide](queryguide/index.html)
+    at [Limiting which Columns Load with Column Deferral](queryguide/columns.html#orm-queryguide-column-deferral)
+    may be applied at mapping time to a SQL expression mapped by [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") by using the [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") function in place of [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Using deferred() for imperative mappers, mapped SQL expressions](queryguide/columns.html#orm-queryguide-deferred-imperative)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a plain descriptor
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In cases where a SQL query more elaborate than what [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") or [`hybrid_property`](extensions/hybrid.html#sqlalchemy.ext.hybrid.hybrid_property
+    "sqlalchemy.ext.hybrid.hybrid_property") can provide must be emitted, a regular
+    Python function accessed as an attribute can be used, assuming the expression
+    only needs to be available on an already-loaded instance. The function is decorated
+    with Python’s own `@property` decorator to mark it as a read-only attribute. Within
+    the function, [`object_session()`](session_api.html#sqlalchemy.orm.object_session
+    "sqlalchemy.orm.object_session") is used to locate the [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") corresponding to the current object, which is then used
+    to emit a query:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: The plain descriptor approach is useful as a last resort, but is less performant
+    in the usual case than both the hybrid and column property approaches, in that
+    it needs to emit a SQL query upon each access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Query-time SQL expressions as mapped attributes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to being able to configure fixed SQL expressions on mapped classes,
+    the SQLAlchemy ORM also includes a feature wherein objects may be loaded with
+    the results of arbitrary SQL expressions which are set up at query time as part
+    of their state. This behavior is available by configuring an ORM mapped attribute
+    using [`query_expression()`](queryguide/columns.html#sqlalchemy.orm.query_expression
+    "sqlalchemy.orm.query_expression") and then using the [`with_expression()`](queryguide/columns.html#sqlalchemy.orm.with_expression
+    "sqlalchemy.orm.with_expression") loader option at query time. See the section
+    [Loading Arbitrary SQL Expressions onto Objects](queryguide/columns.html#orm-queryguide-with-expression)
+    for an example mapping and usage.
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,1526 @@
+- en: What’s new in SQLAlchemy 0.5?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/changelog/migration_05.html](https://docs.sqlalchemy.org/en/20/changelog/migration_05.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: About this Document
+  prefs: []
+  type: TYPE_NORMAL
+- en: This document describes changes between SQLAlchemy version 0.4, last released
+    October 12, 2008, and SQLAlchemy version 0.5, last released January 16, 2010.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Document date: August 4, 2009'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This guide documents API changes which affect users migrating their applications
+    from the 0.4 series of SQLAlchemy to 0.5\. It’s also recommended for those working
+    from [Essential SQLAlchemy](https://oreilly.com/catalog/9780596516147/), which
+    only covers 0.4 and seems to even have some old 0.3isms in it. Note that SQLAlchemy
+    0.5 removes many behaviors which were deprecated throughout the span of the 0.4
+    series, and also deprecates more behaviors specific to 0.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Major Documentation Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Some sections of the documentation have been completely rewritten and can serve
+    as an introduction to new ORM features. The `Query` and `Session` objects in particular
+    have some distinct differences in API and behavior which fundamentally change
+    many of the basic ways things are done, particularly with regards to constructing
+    highly customized ORM queries and dealing with stale session state, commits and
+    rollbacks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Tutorial](https://www.sqlalchemy.org/docs/05/ormtutorial.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Session Documentation](https://www.sqlalchemy.org/docs/05/session.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deprecations Source
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Another source of information is documented within a series of unit tests illustrating
+    up to date usages of some common `Query` patterns; this file can be viewed at
+    [source:sqlalchemy/trunk/test/orm/test_deprecations.py].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Requirements Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Python 2.4 or higher is required. The SQLAlchemy 0.4 line is the last version
+    with Python 2.3 support.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Object Relational Mapping
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Column level expressions within Query.** - as detailed in the [tutorial](https://www.sqlalchemy.org/docs/05/ormtutorial.html),
+    `Query` has the capability to create specific SELECT statements, not just those
+    against full rows:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The tuples returned by any multi-column/entity query are *named*’ tuples:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`Query` has a `statement` accessor, as well as a `subquery()` method which
+    allow `Query` to be used to create more complex combinations:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Explicit ORM aliases are recommended for aliased joins** - The `aliased()`
+    function produces an “alias” of a class, which allows fine-grained control of
+    aliases in conjunction with ORM queries. While a table-level alias (i.e. `table.alias()`)
+    is still usable, an ORM level alias retains the semantics of the ORM mapped object
+    which is significant for inheritance mappings, options, and other scenarios. E.g.:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**query.join() greatly enhanced.** - You can now specify the target and ON
+    clause for a join in multiple ways. A target class alone can be provided where
+    SQLA will attempt to form a join to it via foreign key in the same way as `table.join(someothertable)`.
+    A target and an explicit ON condition can be provided, where the ON condition
+    can be a `relation()` name, an actual class descriptor, or a SQL expression. Or
+    the old way of just a `relation()` name or class descriptor works too. See the
+    ORM tutorial which has several examples.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Declarative is recommended for applications which don’t require (and don’t
+    prefer) abstraction between tables and mappers** - The [/docs/05/reference/ext/declarative.html
+    Declarative] module, which is used to combine the expression of `Table`, `mapper()`,
+    and user defined class objects together, is highly recommended as it simplifies
+    application configuration, ensures the “one mapper per class” pattern, and allows
+    the full range of configuration available to distinct `mapper()` calls. Separate
+    `mapper()` and `Table` usage is now referred to as “classical SQLAlchemy usage”
+    and of course is freely mixable with declarative.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**The .c. attribute has been removed** from classes (i.e. `MyClass.c.somecolumn`).
+    As is the case in 0.4, class- level properties are usable as query elements, i.e.
+    `Class.c.propname` is now superseded by `Class.propname`, and the `c` attribute
+    continues to remain on `Table` objects where they indicate the namespace of `Column`
+    objects present on the table.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To get at the Table for a mapped class (if you didn’t keep it around already):'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Iterate through columns:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Work with a specific column:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The class-bound descriptors support the full set of Column operators as well
+    as the documented relation-oriented operators like `has()`, `any()`, `contains()`,
+    etc.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The reason for the hard removal of `.c.` is that in 0.5, class-bound descriptors
+    carry potentially different meaning, as well as information regarding class mappings,
+    versus plain `Column` objects - and there are use cases where you’d specifically
+    want to use one or the other. Generally, using class-bound descriptors invokes
+    a set of mapping/polymorphic aware translations, and using table- bound columns
+    does not. In 0.4, these translations were applied across the board to all expressions,
+    but 0.5 differentiates completely between columns and mapped descriptors, only
+    applying translations to the latter. So in many cases, particularly when dealing
+    with joined table inheritance configurations as well as when using `query(<columns>)`,
+    `Class.propname` and `table.c.colname` are not interchangeable.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For example, `session.query(users.c.id, users.c.name)` is different versus `session.query(User.id,
+    User.name)`; in the latter case, the `Query` is aware of the mapper in use and
+    further mapper-specific operations like `query.join(<propname>)`, `query.with_parent()`
+    etc. may be used, but in the former case cannot. Additionally, in polymorphic
+    inheritance scenarios, the class-bound descriptors refer to the columns present
+    in the polymorphic selectable in use, not necessarily the table column which directly
+    corresponds to the descriptor. For example, a set of classes related by joined-table
+    inheritance to the `person` table along the `person_id` column of each table will
+    all have their `Class.person_id` attribute mapped to the `person_id` column in
+    `person`, and not their subclass table. Version 0.4 would map this behavior onto
+    table-bound `Column` objects automatically. In 0.5, this automatic conversion
+    has been removed, so that you in fact *can* use table-bound columns as a means
+    to override the translations which occur with polymorphic querying; this allows
+    `Query` to be able to create optimized selects among joined-table or concrete-table
+    inheritance setups, as well as portable subqueries, etc.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**Session Now Synchronizes Automatically with Transactions.** Session now synchronizes
+    against the transaction automatically by default, including autoflush and autoexpire.
+    A transaction is present at all times unless disabled using the `autocommit` option.
+    When all three flags are set to their default, the Session recovers gracefully
+    after rollbacks and it’s very difficult to get stale data into the session. See
+    the new Session documentation for details.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Implicit Order By Is Removed**. This will impact ORM users who rely upon
+    SA’s “implicit ordering” behavior, which states that all Query objects which don’t
+    have an `order_by()` will ORDER BY the “id” or “oid” column of the primary mapped
+    table, and all lazy/eagerly loaded collections apply a similar ordering. In 0.5,
+    automatic ordering must be explicitly configured on `mapper()` and `relation()`
+    objects (if desired), or otherwise when using `Query`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To convert an 0.4 mapping to 0.5, such that its ordering behavior will be extremely
+    similar to 0.4 or previous, use the `order_by` setting on `mapper()` and `relation()`:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To set ordering on a backref, use the `backref()` function:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Using declarative ? To help with the new `order_by` requirement, `order_by`
+    and friends can now be set using strings which are evaluated in Python later on
+    (this works **only** with declarative, not plain mappers):'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: It’s generally a good idea to set `order_by` on `relation()s` which load list-based
+    collections of items, since that ordering cannot otherwise be affected. Other
+    than that, the best practice is to use `Query.order_by()` to control ordering
+    of the primary entities being loaded.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**Session is now autoflush=True/autoexpire=True/autocommit=False.** - To set
+    it up, just call `sessionmaker()` with no arguments. The name `transactional=True`
+    is now `autocommit=False`. Flushes occur upon each query issued (disable with
+    `autoflush=False`), within each `commit()` (as always), and before each `begin_nested()`
+    (so rolling back to the SAVEPOINT is meaningful). All objects are expired after
+    each `commit()` and after each `rollback()`. After rollback, pending objects are
+    expunged, deleted objects move back to persistent. These defaults work together
+    very nicely and there’s really no more need for old techniques like `clear()`
+    (which is renamed to `expunge_all()` as well).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'P.S.: sessions are now reusable after a `rollback()`. Scalar and collection
+    attribute changes, adds and deletes are all rolled back.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**session.add() replaces session.save(), session.update(), session.save_or_update().**
+    - the `session.add(someitem)` and `session.add_all([list of items])` methods replace
+    `save()`, `update()`, and `save_or_update()`. Those methods will remain deprecated
+    throughout 0.5.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**backref configuration made less verbose.** - The `backref()` function now
+    uses the `primaryjoin` and `secondaryjoin` arguments of the forwards-facing `relation()`
+    when they are not explicitly stated. It’s no longer necessary to specify `primaryjoin`/`secondaryjoin`
+    in both directions separately.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Simplified polymorphic options.** - The ORM’s “polymorphic load” behavior
+    has been simplified. In 0.4, mapper() had an argument called `polymorphic_fetch`
+    which could be configured as `select` or `deferred`. This option is removed; the
+    mapper will now just defer any columns which were not present in the SELECT statement.
+    The actual SELECT statement used is controlled by the `with_polymorphic` mapper
+    argument (which is also in 0.4 and replaces `select_table`), as well as the `with_polymorphic()`
+    method on `Query` (also in 0.4).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An improvement to the deferred loading of inheriting classes is that the mapper
+    now produces the “optimized” version of the SELECT statement in all cases; that
+    is, if class B inherits from A, and several attributes only present on class B
+    have been expired, the refresh operation will only include B’s table in the SELECT
+    statement and will not JOIN to A.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The `execute()` method on `Session` converts plain strings into `text()` constructs,
+    so that bind parameters may all be specified as “:bindname” without needing to
+    call `text()` explicitly. If “raw” SQL is desired here, use `session.connection().execute("raw
+    text")`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`session.Query().iterate_instances()` has been renamed to just `instances()`.
+    The old `instances()` method returning a list instead of an iterator no longer
+    exists. If you were relying on that behavior, you should use `list(your_query.instances())`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extending the ORM
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In 0.5 we’re moving forward with more ways to modify and extend the ORM. Heres
+    a summary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**MapperExtension.** - This is the classic extension class, which remains.
+    Methods which should rarely be needed are `create_instance()` and `populate_instance()`.
+    To control the initialization of an object when it’s loaded from the database,
+    use the `reconstruct_instance()` method, or more easily the `@reconstructor` decorator
+    described in the documentation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**SessionExtension.** - This is an easy to use extension class for session
+    events. In particular, it provides `before_flush()`, `after_flush()` and `after_flush_postexec()`
+    methods. This usage is recommended over `MapperExtension.before_XXX` in many cases
+    since within `before_flush()` you can modify the flush plan of the session freely,
+    something which cannot be done from within `MapperExtension`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**AttributeExtension.** - This class is now part of the public API, and allows
+    the interception of userland events on attributes, including attribute set and
+    delete operations, and collection appends and removes. It also allows the value
+    to be set or appended to be modified. The `@validates` decorator, described in
+    the documentation, provides a quick way to mark any mapped attributes as being
+    “validated” by a particular class method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Attribute Instrumentation Customization.** - An API is provided for ambitious
+    efforts to entirely replace SQLAlchemy’s attribute instrumentation, or just to
+    augment it in some cases. This API was produced for the purposes of the Trellis
+    toolkit, but is available as a public API. Some examples are provided in the distribution
+    in the `/examples/custom_attributes` directory.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Schema/Types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**String with no length no longer generates TEXT, it generates VARCHAR** -
+    The `String` type no longer magically converts into a `Text` type when specified
+    with no length. This only has an effect when CREATE TABLE is issued, as it will
+    issue `VARCHAR` with no length parameter, which is not valid on many (but not
+    all) databases. To create a TEXT (or CLOB, i.e. unbounded string) column, use
+    the `Text` type.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**PickleType() with mutable=True requires an __eq__() method** - The `PickleType`
+    type needs to compare values when mutable=True. The method of comparing `pickle.dumps()`
+    is inefficient and unreliable. If an incoming object does not implement `__eq__()`
+    and is also not `None`, the `dumps()` comparison is used but a warning is raised.
+    For types which implement `__eq__()` which includes all dictionaries, lists, etc.,
+    comparison will use `==` and is now reliable by default.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**convert_bind_param() and convert_result_value() methods of TypeEngine/TypeDecorator
+    are removed.** - The O’Reilly book unfortunately documented these methods even
+    though they were deprecated post 0.3\. For a user-defined type which subclasses
+    `TypeEngine`, the `bind_processor()` and `result_processor()` methods should be
+    used for bind/result processing. Any user defined type, whether extending `TypeEngine`
+    or `TypeDecorator`, which uses the old 0.3 style can be easily adapted to the
+    new style using the following adapter:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To use the above mixin:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The `quote` flag on `Column` and `Table` as well as the `quote_schema` flag
+    on `Table` now control quoting both positively and negatively. The default is
+    `None`, meaning let regular quoting rules take effect. When `True`, quoting is
+    forced on. When `False`, quoting is forced off.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Column `DEFAULT` value DDL can now be more conveniently specified with `Column(...,
+    server_default='val')`, deprecating `Column(..., PassiveDefault('val'))`. `default=`
+    is now exclusively for Python-initiated default values, and can coexist with server_default.
+    A new `server_default=FetchedValue()` replaces the `PassiveDefault('')` idiom
+    for marking columns as subject to influence from external triggers and has no
+    DDL side effects.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SQLite’s `DateTime`, `Time` and `Date` types now **only accept datetime objects,
+    not strings** as bind parameter input. If you’d like to create your own “hybrid”
+    type which accepts strings and returns results as date objects (from whatever
+    format you’d like), create a `TypeDecorator` that builds on `String`. If you only
+    want string-based dates, just use `String`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Additionally, the `DateTime` and `Time` types, when used with SQLite, now represent
+    the “microseconds” field of the Python `datetime.datetime` object in the same
+    manner as `str(datetime)` - as fractional seconds, not a count of microseconds.
+    That is:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'So if an existing SQLite file-based database intends to be used across 0.4
+    and 0.5, you either have to upgrade the datetime columns to store the new format
+    (NOTE: please test this, I’m pretty sure its correct):'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'or, enable “legacy” mode as follows:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Connection Pool no longer threadlocal by default
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 0.4 has an unfortunate default setting of “pool_threadlocal=True”, leading to
+    surprise behavior when, for example, using multiple Sessions within a single thread.
+    This flag is now off in 0.5\. To re-enable 0.4’s behavior, specify `pool_threadlocal=True`
+    to `create_engine()`, or alternatively use the “threadlocal” strategy via `strategy="threadlocal"`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*args Accepted, *args No Longer Accepted'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The policy with `method(\*args)` vs. `method([args])` is, if the method accepts
+    a variable-length set of items which represent a fixed structure, it takes `\*args`.
+    If the method accepts a variable-length set of items that are data-driven, it
+    takes `[args]`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The various Query.options() functions `eagerload()`, `eagerload_all()`, `lazyload()`,
+    `contains_eager()`, `defer()`, `undefer()` all accept variable-length `\*keys`
+    as their argument now, which allows a path to be formulated using descriptors,
+    ie.:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: A single array argument is still accepted for backwards compatibility.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Similarly, the `Query.join()` and `Query.outerjoin()` methods accept a variable
+    length *args, with a single array accepted for backwards compatibility:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: the `in_()` method on columns and similar only accepts a list argument now.
+    It no longer accepts `\*args`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Removed
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**entity_name** - This feature was always problematic and rarely used. 0.5’s
+    more deeply fleshed out use cases revealed further issues with `entity_name` which
+    led to its removal. If different mappings are required for a single class, break
+    the class into separate subclasses and map them separately. An example of this
+    is at [wiki:UsageRecipes/EntityName]. More information regarding rationale is
+    described at https://groups.google.c om/group/sqlalchemy/browse_thread/thread/9e23a0641a88b96d?
+    hl=en .'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**get()/load() cleanup**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `load()` method has been removed. Its functionality was kind of arbitrary
+    and basically copied from Hibernate, where it’s also not a particularly meaningful
+    method.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'To get equivalent functionality:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`Session.get(cls, id)` and `Session.load(cls, id)` have been removed. `Session.get()`
+    is redundant vs. `session.query(cls).get(id)`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`MapperExtension.get()` is also removed (as is `MapperExtension.load()`). To
+    override the functionality of `Query.get()`, use a subclass:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`sqlalchemy.orm.relation()`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following deprecated keyword arguments have been removed:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: foreignkey, association, private, attributeext, is_backref
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In particular, `attributeext` is replaced with `extension` - the `AttributeExtension`
+    class is now in the public API.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`session.Query()`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following deprecated functions have been removed:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: list, scalar, count_by, select_whereclause, get_by, select_by, join_by, selectfirst,
+    selectone, select, execute, select_statement, select_text, join_to, join_via,
+    selectfirst_by, selectone_by, apply_max, apply_min, apply_avg, apply_sum
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Additionally, the `id` keyword argument to `join()`, `outerjoin()`, `add_entity()`
+    and `add_column()` has been removed. To target table aliases in `Query` to result
+    columns, use the `aliased` construct:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`sqlalchemy.orm.Mapper`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: instances()
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: get_session() - this method was not very noticeable, but had the effect of associating
+    lazy loads with a particular session even if the parent object was entirely detached,
+    when an extension such as `scoped_session()` or the old `SessionContextExt` was
+    used. It’s possible that some applications which relied upon this behavior will
+    no longer work as expected; but the better programming practice here is to always
+    ensure objects are present within sessions if database access from their attributes
+    are required.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`mapper(MyClass, mytable)`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mapped classes no are longer instrumented with a “c” class attribute; e.g. `MyClass.c`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.orm.collections`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The _prepare_instrumentation alias for prepare_instrumentation has been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.orm`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Removed the `EXT_PASS` alias of `EXT_CONTINUE`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.engine`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The alias from `DefaultDialect.preexecute_sequences` to `.preexecute_pk_sequences`
+    has been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The deprecated engine_descriptors() function has been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.activemapper`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Module removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.assignmapper`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Module removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.associationproxy`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pass-through of keyword args on the proxy’s `.append(item, \**kw)` has been
+    removed and is now simply `.append(item)`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.selectresults`, `sqlalchemy.mods.selectresults`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Modules removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.declarative`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`declared_synonym()` removed.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.sessioncontext`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Module removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.log`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `SADeprecationWarning` alias to `sqlalchemy.exc.SADeprecationWarning` has
+    been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.exc`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`exc.AssertionError` has been removed and usage replaced by the Python built-in
+    of the same name.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.databases.mysql`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The deprecated `get_version_info` dialect method has been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Renamed or Moved
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.exceptions` is now `sqlalchemy.exc`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The module may still be imported under the old name until 0.6.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`FlushError`, `ConcurrentModificationError`, `UnmappedColumnError` -> sqlalchemy.orm.exc'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These exceptions moved to the orm package. Importing ‘sqlalchemy.orm’ will install
+    aliases in sqlalchemy.exc for compatibility until 0.6.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.logging` -> `sqlalchemy.log`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This internal module was renamed. No longer needs to be special cased when packaging
+    SA with py2app and similar tools that scan imports.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`session.Query().iterate_instances()` -> `session.Query().instances()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deprecated
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`Session.save()`, `Session.update()`, `Session.save_or_update()`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: All three replaced by `Session.add()`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.PassiveDefault`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use `Column(server_default=...)` Translates to sqlalchemy.DefaultClause() under
+    the hood.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`session.Query().iterate_instances()`. It has been renamed to `instances()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Major Documentation Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Some sections of the documentation have been completely rewritten and can serve
+    as an introduction to new ORM features. The `Query` and `Session` objects in particular
+    have some distinct differences in API and behavior which fundamentally change
+    many of the basic ways things are done, particularly with regards to constructing
+    highly customized ORM queries and dealing with stale session state, commits and
+    rollbacks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[ORM Tutorial](https://www.sqlalchemy.org/docs/05/ormtutorial.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Session Documentation](https://www.sqlalchemy.org/docs/05/session.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deprecations Source
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Another source of information is documented within a series of unit tests illustrating
+    up to date usages of some common `Query` patterns; this file can be viewed at
+    [source:sqlalchemy/trunk/test/orm/test_deprecations.py].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Requirements Changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Python 2.4 or higher is required. The SQLAlchemy 0.4 line is the last version
+    with Python 2.3 support.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Object Relational Mapping
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Column level expressions within Query.** - as detailed in the [tutorial](https://www.sqlalchemy.org/docs/05/ormtutorial.html),
+    `Query` has the capability to create specific SELECT statements, not just those
+    against full rows:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The tuples returned by any multi-column/entity query are *named*’ tuples:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`Query` has a `statement` accessor, as well as a `subquery()` method which
+    allow `Query` to be used to create more complex combinations:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Explicit ORM aliases are recommended for aliased joins** - The `aliased()`
+    function produces an “alias” of a class, which allows fine-grained control of
+    aliases in conjunction with ORM queries. While a table-level alias (i.e. `table.alias()`)
+    is still usable, an ORM level alias retains the semantics of the ORM mapped object
+    which is significant for inheritance mappings, options, and other scenarios. E.g.:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**query.join() greatly enhanced.** - You can now specify the target and ON
+    clause for a join in multiple ways. A target class alone can be provided where
+    SQLA will attempt to form a join to it via foreign key in the same way as `table.join(someothertable)`.
+    A target and an explicit ON condition can be provided, where the ON condition
+    can be a `relation()` name, an actual class descriptor, or a SQL expression. Or
+    the old way of just a `relation()` name or class descriptor works too. See the
+    ORM tutorial which has several examples.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Declarative is recommended for applications which don’t require (and don’t
+    prefer) abstraction between tables and mappers** - The [/docs/05/reference/ext/declarative.html
+    Declarative] module, which is used to combine the expression of `Table`, `mapper()`,
+    and user defined class objects together, is highly recommended as it simplifies
+    application configuration, ensures the “one mapper per class” pattern, and allows
+    the full range of configuration available to distinct `mapper()` calls. Separate
+    `mapper()` and `Table` usage is now referred to as “classical SQLAlchemy usage”
+    and of course is freely mixable with declarative.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**The .c. attribute has been removed** from classes (i.e. `MyClass.c.somecolumn`).
+    As is the case in 0.4, class- level properties are usable as query elements, i.e.
+    `Class.c.propname` is now superseded by `Class.propname`, and the `c` attribute
+    continues to remain on `Table` objects where they indicate the namespace of `Column`
+    objects present on the table.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To get at the Table for a mapped class (if you didn’t keep it around already):'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Iterate through columns:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Work with a specific column:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The class-bound descriptors support the full set of Column operators as well
+    as the documented relation-oriented operators like `has()`, `any()`, `contains()`,
+    etc.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The reason for the hard removal of `.c.` is that in 0.5, class-bound descriptors
+    carry potentially different meaning, as well as information regarding class mappings,
+    versus plain `Column` objects - and there are use cases where you’d specifically
+    want to use one or the other. Generally, using class-bound descriptors invokes
+    a set of mapping/polymorphic aware translations, and using table- bound columns
+    does not. In 0.4, these translations were applied across the board to all expressions,
+    but 0.5 differentiates completely between columns and mapped descriptors, only
+    applying translations to the latter. So in many cases, particularly when dealing
+    with joined table inheritance configurations as well as when using `query(<columns>)`,
+    `Class.propname` and `table.c.colname` are not interchangeable.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For example, `session.query(users.c.id, users.c.name)` is different versus `session.query(User.id,
+    User.name)`; in the latter case, the `Query` is aware of the mapper in use and
+    further mapper-specific operations like `query.join(<propname>)`, `query.with_parent()`
+    etc. may be used, but in the former case cannot. Additionally, in polymorphic
+    inheritance scenarios, the class-bound descriptors refer to the columns present
+    in the polymorphic selectable in use, not necessarily the table column which directly
+    corresponds to the descriptor. For example, a set of classes related by joined-table
+    inheritance to the `person` table along the `person_id` column of each table will
+    all have their `Class.person_id` attribute mapped to the `person_id` column in
+    `person`, and not their subclass table. Version 0.4 would map this behavior onto
+    table-bound `Column` objects automatically. In 0.5, this automatic conversion
+    has been removed, so that you in fact *can* use table-bound columns as a means
+    to override the translations which occur with polymorphic querying; this allows
+    `Query` to be able to create optimized selects among joined-table or concrete-table
+    inheritance setups, as well as portable subqueries, etc.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**Session Now Synchronizes Automatically with Transactions.** Session now synchronizes
+    against the transaction automatically by default, including autoflush and autoexpire.
+    A transaction is present at all times unless disabled using the `autocommit` option.
+    When all three flags are set to their default, the Session recovers gracefully
+    after rollbacks and it’s very difficult to get stale data into the session. See
+    the new Session documentation for details.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Implicit Order By Is Removed**. This will impact ORM users who rely upon
+    SA’s “implicit ordering” behavior, which states that all Query objects which don’t
+    have an `order_by()` will ORDER BY the “id” or “oid” column of the primary mapped
+    table, and all lazy/eagerly loaded collections apply a similar ordering. In 0.5,
+    automatic ordering must be explicitly configured on `mapper()` and `relation()`
+    objects (if desired), or otherwise when using `Query`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To convert an 0.4 mapping to 0.5, such that its ordering behavior will be extremely
+    similar to 0.4 or previous, use the `order_by` setting on `mapper()` and `relation()`:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To set ordering on a backref, use the `backref()` function:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Using declarative ? To help with the new `order_by` requirement, `order_by`
+    and friends can now be set using strings which are evaluated in Python later on
+    (this works **only** with declarative, not plain mappers):'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: It’s generally a good idea to set `order_by` on `relation()s` which load list-based
+    collections of items, since that ordering cannot otherwise be affected. Other
+    than that, the best practice is to use `Query.order_by()` to control ordering
+    of the primary entities being loaded.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**Session is now autoflush=True/autoexpire=True/autocommit=False.** - To set
+    it up, just call `sessionmaker()` with no arguments. The name `transactional=True`
+    is now `autocommit=False`. Flushes occur upon each query issued (disable with
+    `autoflush=False`), within each `commit()` (as always), and before each `begin_nested()`
+    (so rolling back to the SAVEPOINT is meaningful). All objects are expired after
+    each `commit()` and after each `rollback()`. After rollback, pending objects are
+    expunged, deleted objects move back to persistent. These defaults work together
+    very nicely and there’s really no more need for old techniques like `clear()`
+    (which is renamed to `expunge_all()` as well).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'P.S.: sessions are now reusable after a `rollback()`. Scalar and collection
+    attribute changes, adds and deletes are all rolled back.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '**session.add() replaces session.save(), session.update(), session.save_or_update().**
+    - the `session.add(someitem)` and `session.add_all([list of items])` methods replace
+    `save()`, `update()`, and `save_or_update()`. Those methods will remain deprecated
+    throughout 0.5.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**backref configuration made less verbose.** - The `backref()` function now
+    uses the `primaryjoin` and `secondaryjoin` arguments of the forwards-facing `relation()`
+    when they are not explicitly stated. It’s no longer necessary to specify `primaryjoin`/`secondaryjoin`
+    in both directions separately.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Simplified polymorphic options.** - The ORM’s “polymorphic load” behavior
+    has been simplified. In 0.4, mapper() had an argument called `polymorphic_fetch`
+    which could be configured as `select` or `deferred`. This option is removed; the
+    mapper will now just defer any columns which were not present in the SELECT statement.
+    The actual SELECT statement used is controlled by the `with_polymorphic` mapper
+    argument (which is also in 0.4 and replaces `select_table`), as well as the `with_polymorphic()`
+    method on `Query` (also in 0.4).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An improvement to the deferred loading of inheriting classes is that the mapper
+    now produces the “optimized” version of the SELECT statement in all cases; that
+    is, if class B inherits from A, and several attributes only present on class B
+    have been expired, the refresh operation will only include B’s table in the SELECT
+    statement and will not JOIN to A.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The `execute()` method on `Session` converts plain strings into `text()` constructs,
+    so that bind parameters may all be specified as “:bindname” without needing to
+    call `text()` explicitly. If “raw” SQL is desired here, use `session.connection().execute("raw
+    text")`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`session.Query().iterate_instances()` has been renamed to just `instances()`.
+    The old `instances()` method returning a list instead of an iterator no longer
+    exists. If you were relying on that behavior, you should use `list(your_query.instances())`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extending the ORM
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In 0.5 we’re moving forward with more ways to modify and extend the ORM. Heres
+    a summary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**MapperExtension.** - This is the classic extension class, which remains.
+    Methods which should rarely be needed are `create_instance()` and `populate_instance()`.
+    To control the initialization of an object when it’s loaded from the database,
+    use the `reconstruct_instance()` method, or more easily the `@reconstructor` decorator
+    described in the documentation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**SessionExtension.** - This is an easy to use extension class for session
+    events. In particular, it provides `before_flush()`, `after_flush()` and `after_flush_postexec()`
+    methods. This usage is recommended over `MapperExtension.before_XXX` in many cases
+    since within `before_flush()` you can modify the flush plan of the session freely,
+    something which cannot be done from within `MapperExtension`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**AttributeExtension.** - This class is now part of the public API, and allows
+    the interception of userland events on attributes, including attribute set and
+    delete operations, and collection appends and removes. It also allows the value
+    to be set or appended to be modified. The `@validates` decorator, described in
+    the documentation, provides a quick way to mark any mapped attributes as being
+    “validated” by a particular class method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Attribute Instrumentation Customization.** - An API is provided for ambitious
+    efforts to entirely replace SQLAlchemy’s attribute instrumentation, or just to
+    augment it in some cases. This API was produced for the purposes of the Trellis
+    toolkit, but is available as a public API. Some examples are provided in the distribution
+    in the `/examples/custom_attributes` directory.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Schema/Types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**String with no length no longer generates TEXT, it generates VARCHAR** -
+    The `String` type no longer magically converts into a `Text` type when specified
+    with no length. This only has an effect when CREATE TABLE is issued, as it will
+    issue `VARCHAR` with no length parameter, which is not valid on many (but not
+    all) databases. To create a TEXT (or CLOB, i.e. unbounded string) column, use
+    the `Text` type.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**PickleType() with mutable=True requires an __eq__() method** - The `PickleType`
+    type needs to compare values when mutable=True. The method of comparing `pickle.dumps()`
+    is inefficient and unreliable. If an incoming object does not implement `__eq__()`
+    and is also not `None`, the `dumps()` comparison is used but a warning is raised.
+    For types which implement `__eq__()` which includes all dictionaries, lists, etc.,
+    comparison will use `==` and is now reliable by default.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**convert_bind_param() and convert_result_value() methods of TypeEngine/TypeDecorator
+    are removed.** - The O’Reilly book unfortunately documented these methods even
+    though they were deprecated post 0.3\. For a user-defined type which subclasses
+    `TypeEngine`, the `bind_processor()` and `result_processor()` methods should be
+    used for bind/result processing. Any user defined type, whether extending `TypeEngine`
+    or `TypeDecorator`, which uses the old 0.3 style can be easily adapted to the
+    new style using the following adapter:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To use the above mixin:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The `quote` flag on `Column` and `Table` as well as the `quote_schema` flag
+    on `Table` now control quoting both positively and negatively. The default is
+    `None`, meaning let regular quoting rules take effect. When `True`, quoting is
+    forced on. When `False`, quoting is forced off.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Column `DEFAULT` value DDL can now be more conveniently specified with `Column(...,
+    server_default='val')`, deprecating `Column(..., PassiveDefault('val'))`. `default=`
+    is now exclusively for Python-initiated default values, and can coexist with server_default.
+    A new `server_default=FetchedValue()` replaces the `PassiveDefault('')` idiom
+    for marking columns as subject to influence from external triggers and has no
+    DDL side effects.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SQLite’s `DateTime`, `Time` and `Date` types now **only accept datetime objects,
+    not strings** as bind parameter input. If you’d like to create your own “hybrid”
+    type which accepts strings and returns results as date objects (from whatever
+    format you’d like), create a `TypeDecorator` that builds on `String`. If you only
+    want string-based dates, just use `String`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Additionally, the `DateTime` and `Time` types, when used with SQLite, now represent
+    the “microseconds” field of the Python `datetime.datetime` object in the same
+    manner as `str(datetime)` - as fractional seconds, not a count of microseconds.
+    That is:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'So if an existing SQLite file-based database intends to be used across 0.4
+    and 0.5, you either have to upgrade the datetime columns to store the new format
+    (NOTE: please test this, I’m pretty sure its correct):'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'or, enable “legacy” mode as follows:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Connection Pool no longer threadlocal by default
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 0.4 has an unfortunate default setting of “pool_threadlocal=True”, leading to
+    surprise behavior when, for example, using multiple Sessions within a single thread.
+    This flag is now off in 0.5\. To re-enable 0.4’s behavior, specify `pool_threadlocal=True`
+    to `create_engine()`, or alternatively use the “threadlocal” strategy via `strategy="threadlocal"`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*args Accepted, *args No Longer Accepted'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The policy with `method(\*args)` vs. `method([args])` is, if the method accepts
+    a variable-length set of items which represent a fixed structure, it takes `\*args`.
+    If the method accepts a variable-length set of items that are data-driven, it
+    takes `[args]`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The various Query.options() functions `eagerload()`, `eagerload_all()`, `lazyload()`,
+    `contains_eager()`, `defer()`, `undefer()` all accept variable-length `\*keys`
+    as their argument now, which allows a path to be formulated using descriptors,
+    ie.:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: A single array argument is still accepted for backwards compatibility.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Similarly, the `Query.join()` and `Query.outerjoin()` methods accept a variable
+    length *args, with a single array accepted for backwards compatibility:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: the `in_()` method on columns and similar only accepts a list argument now.
+    It no longer accepts `\*args`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Removed
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**entity_name** - This feature was always problematic and rarely used. 0.5’s
+    more deeply fleshed out use cases revealed further issues with `entity_name` which
+    led to its removal. If different mappings are required for a single class, break
+    the class into separate subclasses and map them separately. An example of this
+    is at [wiki:UsageRecipes/EntityName]. More information regarding rationale is
+    described at https://groups.google.c om/group/sqlalchemy/browse_thread/thread/9e23a0641a88b96d?
+    hl=en .'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**get()/load() cleanup**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `load()` method has been removed. Its functionality was kind of arbitrary
+    and basically copied from Hibernate, where it’s also not a particularly meaningful
+    method.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'To get equivalent functionality:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`Session.get(cls, id)` and `Session.load(cls, id)` have been removed. `Session.get()`
+    is redundant vs. `session.query(cls).get(id)`.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`MapperExtension.get()` is also removed (as is `MapperExtension.load()`). To
+    override the functionality of `Query.get()`, use a subclass:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`sqlalchemy.orm.relation()`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following deprecated keyword arguments have been removed:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: foreignkey, association, private, attributeext, is_backref
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In particular, `attributeext` is replaced with `extension` - the `AttributeExtension`
+    class is now in the public API.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`session.Query()`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following deprecated functions have been removed:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: list, scalar, count_by, select_whereclause, get_by, select_by, join_by, selectfirst,
+    selectone, select, execute, select_statement, select_text, join_to, join_via,
+    selectfirst_by, selectone_by, apply_max, apply_min, apply_avg, apply_sum
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Additionally, the `id` keyword argument to `join()`, `outerjoin()`, `add_entity()`
+    and `add_column()` has been removed. To target table aliases in `Query` to result
+    columns, use the `aliased` construct:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`sqlalchemy.orm.Mapper`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: instances()
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: get_session() - this method was not very noticeable, but had the effect of associating
+    lazy loads with a particular session even if the parent object was entirely detached,
+    when an extension such as `scoped_session()` or the old `SessionContextExt` was
+    used. It’s possible that some applications which relied upon this behavior will
+    no longer work as expected; but the better programming practice here is to always
+    ensure objects are present within sessions if database access from their attributes
+    are required.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`mapper(MyClass, mytable)`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mapped classes no are longer instrumented with a “c” class attribute; e.g. `MyClass.c`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.orm.collections`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The _prepare_instrumentation alias for prepare_instrumentation has been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.orm`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Removed the `EXT_PASS` alias of `EXT_CONTINUE`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.engine`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The alias from `DefaultDialect.preexecute_sequences` to `.preexecute_pk_sequences`
+    has been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The deprecated engine_descriptors() function has been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.activemapper`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Module removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.assignmapper`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Module removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.associationproxy`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pass-through of keyword args on the proxy’s `.append(item, \**kw)` has been
+    removed and is now simply `.append(item)`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.selectresults`, `sqlalchemy.mods.selectresults`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Modules removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.declarative`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`declared_synonym()` removed.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.ext.sessioncontext`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Module removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.log`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `SADeprecationWarning` alias to `sqlalchemy.exc.SADeprecationWarning` has
+    been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.exc`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`exc.AssertionError` has been removed and usage replaced by the Python built-in
+    of the same name.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.databases.mysql`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The deprecated `get_version_info` dialect method has been removed.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Renamed or Moved
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.exceptions` is now `sqlalchemy.exc`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The module may still be imported under the old name until 0.6.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`FlushError`, `ConcurrentModificationError`, `UnmappedColumnError` -> sqlalchemy.orm.exc'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These exceptions moved to the orm package. Importing ‘sqlalchemy.orm’ will install
+    aliases in sqlalchemy.exc for compatibility until 0.6.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.logging` -> `sqlalchemy.log`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This internal module was renamed. No longer needs to be special cased when packaging
+    SA with py2app and similar tools that scan imports.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`session.Query().iterate_instances()` -> `session.Query().instances()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deprecated
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`Session.save()`, `Session.update()`, `Session.save_or_update()`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: All three replaced by `Session.add()`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`sqlalchemy.PassiveDefault`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use `Column(server_default=...)` Translates to sqlalchemy.DefaultClause() under
+    the hood.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`session.Query().iterate_instances()`. It has been renamed to `instances()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

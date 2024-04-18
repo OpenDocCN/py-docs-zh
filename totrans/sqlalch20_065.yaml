@@ -1,0 +1,2267 @@
+- en: Automap
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://docs.sqlalchemy.org/en/20/orm/extensions/automap.html](https://docs.sqlalchemy.org/en/20/orm/extensions/automap.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Define an extension to the [`sqlalchemy.ext.declarative`](declarative/api.html#module-sqlalchemy.ext.declarative
+    "sqlalchemy.ext.declarative") system which automatically generates mapped classes
+    and relationships from a database schema, typically though not necessarily one
+    which is reflected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is hoped that the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    system provides a quick and modernized solution to the problem that the very famous
+    [SQLSoup](https://sqlsoup.readthedocs.io/en/latest/) also tries to solve, that
+    of generating a quick and rudimentary object model from an existing database on
+    the fly. By addressing the issue strictly at the mapper configuration level, and
+    integrating fully with existing Declarative class techniques, [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") seeks to provide a well-integrated approach
+    to the issue of expediently auto-generating ad-hoc mappings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [Automap](#) extension is geared towards a “zero declaration” approach,
+    where a complete ORM model including classes and pre-named relationships can be
+    generated on the fly from a database schema. For applications that still want
+    to use explicit class declarations including explicit relationship definitions
+    in conjunction with reflection of tables, the [`DeferredReflection`](declarative/index.html#sqlalchemy.ext.declarative.DeferredReflection
+    "sqlalchemy.ext.declarative.DeferredReflection") class, described at [Using DeferredReflection](../declarative_tables.html#orm-declarative-reflected-deferred-reflection),
+    is a better choice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Basic Use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The simplest usage is to reflect an existing database into a new model. We
+    create a new [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class in a similar manner as to how we create a declarative base class, using
+    [`automap_base()`](#sqlalchemy.ext.automap.automap_base "sqlalchemy.ext.automap.automap_base").
+    We then call [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") on the resulting base class, asking
+    it to reflect the schema and produce mappings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, calling [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") while passing along the [`AutomapBase.prepare.reflect`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.reflect
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter indicates that the [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") method will be called on this declarative
+    base classes’ [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection; then, each **viable** [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") within the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") will get a new mapped class generated automatically.
+    The [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects which link the various tables
+    together will be used to produce new, bidirectional [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") objects between classes. The classes and relationships
+    follow along a default naming scheme that we can customize. At this point, our
+    basic mapping consisting of related `User` and `Address` classes is ready to use
+    in the traditional way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: By **viable**, we mean that for a table to be mapped, it must specify a primary
+    key. Additionally, if the table is detected as being a pure association table
+    between two other tables, it will not be directly mapped and will instead be configured
+    as a many-to-many table between the mappings for the two referring tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating Mappings from an Existing MetaData
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We can pass a pre-declared [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object to [`automap_base()`](#sqlalchemy.ext.automap.automap_base
+    "sqlalchemy.ext.automap.automap_base"). This object can be constructed in any
+    way, including programmatically, from a serialized file, or from itself being
+    reflected using [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect"). Below we illustrate a combination of reflection
+    and explicit table declaration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Generating Mappings from Multiple Schemas'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare "sqlalchemy.ext.automap.AutomapBase.prepare")
+    method when used with reflection may reflect tables from one schema at a time
+    at most, using the [`AutomapBase.prepare.schema`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.schema
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter to indicate the name of
+    a schema to be reflected from. In order to populate the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") with tables from multiple schemas, [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") may be invoked multiple times, each
+    time passing a different name to the [`AutomapBase.prepare.schema`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.schema
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter. The [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method keeps an internal list of
+    [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects that have already been mapped, and will add new mappings only for those
+    [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects that are new since the last time [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") was run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 2.0: The [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method may be called any number
+    of times; only newly added tables will be mapped on each run. Previously in version
+    1.4 and earlier, multiple calls would cause errors as it would attempt to re-map
+    an already mapped class. The previous workaround approach of invoking [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") directly remains available as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automapping same-named tables across multiple schemas
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For the common case where multiple schemas may have same-named tables and therefore
+    would generate same-named classes, conflicts can be resolved either through use
+    of the [`AutomapBase.prepare.classname_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.classname_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook to apply different classnames
+    on a per-schema basis, or by using the [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook, which allows disambiguation
+    of same-named classes by changing their effective `__module__` attribute. In the
+    example below, this hook is used to create a `__module__` attribute for all classes
+    that is of the form `mymodule.<schemaname>`, where the schema name `default` is
+    used if no schema is present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The same named-classes are organized into a hierarchical collection available
+    at [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module "sqlalchemy.ext.automap.AutomapBase.by_module").
+    This collection is traversed using the dot-separated name of a particular package/module
+    down into the desired class name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook to return a new `__module__`
+    that is not `None`, the class is **not** placed into the [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes
+    "sqlalchemy.ext.automap.AutomapBase.classes") collection; only classes that were
+    not given an explicit modulename are placed here, as the collection cannot represent
+    same-named classes individually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example above, if the database contained a table named `accounts` in
+    all three of the default schema, the `test_schema` schema, and the `test_schema_2`
+    schema, three separate classes will be available as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The default module namespace generated for all [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") classes is `sqlalchemy.ext.automap`. If
+    no [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook is used, the contents of [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") will be entirely within the `sqlalchemy.ext.automap`
+    namespace (e.g. `MyBase.by_module.sqlalchemy.ext.automap.<classname>`), which
+    would contain the same series of classes as what would be seen in [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes
+    "sqlalchemy.ext.automap.AutomapBase.classes"). Therefore it’s generally only necessary
+    to use [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") when explicit `__module__` conventions
+    are present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifying Classes Explicitly
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: If explicit classes are expected to be prominent in an application, consider
+    using [`DeferredReflection`](declarative/index.html#sqlalchemy.ext.declarative.DeferredReflection
+    "sqlalchemy.ext.declarative.DeferredReflection") instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") extension
+    allows classes to be defined explicitly, in a way similar to that of the [`DeferredReflection`](declarative/index.html#sqlalchemy.ext.declarative.DeferredReflection
+    "sqlalchemy.ext.declarative.DeferredReflection") class. Classes that extend from
+    [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    act like regular declarative classes, but are not immediately mapped after their
+    construction, and are instead mapped when we call [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare"). The [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method will make use of the classes
+    we’ve established based on the table name we use. If our schema contains tables
+    `user` and `address`, we can define one or both of the classes to be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, one of the more intricate details is that we illustrated overriding one
+    of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") objects that automap would have created. To do
+    this, we needed to make sure the names match up with what automap would normally
+    generate, in that the relationship name would be `User.address_collection` and
+    the name of the class referred to, from automap’s perspective, is called `address`,
+    even though we are referring to it as `Address` within our usage of this class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overriding Naming Schemes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") is tasked
+    with producing mapped classes and relationship names based on a schema, which
+    means it has decision points in how these names are determined. These three decision
+    points are provided using functions which can be passed to the [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method, and are known as [`classname_for_table()`](#sqlalchemy.ext.automap.classname_for_table
+    "sqlalchemy.ext.automap.classname_for_table"), [`name_for_scalar_relationship()`](#sqlalchemy.ext.automap.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.name_for_scalar_relationship"), and [`name_for_collection_relationship()`](#sqlalchemy.ext.automap.name_for_collection_relationship
+    "sqlalchemy.ext.automap.name_for_collection_relationship"). Any or all of these
+    functions are provided as in the example below, where we use a “camel case” scheme
+    for class names and a “pluralizer” for collection names using the [Inflect](https://pypi.org/project/inflect)
+    package:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'From the above mapping, we would now have classes `User` and `Address`, where
+    the collection from `User` to `Address` is called `User.addresses`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Relationship Detection
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The vast majority of what automap accomplishes is the generation of [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") structures based on foreign keys. The mechanism
+    by which this works for many-to-one and one-to-many relationships is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A given [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table"),
+    known to be mapped to a particular class, is examined for [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: From each [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint"), the remote [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object present is matched up to the class to which
+    it is to be mapped, if any, else it is skipped.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: As the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") we are examining corresponds to a reference
+    from the immediate mapped class, the relationship will be set up as a many-to-one
+    referring to the referred class; a corresponding one-to-many backref will be created
+    on the referred class referring to this class.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If any of the columns that are part of the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") are not nullable (e.g. `nullable=False`),
+    a [`relationship.cascade`](../relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") keyword argument of `all, delete-orphan` will be
+    added to the keyword arguments to be passed to the relationship or backref. If
+    the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") reports that [`ForeignKeyConstraint.ondelete`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint.params.ondelete
+    "sqlalchemy.schema.ForeignKeyConstraint") is set to `CASCADE` for a not null or
+    `SET NULL` for a nullable set of columns, the option [`relationship.passive_deletes`](../relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") flag is set to `True` in the set of relationship
+    keyword arguments. Note that not all backends support reflection of ON DELETE.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The names of the relationships are determined using the [`AutomapBase.prepare.name_for_scalar_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") and [`AutomapBase.prepare.name_for_collection_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.name_for_collection_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") callable functions. It is important
+    to note that the default relationship naming derives the name from the **the actual
+    class name**. If you’ve given a particular class an explicit name by declaring
+    it, or specified an alternate class naming scheme, that’s the name from which
+    the relationship name will be derived.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The classes are inspected for an existing mapped property matching these names.
+    If one is detected on one side, but none on the other side, [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") attempts to create a relationship on the
+    missing side, then uses the [`relationship.back_populates`](../relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") parameter in order to point the new relationship
+    to the other side.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the usual case where no relationship is on either side, [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") produces a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") on the “many-to-one” side and matches it to the
+    other using the [`relationship.backref`](../relationship_api.html#sqlalchemy.orm.relationship.params.backref
+    "sqlalchemy.orm.relationship") parameter.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Production of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and optionally the [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") is handed off to the [`AutomapBase.prepare.generate_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.generate_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") function, which can be supplied
+    by the end-user in order to augment the arguments passed to [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") or to make use of custom implementations of these functions.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Custom Relationship Arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`AutomapBase.prepare.generate_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.generate_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook can be used to add parameters
+    to relationships. For most cases, we can make use of the existing [`generate_relationship()`](#sqlalchemy.ext.automap.generate_relationship
+    "sqlalchemy.ext.automap.generate_relationship") function to return the object,
+    after augmenting the given keyword dictionary with our own arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below is an illustration of how to send [`relationship.cascade`](../relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") and [`relationship.passive_deletes`](../relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") options along to all one-to-many relationships:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Many-to-Many relationships
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") will generate
+    many-to-many relationships, e.g. those which contain a `secondary` argument. The
+    process for producing these is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A given [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    is examined for [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, before any mapped class has
+    been assigned to it.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the table contains two and exactly two [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, and all columns within this
+    table are members of these two [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, the table is assumed to be
+    a “secondary” table, and will **not be mapped directly**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The two (or one, for self-referential) external tables to which the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") refers to are matched to the classes to which they
+    will be mapped, if any.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If mapped classes for both sides are located, a many-to-many bi-directional
+    [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    / [`backref()`](../relationship_api.html#sqlalchemy.orm.backref "sqlalchemy.orm.backref")
+    pair is created between the two classes.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The override logic for many-to-many works the same as that of one-to-many/ many-to-one;
+    the [`generate_relationship()`](#sqlalchemy.ext.automap.generate_relationship
+    "sqlalchemy.ext.automap.generate_relationship") function is called upon to generate
+    the structures and existing attributes will be maintained.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Relationships with Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") will not
+    generate any relationships between two classes that are in an inheritance relationship.
+    That is, with two classes given as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The foreign key from `Engineer` to `Employee` is used not for a relationship,
+    but to establish joined inheritance between the two classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that this means automap will not generate *any* relationships for foreign
+    keys that link from a subclass to a superclass. If a mapping has actual relationships
+    from subclass to superclass as well, those need to be explicit. Below, as we have
+    two separate foreign keys from `Engineer` to `Employee`, we need to set up both
+    the relationship we want as well as the `inherit_condition`, as these are not
+    things SQLAlchemy can guess:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Handling Simple Naming Conflicts
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the case of naming conflicts during mapping, override any of [`classname_for_table()`](#sqlalchemy.ext.automap.classname_for_table
+    "sqlalchemy.ext.automap.classname_for_table"), [`name_for_scalar_relationship()`](#sqlalchemy.ext.automap.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.name_for_scalar_relationship"), and [`name_for_collection_relationship()`](#sqlalchemy.ext.automap.name_for_collection_relationship
+    "sqlalchemy.ext.automap.name_for_collection_relationship") as needed. For example,
+    if automap is attempting to name a many-to-one relationship the same as an existing
+    column, an alternate convention can be conditionally selected. Given a schema:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above schema will first automap the `table_a` table as a class named `table_a`;
+    it will then automap a relationship onto the class for `table_b` with the same
+    name as this related class, e.g. `table_a`. This relationship name conflicts with
+    the mapping column `table_b.table_a`, and will emit an error on mapping.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can resolve this conflict by using an underscore as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, we can change the name on the column side. The columns that
+    are mapped can be modified using the technique described at [Naming Declarative
+    Mapped Columns Explicitly](../declarative_tables.html#mapper-column-distinct-names),
+    by assigning the column explicitly to a new name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using Automap with Explicit Declarations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As noted previously, automap has no dependency on reflection, and can make
+    use of any collection of [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects within a [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection. From this, it follows that automap can
+    also be used generate missing relationships given an otherwise complete model
+    that fully defines table metadata:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, given mostly complete `User` and `Address` mappings, the [`ForeignKey`](../../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") which we defined on `Address.user_id` allowed
+    a bidirectional relationship pair `Address.user` and `User.address_collection`
+    to be generated on the mapped classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that when subclassing [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase"), the [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method is required; if not called,
+    the classes we’ve declared are in an un-mapped state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Intercepting Column Definitions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    and [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects support an event hook [`DDLEvents.column_reflect()`](../../core/events.html#sqlalchemy.events.DDLEvents.column_reflect
+    "sqlalchemy.events.DDLEvents.column_reflect") that may be used to intercept the
+    information reflected about a database column before the [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object is constructed. For example if we wanted to
+    map columns using a naming convention such as `"attr_<columnname>"`, the event
+    could be applied as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.0b2: the [`DDLEvents.column_reflect()`](../../core/events.html#sqlalchemy.events.DDLEvents.column_reflect
+    "sqlalchemy.events.DDLEvents.column_reflect") event may be applied to a [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDLEvents.column_reflect()`](../../core/events.html#sqlalchemy.events.DDLEvents.column_reflect
+    "sqlalchemy.events.DDLEvents.column_reflect")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Automating Column Naming Schemes from Reflected Tables](../declarative_tables.html#mapper-automated-reflection-schemes)
+    - in the ORM mapping documentation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: API Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [automap_base](#sqlalchemy.ext.automap.automap_base)([declarative_base],
+    **kw) | Produce a declarative automap base. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [AutomapBase](#sqlalchemy.ext.automap.AutomapBase) | Base class for an “automap”
+    schema. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [classname_for_table](#sqlalchemy.ext.automap.classname_for_table)(base,
+    tablename, table) | Return the class name that should be used, given the name
+    of a table. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [generate_relationship](#sqlalchemy.ext.automap.generate_relationship)(base,
+    direction, return_fn, attrname, ..., **kw) | Generate a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") on behalf of two mapped classes. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [name_for_collection_relationship](#sqlalchemy.ext.automap.name_for_collection_relationship)(base,
+    local_cls, referred_cls, constraint) | Return the attribute name that should be
+    used to refer from one class to another, for a collection reference. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [name_for_scalar_relationship](#sqlalchemy.ext.automap.name_for_scalar_relationship)(base,
+    local_cls, referred_cls, constraint) | Return the attribute name that should be
+    used to refer from one class to another, for a scalar object reference. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Produce a declarative automap base.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function produces a new base class that is a product of the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") class as well a declarative base produced
+    by `declarative_base()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All parameters other than `declarative_base` are keyword arguments that are
+    passed directly to the `declarative_base()` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`declarative_base` – an existing class produced by `declarative_base()`. When
+    this is passed, the function no longer invokes `declarative_base()` itself, and
+    all other keyword arguments are ignored.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`**kw` – keyword arguments are passed along to `declarative_base()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base class for an “automap” schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class can be compared to the “declarative base” class that is produced by the
+    `declarative_base()` function. In practice, the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") class is always used as a mixin along with
+    an actual declarative base.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A new subclassable [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    is typically instantiated using the [`automap_base()`](#sqlalchemy.ext.automap.automap_base
+    "sqlalchemy.ext.automap.automap_base") function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[by_module](#sqlalchemy.ext.automap.AutomapBase.by_module), [classes](#sqlalchemy.ext.automap.AutomapBase.classes),
+    [metadata](#sqlalchemy.ext.automap.AutomapBase.metadata), [prepare()](#sqlalchemy.ext.automap.AutomapBase.prepare)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Automap](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instance of `Properties` containing a hierarchal structure of dot-separated
+    module names linked to classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This collection is an alternative to the [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes
+    "sqlalchemy.ext.automap.AutomapBase.classes") collection that is useful when making
+    use of the [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter, which will apply distinct
+    `__module__` attributes to generated classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default `__module__` an automap-generated class is `sqlalchemy.ext.automap`;
+    to access this namespace using [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If a class had a `__module__` of `mymodule.account`, accessing this namespace
+    looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Generating Mappings from Multiple Schemas](#automap-by-module)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instance of `Properties` containing classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This object behaves much like the `.c` collection on a table. Classes are present
+    under the name they were given, e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For class names that overlap with a method name of `Properties`, such as `items()`,
+    the getitem form is also supported:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Refers to the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection that will be used for new [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Accessing Table and Metadata](../declarative_tables.html#orm-declarative-metadata)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Extract mapped classes and relationships from the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") and perform mappings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For full documentation and examples see [Basic Use](#automap-basic-use).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`autoload_with` – an [`Engine`](../../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") with which to perform schema reflection; when
+    specified, the [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") method will be invoked within the scope
+    of this method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`engine` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: legacy; use [`AutomapBase.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase"). Used to indicate the [`Engine`](../../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") with which to reflect tables with, if [`AutomapBase.reflect`](#sqlalchemy.ext.automap.AutomapBase.params.reflect
+    "sqlalchemy.ext.automap.AutomapBase") is True.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 1.4: The [`AutomapBase.prepare.engine`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.engine
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter is deprecated and will
+    be removed in a future release. Please use the [`AutomapBase.prepare.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`reflect` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: legacy; use [`AutomapBase.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase"). Indicates that [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") should be invoked.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 1.4: The [`AutomapBase.prepare.reflect`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.reflect
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter is deprecated and will
+    be removed in a future release. Reflection is enabled when [`AutomapBase.prepare.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase.prepare") is passed.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`classname_for_table` – callable function which will be used to produce new
+    class names, given a table name. Defaults to [`classname_for_table()`](#sqlalchemy.ext.automap.classname_for_table
+    "sqlalchemy.ext.automap.classname_for_table").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`modulename_for_table` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: callable function which will be used to produce the effective `__module__` for
+    an internally generated class, to allow for multiple classes of the same name
+    in a single automap base which would be in different “modules”.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Defaults to `None`, which will indicate that `__module__` will not be set explicitly;
+    the Python runtime will use the value `sqlalchemy.ext.automap` for these classes.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: When assigning `__module__` to generated classes, they can be accessed based
+    on dot-separated module names using the [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") collection. Classes that have
+    an explicit `__module_` assigned using this hook do **not** get placed into the
+    [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes "sqlalchemy.ext.automap.AutomapBase.classes")
+    collection, only into [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Generating Mappings from Multiple Schemas](#automap-by-module)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`name_for_scalar_relationship` – callable function which will be used to produce
+    relationship names for scalar relationships. Defaults to [`name_for_scalar_relationship()`](#sqlalchemy.ext.automap.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.name_for_scalar_relationship").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`name_for_collection_relationship` – callable function which will be used to
+    produce relationship names for collection-oriented relationships. Defaults to
+    [`name_for_collection_relationship()`](#sqlalchemy.ext.automap.name_for_collection_relationship
+    "sqlalchemy.ext.automap.name_for_collection_relationship").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`generate_relationship` – callable function which will be used to actually
+    generate [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") constructs. Defaults to [`generate_relationship()`](#sqlalchemy.ext.automap.generate_relationship
+    "sqlalchemy.ext.automap.generate_relationship").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`collection_class` – the Python collection class that will be used when a new
+    [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    object is created that represents a collection. Defaults to `list`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`schema` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Schema name to reflect when reflecting tables using the [`AutomapBase.prepare.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter. The name is passed to
+    the [`MetaData.reflect.schema`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect.params.schema
+    "sqlalchemy.schema.MetaData.reflect") parameter of [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect"). When omitted, the default schema in use
+    by the database connection is used.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`AutomapBase.prepare.schema`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.schema
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter supports reflection of
+    a single schema at a time. In order to include tables from many schemas, use multiple
+    calls to [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For an overview of multiple-schema automap including the use of additional naming
+    conventions to resolve table name conflicts, see the section [Generating Mappings
+    from Multiple Schemas](#automap-by-module).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") supports being directly invoked
+    any number of times, keeping track of tables that have already been processed
+    to avoid processing them a second time.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`reflection_options` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When present, this dictionary of options will be passed to [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") to supply general reflection-specific options
+    like `only` and/or dialect-specific options like `oracle_resolve_synonyms`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the class name that should be used, given the name of a table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default implementation is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Alternate implementations can be specified using the [`AutomapBase.prepare.classname_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.classname_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class doing the prepare.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tablename` – string name of the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`table` – the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object itself.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: a string class name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Python 2, the string used for the class name **must** be a non-Unicode object,
+    e.g. a `str()` object. The `.name` attribute of [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") is typically a Python unicode subclass, so the `str()`
+    function should be applied to this name, after accounting for any non-ASCII characters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the attribute name that should be used to refer from one class to another,
+    for a scalar object reference.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default implementation is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Alternate implementations can be specified using the [`AutomapBase.prepare.name_for_scalar_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class doing the prepare.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`local_cls` – the class to be mapped on the local side.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`referred_cls` – the class to be mapped on the referring side.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`constraint` – the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") that is being inspected to produce this
+    relationship.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the attribute name that should be used to refer from one class to another,
+    for a collection reference.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default implementation is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Alternate implementations can be specified using the [`AutomapBase.prepare.name_for_collection_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.name_for_collection_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class doing the prepare.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`local_cls` – the class to be mapped on the local side.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`referred_cls` – the class to be mapped on the referring side.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`constraint` – the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") that is being inspected to produce this
+    relationship.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Generate a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") on behalf of two mapped classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An alternate implementation of this function can be specified using the [`AutomapBase.prepare.generate_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.generate_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default implementation of this function is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class doing the prepare.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`direction` – indicate the “direction” of the relationship; this will be one
+    of `ONETOMANY`, `MANYTOONE`, `MANYTOMANY`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`return_fn` – the function that is used by default to create the relationship.
+    This will be either [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref"). The [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") function’s result will be used to produce a new [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") in a second step, so it is critical that user-defined
+    implementations correctly differentiate between the two functions, if a custom
+    relationship function is being used.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`attrname` – the attribute name to which this relationship is being assigned.
+    If the value of [`generate_relationship.return_fn`](#sqlalchemy.ext.automap.generate_relationship.params.return_fn
+    "sqlalchemy.ext.automap.generate_relationship") is the [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") function, then this name is the name that is being assigned
+    to the backref.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`local_cls` – the “local” class to which this relationship or backref will
+    be locally present.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`referred_cls` – the “referred” class to which the relationship or backref
+    refers to.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`**kw` – all additional keyword arguments are passed along to the function.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref "sqlalchemy.orm.backref")
+    construct, as dictated by the [`generate_relationship.return_fn`](#sqlalchemy.ext.automap.generate_relationship.params.return_fn
+    "sqlalchemy.ext.automap.generate_relationship") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Basic Use'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The simplest usage is to reflect an existing database into a new model. We
+    create a new [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class in a similar manner as to how we create a declarative base class, using
+    [`automap_base()`](#sqlalchemy.ext.automap.automap_base "sqlalchemy.ext.automap.automap_base").
+    We then call [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") on the resulting base class, asking
+    it to reflect the schema and produce mappings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, calling [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") while passing along the [`AutomapBase.prepare.reflect`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.reflect
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter indicates that the [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") method will be called on this declarative
+    base classes’ [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection; then, each **viable** [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") within the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") will get a new mapped class generated automatically.
+    The [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects which link the various tables
+    together will be used to produce new, bidirectional [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") objects between classes. The classes and relationships
+    follow along a default naming scheme that we can customize. At this point, our
+    basic mapping consisting of related `User` and `Address` classes is ready to use
+    in the traditional way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: By **viable**, we mean that for a table to be mapped, it must specify a primary
+    key. Additionally, if the table is detected as being a pure association table
+    between two other tables, it will not be directly mapped and will instead be configured
+    as a many-to-many table between the mappings for the two referring tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating Mappings from an Existing MetaData
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We can pass a pre-declared [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object to [`automap_base()`](#sqlalchemy.ext.automap.automap_base
+    "sqlalchemy.ext.automap.automap_base"). This object can be constructed in any
+    way, including programmatically, from a serialized file, or from itself being
+    reflected using [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect"). Below we illustrate a combination of reflection
+    and explicit table declaration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Generating Mappings from Multiple Schemas'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare "sqlalchemy.ext.automap.AutomapBase.prepare")
+    method when used with reflection may reflect tables from one schema at a time
+    at most, using the [`AutomapBase.prepare.schema`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.schema
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter to indicate the name of
+    a schema to be reflected from. In order to populate the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") with tables from multiple schemas, [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") may be invoked multiple times, each
+    time passing a different name to the [`AutomapBase.prepare.schema`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.schema
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter. The [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method keeps an internal list of
+    [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects that have already been mapped, and will add new mappings only for those
+    [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects that are new since the last time [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") was run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 2.0: The [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method may be called any number
+    of times; only newly added tables will be mapped on each run. Previously in version
+    1.4 and earlier, multiple calls would cause errors as it would attempt to re-map
+    an already mapped class. The previous workaround approach of invoking [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") directly remains available as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automapping same-named tables across multiple schemas
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For the common case where multiple schemas may have same-named tables and therefore
+    would generate same-named classes, conflicts can be resolved either through use
+    of the [`AutomapBase.prepare.classname_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.classname_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook to apply different classnames
+    on a per-schema basis, or by using the [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook, which allows disambiguation
+    of same-named classes by changing their effective `__module__` attribute. In the
+    example below, this hook is used to create a `__module__` attribute for all classes
+    that is of the form `mymodule.<schemaname>`, where the schema name `default` is
+    used if no schema is present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: The same named-classes are organized into a hierarchical collection available
+    at [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module "sqlalchemy.ext.automap.AutomapBase.by_module").
+    This collection is traversed using the dot-separated name of a particular package/module
+    down into the desired class name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook to return a new `__module__`
+    that is not `None`, the class is **not** placed into the [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes
+    "sqlalchemy.ext.automap.AutomapBase.classes") collection; only classes that were
+    not given an explicit modulename are placed here, as the collection cannot represent
+    same-named classes individually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example above, if the database contained a table named `accounts` in
+    all three of the default schema, the `test_schema` schema, and the `test_schema_2`
+    schema, three separate classes will be available as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: The default module namespace generated for all [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") classes is `sqlalchemy.ext.automap`. If
+    no [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook is used, the contents of [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") will be entirely within the `sqlalchemy.ext.automap`
+    namespace (e.g. `MyBase.by_module.sqlalchemy.ext.automap.<classname>`), which
+    would contain the same series of classes as what would be seen in [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes
+    "sqlalchemy.ext.automap.AutomapBase.classes"). Therefore it’s generally only necessary
+    to use [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") when explicit `__module__` conventions
+    are present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automapping same-named tables across multiple schemas
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For the common case where multiple schemas may have same-named tables and therefore
+    would generate same-named classes, conflicts can be resolved either through use
+    of the [`AutomapBase.prepare.classname_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.classname_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook to apply different classnames
+    on a per-schema basis, or by using the [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook, which allows disambiguation
+    of same-named classes by changing their effective `__module__` attribute. In the
+    example below, this hook is used to create a `__module__` attribute for all classes
+    that is of the form `mymodule.<schemaname>`, where the schema name `default` is
+    used if no schema is present:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: The same named-classes are organized into a hierarchical collection available
+    at [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module "sqlalchemy.ext.automap.AutomapBase.by_module").
+    This collection is traversed using the dot-separated name of a particular package/module
+    down into the desired class name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook to return a new `__module__`
+    that is not `None`, the class is **not** placed into the [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes
+    "sqlalchemy.ext.automap.AutomapBase.classes") collection; only classes that were
+    not given an explicit modulename are placed here, as the collection cannot represent
+    same-named classes individually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the example above, if the database contained a table named `accounts` in
+    all three of the default schema, the `test_schema` schema, and the `test_schema_2`
+    schema, three separate classes will be available as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: The default module namespace generated for all [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") classes is `sqlalchemy.ext.automap`. If
+    no [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook is used, the contents of [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") will be entirely within the `sqlalchemy.ext.automap`
+    namespace (e.g. `MyBase.by_module.sqlalchemy.ext.automap.<classname>`), which
+    would contain the same series of classes as what would be seen in [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes
+    "sqlalchemy.ext.automap.AutomapBase.classes"). Therefore it’s generally only necessary
+    to use [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") when explicit `__module__` conventions
+    are present.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifying Classes Explicitly
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: If explicit classes are expected to be prominent in an application, consider
+    using [`DeferredReflection`](declarative/index.html#sqlalchemy.ext.declarative.DeferredReflection
+    "sqlalchemy.ext.declarative.DeferredReflection") instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") extension
+    allows classes to be defined explicitly, in a way similar to that of the [`DeferredReflection`](declarative/index.html#sqlalchemy.ext.declarative.DeferredReflection
+    "sqlalchemy.ext.declarative.DeferredReflection") class. Classes that extend from
+    [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    act like regular declarative classes, but are not immediately mapped after their
+    construction, and are instead mapped when we call [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare"). The [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method will make use of the classes
+    we’ve established based on the table name we use. If our schema contains tables
+    `user` and `address`, we can define one or both of the classes to be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, one of the more intricate details is that we illustrated overriding one
+    of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") objects that automap would have created. To do
+    this, we needed to make sure the names match up with what automap would normally
+    generate, in that the relationship name would be `User.address_collection` and
+    the name of the class referred to, from automap’s perspective, is called `address`,
+    even though we are referring to it as `Address` within our usage of this class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overriding Naming Schemes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") is tasked
+    with producing mapped classes and relationship names based on a schema, which
+    means it has decision points in how these names are determined. These three decision
+    points are provided using functions which can be passed to the [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method, and are known as [`classname_for_table()`](#sqlalchemy.ext.automap.classname_for_table
+    "sqlalchemy.ext.automap.classname_for_table"), [`name_for_scalar_relationship()`](#sqlalchemy.ext.automap.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.name_for_scalar_relationship"), and [`name_for_collection_relationship()`](#sqlalchemy.ext.automap.name_for_collection_relationship
+    "sqlalchemy.ext.automap.name_for_collection_relationship"). Any or all of these
+    functions are provided as in the example below, where we use a “camel case” scheme
+    for class names and a “pluralizer” for collection names using the [Inflect](https://pypi.org/project/inflect)
+    package:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'From the above mapping, we would now have classes `User` and `Address`, where
+    the collection from `User` to `Address` is called `User.addresses`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Relationship Detection
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The vast majority of what automap accomplishes is the generation of [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") structures based on foreign keys. The mechanism
+    by which this works for many-to-one and one-to-many relationships is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A given [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table"),
+    known to be mapped to a particular class, is examined for [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: From each [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint"), the remote [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") object present is matched up to the class to which
+    it is to be mapped, if any, else it is skipped.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: As the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") we are examining corresponds to a reference
+    from the immediate mapped class, the relationship will be set up as a many-to-one
+    referring to the referred class; a corresponding one-to-many backref will be created
+    on the referred class referring to this class.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If any of the columns that are part of the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") are not nullable (e.g. `nullable=False`),
+    a [`relationship.cascade`](../relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") keyword argument of `all, delete-orphan` will be
+    added to the keyword arguments to be passed to the relationship or backref. If
+    the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") reports that [`ForeignKeyConstraint.ondelete`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint.params.ondelete
+    "sqlalchemy.schema.ForeignKeyConstraint") is set to `CASCADE` for a not null or
+    `SET NULL` for a nullable set of columns, the option [`relationship.passive_deletes`](../relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") flag is set to `True` in the set of relationship
+    keyword arguments. Note that not all backends support reflection of ON DELETE.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The names of the relationships are determined using the [`AutomapBase.prepare.name_for_scalar_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") and [`AutomapBase.prepare.name_for_collection_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.name_for_collection_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") callable functions. It is important
+    to note that the default relationship naming derives the name from the **the actual
+    class name**. If you’ve given a particular class an explicit name by declaring
+    it, or specified an alternate class naming scheme, that’s the name from which
+    the relationship name will be derived.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The classes are inspected for an existing mapped property matching these names.
+    If one is detected on one side, but none on the other side, [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") attempts to create a relationship on the
+    missing side, then uses the [`relationship.back_populates`](../relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") parameter in order to point the new relationship
+    to the other side.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the usual case where no relationship is on either side, [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") produces a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") on the “many-to-one” side and matches it to the
+    other using the [`relationship.backref`](../relationship_api.html#sqlalchemy.orm.relationship.params.backref
+    "sqlalchemy.orm.relationship") parameter.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Production of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and optionally the [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") is handed off to the [`AutomapBase.prepare.generate_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.generate_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") function, which can be supplied
+    by the end-user in order to augment the arguments passed to [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") or to make use of custom implementations of these functions.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Custom Relationship Arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`AutomapBase.prepare.generate_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.generate_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook can be used to add parameters
+    to relationships. For most cases, we can make use of the existing [`generate_relationship()`](#sqlalchemy.ext.automap.generate_relationship
+    "sqlalchemy.ext.automap.generate_relationship") function to return the object,
+    after augmenting the given keyword dictionary with our own arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below is an illustration of how to send [`relationship.cascade`](../relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") and [`relationship.passive_deletes`](../relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") options along to all one-to-many relationships:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Many-to-Many relationships
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") will generate
+    many-to-many relationships, e.g. those which contain a `secondary` argument. The
+    process for producing these is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A given [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    is examined for [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, before any mapped class has
+    been assigned to it.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the table contains two and exactly two [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, and all columns within this
+    table are members of these two [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, the table is assumed to be
+    a “secondary” table, and will **not be mapped directly**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The two (or one, for self-referential) external tables to which the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") refers to are matched to the classes to which they
+    will be mapped, if any.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If mapped classes for both sides are located, a many-to-many bi-directional
+    [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    / [`backref()`](../relationship_api.html#sqlalchemy.orm.backref "sqlalchemy.orm.backref")
+    pair is created between the two classes.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The override logic for many-to-many works the same as that of one-to-many/ many-to-one;
+    the [`generate_relationship()`](#sqlalchemy.ext.automap.generate_relationship
+    "sqlalchemy.ext.automap.generate_relationship") function is called upon to generate
+    the structures and existing attributes will be maintained.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Relationships with Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") will not
+    generate any relationships between two classes that are in an inheritance relationship.
+    That is, with two classes given as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: The foreign key from `Engineer` to `Employee` is used not for a relationship,
+    but to establish joined inheritance between the two classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that this means automap will not generate *any* relationships for foreign
+    keys that link from a subclass to a superclass. If a mapping has actual relationships
+    from subclass to superclass as well, those need to be explicit. Below, as we have
+    two separate foreign keys from `Engineer` to `Employee`, we need to set up both
+    the relationship we want as well as the `inherit_condition`, as these are not
+    things SQLAlchemy can guess:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Handling Simple Naming Conflicts
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the case of naming conflicts during mapping, override any of [`classname_for_table()`](#sqlalchemy.ext.automap.classname_for_table
+    "sqlalchemy.ext.automap.classname_for_table"), [`name_for_scalar_relationship()`](#sqlalchemy.ext.automap.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.name_for_scalar_relationship"), and [`name_for_collection_relationship()`](#sqlalchemy.ext.automap.name_for_collection_relationship
+    "sqlalchemy.ext.automap.name_for_collection_relationship") as needed. For example,
+    if automap is attempting to name a many-to-one relationship the same as an existing
+    column, an alternate convention can be conditionally selected. Given a schema:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above schema will first automap the `table_a` table as a class named `table_a`;
+    it will then automap a relationship onto the class for `table_b` with the same
+    name as this related class, e.g. `table_a`. This relationship name conflicts with
+    the mapping column `table_b.table_a`, and will emit an error on mapping.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can resolve this conflict by using an underscore as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, we can change the name on the column side. The columns that
+    are mapped can be modified using the technique described at [Naming Declarative
+    Mapped Columns Explicitly](../declarative_tables.html#mapper-column-distinct-names),
+    by assigning the column explicitly to a new name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Custom Relationship Arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The [`AutomapBase.prepare.generate_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.generate_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") hook can be used to add parameters
+    to relationships. For most cases, we can make use of the existing [`generate_relationship()`](#sqlalchemy.ext.automap.generate_relationship
+    "sqlalchemy.ext.automap.generate_relationship") function to return the object,
+    after augmenting the given keyword dictionary with our own arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below is an illustration of how to send [`relationship.cascade`](../relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") and [`relationship.passive_deletes`](../relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") options along to all one-to-many relationships:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Many-to-Many relationships
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") will generate
+    many-to-many relationships, e.g. those which contain a `secondary` argument. The
+    process for producing these is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A given [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    is examined for [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, before any mapped class has
+    been assigned to it.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the table contains two and exactly two [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, and all columns within this
+    table are members of these two [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") objects, the table is assumed to be
+    a “secondary” table, and will **not be mapped directly**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The two (or one, for self-referential) external tables to which the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") refers to are matched to the classes to which they
+    will be mapped, if any.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If mapped classes for both sides are located, a many-to-many bi-directional
+    [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    / [`backref()`](../relationship_api.html#sqlalchemy.orm.backref "sqlalchemy.orm.backref")
+    pair is created between the two classes.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The override logic for many-to-many works the same as that of one-to-many/ many-to-one;
+    the [`generate_relationship()`](#sqlalchemy.ext.automap.generate_relationship
+    "sqlalchemy.ext.automap.generate_relationship") function is called upon to generate
+    the structures and existing attributes will be maintained.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Relationships with Inheritance
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[`automap`](#module-sqlalchemy.ext.automap "sqlalchemy.ext.automap") will not
+    generate any relationships between two classes that are in an inheritance relationship.
+    That is, with two classes given as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: The foreign key from `Engineer` to `Employee` is used not for a relationship,
+    but to establish joined inheritance between the two classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that this means automap will not generate *any* relationships for foreign
+    keys that link from a subclass to a superclass. If a mapping has actual relationships
+    from subclass to superclass as well, those need to be explicit. Below, as we have
+    two separate foreign keys from `Engineer` to `Employee`, we need to set up both
+    the relationship we want as well as the `inherit_condition`, as these are not
+    things SQLAlchemy can guess:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: Handling Simple Naming Conflicts
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the case of naming conflicts during mapping, override any of [`classname_for_table()`](#sqlalchemy.ext.automap.classname_for_table
+    "sqlalchemy.ext.automap.classname_for_table"), [`name_for_scalar_relationship()`](#sqlalchemy.ext.automap.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.name_for_scalar_relationship"), and [`name_for_collection_relationship()`](#sqlalchemy.ext.automap.name_for_collection_relationship
+    "sqlalchemy.ext.automap.name_for_collection_relationship") as needed. For example,
+    if automap is attempting to name a many-to-one relationship the same as an existing
+    column, an alternate convention can be conditionally selected. Given a schema:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above schema will first automap the `table_a` table as a class named `table_a`;
+    it will then automap a relationship onto the class for `table_b` with the same
+    name as this related class, e.g. `table_a`. This relationship name conflicts with
+    the mapping column `table_b.table_a`, and will emit an error on mapping.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can resolve this conflict by using an underscore as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, we can change the name on the column side. The columns that
+    are mapped can be modified using the technique described at [Naming Declarative
+    Mapped Columns Explicitly](../declarative_tables.html#mapper-column-distinct-names),
+    by assigning the column explicitly to a new name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using Automap with Explicit Declarations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As noted previously, automap has no dependency on reflection, and can make
+    use of any collection of [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects within a [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection. From this, it follows that automap can
+    also be used generate missing relationships given an otherwise complete model
+    that fully defines table metadata:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, given mostly complete `User` and `Address` mappings, the [`ForeignKey`](../../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") which we defined on `Address.user_id` allowed
+    a bidirectional relationship pair `Address.user` and `User.address_collection`
+    to be generated on the mapped classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that when subclassing [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase"), the [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") method is required; if not called,
+    the classes we’ve declared are in an un-mapped state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## Intercepting Column Definitions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData "sqlalchemy.schema.MetaData")
+    and [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    objects support an event hook [`DDLEvents.column_reflect()`](../../core/events.html#sqlalchemy.events.DDLEvents.column_reflect
+    "sqlalchemy.events.DDLEvents.column_reflect") that may be used to intercept the
+    information reflected about a database column before the [`Column`](../../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") object is constructed. For example if we wanted to
+    map columns using a naming convention such as `"attr_<columnname>"`, the event
+    could be applied as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'New in version 1.4.0b2: the [`DDLEvents.column_reflect()`](../../core/events.html#sqlalchemy.events.DDLEvents.column_reflect
+    "sqlalchemy.events.DDLEvents.column_reflect") event may be applied to a [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") object.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`DDLEvents.column_reflect()`](../../core/events.html#sqlalchemy.events.DDLEvents.column_reflect
+    "sqlalchemy.events.DDLEvents.column_reflect")'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Automating Column Naming Schemes from Reflected Tables](../declarative_tables.html#mapper-automated-reflection-schemes)
+    - in the ORM mapping documentation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: API Reference
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| Object Name | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [automap_base](#sqlalchemy.ext.automap.automap_base)([declarative_base],
+    **kw) | Produce a declarative automap base. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [AutomapBase](#sqlalchemy.ext.automap.AutomapBase) | Base class for an “automap”
+    schema. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [classname_for_table](#sqlalchemy.ext.automap.classname_for_table)(base,
+    tablename, table) | Return the class name that should be used, given the name
+    of a table. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [generate_relationship](#sqlalchemy.ext.automap.generate_relationship)(base,
+    direction, return_fn, attrname, ..., **kw) | Generate a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") on behalf of two mapped classes. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [name_for_collection_relationship](#sqlalchemy.ext.automap.name_for_collection_relationship)(base,
+    local_cls, referred_cls, constraint) | Return the attribute name that should be
+    used to refer from one class to another, for a collection reference. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [name_for_scalar_relationship](#sqlalchemy.ext.automap.name_for_scalar_relationship)(base,
+    local_cls, referred_cls, constraint) | Return the attribute name that should be
+    used to refer from one class to another, for a scalar object reference. |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: Produce a declarative automap base.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function produces a new base class that is a product of the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") class as well a declarative base produced
+    by `declarative_base()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All parameters other than `declarative_base` are keyword arguments that are
+    passed directly to the `declarative_base()` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`declarative_base` – an existing class produced by `declarative_base()`. When
+    this is passed, the function no longer invokes `declarative_base()` itself, and
+    all other keyword arguments are ignored.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`**kw` – keyword arguments are passed along to `declarative_base()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: Base class for an “automap” schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class can be compared to the “declarative base” class that is produced by the
+    `declarative_base()` function. In practice, the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase
+    "sqlalchemy.ext.automap.AutomapBase") class is always used as a mixin along with
+    an actual declarative base.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A new subclassable [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    is typically instantiated using the [`automap_base()`](#sqlalchemy.ext.automap.automap_base
+    "sqlalchemy.ext.automap.automap_base") function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Members**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[by_module](#sqlalchemy.ext.automap.AutomapBase.by_module), [classes](#sqlalchemy.ext.automap.AutomapBase.classes),
+    [metadata](#sqlalchemy.ext.automap.AutomapBase.metadata), [prepare()](#sqlalchemy.ext.automap.AutomapBase.prepare)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Automap](#)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instance of `Properties` containing a hierarchal structure of dot-separated
+    module names linked to classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This collection is an alternative to the [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes
+    "sqlalchemy.ext.automap.AutomapBase.classes") collection that is useful when making
+    use of the [`AutomapBase.prepare.modulename_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.modulename_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter, which will apply distinct
+    `__module__` attributes to generated classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default `__module__` an automap-generated class is `sqlalchemy.ext.automap`;
+    to access this namespace using [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If a class had a `__module__` of `mymodule.account`, accessing this namespace
+    looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: New in version 2.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Generating Mappings from Multiple Schemas](#automap-by-module)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: An instance of `Properties` containing classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This object behaves much like the `.c` collection on a table. Classes are present
+    under the name they were given, e.g.:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For class names that overlap with a method name of `Properties`, such as `items()`,
+    the getitem form is also supported:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: Refers to the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") collection that will be used for new [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See also
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Accessing Table and Metadata](../declarative_tables.html#orm-declarative-metadata)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: Extract mapped classes and relationships from the [`MetaData`](../../core/metadata.html#sqlalchemy.schema.MetaData
+    "sqlalchemy.schema.MetaData") and perform mappings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For full documentation and examples see [Basic Use](#automap-basic-use).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`autoload_with` – an [`Engine`](../../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") with which to perform schema reflection; when
+    specified, the [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") method will be invoked within the scope
+    of this method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`engine` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: legacy; use [`AutomapBase.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase"). Used to indicate the [`Engine`](../../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") or [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") with which to reflect tables with, if [`AutomapBase.reflect`](#sqlalchemy.ext.automap.AutomapBase.params.reflect
+    "sqlalchemy.ext.automap.AutomapBase") is True.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 1.4: The [`AutomapBase.prepare.engine`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.engine
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter is deprecated and will
+    be removed in a future release. Please use the [`AutomapBase.prepare.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`reflect` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: legacy; use [`AutomapBase.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase"). Indicates that [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") should be invoked.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Deprecated since version 1.4: The [`AutomapBase.prepare.reflect`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.reflect
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter is deprecated and will
+    be removed in a future release. Reflection is enabled when [`AutomapBase.prepare.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase.prepare") is passed.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`classname_for_table` – callable function which will be used to produce new
+    class names, given a table name. Defaults to [`classname_for_table()`](#sqlalchemy.ext.automap.classname_for_table
+    "sqlalchemy.ext.automap.classname_for_table").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`modulename_for_table` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: callable function which will be used to produce the effective `__module__` for
+    an internally generated class, to allow for multiple classes of the same name
+    in a single automap base which would be in different “modules”.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Defaults to `None`, which will indicate that `__module__` will not be set explicitly;
+    the Python runtime will use the value `sqlalchemy.ext.automap` for these classes.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: When assigning `__module__` to generated classes, they can be accessed based
+    on dot-separated module names using the [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module") collection. Classes that have
+    an explicit `__module_` assigned using this hook do **not** get placed into the
+    [`AutomapBase.classes`](#sqlalchemy.ext.automap.AutomapBase.classes "sqlalchemy.ext.automap.AutomapBase.classes")
+    collection, only into [`AutomapBase.by_module`](#sqlalchemy.ext.automap.AutomapBase.by_module
+    "sqlalchemy.ext.automap.AutomapBase.by_module").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 2.0.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: See also
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[Generating Mappings from Multiple Schemas](#automap-by-module)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`name_for_scalar_relationship` – callable function which will be used to produce
+    relationship names for scalar relationships. Defaults to [`name_for_scalar_relationship()`](#sqlalchemy.ext.automap.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.name_for_scalar_relationship").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`name_for_collection_relationship` – callable function which will be used to
+    produce relationship names for collection-oriented relationships. Defaults to
+    [`name_for_collection_relationship()`](#sqlalchemy.ext.automap.name_for_collection_relationship
+    "sqlalchemy.ext.automap.name_for_collection_relationship").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`generate_relationship` – callable function which will be used to actually
+    generate [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") and [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") constructs. Defaults to [`generate_relationship()`](#sqlalchemy.ext.automap.generate_relationship
+    "sqlalchemy.ext.automap.generate_relationship").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`collection_class` – the Python collection class that will be used when a new
+    [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    object is created that represents a collection. Defaults to `list`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`schema` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Schema name to reflect when reflecting tables using the [`AutomapBase.prepare.autoload_with`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.autoload_with
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter. The name is passed to
+    the [`MetaData.reflect.schema`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect.params.schema
+    "sqlalchemy.schema.MetaData.reflect") parameter of [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect"). When omitted, the default schema in use
+    by the database connection is used.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The [`AutomapBase.prepare.schema`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.schema
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter supports reflection of
+    a single schema at a time. In order to include tables from many schemas, use multiple
+    calls to [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare").
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: For an overview of multiple-schema automap including the use of additional naming
+    conventions to resolve table name conflicts, see the section [Generating Mappings
+    from Multiple Schemas](#automap-by-module).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'New in version 2.0: [`AutomapBase.prepare()`](#sqlalchemy.ext.automap.AutomapBase.prepare
+    "sqlalchemy.ext.automap.AutomapBase.prepare") supports being directly invoked
+    any number of times, keeping track of tables that have already been processed
+    to avoid processing them a second time.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`reflection_options` –'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When present, this dictionary of options will be passed to [`MetaData.reflect()`](../../core/metadata.html#sqlalchemy.schema.MetaData.reflect
+    "sqlalchemy.schema.MetaData.reflect") to supply general reflection-specific options
+    like `only` and/or dialect-specific options like `oracle_resolve_synonyms`.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: New in version 1.4.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the class name that should be used, given the name of a table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default implementation is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: Alternate implementations can be specified using the [`AutomapBase.prepare.classname_for_table`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.classname_for_table
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class doing the prepare.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tablename` – string name of the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table").'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`table` – the [`Table`](../../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    object itself.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: a string class name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Python 2, the string used for the class name **must** be a non-Unicode object,
+    e.g. a `str()` object. The `.name` attribute of [`Table`](../../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") is typically a Python unicode subclass, so the `str()`
+    function should be applied to this name, after accounting for any non-ASCII characters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the attribute name that should be used to refer from one class to another,
+    for a scalar object reference.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default implementation is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: Alternate implementations can be specified using the [`AutomapBase.prepare.name_for_scalar_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.name_for_scalar_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class doing the prepare.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`local_cls` – the class to be mapped on the local side.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`referred_cls` – the class to be mapped on the referring side.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`constraint` – the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") that is being inspected to produce this
+    relationship.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: Return the attribute name that should be used to refer from one class to another,
+    for a collection reference.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default implementation is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: Alternate implementations can be specified using the [`AutomapBase.prepare.name_for_collection_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.name_for_collection_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class doing the prepare.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`local_cls` – the class to be mapped on the local side.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`referred_cls` – the class to be mapped on the referring side.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`constraint` – the [`ForeignKeyConstraint`](../../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint") that is being inspected to produce this
+    relationship.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: Generate a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") on behalf of two mapped classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An alternate implementation of this function can be specified using the [`AutomapBase.prepare.generate_relationship`](#sqlalchemy.ext.automap.AutomapBase.prepare.params.generate_relationship
+    "sqlalchemy.ext.automap.AutomapBase.prepare") parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default implementation of this function is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`base` – the [`AutomapBase`](#sqlalchemy.ext.automap.AutomapBase "sqlalchemy.ext.automap.AutomapBase")
+    class doing the prepare.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`direction` – indicate the “direction” of the relationship; this will be one
+    of `ONETOMANY`, `MANYTOONE`, `MANYTOMANY`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`return_fn` – the function that is used by default to create the relationship.
+    This will be either [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref"). The [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") function’s result will be used to produce a new [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") in a second step, so it is critical that user-defined
+    implementations correctly differentiate between the two functions, if a custom
+    relationship function is being used.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`attrname` – the attribute name to which this relationship is being assigned.
+    If the value of [`generate_relationship.return_fn`](#sqlalchemy.ext.automap.generate_relationship.params.return_fn
+    "sqlalchemy.ext.automap.generate_relationship") is the [`backref()`](../relationship_api.html#sqlalchemy.orm.backref
+    "sqlalchemy.orm.backref") function, then this name is the name that is being assigned
+    to the backref.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`local_cls` – the “local” class to which this relationship or backref will
+    be locally present.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`referred_cls` – the “referred” class to which the relationship or backref
+    refers to.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`**kw` – all additional keyword arguments are passed along to the function.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    or [`backref()`](../relationship_api.html#sqlalchemy.orm.backref "sqlalchemy.orm.backref")
+    construct, as dictated by the [`generate_relationship.return_fn`](#sqlalchemy.ext.automap.generate_relationship.params.return_fn
+    "sqlalchemy.ext.automap.generate_relationship") parameter.
+  prefs: []
+  type: TYPE_NORMAL
