@@ -1576,6 +1576,10 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Web 应用程序。在这种情况下，最好利用所使用的 Web 框架提供的 SQLAlchemy 集成。或者，基本模式是在 Web 请求开始时创建一个[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")，在执行 POST、PUT 或 DELETE 的 Web 请求结束时调用 [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") 方法，然后在 Web 请求结束时关闭会话。通常还应该设置 [`Session.expire_on_commit`](session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session") 为 False，以便来自视图层的对象在事务已经提交后不需要发出新的 SQL 查询来刷新对象。
 - en: A background daemon which spawns off child forks would want to create a [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") local to each child process, work with that [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") through the life of the “job” that the fork is handling,
@@ -1584,6 +1588,9 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个后台守护进程会生成子进程，可能会想要为每个子进程创建一个[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")，在该子进程处理的“作业”生命周期内使用该[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")，然后在作业完成时将其销毁。
 - en: For a command-line script, the application would create a single, global [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") that is established when the program begins to do its
     work, and commits it right as the program is completing its task.
@@ -1591,6 +1598,8 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于命令行脚本，应用程序会创建一个在程序开始工作时建立的单一全局 [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")，并在程序完成任务时立即提交它。
 - en: For a GUI interface-driven application, the scope of the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") may best be within the scope of a user-generated event,
     such as a button push. Or, the scope may correspond to explicit user interaction,
@@ -1599,6 +1608,8 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于基于 GUI 接口的应用程序，[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    的范围可能最好在用户生成的事件范围内，比如按钮点击。或者，范围可能与明确的用户交互相对应，比如用户“打开”一系列记录，然后“保存”它们。
 - en: As a general rule, the application should manage the lifecycle of the session
     *externally* to functions that deal with specific data. This is a fundamental
     separation of concerns which keeps data-specific operations agnostic of the context
@@ -1606,10 +1617,12 @@
   id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 一般来说，应用程序应该在处理特定数据的函数**外部**管理会话的生命周期。这是一种基本的关注点分离，使得特定于数据的操作不受其访问和操作数据的上下文的影响。
 - en: 'E.g. **don’t do this**:'
   id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，**不要这样做**：
 - en: '[PRE20]'
   id: totrans-168
   prefs: []
@@ -1623,6 +1636,9 @@
   id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 将会话（通常也是事务）的生命周期**分离和外部化**。下面的示例说明了这样做的方式，并且另外使用了 Python 上下文管理器（即 `with:` 关键字）来自动管理
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    及其事务的范围：
 - en: '[PRE21]'
   id: totrans-170
   prefs: []
@@ -1634,11 +1650,14 @@
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 自 1.4 版更改：[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    可以作为上下文管理器使用，无需使用外部辅助函数。
 - en: Is the Session a cache?
   id: totrans-172
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 会话是缓存吗？
 - en: Yeee…no. It’s somewhat used as a cache, in that it implements the [identity
     map](../glossary.html#term-identity-map) pattern, and stores objects keyed to
     their primary key. However, it doesn’t do any kind of query caching. This means,
@@ -1652,11 +1671,15 @@
   id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 嗯……不是。它有点像缓存，因为它实现了[identity map](../glossary.html#term-identity-map)模式，并将对象存储为主键键控制的对象。但是，它不执行任何类型的查询缓存。这意味着，如果你说`session.scalars(select(Foo).filter_by(name='bar'))`，即使`Foo(name='bar')`就在那里，在identity
+    map中，会话也不知道。它必须向数据库发出SQL，获取行，然后当它看到行中的主键时，*然后*它才能查看本地identity map，并查看对象是否已存在。只有当你说`query.get({some
+    primary key})`时，[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")才不需要发出查询。
 - en: Additionally, the Session stores object instances using a weak reference by
     default. This also defeats the purpose of using the Session as a cache.
   id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 另外，默认情况下，会话(Session)使用弱引用来存储对象实例。这也违背了使用会话作为缓存的初衷。
 - en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     is not designed to be a global object from which everyone consults as a “registry”
     of objects. That’s more the job of a **second level cache**. SQLAlchemy provides
@@ -1665,18 +1688,24 @@
   id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")不是设计为所有人都可以向其查询作为“注册表”的全局对象。这更像是**第二级缓存**的工作。SQLAlchemy提供了使用[dogpile.cache](https://dogpilecache.readthedocs.io/)实现第二级缓存的模式，通过[Dogpile
+    Caching](examples.html#examples-caching)示例。'
 - en: How can I get the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
     for a certain object?
   id: totrans-176
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 如何获取某个对象的[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")？
 - en: 'Use the [`Session.object_session()`](session_api.html#sqlalchemy.orm.Session.object_session
     "sqlalchemy.orm.Session.object_session") classmethod available on [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.session.Session"):'
   id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用[`Session.object_session()`](session_api.html#sqlalchemy.orm.Session.object_session
+    "sqlalchemy.orm.Session.object_session")类方法，该方法可用于[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session")：
 - en: '[PRE22]'
   id: totrans-178
   prefs: []
@@ -1687,6 +1716,7 @@
   id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 较新的[运行时检查 API](../core/inspection.html)系统也可以使用：
 - en: '[PRE23]'
   id: totrans-180
   prefs: []
@@ -1697,6 +1727,7 @@
   id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 会话(Session)是线程安全的吗？AsyncSession在并发任务中安全吗？'
 - en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     is a **mutable, stateful** object that represents a **single database transaction**.
     An instance of [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
@@ -1708,6 +1739,10 @@
   id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")是一个**可变的、有状态的**对象，表示一个**单一的数据库事务**。因此，[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")的实例**不能在并发线程或asyncio任务之间共享，除非进行仔细的同步**。[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")旨在以**非并发**方式使用，即，特定的[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")实例应在同一时间只在一个线程或任务中使用。'
 - en: When using the [`AsyncSession`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession
     "sqlalchemy.ext.asyncio.AsyncSession") object from SQLAlchemy’s [asyncio](extensions/asyncio.html)
     extension, this object is only a thin proxy on top of a [`Session`](session_api.html#sqlalchemy.orm.Session
@@ -1718,6 +1753,10 @@
   id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用SQLAlchemy的[asyncio](extensions/asyncio.html)扩展中的[`AsyncSession`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession
+    "sqlalchemy.ext.asyncio.AsyncSession")对象时，该对象只是[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")的一个薄代理，同样的规则适用；它是一个**未同步的、可变的、有状态的对象**，因此**不安全**在多个asyncio任务中同时使用单个[`AsyncSession`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession
+    "sqlalchemy.ext.asyncio.AsyncSession")实例。
 - en: An instance of [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     or [`AsyncSession`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession
     "sqlalchemy.ext.asyncio.AsyncSession") represents a single logical database transaction,
@@ -1731,6 +1770,11 @@
   id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")或[`AsyncSession`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession
+    "sqlalchemy.ext.asyncio.AsyncSession")的一个实例代表一个单一的逻辑数据库事务，每次只引用一个特定[`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine")或[`AsyncEngine`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncEngine
+    "sqlalchemy.ext.asyncio.AsyncEngine")的单个[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")（请注意，这些对象都支持同时绑定到多个引擎，但在这种情况下，在事务范围内仍然只有一个连接）。'
 - en: A database connection within a transaction is also a stateful object that is
     intended to be operated upon in a non-concurrent, sequential fashion. Commands
     are issued on the connection in a sequence, which are handled by the database
@@ -1745,6 +1789,9 @@
   id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 事务中的数据库连接也是一个有状态的对象，应该以非并发、顺序的方式进行操作。命令按照序列在连接上发出，并由数据库服务器按照发出的确切顺序处理。当[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")发出命令并接收结果时，[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")本身正在经历与此连接上的命令和数据状态相一致的内部状态更改；这些状态包括事务是否已启动、提交或回滚，正在使用的SAVEPOINT（如果有），以及将数据库行的状态与本地ORM映射的对象同步的细粒度同步。
 - en: When designing database applications for concurrency, the appropriate model
     is that each concurrent task / thread works with its own database transaction.
     This is why when discussing the issue of database concurrency, the standard terminology
@@ -1754,6 +1801,7 @@
   id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 在为并发设计数据库应用程序时，适当的模型是每个并发任务/线程都使用自己的数据库事务。这就是为什么在讨论数据库并发问题时，使用的标准术语是**多个并发事务**。在传统的关系型数据库管理系统中，没有类似于同时接收和处理多个命令的单个数据库事务的模拟。
 - en: The concurrency model for SQLAlchemy’s [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") and [`AsyncSession`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession
     "sqlalchemy.ext.asyncio.AsyncSession") is therefore **Session per thread, AsyncSession
@@ -1765,6 +1813,10 @@
   id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，SQLAlchemy的[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")和[`AsyncSession`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession
+    "sqlalchemy.ext.asyncio.AsyncSession")的并发模型是**每个线程一个Session，每个任务一个AsyncSession**。一个使用多个线程或多个asyncio任务的应用（例如使用像`asyncio.gather()`这样的API）将希望确保每个线程有其自己的[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")，每个asyncio任务有其自己的[`AsyncSession`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession
+    "sqlalchemy.ext.asyncio.AsyncSession")。
 - en: The best way to ensure this use is by using the [standard context manager pattern](#session-getting)
     locally within the top level Python function that is inside the thread or task,
     which will ensure the lifespan of the [`Session`](session_api.html#sqlalchemy.orm.Session
@@ -1773,6 +1825,9 @@
   id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 确保此使用的最佳方法是在线程或任务内部的顶级Python函数中本地使用[标准上下文管理器模式](#session-getting)，这将确保[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")或[`AsyncSession`](extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession
+    "sqlalchemy.ext.asyncio.AsyncSession")的生命周期在局部范围内维护。
 - en: For applications that benefit from having a “global” [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") where it’s not an option to pass the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") object to specific functions and methods which require
@@ -1786,11 +1841,18 @@
   id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于那些受益于具有“全局”[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")的应用，其中无法将[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")对象传递给需要它的特定函数和方法的情况，[`scoped_session`](contextual.html#sqlalchemy.orm.scoped_session
+    "sqlalchemy.orm.scoped_session")方法可以提供一个“线程本地”的[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")对象；请参阅[上下文/线程本地会话](contextual.html#unitofwork-contextual)一节了解背景。在asyncio环境中，[`async_scoped_session`](extensions/asyncio.html#sqlalchemy.ext.asyncio.async_scoped_session
+    "sqlalchemy.ext.asyncio.async_scoped_session")对象是[`scoped_session`](contextual.html#sqlalchemy.orm.scoped_session
+    "sqlalchemy.orm.scoped_session")的asyncio模拟，但是更难配置，因为它需要一个自定义的“上下文”函数。
 - en: What does the Session do ?
   id: totrans-190
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: Session做什么？
 - en: In the most general sense, the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") establishes all conversations with the database and
     represents a “holding zone” for all the objects which you’ve loaded or associated
@@ -1803,6 +1865,9 @@
   id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 在最一般的意义上，[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")建立了与数据库的所有交流，并代表了在其生命周期内加载或关联的所有对象的“持有区”。它提供了SELECT和其他查询的接口，这些查询将返回和修改ORM映射的对象。ORM对象本身被维护在[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")内部，存储在一个称为[identity map](../glossary.html#term-identity-map)的结构中
+    - 这是一种维护每个对象唯一副本的数据结构，其中“唯一”意味着“只有一个具有特定主键的对象”。
 - en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     in its most common pattern of use begins in a mostly stateless form. Once queries
     are issued or other objects are persisted with it, it requests a connection resource
@@ -1866,6 +1931,9 @@
   id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")可以独立构造，也可以使用[`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
+    "sqlalchemy.orm.sessionmaker")类构造。通常，它被作为连通性的源传递给单个[`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine")。典型的用法可能如下所示：'
 - en: '[PRE24]'
   id: totrans-199
   prefs: []
@@ -1880,6 +1948,10 @@
   id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")与特定数据库
+    URL 关联的[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")一起实例化。然后，它在
+    Python 上下文管理器（即`with:`语句）中使用，因此它在块结束时会自动关闭；这相当于调用[`Session.close()`](session_api.html#sqlalchemy.orm.Session.close
+    "sqlalchemy.orm.Session.close")方法。
 - en: The call to [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
     "sqlalchemy.orm.Session.commit") is optional, and is only needed if the work we’ve
     done with the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
@@ -1889,10 +1961,14 @@
   id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: 对[`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit")的调用是可选的，只有当我们与[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")一起完成的工作包括要持久化到数据库的新数据时才需要。如果我们只发出 SELECT 调用并且不需要写入任何更改，则对[`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit")的调用将是不必要的。
 - en: Note
   id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: 'Note that after [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
     "sqlalchemy.orm.Session.commit") is called, either explicitly or when using a
     context manager, all objects associated with the [`Session`](session_api.html#sqlalchemy.orm.Session
@@ -1907,6 +1983,10 @@
   id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，在调用[`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit "sqlalchemy.orm.Session.commit")之后，无论是明确调用还是使用上下文管理器，与[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")关联的所有对象都将被[过期](../glossary.html#term-expired)，这意味着它们的内容将被擦除以在下一个事务中重新加载。如果这些对象是[分离的](../glossary.html#term-detached)，则在重新关联到新的[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")之前，它们将无法正常工作，除非使用[`Session.expire_on_commit`](session_api.html#sqlalchemy.orm.Session.params.expire_on_commit
+    "sqlalchemy.orm.Session")参数来禁用此行为。更多细节请参阅[Committing](#session-committing)部分。
 - en: 'We may also enclose the [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
     "sqlalchemy.orm.Session.commit") call and the overall “framing” of the transaction
     within a context manager for those cases where we will be committing data to the
