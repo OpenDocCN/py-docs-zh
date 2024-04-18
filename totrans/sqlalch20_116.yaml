@@ -1,122 +1,184 @@
 - en: MetaData / Schema
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 元数据 / 模式
 - en: 原文：[https://docs.sqlalchemy.org/en/20/faq/metadata_schema.html](https://docs.sqlalchemy.org/en/20/faq/metadata_schema.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/faq/metadata_schema.html](https://docs.sqlalchemy.org/en/20/faq/metadata_schema.html)
 - en: '[My program is hanging when I say `table.drop()` / `metadata.drop_all()`](#my-program-is-hanging-when-i-say-table-drop-metadata-drop-all)'
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[当我说 `table.drop()` / `metadata.drop_all()` 时，我的程序挂起了](#my-program-is-hanging-when-i-say-table-drop-metadata-drop-all)'
 - en: '[Does SQLAlchemy support ALTER TABLE, CREATE VIEW, CREATE TRIGGER, Schema Upgrade
     Functionality?](#does-sqlalchemy-support-alter-table-create-view-create-trigger-schema-upgrade-functionality)'
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[SQLAlchemy 支持 ALTER TABLE、CREATE VIEW、CREATE TRIGGER、Schema 升级功能吗？](#does-sqlalchemy-support-alter-table-create-view-create-trigger-schema-upgrade-functionality)'
 - en: '[How can I sort Table objects in order of their dependency?](#how-can-i-sort-table-objects-in-order-of-their-dependency)'
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[我如何按照它们的依赖关系对 Table 对象进行排序？](#how-can-i-sort-table-objects-in-order-of-their-dependency)'
 - en: '[How can I get the CREATE TABLE/ DROP TABLE output as a string?](#how-can-i-get-the-create-table-drop-table-output-as-a-string)'
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[我如何将 CREATE TABLE/ DROP TABLE 输出作为字符串获取？](#how-can-i-get-the-create-table-drop-table-output-as-a-string)'
 - en: '[How can I subclass Table/Column to provide certain behaviors/configurations?](#how-can-i-subclass-table-column-to-provide-certain-behaviors-configurations)'
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[我如何子类化 Table/Column 以提供某些行为/配置？](#how-can-i-subclass-table-column-to-provide-certain-behaviors-configurations)'
 - en: My program is hanging when I say `table.drop()` / `metadata.drop_all()`
+  id: totrans-7
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 当我说 `table.drop()` / `metadata.drop_all()` 时，我的程序挂起了
 - en: 'This usually corresponds to two conditions: 1\. using PostgreSQL, which is
     really strict about table locks, and 2\. you have a connection still open which
     contains locks on the table and is distinct from the connection being used for
     the DROP statement. Heres the most minimal version of the pattern:'
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 这通常对应两种情况：1. 使用 PostgreSQL，它对表锁非常严格，2. 您仍然打开了一个包含对表的锁定的连接，并且与用于 DROP 语句的连接不同。这是模式的最简化版本：
 - en: '[PRE0]'
+  id: totrans-9
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Above, a connection pool connection is still checked out; furthermore, the result
     object above also maintains a link to this connection. If “implicit execution”
     is used, the result will hold this connection opened until the result object is
     closed or all rows are exhausted.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述，连接池连接仍然被检出；此外，上述结果对象还保持对此连接的链接。如果使用“隐式执行”，结果将保持此连接打开，直到结果对象关闭或所有行都被耗尽。
 - en: The call to `mytable.drop(engine)` attempts to emit DROP TABLE on a second connection
     procured from the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
     "sqlalchemy.engine.Engine") which will lock.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 调用 `mytable.drop(engine)` 试图在从 [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") 获取的第二连接上发出 DROP TABLE 操作，这将会被锁定。
 - en: 'The solution is to close out all connections before emitting DROP TABLE:'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 解决方法是在发出 DROP TABLE 前关闭所有连接：
 - en: '[PRE1]'
+  id: totrans-13
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: Does SQLAlchemy support ALTER TABLE, CREATE VIEW, CREATE TRIGGER, Schema Upgrade
     Functionality?
+  id: totrans-14
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: SQLAlchemy 支持 ALTER TABLE、CREATE VIEW、CREATE TRIGGER、Schema 升级功能吗？
 - en: General ALTER support isn’t present in SQLAlchemy directly. For special DDL
     on an ad-hoc basis, the [`DDL`](../core/ddl.html#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL")
     and related constructs can be used. See [Customizing DDL](../core/ddl.html) for
     a discussion on this subject.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: SQLAlchemy 直接不支持通用 ALTER。对于特殊的 ad-hoc 基础DDL，可以使用 [`DDL`](../core/ddl.html#sqlalchemy.schema.DDL
+    "sqlalchemy.schema.DDL") 和相关构造。有关此主题的讨论，请参阅 [自定义 DDL](../core/ddl.html)。
 - en: A more comprehensive option is to use schema migration tools, such as Alembic
     or SQLAlchemy-Migrate; see [Altering Database Objects through Migrations](../core/metadata.html#schema-migrations)
     for discussion on this.
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 更全面的选择是使用模式迁移工具，例如 Alembic 或 SQLAlchemy-Migrate；有关此问题的讨论，请参阅 [通过迁移修改数据库对象](../core/metadata.html#schema-migrations)。
 - en: How can I sort Table objects in order of their dependency?
+  id: totrans-17
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 我如何按照它们的依赖关系对 Table 对象进行排序？
 - en: 'This is available via the [`MetaData.sorted_tables`](../core/metadata.html#sqlalchemy.schema.MetaData.sorted_tables
     "sqlalchemy.schema.MetaData.sorted_tables") function:'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 这可以通过 [`MetaData.sorted_tables`](../core/metadata.html#sqlalchemy.schema.MetaData.sorted_tables
+    "sqlalchemy.schema.MetaData.sorted_tables") 函数获得：
 - en: '[PRE2]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '## How can I get the CREATE TABLE/ DROP TABLE output as a string?'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 如何将 CREATE TABLE/ DROP TABLE 输出作为字符串获取？'
 - en: 'Modern SQLAlchemy has clause constructs which represent DDL operations. These
     can be rendered to strings like any other SQL expression:'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 现代的 SQLAlchemy 具有表示 DDL 操作的从句构造。这些可以像任何其他 SQL 表达式一样渲染为字符串：
 - en: '[PRE3]'
+  id: totrans-22
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'To get the string specific to a certain engine:'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 要获得特定于某个引擎的字符串：
 - en: '[PRE4]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'There’s also a special form of [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
     "sqlalchemy.engine.Engine") available via [`create_mock_engine()`](../core/engines.html#sqlalchemy.create_mock_engine
     "sqlalchemy.create_mock_engine") that allows one to dump an entire metadata creation
     sequence as a string, using this recipe:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 还有一种特殊形式的[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")可通过[`create_mock_engine()`](../core/engines.html#sqlalchemy.create_mock_engine
+    "sqlalchemy.create_mock_engine")访问，允许将整个元数据创建序列转储为字符串，使用以下方法：
 - en: '[PRE5]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: The [Alembic](https://alembic.sqlalchemy.org) tool also supports an “offline”
     SQL generation mode that renders database migrations as SQL scripts.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: '[Alembic](https://alembic.sqlalchemy.org) 工具还支持一种“离线”SQL生成模式，将数据库迁移呈现为SQL脚本。'
 - en: How can I subclass Table/Column to provide certain behaviors/configurations?
+  id: totrans-28
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 如何对表/列进行子类化以提供特定的行为/配置？
 - en: '[`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
     and [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
     are not good targets for direct subclassing. However, there are simple ways to
@@ -124,98 +186,154 @@
     to the linkages between schema objects such as constraint conventions or naming
     conventions using attachment events. An example of many of these techniques can
     be seen at [Naming Conventions](https://www.sqlalchemy.org/trac/wiki/UsageRecipes/NamingConventions).'
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    和 [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    不是直接子类化的良好目标。但是，可以使用创建函数来获取构造时的行为，并使用附加事件来处理与模式对象之间的链接，例如约束约定或命名约定。可以在 [命名约定](https://www.sqlalchemy.org/trac/wiki/UsageRecipes/NamingConventions)
+    中看到许多这些技术的示例。'
 - en: My program is hanging when I say `table.drop()` / `metadata.drop_all()`
+  id: totrans-30
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 当我说`table.drop()` / `metadata.drop_all()`时，我的程序挂起了。
 - en: 'This usually corresponds to two conditions: 1\. using PostgreSQL, which is
     really strict about table locks, and 2\. you have a connection still open which
     contains locks on the table and is distinct from the connection being used for
     the DROP statement. Heres the most minimal version of the pattern:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 这通常对应于两个条件：1. 使用 PostgreSQL，它对表锁非常严格，2. 你有一个仍然打开的连接，其中包含对表的锁，并且与用于 DROP 语句的连接不同。以下是该模式的最简版本：
 - en: '[PRE6]'
+  id: totrans-32
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: Above, a connection pool connection is still checked out; furthermore, the result
     object above also maintains a link to this connection. If “implicit execution”
     is used, the result will hold this connection opened until the result object is
     closed or all rows are exhausted.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，连接池连接仍然被检出；此外，上述结果对象还维护对此连接的链接。如果使用“隐式执行”，结果将保持此连接打开，直到关闭结果对象或耗尽所有行。
 - en: The call to `mytable.drop(engine)` attempts to emit DROP TABLE on a second connection
     procured from the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
     "sqlalchemy.engine.Engine") which will lock.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 对`mytable.drop(engine)`的调用尝试在从[`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine")获取的第二个连接上发出 DROP TABLE，这会导致锁定。
 - en: 'The solution is to close out all connections before emitting DROP TABLE:'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 解决方案是在发出 DROP TABLE 前关闭所有连接：
 - en: '[PRE7]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: Does SQLAlchemy support ALTER TABLE, CREATE VIEW, CREATE TRIGGER, Schema Upgrade
     Functionality?
+  id: totrans-37
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: SQLAlchemy 支持 ALTER TABLE、CREATE VIEW、CREATE TRIGGER、Schema 升级功能吗？
 - en: General ALTER support isn’t present in SQLAlchemy directly. For special DDL
     on an ad-hoc basis, the [`DDL`](../core/ddl.html#sqlalchemy.schema.DDL "sqlalchemy.schema.DDL")
     and related constructs can be used. See [Customizing DDL](../core/ddl.html) for
     a discussion on this subject.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: SQLAlchemy 并不直接支持一般的 ALTER。对于特殊的按需DDL，可以使用[`DDL`](../core/ddl.html#sqlalchemy.schema.DDL
+    "sqlalchemy.schema.DDL")和相关构造。有关此主题的讨论，请参阅 [自定义 DDL](../core/ddl.html)。
 - en: A more comprehensive option is to use schema migration tools, such as Alembic
     or SQLAlchemy-Migrate; see [Altering Database Objects through Migrations](../core/metadata.html#schema-migrations)
     for discussion on this.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 更全面的选项是使用模式迁移工具，例如 Alembic 或 SQLAlchemy-Migrate；请参阅 [通过迁移更改数据库对象](../core/metadata.html#schema-migrations)
+    以讨论此问题。
 - en: How can I sort Table objects in order of their dependency?
+  id: totrans-40
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 如何按其依赖顺序对 Table 对象进行排序？
 - en: 'This is available via the [`MetaData.sorted_tables`](../core/metadata.html#sqlalchemy.schema.MetaData.sorted_tables
     "sqlalchemy.schema.MetaData.sorted_tables") function:'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 可通过[`MetaData.sorted_tables`](../core/metadata.html#sqlalchemy.schema.MetaData.sorted_tables
+    "sqlalchemy.schema.MetaData.sorted_tables")函数进行访问：
 - en: '[PRE8]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: '## How can I get the CREATE TABLE/ DROP TABLE output as a string?'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 如何将 CREATE TABLE/DROP TABLE 输出为字符串？'
 - en: 'Modern SQLAlchemy has clause constructs which represent DDL operations. These
     can be rendered to strings like any other SQL expression:'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 现代的 SQLAlchemy 有表示 DDL 操作的子句构造。这些可以像任何其他 SQL 表达式一样渲染为字符串：
 - en: '[PRE9]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'To get the string specific to a certain engine:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 要获取特定引擎的字符串：
 - en: '[PRE10]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'There’s also a special form of [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
     "sqlalchemy.engine.Engine") available via [`create_mock_engine()`](../core/engines.html#sqlalchemy.create_mock_engine
     "sqlalchemy.create_mock_engine") that allows one to dump an entire metadata creation
     sequence as a string, using this recipe:'
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 还有一种特殊形式的 [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    可以通过 [`create_mock_engine()`](../core/engines.html#sqlalchemy.create_mock_engine
+    "sqlalchemy.create_mock_engine") 获得，它允许将整个元数据创建序列转储为字符串，使用以下方法：
 - en: '[PRE11]'
+  id: totrans-49
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: The [Alembic](https://alembic.sqlalchemy.org) tool also supports an “offline”
     SQL generation mode that renders database migrations as SQL scripts.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: '[Alembic](https://alembic.sqlalchemy.org) 工具还支持一种“离线”SQL生成模式，将数据库迁移呈现为 SQL
+    脚本。'
 - en: How can I subclass Table/Column to provide certain behaviors/configurations?
+  id: totrans-51
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 我如何子类化 Table/Column 以提供某些行为/配置？
 - en: '[`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
     and [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
     are not good targets for direct subclassing. However, there are simple ways to
@@ -223,5 +341,10 @@
     to the linkages between schema objects such as constraint conventions or naming
     conventions using attachment events. An example of many of these techniques can
     be seen at [Naming Conventions](https://www.sqlalchemy.org/trac/wiki/UsageRecipes/NamingConventions).'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")
+    和 [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    不适合直接进行子类化。但是，可以使用创建函数来获得在构造时的行为，以及使用附加事件来处理模式对象之间的链接行为，比如约束惯例或命名惯例。许多这些技术的示例可以在
+    [命名约定](https://www.sqlalchemy.org/trac/wiki/UsageRecipes/NamingConventions) 中看到。'

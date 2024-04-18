@@ -1,65 +1,93 @@
 - en: Performance
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 性能
 - en: 原文：[https://docs.sqlalchemy.org/en/20/faq/performance.html](https://docs.sqlalchemy.org/en/20/faq/performance.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/faq/performance.html](https://docs.sqlalchemy.org/en/20/faq/performance.html)
 - en: '*   [Why is my application slow after upgrading to 1.4 and/or 2.x?](#why-is-my-application-slow-after-upgrading-to-1-4-and-or-2-x)'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '*   [为什么升级到 1.4 和/或 2.x 后我的应用程序变慢了？](#why-is-my-application-slow-after-upgrading-to-1-4-and-or-2-x)'
 - en: '[Step one - turn on SQL logging and confirm whether or not caching is working](#step-one-turn-on-sql-logging-and-confirm-whether-or-not-caching-is-working)'
+  id: totrans-3
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[第一步 - 打开 SQL 日志记录并确认缓存是否正常工作](#step-one-turn-on-sql-logging-and-confirm-whether-or-not-caching-is-working)'
 - en: '[Step two - identify what constructs are blocking caching from being enabled](#step-two-identify-what-constructs-are-blocking-caching-from-being-enabled)'
+  id: totrans-4
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[第二步 - 确定哪些构造阻止启用缓存](#step-two-identify-what-constructs-are-blocking-caching-from-being-enabled)'
 - en: '[Step three - enable caching for the given objects and/or seek alternatives](#step-three-enable-caching-for-the-given-objects-and-or-seek-alternatives)'
+  id: totrans-5
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[第三步 - 为给定的对象启用缓存和/或寻找替代方案](#step-three-enable-caching-for-the-given-objects-and-or-seek-alternatives)'
 - en: '[How can I profile a SQLAlchemy powered application?](#how-can-i-profile-a-sqlalchemy-powered-application)'
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[如何对基于 SQLAlchemy 的应用程序进行性能分析？](#how-can-i-profile-a-sqlalchemy-powered-application)'
 - en: '[Query Profiling](#query-profiling)'
+  id: totrans-7
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[查询性能分析](#query-profiling)'
 - en: '[Code Profiling](#code-profiling)'
+  id: totrans-8
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[代码性能分析](#code-profiling)'
 - en: '[Execution Slowness](#execution-slowness)'
+  id: totrans-9
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[执行速度慢](#execution-slowness)'
 - en: '[Result Fetching Slowness - Core](#result-fetching-slowness-core)'
+  id: totrans-10
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[结果获取慢 - 核心](#result-fetching-slowness-core)'
 - en: '[Result Fetching Slowness - ORM](#result-fetching-slowness-orm)'
+  id: totrans-11
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[结果获取慢 - ORM](#result-fetching-slowness-orm)'
 - en: '[I’m inserting 400,000 rows with the ORM and it’s really slow!](#i-m-inserting-400-000-rows-with-the-orm-and-it-s-really-slow)'
+  id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[我正在使用 ORM 插入 400,000 行，速度非常慢！](#i-m-inserting-400-000-rows-with-the-orm-and-it-s-really-slow)'
 - en: '## Why is my application slow after upgrading to 1.4 and/or 2.x?'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 为什么升级到 1.4 和/或 2.x 后我的应用程序变慢了？'
 - en: SQLAlchemy as of version 1.4 includes a [SQL compilation caching facility](../core/connections.html#sql-caching)
     which will allow Core and ORM SQL constructs to cache their stringified form,
     along with other structural information used to fetch results from the statement,
@@ -71,15 +99,24 @@
     and [`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine "sqlalchemy.types.TypeEngine")
     objects, to produce a **cache key** which fully represents their state to the
     degree that it affects the SQL compilation process.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: SQLAlchemy 自 1.4 版本起包含一个[SQL 编译缓存功能](../core/connections.html#sql-caching)，它将允许核心和
+    ORM SQL 构造缓存它们的字符串形式，以及用于从语句中获取结果的其他结构信息，当下次使用另一个结构上等同的构造时，可以跳过相对昂贵的字符串编译过程。这个系统依赖于为所有
+    SQL 构造实现的功能，包括诸如 [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")、[`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") 和 [`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") 等对象，以生成完全代表它们状态的**缓存键**，至于它们对 SQL 编译过程产生的影响程度。
 - en: The caching system allows SQLAlchemy 1.4 and above to be more performant than
     SQLAlchemy 1.3 with regards to the time spent converting SQL constructs into strings
     repeatedly. However, this only works if caching is enabled for the dialect and
     SQL constructs in use; if not, string compilation is usually similar to that of
     SQLAlchemy 1.3, with a slight decrease in speed in some cases.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 缓存系统使得 SQLAlchemy 1.4 及以上版本在将 SQL 构造重复转换为字符串所花费的时间方面比 SQLAlchemy 1.3 更高效。然而，这仅在为使用的方言和
+    SQL 构造启用缓存时才有效；如果没有启用缓存，则字符串编译通常类似于 SQLAlchemy 1.3，但在某些情况下速度略有下降。
 - en: There is one case however where if SQLAlchemy’s new caching system has been
     disabled (for reasons below), performance for the ORM may be in fact significantly
     poorer than that of 1.3 or other prior releases which is due to the lack of caching
@@ -88,24 +125,36 @@
     significant (30% or higher) degradations in performance (measured in time for
     operations to complete) when switching to 1.4, this is the likely cause of the
     issue, with steps to mitigate below.
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，有一种情况是，如果 SQLAlchemy 的新缓存系统已被禁用（出于以下原因），则 ORM 的性能实际上可能明显低于 1.3 或其他之前的版本，这是由于
+    ORM 惰性加载器和对象刷新查询中缺乏缓存，而在 1.3 版本和更早版本中使用了现在已经过时的 `BakedQuery` 系统。如果应用程序在切换到 1.4
+    时看到了显著（30% 或更高）的性能下降（以操作完成所需的时间为度量），这可能是问题的根本原因，下面有缓解措施。
 - en: See also
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 参见
 - en: '[SQL Compilation Caching](../core/connections.html#sql-caching) - overview
     of the caching system'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: '[SQL 编译缓存](../core/connections.html#sql-caching) - 缓存系统概述'
 - en: '[Object will not produce a cache key, Performance Implications](../errors.html#caching-caveats)
     - additional information regarding the warnings generated for elements that don’t
     enable caching.'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: '[对象将不生成缓存键，性能影响](../errors.html#caching-caveats) - 关于不启用缓存的元素生成的警告的额外信息。'
 - en: Step one - turn on SQL logging and confirm whether or not caching is working
+  id: totrans-20
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第一步 - 打开 SQL 记录并确认缓存是否起作用
 - en: Here, we want to use the technique described at [engine logging](../core/connections.html#sql-caching-logging),
     looking for statements with the `[no key]` indicator or even `[dialect does not
     support caching]`. The indicators we would see for SQL statements that are successfully
@@ -114,54 +163,86 @@
     the vast majority of statements subsequent. If `[no key]` is prevalent in particular
     for SELECT statements, or if caching is disabled entirely due to `[dialect does
     not support caching]`, this can be the cause of significant performance degradation.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们想要使用[引擎日志记录](../core/connections.html#sql-caching-logging)中描述的技术，查找带有`[no
+    key]`指示器的语句，甚至是带有`[dialect does not support caching]`的语句。对于首次调用语句时成功参与缓存系统的 SQL
+    语句，我们会看到`[generated in Xs]`指示器，随后对于绝大多数后续语句会看到`[cached since Xs ago]`指示器。如果对于特定的
+    SELECT 语句主要存在`[no key]`，或者如果由于`[dialect does not support caching]`完全禁用了缓存，这可能是导致性能严重下降的原因。
 - en: See also
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 参见
 - en: '[Estimating Cache Performance Using Logging](../core/connections.html#sql-caching-logging)'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用日志估算缓存性能](../core/connections.html#sql-caching-logging)'
 - en: Step two - identify what constructs are blocking caching from being enabled
+  id: totrans-24
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第二步 - 确定哪些构造物阻止了缓存的启用
 - en: Assuming statements are not being cached, there should be warnings emitted early
     in the application’s log (SQLAlchemy 1.4.28 and above only) indicating dialects,
     [`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine "sqlalchemy.types.TypeEngine")
     objects, and SQL constructs that are not participating in caching.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设语句没有被缓存，在应用程序的日志中会及早发出警告（仅适用于 SQLAlchemy 1.4.28 及以上版本），指示不参与缓存的方言、[`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") 对象和 SQL 构造物。
 - en: 'For user defined datatypes such as those which extend [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
     "sqlalchemy.types.TypeDecorator") and [`UserDefinedType`](../core/custom_types.html#sqlalchemy.types.UserDefinedType
     "sqlalchemy.types.UserDefinedType"), the warnings will look like:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于诸如扩展[`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator")和[`UserDefinedType`](../core/custom_types.html#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType")的用户定义数据类型，警告将如下所示：
 - en: '[PRE0]'
+  id: totrans-27
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'For custom and third party SQL elements, such as those constructed using the
     techniques described at [Custom SQL Constructs and Compilation Extension](../core/compiler.html),
     these warnings will look like:'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于自定义和第三方 SQL 元素，例如那些使用[自定义 SQL 构造和编译扩展](../core/compiler.html)中描述的技术构建的元素，这些警告会看起来像：
 - en: '[PRE1]'
+  id: totrans-29
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'For custom and third party dialects which make use of the [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect
     "sqlalchemy.engine.Dialect") class hierarchy, the warnings will look like:'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于使用[`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")类层次结构的自定义和第三方方言，警告将如下所示：
 - en: '[PRE2]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Step three - enable caching for the given objects and/or seek alternatives
+  id: totrans-32
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第三步 - 为给定对象启用缓存和/或寻求替代方案
 - en: 'Steps to mitigate the lack of caching include:'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 缓存不足的缓解步骤包括：
 - en: 'Review and set [`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
     "sqlalchemy.types.ExternalType.cache_ok") to `True` for all custom types which
     extend from [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
@@ -169,28 +250,43 @@
     "sqlalchemy.types.UserDefinedType"), as well as subclasses of these such as [`PickleType`](../core/type_basics.html#sqlalchemy.types.PickleType
     "sqlalchemy.types.PickleType"). Set this **only** if the custom type does not
     include any additional state attributes which affect how it renders SQL:'
+  id: totrans-34
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将 [`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") 设置为 `True`，用于所有继承自 [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator")、[`UserDefinedType`](../core/custom_types.html#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") 的自定义类型，以及这些类型的子类，如 [`PickleType`](../core/type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType")。仅当自定义类型不包含任何影响其渲染 SQL 的额外状态属性时才设置这个 **属性**：
 - en: '[PRE3]'
+  id: totrans-35
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: If the types in use are from a third-party library, consult with the maintainers
     of that library so that it may be adjusted and released.
+  id: totrans-36
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 如果使用的类型来自第三方库，请与该库的维护者联系，以便进行调整和发布。
 - en: See also
+  id: totrans-37
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
     "sqlalchemy.types.ExternalType.cache_ok") - background on requirements to enable
     caching for custom datatypes.'
+  id: totrans-38
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") - 启用自定义数据类型缓存的要求背景。'
 - en: Make sure third party dialects set [`Dialect.supports_statement_cache`](../core/internals.html#sqlalchemy.engine.Dialect.supports_statement_cache
     "sqlalchemy.engine.Dialect.supports_statement_cache") to `True`. What this indicates
     is that the maintainers of a third party dialect have made sure their dialect
@@ -199,19 +295,28 @@
     compilation patterns which can in fact interfere with caching, it’s important
     that dialect maintainers check and test this carefully, adjusting for any of the
     legacy patterns which won’t work with caching.
+  id: totrans-39
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保第三方方言将 [`Dialect.supports_statement_cache`](../core/internals.html#sqlalchemy.engine.Dialect.supports_statement_cache
+    "sqlalchemy.engine.Dialect.supports_statement_cache") 设置为 `True`。这表明第三方方言的维护者确保其方言与
+    SQLAlchemy 1.4 或更高版本兼容，并且其方言不包含可能干扰缓存的编译特性。由于存在一些常见的编译模式可能会干扰缓存，因此方言维护者务必仔细检查和测试，调整任何与缓存不兼容的传统模式。
 - en: See also
+  id: totrans-40
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Caching for Third Party Dialects](../core/connections.html#engine-thirdparty-caching)
     - background and examples for third-party dialects to participate in SQL statement
     caching.'
+  id: totrans-41
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[第三方方言的缓存](../core/connections.html#engine-thirdparty-caching) - 第三方方言参与 SQL
+    语句缓存的背景和示例。'
 - en: Custom SQL classes, including all DQL / DML constructs one might create using
     the [Custom SQL Constructs and Compilation Extension](../core/compiler.html),
     as well as ad-hoc subclasses of objects such as [`Column`](../core/metadata.html#sqlalchemy.schema.Column
@@ -220,53 +325,83 @@
     "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute may be set to
     `True` for trivial subclasses, which do not contain any subclass-specific state
     information which affects the SQL compilation.
+  id: totrans-42
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 自定义 SQL 类，包括使用 [自定义 SQL 构造和编译扩展](../core/compiler.html) 创建的所有 DQL / DML 构造，以及对象的临时子类，如
+    [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    或 [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")。对于简单子类，可以将
+    [`HasCacheKey.inherit_cache`](../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") 属性设置为 `True`，该属性不包含影响 SQL
+    编译的子类特定状态信息。
 - en: See also
+  id: totrans-43
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Enabling Caching Support for Custom Constructs](../core/compiler.html#compilerext-caching)
     - guidelines for applying the [`HasCacheKey.inherit_cache`](../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
     "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute.'
+  id: totrans-44
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[为自定义构造启用缓存支持](../core/compiler.html#compilerext-caching) - 应用 [`HasCacheKey.inherit_cache`](../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") 属性的指南。'
 - en: See also
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[SQL Compilation Caching](../core/connections.html#sql-caching) - caching system
     overview'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: '[SQL 编译缓存](../core/connections.html#sql-caching) - 缓存系统概述'
 - en: '[Object will not produce a cache key, Performance Implications](../errors.html#caching-caveats)
     - background on warnings emitted when caching is not enabled for specific constructs
     and/or dialects.  ## How can I profile a SQLAlchemy powered application?'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: '[对象不会生成缓存键，性能影响](../errors.html#caching-caveats) - 背景是在为特定结构和/或方言未启用缓存时发出警告的情况。##
+    如何分析一个使用SQLAlchemy的应用程序？'
 - en: Looking for performance issues typically involves two strategies. One is query
     profiling, and the other is code profiling.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 寻找性能问题通常涉及两种策略。一种是查询性能分析，另一种是代码性能分析。
 - en: Query Profiling
+  id: totrans-49
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 查询性能分析
 - en: 'Sometimes just plain SQL logging (enabled via python’s logging module or via
     the `echo=True` argument on [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
     "sqlalchemy.create_engine")) can give an idea how long things are taking. For
     example, if you log something right after a SQL operation, you’d see something
     like this in your log:'
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 有时仅仅记录普通的SQL（通过python的logging模块启用，或者通过[`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine")上的`echo=True`参数启用）就能让你了解到事情花费了多长时间。例如，如果在SQL操作之后记录一些内容，你会在日志中看到类似这样的内容：
 - en: '[PRE4]'
+  id: totrans-51
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: if you logged `myapp.somemessage` right after the operation, you know it took
     334ms to complete the SQL part of things.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你在操作之后记录了`myapp.somemessage`，你就知道完成SQL部分花费了334ms。
 - en: Logging SQL will also illustrate if dozens/hundreds of queries are being issued
     which could be better organized into much fewer queries. When using the SQLAlchemy
     ORM, the “eager loading” feature is provided to partially ([`contains_eager()`](../orm/queryguide/relationships.html#sqlalchemy.orm.contains_eager
@@ -276,96 +411,148 @@
     loading” typically means to use joins so that results across multiple tables can
     be loaded in one result set instead of multiplying numbers of queries as more
     depth is added (i.e. `r + r*r2 + r*r2*r3` …)
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 记录SQL还会说明是否发出了数十/数百个查询，这些查询可以更好地组织成更少的查询。当使用SQLAlchemy ORM时，“eager loading”特性提供了部分（[`contains_eager()`](../orm/queryguide/relationships.html#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager")）或完全（[`joinedload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload")，[`subqueryload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload")）自动化此活动，但是没有ORM的“eager loading”通常意味着使用连接，以便结果可以在一个结果集中加载而不是随着更多深度的添加而增加查询的数量（即
+    `r + r*r2 + r*r2*r3` …）
 - en: 'For more long-term profiling of queries, or to implement an application-side
     “slow query” monitor, events can be used to intercept cursor executions, using
     a recipe like the following:'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于更长期的查询性能分析，或者实现应用程序端的“慢查询”监视器，可以使用事件来拦截游标执行，使用以下类似的配方：
 - en: '[PRE5]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Above, we use the [`ConnectionEvents.before_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.before_cursor_execute
     "sqlalchemy.events.ConnectionEvents.before_cursor_execute") and [`ConnectionEvents.after_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.after_cursor_execute
     "sqlalchemy.events.ConnectionEvents.after_cursor_execute") events to establish
     an interception point around when a statement is executed. We attach a timer onto
     the connection using the `info` dictionary; we use a stack here for the occasional
     case where the cursor execute events may be nested.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上述例子中，我们使用[`ConnectionEvents.before_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.before_cursor_execute
+    "sqlalchemy.events.ConnectionEvents.before_cursor_execute")和[`ConnectionEvents.after_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.after_cursor_execute
+    "sqlalchemy.events.ConnectionEvents.after_cursor_execute")事件来在执行语句时建立拦截点。我们使用`info`字典在连接上附加一个计时器；我们在这里使用堆栈，因为偶尔会出现游标执行事件嵌套的情况。
 - en: '### Code Profiling'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 代码性能分析'
 - en: If logging reveals that individual queries are taking too long, you’d need a
     breakdown of how much time was spent within the database processing the query,
     sending results over the network, being handled by the [DBAPI](../glossary.html#term-DBAPI),
     and finally being received by SQLAlchemy’s result set and/or ORM layer. Each of
     these stages can present their own individual bottlenecks, depending on specifics.
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果日志显示单个查询花费的时间太长，你需要分解在数据库内处理查询、通过网络发送结果、被[DBAPI](../glossary.html#term-DBAPI)处理以及最终由SQLAlchemy的结果集和/或ORM层接收的时间。每个阶段都可能存在自己的瓶颈，具体取决于具体情况。
 - en: 'For that you need to use the [Python Profiling Module](https://docs.python.org/2/library/profile.html).
     Below is a simple recipe which works profiling into a context manager:'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 为此，您需要使用[Python Profiling Module](https://docs.python.org/2/library/profile.html)。以下是一个将分析集成到上下文管理器中的简单示例：
 - en: '[PRE6]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'To profile a section of code:'
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 要对代码段进行分析：
 - en: '[PRE7]'
+  id: totrans-62
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'The output of profiling can be used to give an idea where time is being spent.
     A section of profiling output looks like this:'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 分析的输出可以用来了解时间花在哪里。分析输出的一部分如下所示：
 - en: '[PRE8]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: Above, we can see that the `instances()` SQLAlchemy function was called 222
     times (recursively, and 21 times from the outside), taking a total of .011 seconds
     for all calls combined.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的例子中，我们可以看到 `instances()` SQLAlchemy 函数被调用了 222 次（递归调用，外部调用 21 次），总共花费了 .011
+    秒来执行所有调用。
 - en: Execution Slowness
+  id: totrans-66
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 执行慢
 - en: 'The specifics of these calls can tell us where the time is being spent. If
     for example, you see time being spent within `cursor.execute()`, e.g. against
     the DBAPI:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些调用的具体情况可以告诉我们时间花在哪里。例如，如果您看到时间花在 `cursor.execute()` 内部，例如针对 DBAPI：
 - en: '[PRE9]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: this would indicate that the database is taking a long time to start returning
     results, and it means your query should be optimized, either by adding indexes
     or restructuring the query and/or underlying schema. For that task, analysis of
     the query plan is warranted, using a system such as EXPLAIN, SHOW PLAN, etc. as
     is provided by the database backend.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将表示数据库需要很长时间才能开始返回结果，这意味着您的查询应该进行优化，可以通过添加索引或重构查询和/或底层架构来实现。对于这项任务，应该使用数据库后端提供的
+    EXPLAIN、SHOW PLAN 等系统来分析查询计划。
 - en: Result Fetching Slowness - Core
+  id: totrans-70
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 结果获取慢 - 核心
 - en: If on the other hand you see many thousands of calls related to fetching rows,
     or very long calls to `fetchall()`, it may mean your query is returning more rows
     than expected, or that the fetching of rows itself is slow. The ORM itself typically
     uses `fetchall()` to fetch rows (or `fetchmany()` if the [`Query.yield_per()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.yield_per
     "sqlalchemy.orm.Query.yield_per") option is used).
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，如果你看到与获取行相关的许多调用，或者 `fetchall()` 的调用时间非常长，这可能意味着查询返回的行数超出了预期，或者获取行本身很慢。ORM
+    本身通常使用 `fetchall()` 来获取行（如果使用 [`Query.yield_per()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.yield_per
+    "sqlalchemy.orm.Query.yield_per") 选项，则使用 `fetchmany()`）。
 - en: 'An inordinately large number of rows would be indicated by a very slow call
     to `fetchall()` at the DBAPI level:'
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过在 DBAPI 级别使用 `fetchall()`，会导致调用非常慢，这可能表示行数过多：
 - en: '[PRE10]'
+  id: totrans-73
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: An unexpectedly large number of rows, even if the ultimate result doesn’t seem
     to have many rows, can be the result of a cartesian product - when multiple sets
     of rows are combined together without appropriately joining the tables together.
@@ -373,134 +560,201 @@
     the wrong [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
     objects are used in a complex query, pulling in additional FROM clauses that are
     unexpected.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 即使最终结果似乎没有很多行，但意外地大量行数可能是笛卡尔积的结果 - 当多组行未适当地连接在一起时。如果在复杂查询中使用了错误的[`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") 对象，从而引入了意外的额外 FROM 子句，那么使用 SQLAlchemy Core 或 ORM 查询往往很容易产生这种行为。
 - en: 'On the other hand, a fast call to `fetchall()` at the DBAPI level, but then
     slowness when SQLAlchemy’s [`CursorResult`](../core/connections.html#sqlalchemy.engine.CursorResult
     "sqlalchemy.engine.CursorResult") is asked to do a `fetchall()`, may indicate
     slowness in processing of datatypes, such as unicode conversions and similar:'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，在 DBAPI 级别使用 `fetchall()` 快速，但当 SQLAlchemy 的[`CursorResult`](../core/connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult") 被要求执行 `fetchall()` 时却很慢，可能表示数据类型处理慢，比如 Unicode
+    转换等：
 - en: '[PRE11]'
+  id: totrans-76
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'In some cases, a backend might be doing type-level processing that isn’t needed.
     More specifically, seeing calls within the type API that are slow are better indicators
     - below is what it looks like when we use a type like this:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 在某些情况下，后端可能正在进行不需要的类型级处理。更具体地说，看到类型 API 中的慢调用是更好的指标 - 下面是使用此类类型时的情况：
 - en: '[PRE12]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'the profiling output of this intentionally slow operation can be seen like
     this:'
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个有意慢操作的分析输出可以看起来像这样：
 - en: '[PRE13]'
+  id: totrans-80
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: that is, we see many expensive calls within the `type_api` system, and the actual
     time consuming thing is the `time.sleep()` call.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 也就是说，我们在 `type_api` 系统中看到了许多昂贵的调用，而实际耗时的是 `time.sleep()` 调用。
 - en: Make sure to check the [Dialect documentation](../dialects/index.html) for notes
     on known performance tuning suggestions at this level, especially for databases
     like Oracle. There may be systems related to ensuring numeric accuracy or string
     processing that may not be needed in all cases.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 请确保查阅[方言文档](../dialects/index.html)以了解关于这个级别已知的性能调优建议的说明，特别是对于像 Oracle 这样的数据库。在这种情况下可能有一些关于确保数字精度或字符串处理的系统不需要在所有情况下都需要的系统。
 - en: There also may be even more low-level points at which row-fetching performance
     is suffering; for example, if time spent seems to focus on a call like `socket.receive()`,
     that could indicate that everything is fast except for the actual network connection,
     and too much time is spent with data moving over the network.
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 在行提取性能受影响的更低级别可能还有更多的点；例如，如果花费的时间似乎集中在像 `socket.receive()` 这样的调用上，这可能表明除了实际的网络连接之外，一切都很快，而且花费了太多时间在数据在网络上传输上。
 - en: Result Fetching Slowness - ORM
+  id: totrans-84
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 结果获取速度慢 - ORM
 - en: 'To detect slowness in ORM fetching of rows (which is the most common area of
     performance concern), calls like `populate_state()` and `_instance()` will illustrate
     individual ORM object populations:'
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 要检测 ORM 提取行的慢速（这是性能关注的最常见领域），调用如 `populate_state()` 和 `_instance()` 将说明单个 ORM
+    对象的填充情况：
 - en: '[PRE14]'
+  id: totrans-86
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'The ORM’s slowness in turning rows into ORM-mapped objects is a product of
     the complexity of this operation combined with the overhead of cPython. Common
     strategies to mitigate this include:'
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: ORM 将行转换为 ORM 映射对象的速度慢是这个操作的复杂性与 cPython 的开销的产物。减轻这种情况的常见策略包括：
 - en: 'fetch individual columns instead of full entities, that is:'
+  id: totrans-88
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 获取单个列而不是完整的实体，即：
 - en: '[PRE15]'
+  id: totrans-89
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'instead of:'
+  id: totrans-90
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 而不是：
 - en: '[PRE16]'
+  id: totrans-91
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'Use [`Bundle`](../orm/queryguide/api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle")
     objects to organize column-based results:'
+  id: totrans-92
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用[`Bundle`](../orm/queryguide/api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle")对象来组织基于列的结果：
 - en: '[PRE17]'
+  id: totrans-93
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: Use result caching - see [Dogpile Caching](../orm/examples.html#examples-caching)
     for an in-depth example of this.
+  id: totrans-94
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用结果缓存 - 参见 [Dogpile Caching](../orm/examples.html#examples-caching) 了解深入示例。
 - en: Consider a faster interpreter like that of PyPy.
+  id: totrans-95
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 考虑使用像 PyPy 这样的更快的解释器。
 - en: The output of a profile can be a little daunting but after some practice they
     are very easy to read.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 分析结果可能有点令人生畏，但经过一些实践后，它们就会变得非常容易阅读。
 - en: See also
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Performance](../orm/examples.html#examples-performance) - a suite of performance
     demonstrations with bundled profiling capabilities.'
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: '[性能](../orm/examples.html#examples-performance) - 一套具有捆绑式分析功能的性能演示。'
 - en: I’m inserting 400,000 rows with the ORM and it’s really slow!
+  id: totrans-99
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 我正在使用 ORM 插入 40 万行，但速度真的很慢！
 - en: The nature of ORM inserts has changed, as most included drivers use RETURNING
     with [insertmanyvalues](../core/connections.html#engine-insertmanyvalues) support
     as of SQLAlchemy 2.0\. See the section [Optimized ORM bulk insert now implemented
     for all backends other than MySQL](../changelog/whatsnew_20.html#change-6047)
     for details.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: ORM 插入的性质已经发生了变化，因为大多数包含的驱动程序在 SQLAlchemy 2.0 中都使用了 RETURNING 和 [insertmanyvalues](../core/connections.html#engine-insertmanyvalues)
+    支持。请参阅 [除了 MySQL 外的所有后端现在都已实现优化的 ORM 批量插入](../changelog/whatsnew_20.html#change-6047)
+    一节了解详情。
 - en: Overall, SQLAlchemy built-in drivers other than that of MySQL should now offer
     very fast ORM bulk insert performance.
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 总的来说，SQLAlchemy 内置的驱动程序，除了 MySQL 外，现在应该提供非常快的 ORM 批量插入性能。
 - en: Third party drivers can opt in to the new bulk infrastructure as well with some
     small code changes assuming their backends support the necessary syntaxes. SQLAlchemy
     developers would encourage users of third party dialects to post issues with these
     drivers, so that they may contact SQLAlchemy developers for assistance.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 第三方驱动程序也可以选择使用一些小的代码更改来使用新的批量基础架构，假设他们的后端支持所需的语法。SQLAlchemy 开发人员鼓励第三方方言的用户发布关于这些驱动程序的问题，以便他们可以联系
+    SQLAlchemy 开发人员寻求帮助。
 - en: '## Why is my application slow after upgrading to 1.4 and/or 2.x?'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 为什么我升级到 1.4 和/或 2.x 后我的应用程序变慢了？'
 - en: SQLAlchemy as of version 1.4 includes a [SQL compilation caching facility](../core/connections.html#sql-caching)
     which will allow Core and ORM SQL constructs to cache their stringified form,
     along with other structural information used to fetch results from the statement,
@@ -512,15 +766,24 @@
     and [`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine "sqlalchemy.types.TypeEngine")
     objects, to produce a **cache key** which fully represents their state to the
     degree that it affects the SQL compilation process.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 截至版本1.4，SQLAlchemy包含一个[SQL编译缓存设施](../core/connections.html#sql-caching)，它允许核心和ORM
+    SQL构造缓存它们的字符串形式，以及用于从语句中获取结果的其他结构信息，从而在下次使用另一个结构上等价的构造时跳过相对昂贵的字符串编译过程。该系统依赖于为所有SQL构造实现的功能，包括诸如[`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column")、[`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select")和[`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine")对象等，以生成完全代表它们状态的**缓存键**，在影响SQL编译过程的程度上。
 - en: The caching system allows SQLAlchemy 1.4 and above to be more performant than
     SQLAlchemy 1.3 with regards to the time spent converting SQL constructs into strings
     repeatedly. However, this only works if caching is enabled for the dialect and
     SQL constructs in use; if not, string compilation is usually similar to that of
     SQLAlchemy 1.3, with a slight decrease in speed in some cases.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 缓存系统使得SQLAlchemy 1.4及以上版本在将SQL构造反复转换为字符串方面比SQLAlchemy 1.3更高效。但是，这仅在启用了使用的方言和SQL构造的缓存时才有效；如果没有启用，字符串编译通常类似于SQLAlchemy
+    1.3，某些情况下速度略有降低。
 - en: There is one case however where if SQLAlchemy’s new caching system has been
     disabled (for reasons below), performance for the ORM may be in fact significantly
     poorer than that of 1.3 or other prior releases which is due to the lack of caching
@@ -529,24 +792,34 @@
     significant (30% or higher) degradations in performance (measured in time for
     operations to complete) when switching to 1.4, this is the likely cause of the
     issue, with steps to mitigate below.
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是，有一种情况，即如果禁用了SQLAlchemy的新缓存系统（由于以下原因），则ORM的性能实际上可能显着低于1.3或其他先前版本，原因是在1.3和以前的版本中，ORM惰性加载器和对象刷新查询中没有缓存，而是使用了现在已经过时的`BakedQuery`系统。如果应用程序在切换到1.4后性能显着下降（测量操作完成所需的时间为30%或更高），则这可能是问题的主要原因，以下是缓解措施。
 - en: See also
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[SQL Compilation Caching](../core/connections.html#sql-caching) - overview
     of the caching system'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: '[SQL编译缓存](../core/connections.html#sql-caching) - 缓存系统概述'
 - en: '[Object will not produce a cache key, Performance Implications](../errors.html#caching-caveats)
     - additional information regarding the warnings generated for elements that don’t
     enable caching.'
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: '[对象不会产生缓存键，性能影响](../errors.html#caching-caveats) - 关于未启用缓存的元素生成警告的附加信息。'
 - en: Step one - turn on SQL logging and confirm whether or not caching is working
+  id: totrans-110
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第一步 - 打开SQL日志并确认缓存是否正常工作
 - en: Here, we want to use the technique described at [engine logging](../core/connections.html#sql-caching-logging),
     looking for statements with the `[no key]` indicator or even `[dialect does not
     support caching]`. The indicators we would see for SQL statements that are successfully
@@ -555,54 +828,87 @@
     the vast majority of statements subsequent. If `[no key]` is prevalent in particular
     for SELECT statements, or if caching is disabled entirely due to `[dialect does
     not support caching]`, this can be the cause of significant performance degradation.
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们希望使用[引擎日志记录](../core/connections.html#sql-caching-logging)中描述的技术，寻找带有`[no
+    key]`指示器或甚至`[dialect does not support caching]`的语句。对于成功参与缓存系统的SQL语句，我们将看到首次调用语句时指示为`[generated
+    in Xs]`，对于绝大多数后续语句，将看到`[cached since Xs ago]`。如果特别是对于SELECT语句，或者如果由于`[dialect
+    does not support caching]`而完全禁用缓存，则这可能是性能显著下降的原因。
 - en: See also
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Estimating Cache Performance Using Logging](../core/connections.html#sql-caching-logging)'
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用日志估算缓存性能](../core/connections.html#sql-caching-logging)'
 - en: Step two - identify what constructs are blocking caching from being enabled
+  id: totrans-114
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第二步 - 确定是哪些构造物阻止了缓存的启用
 - en: Assuming statements are not being cached, there should be warnings emitted early
     in the application’s log (SQLAlchemy 1.4.28 and above only) indicating dialects,
     [`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine "sqlalchemy.types.TypeEngine")
     objects, and SQL constructs that are not participating in caching.
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设语句未被缓存，应该会在应用程序日志的早期（仅适用于 SQLAlchemy 1.4.28 及以上版本）中发出警告，指示不参与缓存的方言、[`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") 对象和 SQL 构造。
 - en: 'For user defined datatypes such as those which extend [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
     "sqlalchemy.types.TypeDecorator") and [`UserDefinedType`](../core/custom_types.html#sqlalchemy.types.UserDefinedType
     "sqlalchemy.types.UserDefinedType"), the warnings will look like:'
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于像那些扩展 [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator") 和 [`UserDefinedType`](../core/custom_types.html#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") 的用户定义数据类型，警告将如下所示：
 - en: '[PRE18]'
+  id: totrans-117
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: 'For custom and third party SQL elements, such as those constructed using the
     techniques described at [Custom SQL Constructs and Compilation Extension](../core/compiler.html),
     these warnings will look like:'
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于自定义和第三方 SQL 元素，比如那些使用 [自定义 SQL 构造和编译扩展](../core/compiler.html) 中描述的技术构建的元素，这些警告将如下所示：
 - en: '[PRE19]'
+  id: totrans-119
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: 'For custom and third party dialects which make use of the [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect
     "sqlalchemy.engine.Dialect") class hierarchy, the warnings will look like:'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于使用 [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    类层次结构的自定义和第三方方言，警告将如下所示：
 - en: '[PRE20]'
+  id: totrans-121
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: Step three - enable caching for the given objects and/or seek alternatives
+  id: totrans-122
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第三步 - 为给定对象启用缓存和/或寻求替代方案
 - en: 'Steps to mitigate the lack of caching include:'
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 缓解缓存不足的步骤包括：
 - en: 'Review and set [`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
     "sqlalchemy.types.ExternalType.cache_ok") to `True` for all custom types which
     extend from [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
@@ -610,28 +916,43 @@
     "sqlalchemy.types.UserDefinedType"), as well as subclasses of these such as [`PickleType`](../core/type_basics.html#sqlalchemy.types.PickleType
     "sqlalchemy.types.PickleType"). Set this **only** if the custom type does not
     include any additional state attributes which affect how it renders SQL:'
+  id: totrans-124
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 检查并设置 [`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") 为 `True`，用于所有继承自 [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator")、[`UserDefinedType`](../core/custom_types.html#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") 的自定义类型，以及这些类型的子类，如 [`PickleType`](../core/type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType")。只有在自定义类型不包含影响其呈现 SQL 的其他状态属性时才设置此项：
 - en: '[PRE21]'
+  id: totrans-125
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: If the types in use are from a third-party library, consult with the maintainers
     of that library so that it may be adjusted and released.
+  id: totrans-126
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 如果使用的类型来自第三方库，请与该库的维护者联系，以便进行调整和发布。
 - en: See also
+  id: totrans-127
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
     "sqlalchemy.types.ExternalType.cache_ok") - background on requirements to enable
     caching for custom datatypes.'
+  id: totrans-128
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") - 关于启用自定义数据类型缓存的要求背景信息。'
 - en: Make sure third party dialects set [`Dialect.supports_statement_cache`](../core/internals.html#sqlalchemy.engine.Dialect.supports_statement_cache
     "sqlalchemy.engine.Dialect.supports_statement_cache") to `True`. What this indicates
     is that the maintainers of a third party dialect have made sure their dialect
@@ -640,19 +961,28 @@
     compilation patterns which can in fact interfere with caching, it’s important
     that dialect maintainers check and test this carefully, adjusting for any of the
     legacy patterns which won’t work with caching.
+  id: totrans-129
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保第三方方言将 [`Dialect.supports_statement_cache`](../core/internals.html#sqlalchemy.engine.Dialect.supports_statement_cache
+    "sqlalchemy.engine.Dialect.supports_statement_cache") 设置为 `True`。这表示第三方方言的维护者已确保其方言与
+    SQLAlchemy 1.4 或更高版本兼容，并且他们的方言不包含可能妨碍缓存的任何编译特性。由于有一些常见的编译模式实际上可能会干扰缓存，因此方言维护者必须仔细检查和测试此内容，并针对任何无法与缓存一起使用的旧模式进行调整。
 - en: See also
+  id: totrans-130
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[Caching for Third Party Dialects](../core/connections.html#engine-thirdparty-caching)
     - background and examples for third-party dialects to participate in SQL statement
     caching.'
+  id: totrans-131
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[第三方方言的缓存](../core/connections.html#engine-thirdparty-caching) - 第三方方言参与 SQL
+    语句缓存的背景和示例。'
 - en: Custom SQL classes, including all DQL / DML constructs one might create using
     the [Custom SQL Constructs and Compilation Extension](../core/compiler.html),
     as well as ad-hoc subclasses of objects such as [`Column`](../core/metadata.html#sqlalchemy.schema.Column
@@ -661,35 +991,54 @@
     "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute may be set to
     `True` for trivial subclasses, which do not contain any subclass-specific state
     information which affects the SQL compilation.
+  id: totrans-132
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 自定义 SQL 类，包括使用[自定义 SQL 构造和编译扩展](../core/compiler.html)可能创建的所有 DQL / DML 构造，以及对象的临时子类，如[`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column")或[`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table")。[`HasCacheKey.inherit_cache`](../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") 属性可以设置为 `True`，用于简单的子类，这些子类不包含影响
+    SQL 编译的子类特定状态信息。
 - en: See also
+  id: totrans-133
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[Enabling Caching Support for Custom Constructs](../core/compiler.html#compilerext-caching)
     - guidelines for applying the [`HasCacheKey.inherit_cache`](../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
     "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute.'
+  id: totrans-134
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[为自定义构造启用缓存支持](../core/compiler.html#compilerext-caching) - 应用[`HasCacheKey.inherit_cache`](../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") 属性的指南。'
 - en: See also
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[SQL Compilation Caching](../core/connections.html#sql-caching) - caching system
     overview'
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: '[SQL 编译缓存](../core/connections.html#sql-caching) - 缓存系统概述'
 - en: '[Object will not produce a cache key, Performance Implications](../errors.html#caching-caveats)
     - background on warnings emitted when caching is not enabled for specific constructs
     and/or dialects.'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: '[对象不会生成缓存键，性能影响](../errors.html#caching-caveats) - 在未为特定构造和/或方言启用缓存时发出警告的背景信息。'
 - en: Step one - turn on SQL logging and confirm whether or not caching is working
+  id: totrans-138
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 步骤一 - 打开 SQL 日志记录并确认缓存是否起作用
 - en: Here, we want to use the technique described at [engine logging](../core/connections.html#sql-caching-logging),
     looking for statements with the `[no key]` indicator or even `[dialect does not
     support caching]`. The indicators we would see for SQL statements that are successfully
@@ -698,54 +1047,87 @@
     the vast majority of statements subsequent. If `[no key]` is prevalent in particular
     for SELECT statements, or if caching is disabled entirely due to `[dialect does
     not support caching]`, this can be the cause of significant performance degradation.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们想要使用[引擎日志记录](../core/connections.html#sql-caching-logging)中描述的技术，查找具有
+    `[no key]` 指示器或甚至 `[dialect does not support caching]` 的语句。当首次调用语句时，我们将看到参与缓存系统的
+    SQL 语句指示 `[generated in Xs]`，然后对于绝大多数后续语句，指示为 `[cached since Xs ago]`。如果 `[no
+    key]` 特别是对于 SELECT 语句普遍存在，或者如果由于 `[dialect does not support caching]` 而完全禁用缓存，这可能是导致性能严重下降的原因。
 - en: See also
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[Estimating Cache Performance Using Logging](../core/connections.html#sql-caching-logging)'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用日志估算缓存性能](../core/connections.html#sql-caching-logging)'
 - en: Step two - identify what constructs are blocking caching from being enabled
+  id: totrans-142
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第二步 - 确定哪些构造阻止了缓存的启用
 - en: Assuming statements are not being cached, there should be warnings emitted early
     in the application’s log (SQLAlchemy 1.4.28 and above only) indicating dialects,
     [`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine "sqlalchemy.types.TypeEngine")
     objects, and SQL constructs that are not participating in caching.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设语句未被缓存，则应在应用程序的日志中尽早发出警告（仅适用于 SQLAlchemy 1.4.28 及以上版本），指示不参与缓存的方言、[`TypeEngine`](../core/type_api.html#sqlalchemy.types.TypeEngine
+    "sqlalchemy.types.TypeEngine") 对象和 SQL 构造。
 - en: 'For user defined datatypes such as those which extend [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
     "sqlalchemy.types.TypeDecorator") and [`UserDefinedType`](../core/custom_types.html#sqlalchemy.types.UserDefinedType
     "sqlalchemy.types.UserDefinedType"), the warnings will look like:'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于用户定义的数据类型，比如那些扩展了[`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator")和[`UserDefinedType`](../core/custom_types.html#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType")的数据类型，警告信息如下：
 - en: '[PRE22]'
+  id: totrans-145
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: 'For custom and third party SQL elements, such as those constructed using the
     techniques described at [Custom SQL Constructs and Compilation Extension](../core/compiler.html),
     these warnings will look like:'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于自定义和第三方 SQL 元素，例如使用 [自定义 SQL 构造和编译扩展](../core/compiler.html) 中描述的技术构造的元素，这些警告信息如下：
 - en: '[PRE23]'
+  id: totrans-147
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'For custom and third party dialects which make use of the [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect
     "sqlalchemy.engine.Dialect") class hierarchy, the warnings will look like:'
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于使用 [`Dialect`](../core/internals.html#sqlalchemy.engine.Dialect "sqlalchemy.engine.Dialect")
+    类层次结构的自定义和第三方方言，警告信息如下：
 - en: '[PRE24]'
+  id: totrans-149
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: Step three - enable caching for the given objects and/or seek alternatives
+  id: totrans-150
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第三步 - 为给定的对象启用缓存和/或寻找替代方案
 - en: 'Steps to mitigate the lack of caching include:'
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: 缓存缺失的缓解步骤包括：
 - en: 'Review and set [`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
     "sqlalchemy.types.ExternalType.cache_ok") to `True` for all custom types which
     extend from [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
@@ -753,28 +1135,43 @@
     "sqlalchemy.types.UserDefinedType"), as well as subclasses of these such as [`PickleType`](../core/type_basics.html#sqlalchemy.types.PickleType
     "sqlalchemy.types.PickleType"). Set this **only** if the custom type does not
     include any additional state attributes which affect how it renders SQL:'
+  id: totrans-152
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 查看并设置 [`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok")，对于所有扩展自 [`TypeDecorator`](../core/custom_types.html#sqlalchemy.types.TypeDecorator
+    "sqlalchemy.types.TypeDecorator")、[`UserDefinedType`](../core/custom_types.html#sqlalchemy.types.UserDefinedType
+    "sqlalchemy.types.UserDefinedType") 的自定义类型，以及这些类型的子类，例如 [`PickleType`](../core/type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType")。仅在自定义类型不包含影响其呈现 SQL 的其他状态属性时才设置此选项：
 - en: '[PRE25]'
+  id: totrans-153
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: If the types in use are from a third-party library, consult with the maintainers
     of that library so that it may be adjusted and released.
+  id: totrans-154
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 如果使用的类型来自第三方库，请咨询该库的维护者，以便进行调整并发布。
 - en: See also
+  id: totrans-155
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
     "sqlalchemy.types.ExternalType.cache_ok") - background on requirements to enable
     caching for custom datatypes.'
+  id: totrans-156
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[`ExternalType.cache_ok`](../core/type_api.html#sqlalchemy.types.ExternalType.cache_ok
+    "sqlalchemy.types.ExternalType.cache_ok") - 启用自定义数据类型缓存的要求背景。'
 - en: Make sure third party dialects set [`Dialect.supports_statement_cache`](../core/internals.html#sqlalchemy.engine.Dialect.supports_statement_cache
     "sqlalchemy.engine.Dialect.supports_statement_cache") to `True`. What this indicates
     is that the maintainers of a third party dialect have made sure their dialect
@@ -783,19 +1180,28 @@
     compilation patterns which can in fact interfere with caching, it’s important
     that dialect maintainers check and test this carefully, adjusting for any of the
     legacy patterns which won’t work with caching.
+  id: totrans-157
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保第三方方言设置[`Dialect.supports_statement_cache`](../core/internals.html#sqlalchemy.engine.Dialect.supports_statement_cache
+    "sqlalchemy.engine.Dialect.supports_statement_cache")为 `True`。这表示第三方方言的维护者已确保他们的方言与
+    SQLAlchemy 1.4 或更高版本兼容，并且他们的方言不包含任何可能干扰缓存的编译特性。由于有一些常见的编译模式实际上可能会干扰缓存，因此方言维护者需要仔细检查和测试，并调整任何不适用于缓存的旧模式。
 - en: See also
+  id: totrans-158
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Caching for Third Party Dialects](../core/connections.html#engine-thirdparty-caching)
     - background and examples for third-party dialects to participate in SQL statement
     caching.'
+  id: totrans-159
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[第三方方言的缓存](../core/connections.html#engine-thirdparty-caching) - 第三方方言参与 SQL
+    语句缓存的背景和示例。'
 - en: Custom SQL classes, including all DQL / DML constructs one might create using
     the [Custom SQL Constructs and Compilation Extension](../core/compiler.html),
     as well as ad-hoc subclasses of objects such as [`Column`](../core/metadata.html#sqlalchemy.schema.Column
@@ -804,56 +1210,86 @@
     "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute may be set to
     `True` for trivial subclasses, which do not contain any subclass-specific state
     information which affects the SQL compilation.
+  id: totrans-160
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 自定义 SQL 类，包括使用 [自定义 SQL 构造和编译扩展](../core/compiler.html) 创建的所有 DQL / DML 构造，以及对象的临时子类，例如
+    [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
+    或 [`Table`](../core/metadata.html#sqlalchemy.schema.Table "sqlalchemy.schema.Table")。对于不包含影响
+    SQL 编译的子类特定状态信息的简单子类，可以将 [`HasCacheKey.inherit_cache`](../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") 属性设置为 `True`。
 - en: See also
+  id: totrans-161
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Enabling Caching Support for Custom Constructs](../core/compiler.html#compilerext-caching)
     - guidelines for applying the [`HasCacheKey.inherit_cache`](../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
     "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache") attribute.'
+  id: totrans-162
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[为自定义结构启用缓存支持](../core/compiler.html#compilerext-caching) - 应用[`HasCacheKey.inherit_cache`](../core/foundation.html#sqlalchemy.sql.traversals.HasCacheKey.inherit_cache
+    "sqlalchemy.sql.traversals.HasCacheKey.inherit_cache")属性的指南。'
 - en: See also
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[SQL Compilation Caching](../core/connections.html#sql-caching) - caching system
     overview'
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: '[SQL 编译缓存](../core/connections.html#sql-caching) - 缓存系统概述'
 - en: '[Object will not produce a cache key, Performance Implications](../errors.html#caching-caveats)
     - background on warnings emitted when caching is not enabled for specific constructs
     and/or dialects.'
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: '[对象不会生成缓存密钥，性能影响](../errors.html#caching-caveats) - 当为特定构造和/或方言禁用缓存时发出警告的背景信息。'
 - en: '## How can I profile a SQLAlchemy powered application?'
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 如何对由 SQLAlchemy 驱动的应用进行性能分析？'
 - en: Looking for performance issues typically involves two strategies. One is query
     profiling, and the other is code profiling.
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 寻找性能问题通常涉及两种策略。一种是查询分析，另一种是代码分析。
 - en: Query Profiling
+  id: totrans-168
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 查询分析
 - en: 'Sometimes just plain SQL logging (enabled via python’s logging module or via
     the `echo=True` argument on [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
     "sqlalchemy.create_engine")) can give an idea how long things are taking. For
     example, if you log something right after a SQL operation, you’d see something
     like this in your log:'
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 有时候，仅仅通过普通的 SQL 记录（通过 python 的 logging 模块启用，或者通过[`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine")上的 `echo=True` 参数启用）就可以了解操作花费的时间。例如，如果在 SQL 操作之后记录了一些内容，你会在日志中看到像这样的信息：
 - en: '[PRE26]'
+  id: totrans-170
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: if you logged `myapp.somemessage` right after the operation, you know it took
     334ms to complete the SQL part of things.
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你在操作之后记录了 `myapp.somemessage`，你就知道完成 SQL 部分花费了 334ms。
 - en: Logging SQL will also illustrate if dozens/hundreds of queries are being issued
     which could be better organized into much fewer queries. When using the SQLAlchemy
     ORM, the “eager loading” feature is provided to partially ([`contains_eager()`](../orm/queryguide/relationships.html#sqlalchemy.orm.contains_eager
@@ -863,96 +1299,151 @@
     loading” typically means to use joins so that results across multiple tables can
     be loaded in one result set instead of multiplying numbers of queries as more
     depth is added (i.e. `r + r*r2 + r*r2*r3` …)
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 记录 SQL 也会说明是否发出了数十/数百个查询，这些查询可以更好地组织成更少的查询。在使用 SQLAlchemy ORM 时，“急加载”功能提供了部分
+    ([`contains_eager()`](../orm/queryguide/relationships.html#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager")) 或完全 ([`joinedload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload"), [`subqueryload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload")) 自动化此活动，但是没有 ORM 的“急加载”通常意味着使用连接，以便跨多个表加载结果集，而不是随着深度的增加而增加查询次数（即
+    `r + r*r2 + r*r2*r3` …）
 - en: 'For more long-term profiling of queries, or to implement an application-side
     “slow query” monitor, events can be used to intercept cursor executions, using
     a recipe like the following:'
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于更长期的查询分析，或者实现应用程序端的“慢查询”监视器，可以使用事件拦截游标执行，使用以下类似的方法：
 - en: '[PRE27]'
+  id: totrans-174
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: Above, we use the [`ConnectionEvents.before_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.before_cursor_execute
     "sqlalchemy.events.ConnectionEvents.before_cursor_execute") and [`ConnectionEvents.after_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.after_cursor_execute
     "sqlalchemy.events.ConnectionEvents.after_cursor_execute") events to establish
     an interception point around when a statement is executed. We attach a timer onto
     the connection using the `info` dictionary; we use a stack here for the occasional
     case where the cursor execute events may be nested.
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的例子中，我们使用 [`ConnectionEvents.before_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.before_cursor_execute
+    "sqlalchemy.events.ConnectionEvents.before_cursor_execute") 和 [`ConnectionEvents.after_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.after_cursor_execute
+    "sqlalchemy.events.ConnectionEvents.after_cursor_execute") 事件来建立在执行语句时的拦截点。我们使用
+    `info` 字典在连接上附加一个计时器；我们在这里使用堆栈，以处理游标执行事件可能嵌套的偶发情况。
 - en: '### Code Profiling'
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 代码分析'
 - en: If logging reveals that individual queries are taking too long, you’d need a
     breakdown of how much time was spent within the database processing the query,
     sending results over the network, being handled by the [DBAPI](../glossary.html#term-DBAPI),
     and finally being received by SQLAlchemy’s result set and/or ORM layer. Each of
     these stages can present their own individual bottlenecks, depending on specifics.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果日志显示单个查询花费的时间过长，您需要了解在数据库内部处理查询、通过网络发送结果、由 [DBAPI](../glossary.html#term-DBAPI)
+    处理以及最终由 SQLAlchemy 的结果集和/或 ORM 层接收的时间分别花费了多少。每个阶段都可能出现自己的瓶颈，具体取决于具体情况。
 - en: 'For that you need to use the [Python Profiling Module](https://docs.python.org/2/library/profile.html).
     Below is a simple recipe which works profiling into a context manager:'
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 为此，您需要使用 [Python Profiling Module](https://docs.python.org/2/library/profile.html)。以下是一个将分析集成到上下文管理器中的简单示例：
 - en: '[PRE28]'
+  id: totrans-179
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: 'To profile a section of code:'
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: 要对代码段进行分析：
 - en: '[PRE29]'
+  id: totrans-181
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: 'The output of profiling can be used to give an idea where time is being spent.
     A section of profiling output looks like this:'
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 分析的输出可以用来了解时间花费在哪里。分析输出的一部分看起来像这样：
 - en: '[PRE30]'
+  id: totrans-183
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: Above, we can see that the `instances()` SQLAlchemy function was called 222
     times (recursively, and 21 times from the outside), taking a total of .011 seconds
     for all calls combined.
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的例子中，我们可以看到 `instances()` SQLAlchemy 函数被调用了 222 次（递归调用，并且从外部调用了 21 次），所有调用总共花费了
+    .011 秒。
 - en: Execution Slowness
+  id: totrans-185
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 执行速度慢
 - en: 'The specifics of these calls can tell us where the time is being spent. If
     for example, you see time being spent within `cursor.execute()`, e.g. against
     the DBAPI:'
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些调用的具体信息可以告诉我们时间花费在哪里。例如，如果您看到时间花费在 `cursor.execute()` 内部，例如针对 DBAPI：
 - en: '[PRE31]'
+  id: totrans-187
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: this would indicate that the database is taking a long time to start returning
     results, and it means your query should be optimized, either by adding indexes
     or restructuring the query and/or underlying schema. For that task, analysis of
     the query plan is warranted, using a system such as EXPLAIN, SHOW PLAN, etc. as
     is provided by the database backend.
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 这表明数据库启动返回结果花费了很长时间，这意味着你的查询应该进行优化，可以通过添加索引或重构查询和/或底层模式来实现。对于这项任务，有必要分析查询计划，使用诸如
+    EXPLAIN、SHOW PLAN 等数据库后端提供的系统。
 - en: Result Fetching Slowness - Core
+  id: totrans-189
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 结果获取缓慢 - Core
 - en: If on the other hand you see many thousands of calls related to fetching rows,
     or very long calls to `fetchall()`, it may mean your query is returning more rows
     than expected, or that the fetching of rows itself is slow. The ORM itself typically
     uses `fetchall()` to fetch rows (or `fetchmany()` if the [`Query.yield_per()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.yield_per
     "sqlalchemy.orm.Query.yield_per") option is used).
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，如果您看到与获取行相关的成千上万次调用，或者对 `fetchall()` 的调用非常长，这可能意味着您的查询返回的行数比预期的多，或者获取行本身很慢。ORM
+    本身通常使用 `fetchall()` 来获取行（或者如果使用了 [`Query.yield_per()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.yield_per
+    "sqlalchemy.orm.Query.yield_per") 选项，则使用 `fetchmany()`）。
 - en: 'An inordinately large number of rows would be indicated by a very slow call
     to `fetchall()` at the DBAPI level:'
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 非常大量的行数将通过在 DBAPI 级别非常慢的调用 `fetchall()` 来表示：
 - en: '[PRE32]'
+  id: totrans-192
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: An unexpectedly large number of rows, even if the ultimate result doesn’t seem
     to have many rows, can be the result of a cartesian product - when multiple sets
     of rows are combined together without appropriately joining the tables together.
@@ -960,128 +1451,193 @@
     the wrong [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
     objects are used in a complex query, pulling in additional FROM clauses that are
     unexpected.
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 即使最终结果似乎没有很多行，但出现意外地大量行的情况可能是笛卡尔积的结果 - 当多组行未经适当连接地组合在一起时。如果在复杂查询中使用了错误的 [`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column") 对象，导致引入意外的额外 FROM 子句，那么用 SQLAlchemy Core 或 ORM 查询往往很容易产生这种行为。
 - en: 'On the other hand, a fast call to `fetchall()` at the DBAPI level, but then
     slowness when SQLAlchemy’s [`CursorResult`](../core/connections.html#sqlalchemy.engine.CursorResult
     "sqlalchemy.engine.CursorResult") is asked to do a `fetchall()`, may indicate
     slowness in processing of datatypes, such as unicode conversions and similar:'
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，在 DBAPI 级别快速调用 `fetchall()`，但当 SQLAlchemy 的 [`CursorResult`](../core/connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult") 要求执行 `fetchall()` 时出现缓慢，可能表示数据类型的处理速度较慢，例如 unicode
+    转换等：
 - en: '[PRE33]'
+  id: totrans-195
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: 'In some cases, a backend might be doing type-level processing that isn’t needed.
     More specifically, seeing calls within the type API that are slow are better indicators
     - below is what it looks like when we use a type like this:'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 在某些情况下，后端可能正在进行不需要的类型级处理。更具体地说，看到类型 API 内的调用很慢更好，下面是我们使用这样一个类型时的情况：
 - en: '[PRE34]'
+  id: totrans-197
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: 'the profiling output of this intentionally slow operation can be seen like
     this:'
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个有意慢操作的分析结果可以看起来像这样：
 - en: '[PRE35]'
+  id: totrans-199
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: that is, we see many expensive calls within the `type_api` system, and the actual
     time consuming thing is the `time.sleep()` call.
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 也就是说，我们在 `type_api` 系统内看到了很多昂贵的调用，而实际耗时的事情是 `time.sleep()` 调用。
 - en: Make sure to check the [Dialect documentation](../dialects/index.html) for notes
     on known performance tuning suggestions at this level, especially for databases
     like Oracle. There may be systems related to ensuring numeric accuracy or string
     processing that may not be needed in all cases.
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: 确保检查[Dialect documentation](../dialects/index.html)以了解此级别已知的性能调整建议，特别是对于像 Oracle
+    这样的数据库。可能有关于确保数值精度或字符串处理的系统可能并不在所有情况下都需要。
 - en: There also may be even more low-level points at which row-fetching performance
     is suffering; for example, if time spent seems to focus on a call like `socket.receive()`,
     that could indicate that everything is fast except for the actual network connection,
     and too much time is spent with data moving over the network.
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: 还可能存在更低级别的点导致行获取性能下降；例如，如果时间主要花在像 `socket.receive()` 这样的调用上，这可能表明除了网络连接本身外，其他所有东西都很快，而且花费了太多时间在网络上传输数据。
 - en: Result Fetching Slowness - ORM
+  id: totrans-203
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 结果获取缓慢 - ORM
 - en: 'To detect slowness in ORM fetching of rows (which is the most common area of
     performance concern), calls like `populate_state()` and `_instance()` will illustrate
     individual ORM object populations:'
+  id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: 要检测 ORM 获取行的速度慢（这是性能关注的最常见领域），像 `populate_state()` 和 `_instance()` 这样的调用将说明单个
+    ORM 对象的加载情况：
 - en: '[PRE36]'
+  id: totrans-205
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: 'The ORM’s slowness in turning rows into ORM-mapped objects is a product of
     the complexity of this operation combined with the overhead of cPython. Common
     strategies to mitigate this include:'
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: ORM 将行转换为 ORM 映射对象的速度慢是由于此操作的复杂性与 cPython 的开销相结合造成的。缓解这种情况的常见策略包括：
 - en: 'fetch individual columns instead of full entities, that is:'
+  id: totrans-207
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 获取单个列而不是完整的实体，即：
 - en: '[PRE37]'
+  id: totrans-208
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: 'instead of:'
+  id: totrans-209
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 而不是：
 - en: '[PRE38]'
+  id: totrans-210
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: 'Use [`Bundle`](../orm/queryguide/api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle")
     objects to organize column-based results:'
+  id: totrans-211
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 [`Bundle`](../orm/queryguide/api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle")
+    对象组织基于列的结果：
 - en: '[PRE39]'
+  id: totrans-212
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: Use result caching - see [Dogpile Caching](../orm/examples.html#examples-caching)
     for an in-depth example of this.
+  id: totrans-213
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用结果缓存 - 有关此的详细示例，请参见 [Dogpile Caching](../orm/examples.html#examples-caching)。
 - en: Consider a faster interpreter like that of PyPy.
+  id: totrans-214
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 考虑使用像 PyPy 这样的更快的解释器。
 - en: The output of a profile can be a little daunting but after some practice they
     are very easy to read.
+  id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: 一次性分析的输出可能有点令人生畏，但经过一些练习后，它们会变得非常容易阅读。
 - en: See also
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Performance](../orm/examples.html#examples-performance) - a suite of performance
     demonstrations with bundled profiling capabilities.'
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: '[性能](../orm/examples.html#examples-performance) - 一套具有捆绑分析功能的性能演示。'
 - en: Query Profiling
+  id: totrans-218
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 查询分析
 - en: 'Sometimes just plain SQL logging (enabled via python’s logging module or via
     the `echo=True` argument on [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
     "sqlalchemy.create_engine")) can give an idea how long things are taking. For
     example, if you log something right after a SQL operation, you’d see something
     like this in your log:'
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: 有时，仅仅记录 SQL（通过 Python 的 logging 模块启用或通过 [`create_engine()`](../core/engines.html#sqlalchemy.create_engine
+    "sqlalchemy.create_engine") 的 `echo=True` 参数启用）可以让人了解到事情花费的时间。例如，如果在 SQL 操作之后记录了某些内容，则在日志中会看到类似于以下内容：
 - en: '[PRE40]'
+  id: totrans-220
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: if you logged `myapp.somemessage` right after the operation, you know it took
     334ms to complete the SQL part of things.
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果在操作之后记录了 `myapp.somemessage`，则知道完成 SQL 部分花费了 334ms。
 - en: Logging SQL will also illustrate if dozens/hundreds of queries are being issued
     which could be better organized into much fewer queries. When using the SQLAlchemy
     ORM, the “eager loading” feature is provided to partially ([`contains_eager()`](../orm/queryguide/relationships.html#sqlalchemy.orm.contains_eager
@@ -1091,96 +1647,146 @@
     loading” typically means to use joins so that results across multiple tables can
     be loaded in one result set instead of multiplying numbers of queries as more
     depth is added (i.e. `r + r*r2 + r*r2*r3` …)
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: 记录 SQL 还会说明是否发出了数十个/数百个查询，这些查询可以更好地组织为更少的查询。在使用 SQLAlchemy ORM 时，“急加载”功能提供了部分（[`contains_eager()`](../orm/queryguide/relationships.html#sqlalchemy.orm.contains_eager
+    "sqlalchemy.orm.contains_eager")）或完全（[`joinedload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload")、[`subqueryload()`](../orm/queryguide/relationships.html#sqlalchemy.orm.subqueryload
+    "sqlalchemy.orm.subqueryload")）自动化此活动，但在没有 ORM 的“急加载”时，通常意味着使用连接以便在一个结果集中加载多个表的结果，而不是随着深度的增加而增加查询次数（即
+    `r + r*r2 + r*r2*r3` …）
 - en: 'For more long-term profiling of queries, or to implement an application-side
     “slow query” monitor, events can be used to intercept cursor executions, using
     a recipe like the following:'
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了更长期地分析查询，或者实现应用程序端的“慢查询”监视器，可以使用事件拦截游标执行，使用以下类似的方法：
 - en: '[PRE41]'
+  id: totrans-224
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: Above, we use the [`ConnectionEvents.before_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.before_cursor_execute
     "sqlalchemy.events.ConnectionEvents.before_cursor_execute") and [`ConnectionEvents.after_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.after_cursor_execute
     "sqlalchemy.events.ConnectionEvents.after_cursor_execute") events to establish
     an interception point around when a statement is executed. We attach a timer onto
     the connection using the `info` dictionary; we use a stack here for the occasional
     case where the cursor execute events may be nested.
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 以上，我们使用[`ConnectionEvents.before_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.before_cursor_execute
+    "sqlalchemy.events.ConnectionEvents.before_cursor_execute")和[`ConnectionEvents.after_cursor_execute()`](../core/events.html#sqlalchemy.events.ConnectionEvents.after_cursor_execute
+    "sqlalchemy.events.ConnectionEvents.after_cursor_execute")事件在语句执行时建立拦截点。我们在连接上附加一个计时器，使用`info`字典；在这里我们使用堆栈，偶尔情况下游标执行事件可能是嵌套的。
 - en: '### Code Profiling'
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 代码性能分析'
 - en: If logging reveals that individual queries are taking too long, you’d need a
     breakdown of how much time was spent within the database processing the query,
     sending results over the network, being handled by the [DBAPI](../glossary.html#term-DBAPI),
     and finally being received by SQLAlchemy’s result set and/or ORM layer. Each of
     these stages can present their own individual bottlenecks, depending on specifics.
+  id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果日志显示个别查询花费了太长时间，您需要详细了解在数据库内部处理查询、通过网络发送结果、由[DBAPI](../glossary.html#term-DBAPI)处理以及最终由SQLAlchemy的结果集和/或ORM层接收的时间。每个阶段都可能存在自己的瓶颈，具体取决于特定情况。
 - en: 'For that you need to use the [Python Profiling Module](https://docs.python.org/2/library/profile.html).
     Below is a simple recipe which works profiling into a context manager:'
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 为此，您需要使用[Python性能分析模块](https://docs.python.org/2/library/profile.html)。以下是一个将性能分析嵌入到上下文管理器中的简单示例：
 - en: '[PRE42]'
+  id: totrans-229
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: 'To profile a section of code:'
+  id: totrans-230
   prefs: []
   type: TYPE_NORMAL
+  zh: 对代码段进行性能分析：
 - en: '[PRE43]'
+  id: totrans-231
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: 'The output of profiling can be used to give an idea where time is being spent.
     A section of profiling output looks like this:'
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 性能分析的输出可以让我们了解时间消耗在哪里。性能分析的一部分输出如下所示：
 - en: '[PRE44]'
+  id: totrans-233
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: Above, we can see that the `instances()` SQLAlchemy function was called 222
     times (recursively, and 21 times from the outside), taking a total of .011 seconds
     for all calls combined.
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: 以上，我们可以看到`instances()` SQLAlchemy函数被调用了222次（递归调用，从外部调用了21次），所有调用总共花了0.011秒。
 - en: Execution Slowness
+  id: totrans-235
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 执行速度慢
 - en: 'The specifics of these calls can tell us where the time is being spent. If
     for example, you see time being spent within `cursor.execute()`, e.g. against
     the DBAPI:'
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些调用的具体细节可以告诉我们时间都花在哪里。例如，如果您看到在`cursor.execute()`内花费了时间，例如针对DBAPI：
 - en: '[PRE45]'
+  id: totrans-237
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: this would indicate that the database is taking a long time to start returning
     results, and it means your query should be optimized, either by adding indexes
     or restructuring the query and/or underlying schema. For that task, analysis of
     the query plan is warranted, using a system such as EXPLAIN, SHOW PLAN, etc. as
     is provided by the database backend.
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将表明数据库花费了很长时间才开始返回结果，这意味着您的查询应该被优化，可以通过添加索引或重组查询和/或底层架构来完成此任务。对查询计划的分析是有必要的，可以使用像EXPLAIN、SHOW
+    PLAN等数据库后端提供的系统。
 - en: Result Fetching Slowness - Core
+  id: totrans-239
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 结果获取速度慢 - 核心
 - en: If on the other hand you see many thousands of calls related to fetching rows,
     or very long calls to `fetchall()`, it may mean your query is returning more rows
     than expected, or that the fetching of rows itself is slow. The ORM itself typically
     uses `fetchall()` to fetch rows (or `fetchmany()` if the [`Query.yield_per()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.yield_per
     "sqlalchemy.orm.Query.yield_per") option is used).
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，如果你看到与获取行有关的成千上万次调用，或者对`fetchall()`的非常长时间的调用，这可能意味着你的查询返回的行数超出了预期，或者获取行本身的速度很慢。ORM本身通常使用`fetchall()`来获取行（如果使用了[`Query.yield_per()`](../orm/queryguide/query.html#sqlalchemy.orm.Query.yield_per
+    "sqlalchemy.orm.Query.yield_per")选项，则使用`fetchmany()`）。
 - en: 'An inordinately large number of rows would be indicated by a very slow call
     to `fetchall()` at the DBAPI level:'
+  id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: 非常慢的`fetchall()`调用会被DBAPI级别上指示出异乎寻常的大量行：
 - en: '[PRE46]'
+  id: totrans-242
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: An unexpectedly large number of rows, even if the ultimate result doesn’t seem
     to have many rows, can be the result of a cartesian product - when multiple sets
     of rows are combined together without appropriately joining the tables together.
@@ -1188,128 +1794,191 @@
     the wrong [`Column`](../core/metadata.html#sqlalchemy.schema.Column "sqlalchemy.schema.Column")
     objects are used in a complex query, pulling in additional FROM clauses that are
     unexpected.
+  id: totrans-243
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果行数意外地很大，即使最终结果似乎没有很多行，也可能是笛卡尔积的结果 - 当多组行组合在一起而没有适当地连接表时。如果在复杂查询中使用了错误的[`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column")对象，拉入意外的FROM子句，很容易在SQLAlchemy Core或ORM查询中产生这种行为。
 - en: 'On the other hand, a fast call to `fetchall()` at the DBAPI level, but then
     slowness when SQLAlchemy’s [`CursorResult`](../core/connections.html#sqlalchemy.engine.CursorResult
     "sqlalchemy.engine.CursorResult") is asked to do a `fetchall()`, may indicate
     slowness in processing of datatypes, such as unicode conversions and similar:'
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，在DBAPI级别快速调用`fetchall()`，但当要求SQLAlchemy的[`CursorResult`](../core/connections.html#sqlalchemy.engine.CursorResult
+    "sqlalchemy.engine.CursorResult")执行`fetchall()`时变慢，可能表明在处理数据类型（如unicode转换等）时存在缓慢：
 - en: '[PRE47]'
+  id: totrans-245
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: 'In some cases, a backend might be doing type-level processing that isn’t needed.
     More specifically, seeing calls within the type API that are slow are better indicators
     - below is what it looks like when we use a type like this:'
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: 在某些情况下，后端可能正在进行不必要的类型级处理。更具体地说，看到类型API中的调用很慢更好，下面是当我们使用这样的类型时的情况：
 - en: '[PRE48]'
+  id: totrans-247
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: 'the profiling output of this intentionally slow operation can be seen like
     this:'
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个故意缓慢操作的分析输出看起来像这样：
 - en: '[PRE49]'
+  id: totrans-249
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: that is, we see many expensive calls within the `type_api` system, and the actual
     time consuming thing is the `time.sleep()` call.
+  id: totrans-250
   prefs: []
   type: TYPE_NORMAL
+  zh: 也就是说，我们在`type_api`系统中看到许多昂贵的调用，而实际耗时的是`time.sleep()`调用。
 - en: Make sure to check the [Dialect documentation](../dialects/index.html) for notes
     on known performance tuning suggestions at this level, especially for databases
     like Oracle. There may be systems related to ensuring numeric accuracy or string
     processing that may not be needed in all cases.
+  id: totrans-251
   prefs: []
   type: TYPE_NORMAL
+  zh: 确保查看[Dialect文档](../dialects/index.html)以获取关于已知性能调优建议的说明，特别是对于像Oracle这样的数据库。可能存在确保数字精度或字符串处理的系统，在某些情况下可能不需要。
 - en: There also may be even more low-level points at which row-fetching performance
     is suffering; for example, if time spent seems to focus on a call like `socket.receive()`,
     that could indicate that everything is fast except for the actual network connection,
     and too much time is spent with data moving over the network.
+  id: totrans-252
   prefs: []
   type: TYPE_NORMAL
+  zh: 还可能存在更多低级别的点导致行提取性能下降；例如，如果花费的时间似乎集中在像`socket.receive()`这样的调用上，那可能表明除了实际的网络连接外，一切都很快，而花费太多时间在数据在网络上传输上。
 - en: Result Fetching Slowness - ORM
+  id: totrans-253
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 结果提取缓慢 - ORM
 - en: 'To detect slowness in ORM fetching of rows (which is the most common area of
     performance concern), calls like `populate_state()` and `_instance()` will illustrate
     individual ORM object populations:'
+  id: totrans-254
   prefs: []
   type: TYPE_NORMAL
+  zh: 要检测ORM提取行的缓慢（这是性能关注的最常见领域），像`populate_state()`和`_instance()`这样的调用将说明单个ORM对象的填充：
 - en: '[PRE50]'
+  id: totrans-255
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: 'The ORM’s slowness in turning rows into ORM-mapped objects is a product of
     the complexity of this operation combined with the overhead of cPython. Common
     strategies to mitigate this include:'
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
+  zh: ORM在将行转换为ORM映射对象时的缓慢是这个操作的复杂性与cPython的开销相结合的产物。减轻这种情况的常见策略包括：
 - en: 'fetch individual columns instead of full entities, that is:'
+  id: totrans-257
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 获取单个列而不是完整实体，也就是：
 - en: '[PRE51]'
+  id: totrans-258
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: 'instead of:'
+  id: totrans-259
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 而不是：
 - en: '[PRE52]'
+  id: totrans-260
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: 'Use [`Bundle`](../orm/queryguide/api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle")
     objects to organize column-based results:'
+  id: totrans-261
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用[`Bundle`](../orm/queryguide/api.html#sqlalchemy.orm.Bundle "sqlalchemy.orm.Bundle")对象来组织基于列的结果：
 - en: '[PRE53]'
+  id: totrans-262
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: Use result caching - see [Dogpile Caching](../orm/examples.html#examples-caching)
     for an in-depth example of this.
+  id: totrans-263
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用结果缓存 - 参见[Dogpile Caching](../orm/examples.html#examples-caching)以获取关于此的深入示例。
 - en: Consider a faster interpreter like that of PyPy.
+  id: totrans-264
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 考虑使用像PyPy这样的更快解释器。
 - en: The output of a profile can be a little daunting but after some practice they
     are very easy to read.
+  id: totrans-265
   prefs: []
   type: TYPE_NORMAL
+  zh: 分析的输出可能有点令人生畏，但经过一些练习后，它们非常容易阅读。
 - en: See also
+  id: totrans-266
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Performance](../orm/examples.html#examples-performance) - a suite of performance
     demonstrations with bundled profiling capabilities.'
+  id: totrans-267
   prefs: []
   type: TYPE_NORMAL
+  zh: '[性能](../orm/examples.html#examples-performance) - 一套具有捆绑分析功能的性能演示。'
 - en: I’m inserting 400,000 rows with the ORM and it’s really slow!
+  id: totrans-268
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 我正在使用ORM插入40万行，速度真的很慢！
 - en: The nature of ORM inserts has changed, as most included drivers use RETURNING
     with [insertmanyvalues](../core/connections.html#engine-insertmanyvalues) support
     as of SQLAlchemy 2.0\. See the section [Optimized ORM bulk insert now implemented
     for all backends other than MySQL](../changelog/whatsnew_20.html#change-6047)
     for details.
+  id: totrans-269
   prefs: []
   type: TYPE_NORMAL
+  zh: ORM 插入的性质已经改变，因为大多数包含的驱动程序在 SQLAlchemy 2.0 中都使用了带有 [insertmanyvalues](../core/connections.html#engine-insertmanyvalues)
+    支持的 RETURNING。详情请参见 [优化的 ORM 批量插入现在已经为除 MySQL 外的所有后端实现](../changelog/whatsnew_20.html#change-6047)
+    部分。
 - en: Overall, SQLAlchemy built-in drivers other than that of MySQL should now offer
     very fast ORM bulk insert performance.
+  id: totrans-270
   prefs: []
   type: TYPE_NORMAL
+  zh: 总的来说，除了 MySQL 外，SQLAlchemy 内置的驱动程序现在应该提供非常快速的 ORM 批量插入性能。
 - en: Third party drivers can opt in to the new bulk infrastructure as well with some
     small code changes assuming their backends support the necessary syntaxes. SQLAlchemy
     developers would encourage users of third party dialects to post issues with these
     drivers, so that they may contact SQLAlchemy developers for assistance.
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
+  zh: 第三方驱动程序也可以通过一些小的代码更改选择使用新的批量基础设施，假设它们的后端支持必要的语法。SQLAlchemy 开发人员鼓励第三方方言的用户发布与这些驱动程序相关的问题，以便他们可以联系
+    SQLAlchemy 开发人员寻求帮助。

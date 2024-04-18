@@ -1,52 +1,82 @@
 - en: Mutation Tracking
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 突变跟踪
 - en: 原文：[https://docs.sqlalchemy.org/en/20/orm/extensions/mutable.html](https://docs.sqlalchemy.org/en/20/orm/extensions/mutable.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/orm/extensions/mutable.html](https://docs.sqlalchemy.org/en/20/orm/extensions/mutable.html)
 - en: Provide support for tracking of in-place changes to scalar values, which are
     propagated into ORM change events on owning parent objects.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 提供对标量值的就地更改的跟踪支持，这些更改传播到拥有父对象上的 ORM 更改事件中。
 - en: '## Establishing Mutability on Scalar Column Values'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 在标量列值上建立可变性'
 - en: 'A typical example of a “mutable” structure is a Python dictionary. Following
     the example introduced in [SQL Datatype Objects](../../core/types.html), we begin
     with a custom type that marshals Python dictionaries into JSON strings before
     being persisted:'
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: “可变”结构的典型示例是 Python 字典。按照 [SQL 数据类型对象](../../core/types.html) 中介绍的示例，我们从一个自定义类型开始，该类型将
+    Python 字典编组为 JSON 字符串，然后再进行持久化：
 - en: '[PRE0]'
+  id: totrans-5
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: The usage of `json` is only for the purposes of example. The [`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable
     "sqlalchemy.ext.mutable") extension can be used with any type whose target Python
     type may be mutable, including [`PickleType`](../../core/type_basics.html#sqlalchemy.types.PickleType
     "sqlalchemy.types.PickleType"), [`ARRAY`](../../dialects/postgresql.html#sqlalchemy.dialects.postgresql.ARRAY
     "sqlalchemy.dialects.postgresql.ARRAY"), etc.
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 仅出于示例目的使用 `json`。[`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
+    扩展可与任何目标 Python 类型可能是可变的类型一起使用，包括 [`PickleType`](../../core/type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType")、[`ARRAY`](../../dialects/postgresql.html#sqlalchemy.dialects.postgresql.ARRAY
+    "sqlalchemy.dialects.postgresql.ARRAY") 等。
 - en: 'When using the [`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
     extension, the value itself tracks all parents which reference it. Below, we illustrate
     a simple version of the [`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
     dictionary object, which applies the [`Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable") mixin to a plain Python dictionary:'
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用 [`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
+    扩展时，值本身会跟踪所有引用它的父对象。下面，我们展示了 [`MutableDict`](#sqlalchemy.ext.mutable.MutableDict
+    "sqlalchemy.ext.mutable.MutableDict") 字典对象的简单版本，它将 [`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable") mixin 应用于普通 Python 字典：
 - en: '[PRE1]'
+  id: totrans-8
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: The above dictionary class takes the approach of subclassing the Python built-in
     `dict` to produce a dict subclass which routes all mutation events through `__setitem__`.
     There are variants on this approach, such as subclassing `UserDict.UserDict` or
     `collections.MutableMapping`; the part that’s important to this example is that
     the [`Mutable.changed()`](#sqlalchemy.ext.mutable.Mutable.changed "sqlalchemy.ext.mutable.Mutable.changed")
     method is called whenever an in-place change to the datastructure takes place.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述字典类采用了子类化 Python 内置的 `dict` 的方法，以生成一个 dict 子类，该子类通过 `__setitem__` 将所有突变事件路由到。这种方法有其变体，例如子类化
+    `UserDict.UserDict` 或 `collections.MutableMapping`；对于此示例而言，重要的部分是当数据结构发生就地更改时，将调用
+    [`Mutable.changed()`](#sqlalchemy.ext.mutable.Mutable.changed "sqlalchemy.ext.mutable.Mutable.changed")
+    方法。
 - en: We also redefine the [`Mutable.coerce()`](#sqlalchemy.ext.mutable.Mutable.coerce
     "sqlalchemy.ext.mutable.Mutable.coerce") method which will be used to convert
     any values that are not instances of `MutableDict`, such as the plain dictionaries
@@ -56,55 +86,86 @@
     calling code uses `MutableDict` explicitly. When [`Mutable.coerce()`](#sqlalchemy.ext.mutable.Mutable.coerce
     "sqlalchemy.ext.mutable.Mutable.coerce") is not overridden, any values applied
     to a parent object which are not instances of the mutable type will raise a `ValueError`.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还重新定义了 [`Mutable.coerce()`](#sqlalchemy.ext.mutable.Mutable.coerce "sqlalchemy.ext.mutable.Mutable.coerce")
+    方法，该方法将用于将不是 `MutableDict` 实例的任何值转换为适当的类型，例如 `json` 模块返回的普通字典。定义此方法是可选的；我们也可以创建我们的
+    `JSONEncodedDict`，使其始终返回 `MutableDict` 的实例，并且还确保所有调用代码都显式使用 `MutableDict`。当未覆盖
+    [`Mutable.coerce()`](#sqlalchemy.ext.mutable.Mutable.coerce "sqlalchemy.ext.mutable.Mutable.coerce")
+    时，应用于父对象的任何不是可变类型实例的值都将引发 `ValueError`。
 - en: 'Our new `MutableDict` type offers a class method [`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") which we can use within column metadata
     to associate with types. This method grabs the given type object or class and
     associates a listener that will detect all future mappings of this type, applying
     event listening instrumentation to the mapped attribute. Such as, with classical
     table metadata:'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的新 `MutableDict` 类型提供了一个类方法 [`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
+    "sqlalchemy.ext.mutable.Mutable.as_mutable")，我们可以在列元数据中使用它来关联类型。该方法获取给定的类型对象或类，并关联一个监听器，该监听器将检测到该类型的所有未来映射，并对映射的属性应用事件监听仪器。例如，使用经典的表元数据：
 - en: '[PRE2]'
+  id: totrans-12
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'Above, [`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") returns an instance of `JSONEncodedDict`
     (if the type object was not an instance already), which will intercept any attributes
     which are mapped against this type. Below we establish a simple mapping against
     the `my_data` table:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面，[`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable "sqlalchemy.ext.mutable.Mutable.as_mutable")
+    返回一个 `JSONEncodedDict` 实例（如果类型对象尚不是实例），该实例将拦截针对该类型映射的任何属性。下面我们建立一个简单的映射与 `my_data`
+    表：
 - en: '[PRE3]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: The `MyDataClass.data` member will now be notified of in place changes to its
     value.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: '`MyDataClass.data` 成员现在将收到对其值的原地更改的通知。'
 - en: 'Any in-place changes to the `MyDataClass.data` member will flag the attribute
     as “dirty” on the parent object:'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 对 `MyDataClass.data` 成员的任何原地更改都会在父对象上标记属性为“脏”：
 - en: '[PRE4]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'The `MutableDict` can be associated with all future instances of `JSONEncodedDict`
     in one step, using [`Mutable.associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
     "sqlalchemy.ext.mutable.Mutable.associate_with"). This is similar to [`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") except it will intercept all occurrences
     of `MutableDict` in all mappings unconditionally, without the need to declare
     it individually:'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: '`MutableDict` 可以通过一步关联所有未来的 `JSONEncodedDict` 实例，使用 [`Mutable.associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
+    "sqlalchemy.ext.mutable.Mutable.associate_with")。这类似于 [`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
+    "sqlalchemy.ext.mutable.Mutable.as_mutable")，但它将无条件地拦截所有映射中所有 `MutableDict` 的出现，而无需单独声明它：'
 - en: '[PRE5]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Supporting Pickling
+  id: totrans-20
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 支持 Pickling
 - en: 'The key to the [`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
     extension relies upon the placement of a `weakref.WeakKeyDictionary` upon the
     value object, which stores a mapping of parent mapped objects keyed to the attribute
@@ -115,46 +176,75 @@
     pickled by themselves outside of the context of the parent. The developer responsibility
     here is only to provide a `__getstate__` method that excludes the [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
     "sqlalchemy.ext.mutable.MutableBase._parents") collection from the pickle stream:'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
+    扩展的关键在于在值对象上放置了一个 `weakref.WeakKeyDictionary`，它存储了父映射对象到与该值相关联的属性名称的映射。 `WeakKeyDictionary`
+    对象不可 pickle，因为它们包含 weakrefs 和函数回调。在我们的情况下，这是件好事，因为如果这个字典是可 pickle 的，那么它可能会导致我们的值对象的
+    pickle 大小过大，因为它们在不涉及父对象上下文的情况下被单独 pickle。开发人员在这里的责任只是提供一个 `__getstate__` 方法，该方法将
+    [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents "sqlalchemy.ext.mutable.MutableBase._parents")
+    集合从 pickle 流中排除：'
 - en: '[PRE6]'
+  id: totrans-22
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'With our dictionary example, we need to return the contents of the dict itself
     (and also restore them on __setstate__):'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于我们的字典示例，我们需要返回字典本身的内容（并在 `__setstate__` 上也进行恢复）：
 - en: '[PRE7]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: In the case that our mutable value object is pickled as it is attached to one
     or more parent objects that are also part of the pickle, the [`Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable") mixin will re-establish the [`Mutable._parents`](#sqlalchemy.ext.mutable.Mutable._parents
     "sqlalchemy.ext.mutable.Mutable._parents") collection on each value object as
     the owning parents themselves are unpickled.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们的可变值对象作为它附加到的一个或多个父对象一起被 pickle，那么 [`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable") mixin 将在每个值对象上重新建立 [`Mutable._parents`](#sqlalchemy.ext.mutable.Mutable._parents
+    "sqlalchemy.ext.mutable.Mutable._parents") 集合，因为拥有父对象本身被 unpickle。
 - en: Receiving Events
+  id: totrans-26
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 接收事件
 - en: 'The [`AttributeEvents.modified()`](../events.html#sqlalchemy.orm.AttributeEvents.modified
     "sqlalchemy.orm.AttributeEvents.modified") event handler may be used to receive
     an event when a mutable scalar emits a change event. This event handler is called
     when the [`flag_modified()`](../session_api.html#sqlalchemy.orm.attributes.flag_modified
     "sqlalchemy.orm.attributes.flag_modified") function is called from within the
     mutable extension:'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`AttributeEvents.modified()`](../events.html#sqlalchemy.orm.AttributeEvents.modified
+    "sqlalchemy.orm.AttributeEvents.modified") 事件处理程序可用于在可变标量发出更改事件时接收事件。 当从可变扩展内调用
+    [`flag_modified()`](../session_api.html#sqlalchemy.orm.attributes.flag_modified
+    "sqlalchemy.orm.attributes.flag_modified") 函数时，将调用此事件处理程序：'
 - en: '[PRE8]  ## Establishing Mutability on Composites'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE8]  ## 在复合上建立可变性'
 - en: Composites are a special ORM feature which allow a single scalar attribute to
     be assigned an object value which represents information “composed” from one or
     more columns from the underlying mapped table. The usual example is that of a
     geometric “point”, and is introduced in [Composite Column Types](../composites.html#mapper-composite).
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 复合是一种特殊的ORM功能，允许将单个标量属性分配给一个对象值，该对象值表示从底层映射表的一个或多个列中“组合”而成的信息。 通常示例是几何“点”，并在
+    [复合列类型](../composites.html#mapper-composite) 中介绍。
 - en: 'As is the case with [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable"),
     the user-defined composite class subclasses [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
     "sqlalchemy.ext.mutable.MutableComposite") as a mixin, and detects and delivers
@@ -166,33 +256,58 @@
     "sqlalchemy.ext.mutable.MutableComposite") in its bases and to route attribute
     set events via `__setattr__` to the [`MutableComposite.changed()`](#sqlalchemy.ext.mutable.MutableComposite.changed
     "sqlalchemy.ext.mutable.MutableComposite.changed") method:'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 与 [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
+    一样，用户定义的复合类将 [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
+    作为一个混合类，通过 [`MutableComposite.changed()`](#sqlalchemy.ext.mutable.MutableComposite.changed
+    "sqlalchemy.ext.mutable.MutableComposite.changed") 方法检测并传递更改事件给其父对象。 在复合类的情况下，检测通常通过特殊的Python方法
+    `__setattr__()` 进行。 在下面的示例中，我们扩展了 [复合列类型](../composites.html#mapper-composite)
+    中介绍的 `Point` 类，以包括 [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite") 在其基类中，并通过 `__setattr__` 将属性设置事件路由到
+    [`MutableComposite.changed()`](#sqlalchemy.ext.mutable.MutableComposite.changed
+    "sqlalchemy.ext.mutable.MutableComposite.changed") 方法：
 - en: '[PRE9]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'The [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
     class makes use of class mapping events to automatically establish listeners for
     any usage of [`composite()`](../composites.html#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
     that specifies our `Point` type. Below, when `Point` is mapped to the `Vertex`
     class, listeners are established which will route change events from `Point` objects
     to each of the `Vertex.start` and `Vertex.end` attributes:'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
+    类利用类映射事件自动为任何使用指定我们的 `Point` 类型的 [`composite()`](../composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") 的地方建立监听器。 下面，当 `Point` 映射到 `Vertex` 类时，将建立监听器，这些监听器将将来自
+    `Point` 对象的更改事件路由到每个 `Vertex.start` 和 `Vertex.end` 属性：'
 - en: '[PRE10]'
+  id: totrans-33
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'Any in-place changes to the `Vertex.start` or `Vertex.end` members will flag
     the attribute as “dirty” on the parent object:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 对 `Vertex.start` 或 `Vertex.end` 成员的任何原地更改都将在父对象上标记该属性为“脏”：
 - en: '[PRE11]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Coercing Mutable Composites
+  id: totrans-36
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 强制转换可变组合
 - en: 'The [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce "sqlalchemy.ext.mutable.MutableBase.coerce")
     method is also supported on composite types. In the case of [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
     "sqlalchemy.ext.mutable.MutableComposite"), the [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
@@ -202,15 +317,25 @@
     to using a [`validates()`](../mapped_attributes.html#sqlalchemy.orm.validates
     "sqlalchemy.orm.validates") validation routine for all attributes which make use
     of the custom composite type:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce "sqlalchemy.ext.mutable.MutableBase.coerce")
+    方法也支持复合类型。对于 [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")，[`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
+    "sqlalchemy.ext.mutable.MutableBase.coerce") 方法仅在属性设置操作时调用，而不在加载操作中调用。覆盖 [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
+    "sqlalchemy.ext.mutable.MutableBase.coerce") 方法基本上等同于为使用自定义复合类型的所有属性使用 [`validates()`](../mapped_attributes.html#sqlalchemy.orm.validates
+    "sqlalchemy.orm.validates") 验证程序：'
 - en: '[PRE12]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: Supporting Pickling
+  id: totrans-39
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 支持 Pickling
 - en: 'As is the case with [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable"),
     the [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
     helper class uses a `weakref.WeakKeyDictionary` available via the [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
@@ -219,101 +344,165 @@
     least need to define a `__getstate__` that doesn’t include the `_parents` dictionary.
     Below we define both a `__getstate__` and a `__setstate__` that package up the
     minimal form of our `Point` class:'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: '与 [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
+    类似，[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
+    辅助类使用 `weakref.WeakKeyDictionary`，可通过 [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
+    "sqlalchemy.ext.mutable.MutableBase._parents") 属性获得，该属性不可 picklable。如果我们需要 pickle
+    `Point` 的实例或其所属的类 `Vertex`，我们至少需要定义一个不包含 `_parents` 字典的 `__getstate__`。下面我们定义了
+    `Point` 类的最小形式的 `__getstate__` 和 `__setstate__`： '
 - en: '[PRE13]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: As with [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable"),
     the [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
     augments the pickling process of the parent’s object-relational state so that
     the [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents "sqlalchemy.ext.mutable.MutableBase._parents")
     collection is restored to all `Point` objects.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 与 [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
+    一样，[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
+    增强了父对象的对象关系状态的 pickling 过程，以便 [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
+    "sqlalchemy.ext.mutable.MutableBase._parents") 集合被恢复到所有 `Point` 对象中。
 - en: API Reference
+  id: totrans-43
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: API 参考
 - en: '| Object Name | Description |'
+  id: totrans-44
   prefs: []
   type: TYPE_TB
+  zh: '| 对象名称 | 描述 |'
 - en: '| --- | --- |'
+  id: totrans-45
   prefs: []
   type: TYPE_TB
+  zh: '| --- | --- |'
 - en: '| [Mutable](#sqlalchemy.ext.mutable.Mutable) | Mixin that defines transparent
     propagation of change events to a parent object. |'
+  id: totrans-46
   prefs: []
   type: TYPE_TB
+  zh: '| [Mutable](#sqlalchemy.ext.mutable.Mutable) | 混合类，定义对父对象的变更事件的透明传播。 |'
 - en: '| [MutableBase](#sqlalchemy.ext.mutable.MutableBase) | Common base class to
     [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     and [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite").
     |'
+  id: totrans-47
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableBase](#sqlalchemy.ext.mutable.MutableBase) | [`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable") 和 [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite") 的通用基类。 |'
 - en: '| [MutableComposite](#sqlalchemy.ext.mutable.MutableComposite) | Mixin that
     defines transparent propagation of change events on a SQLAlchemy “composite” object
     to its owning parent or parents. |'
+  id: totrans-48
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableComposite](#sqlalchemy.ext.mutable.MutableComposite) | 混合类，定义对 SQLAlchemy
+    “composite” 对象的变更事件的透明传播，传播到其拥有的父对象或父对象。 |'
 - en: '| [MutableDict](#sqlalchemy.ext.mutable.MutableDict) | A dictionary type that
     implements [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
     |'
+  id: totrans-49
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableDict](#sqlalchemy.ext.mutable.MutableDict) | 实现了 [`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable") 的字典类型。 |'
 - en: '| [MutableList](#sqlalchemy.ext.mutable.MutableList) | A list type that implements
     [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
     |'
+  id: totrans-50
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableList](#sqlalchemy.ext.mutable.MutableList) | 实现了 [`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable") 的列表类型。 |'
 - en: '| [MutableSet](#sqlalchemy.ext.mutable.MutableSet) | A set type that implements
     [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
     |'
+  id: totrans-51
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableSet](#sqlalchemy.ext.mutable.MutableSet) | 实现[`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")的集合类型。 |'
 - en: '[PRE14]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: '**Members**'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[_parents](#sqlalchemy.ext.mutable.MutableBase._parents), [coerce()](#sqlalchemy.ext.mutable.MutableBase.coerce)'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: '[_parents](#sqlalchemy.ext.mutable.MutableBase._parents)，[coerce()](#sqlalchemy.ext.mutable.MutableBase.coerce)'
 - en: Common base class to [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     and [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite").
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 公共基类，用于[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")和[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")。
 - en: '[PRE15]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Dictionary of parent object’s [`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState")->attribute name on the parent.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 父对象的[`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")->父对象上的属性名称的字典。
 - en: This attribute is a so-called “memoized” property. It initializes itself with
     a new `weakref.WeakKeyDictionary` the first time it is accessed, returning the
     same object upon subsequent access.
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 该属性是所谓的“记忆化”属性。首次访问时，它会使用一个新的`weakref.WeakKeyDictionary`进行初始化，并在后续访问时返回相同的对象。
 - en: 'Changed in version 1.4: the [`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState") is now used as the key in the weak dictionary
     rather than the instance itself.'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 在1.4版本中更改：现在使用[`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")作为弱字典中的键，而不是实例本身。
 - en: '[PRE16]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: Given a value, coerce it into the target type.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定一个值，将其强制转换为目标类型。
 - en: Can be overridden by custom subclasses to coerce incoming data into a particular
     type.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以被自定义子类重写，将传入数据强制转换为特定类型。
 - en: By default, raises `ValueError`.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，引发`ValueError`。
 - en: This method is called in different scenarios depending on if the parent class
     is of type [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     or of type [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite").
@@ -321,195 +510,307 @@
     as during ORM loading operations. For the latter, it is only called during attribute-set
     operations; the mechanics of the [`composite()`](../composites.html#sqlalchemy.orm.composite
     "sqlalchemy.orm.composite") construct handle coercion during load operations.
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据父类是[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")类型还是[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")类型，在不同情况下调用此方法。对于前者，它在属性设置操作和ORM加载操作期间都会被调用。对于后者，它仅在属性设置操作期间被调用；[`composite()`](../composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite")构造的机制在加载操作期间处理强制转换。
 - en: 'Parameters:'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 参数：
 - en: '`key` – string name of the ORM-mapped attribute being set.'
+  id: totrans-66
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`key` – 正在设置的ORM映射属性的字符串名称。'
 - en: '`value` – the incoming value.'
+  id: totrans-67
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`value` – 输入值。'
 - en: 'Returns:'
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 返回：
 - en: the method should return the coerced value, or raise `ValueError` if the coercion
     cannot be completed.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果无法完成强制转换，则该方法应返回强制转换后的值，或引发`ValueError`。
 - en: '[PRE17]'
+  id: totrans-70
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: Mixin that defines transparent propagation of change events to a parent object.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 定义透明传播更改事件到父对象的混入。
 - en: See the example in [Establishing Mutability on Scalar Column Values](#mutable-scalars)
     for usage information.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 查看[在标量列值上建立可变性](#mutable-scalars)中的示例以获取用法信息。
 - en: '**Members**'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[_get_listen_keys()](#sqlalchemy.ext.mutable.Mutable._get_listen_keys), [_listen_on_attribute()](#sqlalchemy.ext.mutable.Mutable._listen_on_attribute),
     [_parents](#sqlalchemy.ext.mutable.Mutable._parents), [as_mutable()](#sqlalchemy.ext.mutable.Mutable.as_mutable),
     [associate_with()](#sqlalchemy.ext.mutable.Mutable.associate_with), [associate_with_attribute()](#sqlalchemy.ext.mutable.Mutable.associate_with_attribute),
     [changed()](#sqlalchemy.ext.mutable.Mutable.changed), [coerce()](#sqlalchemy.ext.mutable.Mutable.coerce)'
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: '[_get_listen_keys()](#sqlalchemy.ext.mutable.Mutable._get_listen_keys)，[_listen_on_attribute()](#sqlalchemy.ext.mutable.Mutable._listen_on_attribute)，[_parents](#sqlalchemy.ext.mutable.Mutable._parents)，[as_mutable()](#sqlalchemy.ext.mutable.Mutable.as_mutable)，[associate_with()](#sqlalchemy.ext.mutable.Mutable.associate_with)，[associate_with_attribute()](#sqlalchemy.ext.mutable.Mutable.associate_with_attribute)，[changed()](#sqlalchemy.ext.mutable.Mutable.changed)，[coerce()](#sqlalchemy.ext.mutable.Mutable.coerce)'
 - en: '**Class signature**'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     ([`sqlalchemy.ext.mutable.MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase"))
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 类[`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")（[`sqlalchemy.ext.mutable.MutableBase`](#sqlalchemy.ext.mutable.MutableBase
+    "sqlalchemy.ext.mutable.MutableBase"))
 - en: '[PRE18]'
+  id: totrans-77
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '*inherited from the* `sqlalchemy.ext.mutable.MutableBase._get_listen_keys`
     *method of* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")'
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")
+    *的* `sqlalchemy.ext.mutable.MutableBase._get_listen_keys` *方法*'
 - en: Given a descriptor attribute, return a `set()` of the attribute keys which indicate
     a change in the state of this attribute.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定一个描述符属性，返回一个指示此属性状态变化的属性键的`set()`。
 - en: This is normally just `set([attribute.key])`, but can be overridden to provide
     for additional keys. E.g. a [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
     "sqlalchemy.ext.mutable.MutableComposite") augments this set with the attribute
     keys associated with the columns that comprise the composite value.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 这通常只是`set([attribute.key])`，但可以被覆盖以提供额外的键。例如，[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")会用与组成复合值的列相关联的属性键来增加这个集合。
 - en: This collection is consulted in the case of intercepting the [`InstanceEvents.refresh()`](../events.html#sqlalchemy.orm.InstanceEvents.refresh
     "sqlalchemy.orm.InstanceEvents.refresh") and [`InstanceEvents.refresh_flush()`](../events.html#sqlalchemy.orm.InstanceEvents.refresh_flush
     "sqlalchemy.orm.InstanceEvents.refresh_flush") events, which pass along a list
     of attribute names that have been refreshed; the list is compared against this
     set to determine if action needs to be taken.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 在拦截[`InstanceEvents.refresh()`](../events.html#sqlalchemy.orm.InstanceEvents.refresh
+    "sqlalchemy.orm.InstanceEvents.refresh")和[`InstanceEvents.refresh_flush()`](../events.html#sqlalchemy.orm.InstanceEvents.refresh_flush
+    "sqlalchemy.orm.InstanceEvents.refresh_flush")事件时，将查询此集合，这些事件传递了已刷新的属性名称列表；该列表与此集合进行比较，以确定是否需要采取行动。
 - en: '[PRE19]'
+  id: totrans-82
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: '*inherited from the* `sqlalchemy.ext.mutable.MutableBase._listen_on_attribute`
     *method of* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")
+    *的* `sqlalchemy.ext.mutable.MutableBase._listen_on_attribute` *方法*'
 - en: Establish this type as a mutation listener for the given mapped descriptor.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 将此类型建立为给定映射描述符的变异监听器。
 - en: '[PRE20]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: '*inherited from the* `sqlalchemy.ext.mutable.MutableBase._parents` *attribute
     of* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")
+    *的* `sqlalchemy.ext.mutable.MutableBase._parents` *属性*'
 - en: Dictionary of parent object’s [`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState")->attribute name on the parent.
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 父对象的[`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")->父对象上的属性名的字典。
 - en: This attribute is a so-called “memoized” property. It initializes itself with
     a new `weakref.WeakKeyDictionary` the first time it is accessed, returning the
     same object upon subsequent access.
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 此属性是所谓的“记忆化”属性。它在第一次访问时使用一个新的`weakref.WeakKeyDictionary`进行初始化，并在后续访问时返回相同的对象。
 - en: 'Changed in version 1.4: the [`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState") is now used as the key in the weak dictionary
     rather than the instance itself.'
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 自版本1.4更改：[`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")现在作为弱字典中的键，而不是实例本身。
 - en: '[PRE21]'
+  id: totrans-90
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: Associate a SQL type with this mutable Python type.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 将SQL类型与此可变Python类型关联起来。
 - en: This establishes listeners that will detect ORM mappings against the given type,
     adding mutation event trackers to those mappings.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将建立侦听器，以检测针对给定类型的ORM映射，并向这些映射添加变异事件跟踪器。
 - en: 'The type is returned, unconditionally as an instance, so that [`as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") can be used inline:'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 类型无条件地作为实例返回，因此可以内联使用[`as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
+    "sqlalchemy.ext.mutable.Mutable.as_mutable")：
 - en: '[PRE22]'
+  id: totrans-94
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: Note that the returned type is always an instance, even if a class is given,
     and that only columns which are declared specifically with that type instance
     receive additional instrumentation.
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，返回的类型始终是一个实例，即使给定一个类，也只有明确声明了该类型实例的列才会接收到额外的仪器设备。
 - en: To associate a particular mutable type with all occurrences of a particular
     type, use the [`Mutable.associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
     "sqlalchemy.ext.mutable.Mutable.associate_with") classmethod of the particular
     [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     subclass to establish a global association.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 要将特定的可变类型与所有特定类型的所有出现相关联，请使用特定[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")子类的[`Mutable.associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
+    "sqlalchemy.ext.mutable.Mutable.associate_with")类方法来建立全局关联。
 - en: Warning
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告
 - en: The listeners established by this method are *global* to all mappers, and are
     *not* garbage collected. Only use [`as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") for types that are permanent to an
     application, not with ad-hoc types else this will cause unbounded growth in memory
     usage.
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 此方法建立的侦听器对所有映射器都是*全局*的，并且*不*会被垃圾回收。只能对应用程序中永久的类型使用[`as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
+    "sqlalchemy.ext.mutable.Mutable.as_mutable")，不要与临时类型一起使用，否则这将导致内存使用量无限增长。
 - en: '[PRE23]'
+  id: totrans-99
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: Associate this wrapper with all future mapped columns of the given type.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 将此包装器与未来的给定类型的映射列相关联。
 - en: This is a convenience method that calls `associate_with_attribute` automatically.
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个方便的方法，会自动调用`associate_with_attribute`。
 - en: Warning
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告
 - en: The listeners established by this method are *global* to all mappers, and are
     *not* garbage collected. Only use [`associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
     "sqlalchemy.ext.mutable.Mutable.associate_with") for types that are permanent
     to an application, not with ad-hoc types else this will cause unbounded growth
     in memory usage.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 此方法建立的侦听器对所有映射器都是*全局*的，并且*不*会被垃圾回收。只能对应用程序中永久的类型使用[`associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
+    "sqlalchemy.ext.mutable.Mutable.associate_with")，不要与临时类型一起使用，否则这将导致内存使用量无限增长。
 - en: '[PRE24]'
+  id: totrans-104
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: Establish this type as a mutation listener for the given mapped descriptor.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 将此类型建立为给定映射描述符的变异侦听器。
 - en: '[PRE25]'
+  id: totrans-106
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: Subclasses should call this method whenever change events occur.
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 子类应该在发生变更事件时调用此方法。
 - en: '[PRE26]'
+  id: totrans-108
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: '*inherited from the* [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
     "sqlalchemy.ext.mutable.MutableBase.coerce") *method of* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase
     "sqlalchemy.ext.mutable.MutableBase")'
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce "sqlalchemy.ext.mutable.MutableBase")
+    *方法的* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")'
 - en: Given a value, coerce it into the target type.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定一个值，将其强制转换为目标类型。
 - en: Can be overridden by custom subclasses to coerce incoming data into a particular
     type.
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以由自定义子类重写以将传入数据强制转换为特定类型。
 - en: By default, raises `ValueError`.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，引发`ValueError`。
 - en: This method is called in different scenarios depending on if the parent class
     is of type [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     or of type [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite").
@@ -517,70 +818,112 @@
     as during ORM loading operations. For the latter, it is only called during attribute-set
     operations; the mechanics of the [`composite()`](../composites.html#sqlalchemy.orm.composite
     "sqlalchemy.orm.composite") construct handle coercion during load operations.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据父类是[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")类型还是[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")类型，在不同的情况下调用此方法。对于前者，在属性设置操作和ORM加载操作期间都会调用它。对于后者，在属性设置操作期间才会调用它；[`composite()`](../composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite")构造的机制处理加载操作期间的强制转换。
 - en: 'Parameters:'
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: '参数:'
 - en: '`key` – string name of the ORM-mapped attribute being set.'
+  id: totrans-115
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`key` – 正在设置的ORM映射属性的字符串名称。'
 - en: '`value` – the incoming value.'
+  id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`value` – 输入值。'
 - en: 'Returns:'
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 返回：
 - en: the method should return the coerced value, or raise `ValueError` if the coercion
     cannot be completed.
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果无法完成转换，则该方法应返回转换后的值，或引发`ValueError`。
 - en: '[PRE27]'
+  id: totrans-119
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: Mixin that defines transparent propagation of change events on a SQLAlchemy
     “composite” object to its owning parent or parents.
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 混入，定义了将SQLAlchemy“组合”对象上的变更事件透明传播到其拥有的父对象的机制。
 - en: See the example in [Establishing Mutability on Composites](#mutable-composites)
     for usage information.
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 查看[在组合上建立可变性](#mutable-composites)中的示例以获取用法信息。
 - en: '**Members**'
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[changed()](#sqlalchemy.ext.mutable.MutableComposite.changed)'
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: '[changed()](#sqlalchemy.ext.mutable.MutableComposite.changed)'
 - en: '**Class signature**'
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
     "sqlalchemy.ext.mutable.MutableComposite") ([`sqlalchemy.ext.mutable.MutableBase`](#sqlalchemy.ext.mutable.MutableBase
     "sqlalchemy.ext.mutable.MutableBase"))
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 类 [`sqlalchemy.ext.mutable.MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")（[`sqlalchemy.ext.mutable.MutableBase`](#sqlalchemy.ext.mutable.MutableBase
+    "sqlalchemy.ext.mutable.MutableBase")）
 - en: '[PRE28]'
+  id: totrans-126
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: Subclasses should call this method whenever change events occur.
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 子类应在更改事件发生时调用此方法。
 - en: '[PRE29]'
+  id: totrans-128
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: A dictionary type that implements [`Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable").
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 一种实现了 [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
+    的字典类型。
 - en: The [`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
     object implements a dictionary that will emit change events to the underlying
     mapping when the contents of the dictionary are altered, including when values
     are added or removed.
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
+    对象实现了一个字典，当更改字典的内容时会向底层映射发送更改事件，包括添加或删除值时。'
 - en: Note that [`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
     does **not** apply mutable tracking to the *values themselves* inside the dictionary.
     Therefore it is not a sufficient solution for the use case of tracking deep changes
@@ -589,87 +932,143 @@
     "sqlalchemy.ext.mutable.MutableDict") that provides appropriate coercion to the
     values placed in the dictionary so that they too are “mutable”, and emit events
     up to their parent structure.
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
+    **不会**将可变跟踪应用于字典内部的*值本身*。因此，它不足以解决跟踪对*递归*字典结构进行深层更改的用例，例如 JSON 结构。要支持此用例，请构建 [`MutableDict`](#sqlalchemy.ext.mutable.MutableDict
+    "sqlalchemy.ext.mutable.MutableDict") 的子类，该子类提供适当的强制转换，以便将放置在字典中的值也“可变”，并将事件发送到其父结构。
 - en: See also
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")'
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")'
 - en: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")'
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")'
 - en: '**Members**'
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[clear()](#sqlalchemy.ext.mutable.MutableDict.clear), [coerce()](#sqlalchemy.ext.mutable.MutableDict.coerce),
     [pop()](#sqlalchemy.ext.mutable.MutableDict.pop), [popitem()](#sqlalchemy.ext.mutable.MutableDict.popitem),
     [setdefault()](#sqlalchemy.ext.mutable.MutableDict.setdefault), [update()](#sqlalchemy.ext.mutable.MutableDict.update)'
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: '[clear()](#sqlalchemy.ext.mutable.MutableDict.clear), [coerce()](#sqlalchemy.ext.mutable.MutableDict.coerce),
+    [pop()](#sqlalchemy.ext.mutable.MutableDict.pop), [popitem()](#sqlalchemy.ext.mutable.MutableDict.popitem),
+    [setdefault()](#sqlalchemy.ext.mutable.MutableDict.setdefault), [update()](#sqlalchemy.ext.mutable.MutableDict.update)'
 - en: '**Class signature**'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.MutableDict`](#sqlalchemy.ext.mutable.MutableDict
     "sqlalchemy.ext.mutable.MutableDict") ([`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable"), `builtins.dict`, `typing.Generic`)
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 类 [`sqlalchemy.ext.mutable.MutableDict`](#sqlalchemy.ext.mutable.MutableDict
+    "sqlalchemy.ext.mutable.MutableDict")（[`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")，`builtins.dict`，`typing.Generic`）
 - en: '[PRE30]'
+  id: totrans-139
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: '[PRE31]'
+  id: totrans-140
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: Convert plain dictionary to instance of this class.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 将普通字典转换为此类的实例。
 - en: '[PRE32]'
+  id: totrans-142
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: If the key is not found, return the default if given; otherwise, raise a KeyError.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果找不到键，则在给定默认值的情况下返回；否则，引发 KeyError。
 - en: '[PRE33]'
+  id: totrans-144
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: Remove and return a (key, value) pair as a 2-tuple.
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: 移除并返回一个（键，值）对作为 2 元组。
 - en: Pairs are returned in LIFO (last-in, first-out) order. Raises KeyError if the
     dict is empty.
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 以 LIFO（后进先出）顺序返回键值对。如果字典为空，则引发 KeyError。
 - en: '[PRE34]'
+  id: totrans-147
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: Insert key with a value of default if key is not in the dictionary.
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果字典中没有键，则将键插入并将其值设置为默认值。
 - en: Return the value for key if key is in the dictionary, else default.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果字典中存在键，则返回键的值，否则返回默认值。
 - en: '[PRE35]'
+  id: totrans-150
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: 'If E is present and has a .keys() method, then does: for k in E: D[k] = E[k]
     If E is present and lacks a .keys() method, then does: for k, v in E: D[k] = v
     In either case, this is followed by: for k in F: D[k] = F[k]'
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: '如果 E 存在且具有 `.keys()` 方法，则执行以下操作：for k in E: D[k] = E[k] 如果 E 存在但缺少 `.keys()`
+    方法，则执行以下操作：for k, v in E: D[k] = v 在任一情况下，接下来执行以下操作：for k in F: D[k] = F[k]'
 - en: '[PRE36]'
+  id: totrans-152
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: A list type that implements [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 一种实现了 [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
+    的列表类型。
 - en: The [`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")
     object implements a list that will emit change events to the underlying mapping
     when the contents of the list are altered, including when values are added or
     removed.
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")对象实现了一个列表，在修改列表内容时会向底层映射发出更改事件，包括添加或删除值时。'
 - en: Note that [`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")
     does **not** apply mutable tracking to the *values themselves* inside the list.
     Therefore it is not a sufficient solution for the use case of tracking deep changes
@@ -678,124 +1077,206 @@
     "sqlalchemy.ext.mutable.MutableList") that provides appropriate coercion to the
     values placed in the dictionary so that they too are “mutable”, and emit events
     up to their parent structure.
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")不会对列表内部的*值本身*应用可变跟踪。因此，它不能解决跟踪*递归*可变结构（例如
+    JSON 结构）的深层更改的用例。要支持此用例，构建[`MutableList`](#sqlalchemy.ext.mutable.MutableList
+    "sqlalchemy.ext.mutable.MutableList")的子类，提供适当的强制转换以使放置在字典中的值也是“可变的”，并将事件传播到其父结构。
 - en: See also
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")'
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")'
 - en: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")'
 - en: '**Members**'
+  id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[append()](#sqlalchemy.ext.mutable.MutableList.append), [clear()](#sqlalchemy.ext.mutable.MutableList.clear),
     [coerce()](#sqlalchemy.ext.mutable.MutableList.coerce), [extend()](#sqlalchemy.ext.mutable.MutableList.extend),
     [insert()](#sqlalchemy.ext.mutable.MutableList.insert), [is_iterable()](#sqlalchemy.ext.mutable.MutableList.is_iterable),
     [is_scalar()](#sqlalchemy.ext.mutable.MutableList.is_scalar), [pop()](#sqlalchemy.ext.mutable.MutableList.pop),
     [remove()](#sqlalchemy.ext.mutable.MutableList.remove), [reverse()](#sqlalchemy.ext.mutable.MutableList.reverse),
     [sort()](#sqlalchemy.ext.mutable.MutableList.sort)'
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: '[append()](#sqlalchemy.ext.mutable.MutableList.append), [clear()](#sqlalchemy.ext.mutable.MutableList.clear),
+    [coerce()](#sqlalchemy.ext.mutable.MutableList.coerce), [extend()](#sqlalchemy.ext.mutable.MutableList.extend),
+    [insert()](#sqlalchemy.ext.mutable.MutableList.insert), [is_iterable()](#sqlalchemy.ext.mutable.MutableList.is_iterable),
+    [is_scalar()](#sqlalchemy.ext.mutable.MutableList.is_scalar), [pop()](#sqlalchemy.ext.mutable.MutableList.pop),
+    [remove()](#sqlalchemy.ext.mutable.MutableList.remove), [reverse()](#sqlalchemy.ext.mutable.MutableList.reverse),
+    [sort()](#sqlalchemy.ext.mutable.MutableList.sort)'
 - en: '**Class signature**'
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.MutableList`](#sqlalchemy.ext.mutable.MutableList
     "sqlalchemy.ext.mutable.MutableList") ([`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable"), `builtins.list`, `typing.Generic`)
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 类[`sqlalchemy.ext.mutable.MutableList`](#sqlalchemy.ext.mutable.MutableList
+    "sqlalchemy.ext.mutable.MutableList")（[`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")，`builtins.list`，`typing.Generic`）
 - en: '[PRE37]'
+  id: totrans-163
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: Append object to the end of the list.
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: 将对象追加到列表末尾。
 - en: '[PRE38]'
+  id: totrans-165
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: Remove all items from list.
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 从列表中删除所有项。
 - en: '[PRE39]'
+  id: totrans-167
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: Convert plain list to instance of this class.
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 将普通列表转换为此类的实例。
 - en: '[PRE40]'
+  id: totrans-169
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: Extend list by appending elements from the iterable.
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过从可迭代对象中追加元素来扩展列表。
 - en: '[PRE41]'
+  id: totrans-171
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: Insert object before index.
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 在索引之前插入对象。
 - en: '[PRE42]'
+  id: totrans-173
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: '[PRE43]'
+  id: totrans-174
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: '[PRE44]'
+  id: totrans-175
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: Remove and return item at index (default last).
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 移除并返回索引处的项（默认为最后一个）。
 - en: Raises IndexError if list is empty or index is out of range.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果列表为空或索引超出范围，则引发 IndexError。
 - en: '[PRE45]'
+  id: totrans-178
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: Remove first occurrence of value.
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 移除第一次出现的值。
 - en: Raises ValueError if the value is not present.
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果值不存在，则引发 ValueError。
 - en: '[PRE46]'
+  id: totrans-181
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: Reverse *IN PLACE*.
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: '*原地*反转。'
 - en: '[PRE47]'
+  id: totrans-183
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: Sort the list in ascending order and return None.
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 对列表进行升序排序并返回 None。
 - en: The sort is in-place (i.e. the list itself is modified) and stable (i.e. the
     order of two equal elements is maintained).
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 排序是原地进行的（即修改列表本身）并且是稳定的（即保持两个相等元素的顺序）。
 - en: If a key function is given, apply it once to each list item and sort them, ascending
     or descending, according to their function values.
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果给定了键函数，则将其一次应用于每个列表项并根据其函数值升序或降序排序。
 - en: The reverse flag can be set to sort in descending order.
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 反转标志可以设置为按降序排序。
 - en: '[PRE48]'
+  id: totrans-188
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: A set type that implements [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 实现了[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")的集合类型。
 - en: The [`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
     object implements a set that will emit change events to the underlying mapping
     when the contents of the set are altered, including when values are added or removed.
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
+    对象实现了一个集合，当集合的内容发生更改时，将向底层映射发出更改事件，包括添加或删除值时。'
 - en: Note that [`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
     does **not** apply mutable tracking to the *values themselves* inside the set.
     Therefore it is not a sufficient solution for the use case of tracking deep changes
@@ -803,142 +1284,234 @@
     of [`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
     that provides appropriate coercion to the values placed in the dictionary so that
     they too are “mutable”, and emit events up to their parent structure.
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
+    **不会**对集合中*值本身*应用可变跟踪。因此，它不是跟踪*递归*可变结构的深层更改的足够解决方案。为了支持这种用例，请构建一个[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet
+    "sqlalchemy.ext.mutable.MutableSet")的子类，该子类提供适当的强制转换，使放置在字典中的值也是“可变的”，并向其父结构发出事件。
 - en: See also
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")'
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")'
 - en: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")'
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")'
 - en: '**Members**'
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[add()](#sqlalchemy.ext.mutable.MutableSet.add), [clear()](#sqlalchemy.ext.mutable.MutableSet.clear),
     [coerce()](#sqlalchemy.ext.mutable.MutableSet.coerce), [difference_update()](#sqlalchemy.ext.mutable.MutableSet.difference_update),
     [discard()](#sqlalchemy.ext.mutable.MutableSet.discard), [intersection_update()](#sqlalchemy.ext.mutable.MutableSet.intersection_update),
     [pop()](#sqlalchemy.ext.mutable.MutableSet.pop), [remove()](#sqlalchemy.ext.mutable.MutableSet.remove),
     [symmetric_difference_update()](#sqlalchemy.ext.mutable.MutableSet.symmetric_difference_update),
     [update()](#sqlalchemy.ext.mutable.MutableSet.update)'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: '[add()](#sqlalchemy.ext.mutable.MutableSet.add), [clear()](#sqlalchemy.ext.mutable.MutableSet.clear),
+    [coerce()](#sqlalchemy.ext.mutable.MutableSet.coerce), [difference_update()](#sqlalchemy.ext.mutable.MutableSet.difference_update),
+    [discard()](#sqlalchemy.ext.mutable.MutableSet.discard), [intersection_update()](#sqlalchemy.ext.mutable.MutableSet.intersection_update),
+    [pop()](#sqlalchemy.ext.mutable.MutableSet.pop), [remove()](#sqlalchemy.ext.mutable.MutableSet.remove),
+    [symmetric_difference_update()](#sqlalchemy.ext.mutable.MutableSet.symmetric_difference_update),
+    [update()](#sqlalchemy.ext.mutable.MutableSet.update)'
 - en: '**Class signature**'
+  id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.MutableSet`](#sqlalchemy.ext.mutable.MutableSet
     "sqlalchemy.ext.mutable.MutableSet") ([`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable"), `builtins.set`, `typing.Generic`)
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 类 [`sqlalchemy.ext.mutable.MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")（[`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")， `builtins.set`， `typing.Generic`）
 - en: '[PRE49]'
+  id: totrans-199
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: Add an element to a set.
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 向集合添加一个元素。
 - en: This has no effect if the element is already present.
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果元素已经存在，则不起作用。
 - en: '[PRE50]'
+  id: totrans-202
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: Remove all elements from this set.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 从此集合中移除所有元素。
 - en: '[PRE51]'
+  id: totrans-204
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: Convert plain set to instance of this class.
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 将普通集合转换为此类的实例。
 - en: '[PRE52]'
+  id: totrans-206
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: Remove all elements of another set from this set.
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 从此集合中删除另一个集合的所有元素。
 - en: '[PRE53]'
+  id: totrans-208
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: Remove an element from a set if it is a member.
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果元素是成员，则从集合中删除一个元素。
 - en: If the element is not a member, do nothing.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果元素不是成员，则不执行任何操作。
 - en: '[PRE54]'
+  id: totrans-211
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: Update a set with the intersection of itself and another.
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用自身与另一个集合的交集更新集合。
 - en: '[PRE55]'
+  id: totrans-213
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: Remove and return an arbitrary set element. Raises KeyError if the set is empty.
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: 移除并返回一个任意的集合元素。如果集合为空，则引发 KeyError。
 - en: '[PRE56]'
+  id: totrans-215
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: Remove an element from a set; it must be a member.
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 从集合中删除一个元素；它必须是成员。
 - en: If the element is not a member, raise a KeyError.
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果元素不是成员，则引发 KeyError。
 - en: '[PRE57]'
+  id: totrans-218
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: Update a set with the symmetric difference of itself and another.
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用自身与另一个集合的对称差更新集合。
 - en: '[PRE58]'
+  id: totrans-220
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: Update a set with the union of itself and others.
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用自身与其他集合的并集更新集合。
 - en: '## Establishing Mutability on Scalar Column Values'
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 在标量列值上建立可变性'
 - en: 'A typical example of a “mutable” structure is a Python dictionary. Following
     the example introduced in [SQL Datatype Objects](../../core/types.html), we begin
     with a custom type that marshals Python dictionaries into JSON strings before
     being persisted:'
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: “可变”结构的典型示例是 Python 字典。在[SQL 数据类型对象](../../core/types.html)中介绍的示例中，我们从自定义类型开始，该类型在持久化之前将
+    Python 字典编组为 JSON 字符串：
 - en: '[PRE59]'
+  id: totrans-224
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: The usage of `json` is only for the purposes of example. The [`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable
     "sqlalchemy.ext.mutable") extension can be used with any type whose target Python
     type may be mutable, including [`PickleType`](../../core/type_basics.html#sqlalchemy.types.PickleType
     "sqlalchemy.types.PickleType"), [`ARRAY`](../../dialects/postgresql.html#sqlalchemy.dialects.postgresql.ARRAY
     "sqlalchemy.dialects.postgresql.ARRAY"), etc.
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用`json`仅用于示例目的。[`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
+    扩展可以与任何目标Python类型可能是可变的类型一起使用，包括[`PickleType`](../../core/type_basics.html#sqlalchemy.types.PickleType
+    "sqlalchemy.types.PickleType")、[`ARRAY`](../../dialects/postgresql.html#sqlalchemy.dialects.postgresql.ARRAY
+    "sqlalchemy.dialects.postgresql.ARRAY")等。
 - en: 'When using the [`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
     extension, the value itself tracks all parents which reference it. Below, we illustrate
     a simple version of the [`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
     dictionary object, which applies the [`Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable") mixin to a plain Python dictionary:'
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用[`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
+    扩展时，值本身跟踪所有引用它的父对象。下面，我们展示了一个简单版本的[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict
+    "sqlalchemy.ext.mutable.MutableDict")字典对象，它将[`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable") mixin应用于普通的Python字典：
 - en: '[PRE60]'
+  id: totrans-227
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: The above dictionary class takes the approach of subclassing the Python built-in
     `dict` to produce a dict subclass which routes all mutation events through `__setitem__`.
     There are variants on this approach, such as subclassing `UserDict.UserDict` or
     `collections.MutableMapping`; the part that’s important to this example is that
     the [`Mutable.changed()`](#sqlalchemy.ext.mutable.Mutable.changed "sqlalchemy.ext.mutable.Mutable.changed")
     method is called whenever an in-place change to the datastructure takes place.
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述字典类采用了子类化Python内置的`dict`的方法，以产生一个dict子类，通过`__setitem__`路由所有的变异事件。这种方法还有变体，比如子类化`UserDict.UserDict`或`collections.MutableMapping`；对于这个示例很重要的部分是，每当对数据结构进行就地更改时，都会调用[`Mutable.changed()`](#sqlalchemy.ext.mutable.Mutable.changed
+    "sqlalchemy.ext.mutable.Mutable.changed")方法。
 - en: We also redefine the [`Mutable.coerce()`](#sqlalchemy.ext.mutable.Mutable.coerce
     "sqlalchemy.ext.mutable.Mutable.coerce") method which will be used to convert
     any values that are not instances of `MutableDict`, such as the plain dictionaries
@@ -948,55 +1521,83 @@
     calling code uses `MutableDict` explicitly. When [`Mutable.coerce()`](#sqlalchemy.ext.mutable.Mutable.coerce
     "sqlalchemy.ext.mutable.Mutable.coerce") is not overridden, any values applied
     to a parent object which are not instances of the mutable type will raise a `ValueError`.
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还重新定义了[`Mutable.coerce()`](#sqlalchemy.ext.mutable.Mutable.coerce "sqlalchemy.ext.mutable.Mutable.coerce")
+    方法，用于将不是`MutableDict`实例的任何值转换为适当的类型，比如`json`模块返回的普通字典。定义这个方法是可选的；我们也可以创建我们的`JSONEncodedDict`，使其始终返回`MutableDict`的实例，并确保所有调用代码都明确使用`MutableDict`。当未覆盖[`Mutable.coerce()`](#sqlalchemy.ext.mutable.Mutable.coerce
+    "sqlalchemy.ext.mutable.Mutable.coerce")时，应用于父对象的任何不是可变类型实例的值将引发`ValueError`。
 - en: 'Our new `MutableDict` type offers a class method [`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") which we can use within column metadata
     to associate with types. This method grabs the given type object or class and
     associates a listener that will detect all future mappings of this type, applying
     event listening instrumentation to the mapped attribute. Such as, with classical
     table metadata:'
+  id: totrans-230
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的新`MutableDict`类型提供了一个类方法[`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
+    "sqlalchemy.ext.mutable.Mutable.as_mutable")，我们可以在列元数据中使用它与类型关联。这个方法获取给定的类型对象或类，并关联一个监听器，将检测到所有将来映射到该类型的映射，应用事件监听仪器到映射的属性。例如，使用经典表元数据：
 - en: '[PRE61]'
+  id: totrans-231
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE61]'
 - en: 'Above, [`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") returns an instance of `JSONEncodedDict`
     (if the type object was not an instance already), which will intercept any attributes
     which are mapped against this type. Below we establish a simple mapping against
     the `my_data` table:'
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，[`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable "sqlalchemy.ext.mutable.Mutable.as_mutable")
+    返回一个`JSONEncodedDict`的实例（如果类型对象尚未是一个实例），它将拦截任何映射到该类型的属性。下面我们建立一个简单的映射到`my_data`表：
 - en: '[PRE62]'
+  id: totrans-233
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE62]'
 - en: The `MyDataClass.data` member will now be notified of in place changes to its
     value.
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: '`MyDataClass.data` 成员现在将被通知其值的原地更改。'
 - en: 'Any in-place changes to the `MyDataClass.data` member will flag the attribute
     as “dirty” on the parent object:'
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 对 `MyDataClass.data` 成员的任何原地更改都将标记父对象的属性为“脏”：
 - en: '[PRE63]'
+  id: totrans-236
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE63]'
 - en: 'The `MutableDict` can be associated with all future instances of `JSONEncodedDict`
     in one step, using [`Mutable.associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
     "sqlalchemy.ext.mutable.Mutable.associate_with"). This is similar to [`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") except it will intercept all occurrences
     of `MutableDict` in all mappings unconditionally, without the need to declare
     it individually:'
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: '`MutableDict` 可以通过一个步骤与所有未来的 `JSONEncodedDict` 实例关联，使用 [`Mutable.associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
+    "sqlalchemy.ext.mutable.Mutable.associate_with")。这类似于 [`Mutable.as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
+    "sqlalchemy.ext.mutable.Mutable.as_mutable")，但它将无条件拦截所有映射中 `MutableDict` 的所有出现，而无需单独声明它：'
 - en: '[PRE64]'
+  id: totrans-238
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE64]'
 - en: Supporting Pickling
+  id: totrans-239
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 支持 Pickling
 - en: 'The key to the [`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
     extension relies upon the placement of a `weakref.WeakKeyDictionary` upon the
     value object, which stores a mapping of parent mapped objects keyed to the attribute
@@ -1007,44 +1608,70 @@
     pickled by themselves outside of the context of the parent. The developer responsibility
     here is only to provide a `__getstate__` method that excludes the [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
     "sqlalchemy.ext.mutable.MutableBase._parents") collection from the pickle stream:'
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
+    扩展的关键在于在值对象上放置一个 `weakref.WeakKeyDictionary`，它存储了父映射对象的映射，键为它们与该值相关联的属性名。 `WeakKeyDictionary`
+    对象不可 pickle，因为它们包含弱引用和函数回调。在我们的情况下，这是一件好事，因为如果这个字典是可 pickle 的，它可能会导致独立于父对象上下文的值对象的
+    pickle 大小过大。在这里，开发者的责任仅仅是提供一个 `__getstate__` 方法，从 pickle 流中排除 [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
+    "sqlalchemy.ext.mutable.MutableBase._parents") 集合：'
 - en: '[PRE65]'
+  id: totrans-241
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE65]'
 - en: 'With our dictionary example, we need to return the contents of the dict itself
     (and also restore them on __setstate__):'
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于我们的字典示例，我们需要返回字典本身的内容（并在 __setstate__ 中还原它们）：
 - en: '[PRE66]'
+  id: totrans-243
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE66]'
 - en: In the case that our mutable value object is pickled as it is attached to one
     or more parent objects that are also part of the pickle, the [`Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable") mixin will re-establish the [`Mutable._parents`](#sqlalchemy.ext.mutable.Mutable._parents
     "sqlalchemy.ext.mutable.Mutable._parents") collection on each value object as
     the owning parents themselves are unpickled.
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们的可变值对象被 pickle，而它附加到一个或多个也是 pickle 的父对象上，[`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable") mixin 将在每个值对象上重新建立 [`Mutable._parents`](#sqlalchemy.ext.mutable.Mutable._parents
+    "sqlalchemy.ext.mutable.Mutable._parents") 集合，因为拥有父对象本身被 unpickle。
 - en: Receiving Events
+  id: totrans-245
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 接收事件
 - en: 'The [`AttributeEvents.modified()`](../events.html#sqlalchemy.orm.AttributeEvents.modified
     "sqlalchemy.orm.AttributeEvents.modified") event handler may be used to receive
     an event when a mutable scalar emits a change event. This event handler is called
     when the [`flag_modified()`](../session_api.html#sqlalchemy.orm.attributes.flag_modified
     "sqlalchemy.orm.attributes.flag_modified") function is called from within the
     mutable extension:'
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: 当一个可变标量发出变更事件时，[`AttributeEvents.modified()`](../events.html#sqlalchemy.orm.AttributeEvents.modified
+    "sqlalchemy.orm.AttributeEvents.modified") 事件处理程序可以用于接收事件。当在可变扩展内部调用 [`flag_modified()`](../session_api.html#sqlalchemy.orm.attributes.flag_modified
+    "sqlalchemy.orm.attributes.flag_modified") 函数时，将调用此事件处理程序：
 - en: '[PRE67]'
+  id: totrans-247
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE67]'
 - en: Supporting Pickling
+  id: totrans-248
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 支持 Pickling
 - en: 'The key to the [`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
     extension relies upon the placement of a `weakref.WeakKeyDictionary` upon the
     value object, which stores a mapping of parent mapped objects keyed to the attribute
@@ -1055,49 +1682,80 @@
     pickled by themselves outside of the context of the parent. The developer responsibility
     here is only to provide a `__getstate__` method that excludes the [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
     "sqlalchemy.ext.mutable.MutableBase._parents") collection from the pickle stream:'
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`sqlalchemy.ext.mutable`](#module-sqlalchemy.ext.mutable "sqlalchemy.ext.mutable")
+    扩展的关键在于在值对象上放置一个 `weakref.WeakKeyDictionary`，该字典存储父映射对象的映射，以属性名称为键，这些父映射对象与该值相关联。由于
+    `WeakKeyDictionary` 对象包含弱引用和函数回调，因此它们不可 picklable。在我们的情况下，这是一件好事，因为如果这个字典是可 pickle
+    的，那么它可能会导致我们的值对象的 pickle 大小过大，这些值对象是在不涉及父对象的情况下 pickle 的。开发者在这里的责任只是提供一个 `__getstate__`
+    方法，该方法从 pickle 流中排除了 [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
+    "sqlalchemy.ext.mutable.MutableBase._parents") 集合：'
 - en: '[PRE68]'
+  id: totrans-250
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE68]'
 - en: 'With our dictionary example, we need to return the contents of the dict itself
     (and also restore them on __setstate__):'
+  id: totrans-251
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于我们的字典示例，我们需要返回字典本身的内容（并在 __setstate__ 中还原它们）：
 - en: '[PRE69]'
+  id: totrans-252
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE69]'
 - en: In the case that our mutable value object is pickled as it is attached to one
     or more parent objects that are also part of the pickle, the [`Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable") mixin will re-establish the [`Mutable._parents`](#sqlalchemy.ext.mutable.Mutable._parents
     "sqlalchemy.ext.mutable.Mutable._parents") collection on each value object as
     the owning parents themselves are unpickled.
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们可变的值对象作为 pickle 对象时，如果它附加在一个或多个也是 pickle 的父对象上，[`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable") mixin 将在每个值对象上重新建立 [`Mutable._parents`](#sqlalchemy.ext.mutable.Mutable._parents
+    "sqlalchemy.ext.mutable.Mutable._parents") 集合，因为拥有父对象的本身会被 unpickle。
 - en: Receiving Events
+  id: totrans-254
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 接收事件
 - en: 'The [`AttributeEvents.modified()`](../events.html#sqlalchemy.orm.AttributeEvents.modified
     "sqlalchemy.orm.AttributeEvents.modified") event handler may be used to receive
     an event when a mutable scalar emits a change event. This event handler is called
     when the [`flag_modified()`](../session_api.html#sqlalchemy.orm.attributes.flag_modified
     "sqlalchemy.orm.attributes.flag_modified") function is called from within the
     mutable extension:'
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`AttributeEvents.modified()`](../events.html#sqlalchemy.orm.AttributeEvents.modified
+    "sqlalchemy.orm.AttributeEvents.modified") 事件处理程序可用于在可变标量发出更改事件时接收事件。当在可变扩展中调用
+    [`flag_modified()`](../session_api.html#sqlalchemy.orm.attributes.flag_modified
+    "sqlalchemy.orm.attributes.flag_modified") 函数时，将调用此事件处理程序：'
 - en: '[PRE70]'
+  id: totrans-256
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE70]'
 - en: '## Establishing Mutability on Composites'
+  id: totrans-257
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 确立组合物的可变性'
 - en: Composites are a special ORM feature which allow a single scalar attribute to
     be assigned an object value which represents information “composed” from one or
     more columns from the underlying mapped table. The usual example is that of a
     geometric “point”, and is introduced in [Composite Column Types](../composites.html#mapper-composite).
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
+  zh: 组合物是 ORM 的一种特殊功能，它允许将单个标量属性分配给一个对象值，该对象值表示从底层映射表中的一个或多个列中“组合”出的信息。通常的例子是几何“点”，并在[Composite
+    Column Types](../composites.html#mapper-composite)中介绍。
 - en: 'As is the case with [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable"),
     the user-defined composite class subclasses [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
     "sqlalchemy.ext.mutable.MutableComposite") as a mixin, and detects and delivers
@@ -1109,33 +1767,52 @@
     "sqlalchemy.ext.mutable.MutableComposite") in its bases and to route attribute
     set events via `__setattr__` to the [`MutableComposite.changed()`](#sqlalchemy.ext.mutable.MutableComposite.changed
     "sqlalchemy.ext.mutable.MutableComposite.changed") method:'
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: 与[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")类似，用户定义的复合类作为一个混合类继承[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")，通过[`MutableComposite.changed()`](#sqlalchemy.ext.mutable.MutableComposite.changed
+    "sqlalchemy.ext.mutable.MutableComposite.changed")方法检测并传递更改事件给其父类。对于复合类，通常是通过使用特殊的Python方法`__setattr__()`来进行检测。在下面的示例中，我们扩展了[复合列类型](../composites.html#mapper-composite)中介绍的`Point`类，将[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")包含在其基类中，并通过`__setattr__`将属性设置事件路由到[`MutableComposite.changed()`](#sqlalchemy.ext.mutable.MutableComposite.changed
+    "sqlalchemy.ext.mutable.MutableComposite.changed")方法：
 - en: '[PRE71]'
+  id: totrans-260
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE71]'
 - en: 'The [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
     class makes use of class mapping events to automatically establish listeners for
     any usage of [`composite()`](../composites.html#sqlalchemy.orm.composite "sqlalchemy.orm.composite")
     that specifies our `Point` type. Below, when `Point` is mapped to the `Vertex`
     class, listeners are established which will route change events from `Point` objects
     to each of the `Vertex.start` and `Vertex.end` attributes:'
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")类利用类映射事件自动为任何指定我们的`Point`类型的[`composite()`](../composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite")的使用建立监听器。下面，当`Point`映射到`Vertex`类时，将建立监听器，这些监听器将把`Point`对象的更改事件路由到`Vertex.start`和`Vertex.end`属性中的每一个：'
 - en: '[PRE72]'
+  id: totrans-262
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE72]'
 - en: 'Any in-place changes to the `Vertex.start` or `Vertex.end` members will flag
     the attribute as “dirty” on the parent object:'
+  id: totrans-263
   prefs: []
   type: TYPE_NORMAL
+  zh: 对`Vertex.start`或`Vertex.end`成员的任何就地更改都会在父对象上标记属性为“脏”：
 - en: '[PRE73]'
+  id: totrans-264
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE73]'
 - en: Coercing Mutable Composites
+  id: totrans-265
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 强制可变复合类型
 - en: 'The [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce "sqlalchemy.ext.mutable.MutableBase.coerce")
     method is also supported on composite types. In the case of [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
     "sqlalchemy.ext.mutable.MutableComposite"), the [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
@@ -1145,15 +1822,26 @@
     to using a [`validates()`](../mapped_attributes.html#sqlalchemy.orm.validates
     "sqlalchemy.orm.validates") validation routine for all attributes which make use
     of the custom composite type:'
+  id: totrans-266
   prefs: []
   type: TYPE_NORMAL
+  zh: 在复合类型上也支持[`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
+    "sqlalchemy.ext.mutable.MutableBase.coerce")方法。对于[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")，[`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
+    "sqlalchemy.ext.mutable.MutableBase.coerce")方法仅在属性设置操作中调用，而不是在加载操作中调用。覆盖[`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
+    "sqlalchemy.ext.mutable.MutableBase.coerce")方法基本上等同于为使用自定义复合类型的所有属性使用[`validates()`](../mapped_attributes.html#sqlalchemy.orm.validates
+    "sqlalchemy.orm.validates")验证程序：
 - en: '[PRE74]'
+  id: totrans-267
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE74]'
 - en: Supporting Pickling
+  id: totrans-268
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 支持 Pickling
 - en: 'As is the case with [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable"),
     the [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
     helper class uses a `weakref.WeakKeyDictionary` available via the [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
@@ -1162,22 +1850,35 @@
     least need to define a `__getstate__` that doesn’t include the `_parents` dictionary.
     Below we define both a `__getstate__` and a `__setstate__` that package up the
     minimal form of our `Point` class:'
+  id: totrans-269
   prefs: []
   type: TYPE_NORMAL
+  zh: 与[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")类似，[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")辅助类使用了通过[`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
+    "sqlalchemy.ext.mutable.MutableBase._parents")属性获得的`weakref.WeakKeyDictionary`，该字典不可
+    pickle。如果我们需要 pickle `Point` 或其拥有类 `Vertex` 的实例，至少需要定义一个不包含 `_parents` 字典的`__getstate__`。下面我们定义了`Point`类的最小形式的`__getstate__`和`__setstate__`：
 - en: '[PRE75]'
+  id: totrans-270
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE75]'
 - en: As with [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable"),
     the [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
     augments the pickling process of the parent’s object-relational state so that
     the [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents "sqlalchemy.ext.mutable.MutableBase._parents")
     collection is restored to all `Point` objects.
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
+  zh: 与[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")类似，[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")增强了父对象的对象关系状态的 pickling 过程，以便将[`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
+    "sqlalchemy.ext.mutable.MutableBase._parents")集合还原为所有`Point`对象。
 - en: Coercing Mutable Composites
+  id: totrans-272
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 强制转换可变复合类型
 - en: 'The [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce "sqlalchemy.ext.mutable.MutableBase.coerce")
     method is also supported on composite types. In the case of [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
     "sqlalchemy.ext.mutable.MutableComposite"), the [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
@@ -1187,15 +1888,25 @@
     to using a [`validates()`](../mapped_attributes.html#sqlalchemy.orm.validates
     "sqlalchemy.orm.validates") validation routine for all attributes which make use
     of the custom composite type:'
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce "sqlalchemy.ext.mutable.MutableBase.coerce")方法也支持复合类型。在[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")的情况下，[`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
+    "sqlalchemy.ext.mutable.MutableBase.coerce")方法仅在属性设置操作而非加载操作时调用。覆盖[`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
+    "sqlalchemy.ext.mutable.MutableBase.coerce")方法基本上等同于对使用自定义复合类型的所有属性使用[`validates()`](../mapped_attributes.html#sqlalchemy.orm.validates
+    "sqlalchemy.orm.validates")验证程序：'
 - en: '[PRE76]'
+  id: totrans-274
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE76]'
 - en: Supporting Pickling
+  id: totrans-275
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 支持 Pickling
 - en: 'As is the case with [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable"),
     the [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
     helper class uses a `weakref.WeakKeyDictionary` available via the [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
@@ -1204,101 +1915,162 @@
     least need to define a `__getstate__` that doesn’t include the `_parents` dictionary.
     Below we define both a `__getstate__` and a `__setstate__` that package up the
     minimal form of our `Point` class:'
+  id: totrans-276
   prefs: []
   type: TYPE_NORMAL
+  zh: 与[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")类似，[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")辅助类使用了通过[`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
+    "sqlalchemy.ext.mutable.MutableBase._parents")属性获得的`weakref.WeakKeyDictionary`，该字典不可
+    pickle。如果我们需要 pickle `Point` 或其拥有类 `Vertex` 的实例，至少需要定义一个不包含 `_parents` 字典的`__getstate__`。下面我们定义了`Point`类的最小形式的`__getstate__`和`__setstate__`：
 - en: '[PRE77]'
+  id: totrans-277
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE77]'
 - en: As with [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable"),
     the [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
     augments the pickling process of the parent’s object-relational state so that
     the [`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents "sqlalchemy.ext.mutable.MutableBase._parents")
     collection is restored to all `Point` objects.
+  id: totrans-278
   prefs: []
   type: TYPE_NORMAL
+  zh: 与[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")一样，[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")增强了父对象的对象关系状态的 pickling 过程，以便将[`MutableBase._parents()`](#sqlalchemy.ext.mutable.MutableBase._parents
+    "sqlalchemy.ext.mutable.MutableBase._parents")集合还原为所有`Point`对象。
 - en: API Reference
+  id: totrans-279
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: API 参考
 - en: '| Object Name | Description |'
+  id: totrans-280
   prefs: []
   type: TYPE_TB
+  zh: '| 对象名称 | 描述 |'
 - en: '| --- | --- |'
+  id: totrans-281
   prefs: []
   type: TYPE_TB
+  zh: '| --- | --- |'
 - en: '| [Mutable](#sqlalchemy.ext.mutable.Mutable) | Mixin that defines transparent
     propagation of change events to a parent object. |'
+  id: totrans-282
   prefs: []
   type: TYPE_TB
+  zh: '| [Mutable](#sqlalchemy.ext.mutable.Mutable) | 定义更改事件透明传播到父对象的混合类。 |'
 - en: '| [MutableBase](#sqlalchemy.ext.mutable.MutableBase) | Common base class to
     [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     and [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite").
     |'
+  id: totrans-283
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableBase](#sqlalchemy.ext.mutable.MutableBase) | [`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")和[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")的通用基类。 |'
 - en: '| [MutableComposite](#sqlalchemy.ext.mutable.MutableComposite) | Mixin that
     defines transparent propagation of change events on a SQLAlchemy “composite” object
     to its owning parent or parents. |'
+  id: totrans-284
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableComposite](#sqlalchemy.ext.mutable.MutableComposite) | 定义 SQLAlchemy
+    “composite” 对象上的更改事件透明传播到其拥有的父对象或父对象的混合类。 |'
 - en: '| [MutableDict](#sqlalchemy.ext.mutable.MutableDict) | A dictionary type that
     implements [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
     |'
+  id: totrans-285
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableDict](#sqlalchemy.ext.mutable.MutableDict) | 一个实现[`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")的字典类型。 |'
 - en: '| [MutableList](#sqlalchemy.ext.mutable.MutableList) | A list type that implements
     [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
     |'
+  id: totrans-286
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableList](#sqlalchemy.ext.mutable.MutableList) | 一个实现[`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")的列表类型。 |'
 - en: '| [MutableSet](#sqlalchemy.ext.mutable.MutableSet) | A set type that implements
     [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
     |'
+  id: totrans-287
   prefs: []
   type: TYPE_TB
+  zh: '| [MutableSet](#sqlalchemy.ext.mutable.MutableSet) | 一个实现[`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")的集合类型。 |'
 - en: '[PRE78]'
+  id: totrans-288
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE78]'
 - en: '**Members**'
+  id: totrans-289
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[_parents](#sqlalchemy.ext.mutable.MutableBase._parents), [coerce()](#sqlalchemy.ext.mutable.MutableBase.coerce)'
+  id: totrans-290
   prefs: []
   type: TYPE_NORMAL
+  zh: '[_parents](#sqlalchemy.ext.mutable.MutableBase._parents), [coerce()](#sqlalchemy.ext.mutable.MutableBase.coerce)'
 - en: Common base class to [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     and [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite").
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")和[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")的通用基类。'
 - en: '[PRE79]'
+  id: totrans-292
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE79]'
 - en: Dictionary of parent object’s [`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState")->attribute name on the parent.
+  id: totrans-293
   prefs: []
   type: TYPE_NORMAL
+  zh: 父对象的[`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")字典->父对象上的属性名称。
 - en: This attribute is a so-called “memoized” property. It initializes itself with
     a new `weakref.WeakKeyDictionary` the first time it is accessed, returning the
     same object upon subsequent access.
+  id: totrans-294
   prefs: []
   type: TYPE_NORMAL
+  zh: 此属性是所谓的“记忆化”属性。第一次访问时，它会用一个新的`weakref.WeakKeyDictionary`初始化自己，并在后续访问时返回相同的对象。
 - en: 'Changed in version 1.4: the [`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState") is now used as the key in the weak dictionary
     rather than the instance itself.'
+  id: totrans-295
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 1.4 版中更改：[`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")现在被用作弱字典中的键，而不是实例本身。
 - en: '[PRE80]'
+  id: totrans-296
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE80]'
 - en: Given a value, coerce it into the target type.
+  id: totrans-297
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定一个值，将其强制转换为目标类型。
 - en: Can be overridden by custom subclasses to coerce incoming data into a particular
     type.
+  id: totrans-298
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以被自定义子类覆盖，将传入数据强制转换为特定类型。
 - en: By default, raises `ValueError`.
+  id: totrans-299
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，引发`ValueError`。
 - en: This method is called in different scenarios depending on if the parent class
     is of type [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     or of type [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite").
@@ -1306,195 +2078,312 @@
     as during ORM loading operations. For the latter, it is only called during attribute-set
     operations; the mechanics of the [`composite()`](../composites.html#sqlalchemy.orm.composite
     "sqlalchemy.orm.composite") construct handle coercion during load operations.
+  id: totrans-300
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据父类是[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")类型还是[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite")类型，在不同的情况下调用此方法。对于前者，它在属性集操作和ORM加载操作期间都会被调用。对于后者，它仅在属性集操作期间被调用；[`composite()`](../composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite")构造的机制在加载操作期间处理强制转换。
 - en: 'Parameters:'
+  id: totrans-301
   prefs: []
   type: TYPE_NORMAL
+  zh: 参数：
 - en: '`key` – string name of the ORM-mapped attribute being set.'
+  id: totrans-302
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`key` – 正在设置的ORM映射属性的字符串名称。'
 - en: '`value` – the incoming value.'
+  id: totrans-303
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`value` – 传入的值。'
 - en: 'Returns:'
+  id: totrans-304
   prefs: []
   type: TYPE_NORMAL
+  zh: 返回：
 - en: the method should return the coerced value, or raise `ValueError` if the coercion
     cannot be completed.
+  id: totrans-305
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果无法完成强制转换，该方法应返回强制转换后的值，或引发`ValueError`。
 - en: '[PRE81]'
+  id: totrans-306
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE81]'
 - en: Mixin that defines transparent propagation of change events to a parent object.
+  id: totrans-307
   prefs: []
   type: TYPE_NORMAL
+  zh: 定义将更改事件透明传播到父对象的混合类。
 - en: See the example in [Establishing Mutability on Scalar Column Values](#mutable-scalars)
     for usage information.
+  id: totrans-308
   prefs: []
   type: TYPE_NORMAL
+  zh: 查看[在标量列值上建立可变性](#mutable-scalars)中的示例以获取用法信息。
 - en: '**Members**'
+  id: totrans-309
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[_get_listen_keys()](#sqlalchemy.ext.mutable.Mutable._get_listen_keys), [_listen_on_attribute()](#sqlalchemy.ext.mutable.Mutable._listen_on_attribute),
     [_parents](#sqlalchemy.ext.mutable.Mutable._parents), [as_mutable()](#sqlalchemy.ext.mutable.Mutable.as_mutable),
     [associate_with()](#sqlalchemy.ext.mutable.Mutable.associate_with), [associate_with_attribute()](#sqlalchemy.ext.mutable.Mutable.associate_with_attribute),
     [changed()](#sqlalchemy.ext.mutable.Mutable.changed), [coerce()](#sqlalchemy.ext.mutable.Mutable.coerce)'
+  id: totrans-310
   prefs: []
   type: TYPE_NORMAL
+  zh: '[_get_listen_keys()](#sqlalchemy.ext.mutable.Mutable._get_listen_keys), [_listen_on_attribute()](#sqlalchemy.ext.mutable.Mutable._listen_on_attribute),
+    [_parents](#sqlalchemy.ext.mutable.Mutable._parents), [as_mutable()](#sqlalchemy.ext.mutable.Mutable.as_mutable),
+    [associate_with()](#sqlalchemy.ext.mutable.Mutable.associate_with), [associate_with_attribute()](#sqlalchemy.ext.mutable.Mutable.associate_with_attribute),
+    [changed()](#sqlalchemy.ext.mutable.Mutable.changed), [coerce()](#sqlalchemy.ext.mutable.Mutable.coerce)'
 - en: '**Class signature**'
+  id: totrans-311
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     ([`sqlalchemy.ext.mutable.MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase"))
+  id: totrans-312
   prefs: []
   type: TYPE_NORMAL
+  zh: 类[`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")（[`sqlalchemy.ext.mutable.MutableBase`](#sqlalchemy.ext.mutable.MutableBase
+    "sqlalchemy.ext.mutable.MutableBase")）
 - en: '[PRE82]'
+  id: totrans-313
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE82]'
 - en: '*inherited from the* `sqlalchemy.ext.mutable.MutableBase._get_listen_keys`
     *method of* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")'
+  id: totrans-314
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")
+    *的* `sqlalchemy.ext.mutable.MutableBase._get_listen_keys` *方法*'
 - en: Given a descriptor attribute, return a `set()` of the attribute keys which indicate
     a change in the state of this attribute.
+  id: totrans-315
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定一个描述符属性，返回指示此属性状态变化的属性键的`set()`。
 - en: This is normally just `set([attribute.key])`, but can be overridden to provide
     for additional keys. E.g. a [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
     "sqlalchemy.ext.mutable.MutableComposite") augments this set with the attribute
     keys associated with the columns that comprise the composite value.
+  id: totrans-316
   prefs: []
   type: TYPE_NORMAL
+  zh: 通常只是`set([attribute.key])`，但可以被覆盖以提供额外的键。例如，[`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite") 会用包含组合值的列相关联的属性键来增加这个集合。
 - en: This collection is consulted in the case of intercepting the [`InstanceEvents.refresh()`](../events.html#sqlalchemy.orm.InstanceEvents.refresh
     "sqlalchemy.orm.InstanceEvents.refresh") and [`InstanceEvents.refresh_flush()`](../events.html#sqlalchemy.orm.InstanceEvents.refresh_flush
     "sqlalchemy.orm.InstanceEvents.refresh_flush") events, which pass along a list
     of attribute names that have been refreshed; the list is compared against this
     set to determine if action needs to be taken.
+  id: totrans-317
   prefs: []
   type: TYPE_NORMAL
+  zh: 在拦截[`InstanceEvents.refresh()`](../events.html#sqlalchemy.orm.InstanceEvents.refresh
+    "sqlalchemy.orm.InstanceEvents.refresh")和[`InstanceEvents.refresh_flush()`](../events.html#sqlalchemy.orm.InstanceEvents.refresh_flush
+    "sqlalchemy.orm.InstanceEvents.refresh_flush")事件时，会查询此集合，这些事件会传递一个已刷新的属性名称列表；该列表将与此集合进行比较，以确定是否需要采取行动。
 - en: '[PRE83]'
+  id: totrans-318
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE83]'
 - en: '*inherited from the* `sqlalchemy.ext.mutable.MutableBase._listen_on_attribute`
     *method of* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")'
+  id: totrans-319
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")
+    的 `sqlalchemy.ext.mutable.MutableBase._listen_on_attribute` *方法*'
 - en: Establish this type as a mutation listener for the given mapped descriptor.
+  id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: 将此类型作为给定映射描述符的变异监听器。
 - en: '[PRE84]'
+  id: totrans-321
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE84]'
 - en: '*inherited from the* `sqlalchemy.ext.mutable.MutableBase._parents` *attribute
     of* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")'
+  id: totrans-322
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")
+    的 `sqlalchemy.ext.mutable.MutableBase._parents` *属性*'
 - en: Dictionary of parent object’s [`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState")->attribute name on the parent.
+  id: totrans-323
   prefs: []
   type: TYPE_NORMAL
+  zh: 父对象的[`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")->父对象上的属性名称的字典。
 - en: This attribute is a so-called “memoized” property. It initializes itself with
     a new `weakref.WeakKeyDictionary` the first time it is accessed, returning the
     same object upon subsequent access.
+  id: totrans-324
   prefs: []
   type: TYPE_NORMAL
+  zh: 此属性是所谓的“记忆化”属性。它在首次访问时使用一个新的`weakref.WeakKeyDictionary`进行初始化，并在后续访问时返回相同的对象。
 - en: 'Changed in version 1.4: the [`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState") is now used as the key in the weak dictionary
     rather than the instance itself.'
+  id: totrans-325
   prefs: []
   type: TYPE_NORMAL
+  zh: 在1.4版本中更改：现在使用[`InstanceState`](../internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")作为弱字典中的键，而不是实例本身。
 - en: '[PRE85]'
+  id: totrans-326
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE85]'
 - en: Associate a SQL type with this mutable Python type.
+  id: totrans-327
   prefs: []
   type: TYPE_NORMAL
+  zh: 将SQL类型与此可变Python类型关联。
 - en: This establishes listeners that will detect ORM mappings against the given type,
     adding mutation event trackers to those mappings.
+  id: totrans-328
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将建立监听器，用于检测针对给定类型的ORM映射，向这些映射添加变异事件跟踪器。
 - en: 'The type is returned, unconditionally as an instance, so that [`as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") can be used inline:'
+  id: totrans-329
   prefs: []
   type: TYPE_NORMAL
+  zh: 该类型无条件地作为一个实例返回，以便可以内联使用[`as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
+    "sqlalchemy.ext.mutable.Mutable.as_mutable")：
 - en: '[PRE86]'
+  id: totrans-330
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE86]'
 - en: Note that the returned type is always an instance, even if a class is given,
     and that only columns which are declared specifically with that type instance
     receive additional instrumentation.
+  id: totrans-331
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，返回的类型始终是一个实例，即使给定一个类，也只有明确声明了该类型实例的列才会接收到额外的仪器化。
 - en: To associate a particular mutable type with all occurrences of a particular
     type, use the [`Mutable.associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
     "sqlalchemy.ext.mutable.Mutable.associate_with") classmethod of the particular
     [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     subclass to establish a global association.
+  id: totrans-332
   prefs: []
   type: TYPE_NORMAL
+  zh: 要将特定的可变类型与特定类型的所有出现关联起来，请使用[`Mutable.associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
+    "sqlalchemy.ext.mutable.Mutable.associate_with")类方法的特定[`Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")子类来建立全局关联。
 - en: Warning
+  id: totrans-333
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告
 - en: The listeners established by this method are *global* to all mappers, and are
     *not* garbage collected. Only use [`as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
     "sqlalchemy.ext.mutable.Mutable.as_mutable") for types that are permanent to an
     application, not with ad-hoc types else this will cause unbounded growth in memory
     usage.
+  id: totrans-334
   prefs: []
   type: TYPE_NORMAL
+  zh: 此方法建立的监听器是*全局*的，适用于所有映射器，并且*不*会被垃圾回收。只能对应用程序中永久的类型使用[`as_mutable()`](#sqlalchemy.ext.mutable.Mutable.as_mutable
+    "sqlalchemy.ext.mutable.Mutable.as_mutable")，而不是临时类型，否则会导致内存使用量无限增长。
 - en: '[PRE87]'
+  id: totrans-335
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE87]'
 - en: Associate this wrapper with all future mapped columns of the given type.
+  id: totrans-336
   prefs: []
   type: TYPE_NORMAL
+  zh: 将此包装器与将来的给定类型的映射列关联起来。
 - en: This is a convenience method that calls `associate_with_attribute` automatically.
+  id: totrans-337
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个方便的方法，会自动调用`associate_with_attribute`。
 - en: Warning
+  id: totrans-338
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告
 - en: The listeners established by this method are *global* to all mappers, and are
     *not* garbage collected. Only use [`associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
     "sqlalchemy.ext.mutable.Mutable.associate_with") for types that are permanent
     to an application, not with ad-hoc types else this will cause unbounded growth
     in memory usage.
+  id: totrans-339
   prefs: []
   type: TYPE_NORMAL
+  zh: 该方法建立的监听器是*全局*的，适用于所有映射器，并且*不*会被垃圾回收。只能对应用程序中永久的类型使用[`associate_with()`](#sqlalchemy.ext.mutable.Mutable.associate_with
+    "sqlalchemy.ext.mutable.Mutable.associate_with")，而不是临时类型，否则会导致内存使用量无限增长。
 - en: '[PRE88]'
+  id: totrans-340
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE88]'
 - en: Establish this type as a mutation listener for the given mapped descriptor.
+  id: totrans-341
   prefs: []
   type: TYPE_NORMAL
+  zh: 将此类型作为给定映射描述符的变异监听器。
 - en: '[PRE89]'
+  id: totrans-342
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE89]'
 - en: Subclasses should call this method whenever change events occur.
+  id: totrans-343
   prefs: []
   type: TYPE_NORMAL
+  zh: 子类在发生更改事件时应调用此方法。
 - en: '[PRE90]'
+  id: totrans-344
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE90]'
 - en: '*inherited from the* [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce
     "sqlalchemy.ext.mutable.MutableBase.coerce") *method of* [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase
     "sqlalchemy.ext.mutable.MutableBase")'
+  id: totrans-345
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* [`MutableBase.coerce()`](#sqlalchemy.ext.mutable.MutableBase.coerce "sqlalchemy.ext.mutable.MutableBase")
+    *方法* 的 [`MutableBase`](#sqlalchemy.ext.mutable.MutableBase "sqlalchemy.ext.mutable.MutableBase")'
 - en: Given a value, coerce it into the target type.
+  id: totrans-346
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定一个值，将其强制转换为目标类型。
 - en: Can be overridden by custom subclasses to coerce incoming data into a particular
     type.
+  id: totrans-347
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以被自定义子类重写以将传入的数据强制转换为特定类型。
 - en: By default, raises `ValueError`.
+  id: totrans-348
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，引发 `ValueError`。
 - en: This method is called in different scenarios depending on if the parent class
     is of type [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
     or of type [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite").
@@ -1502,70 +2391,113 @@
     as during ORM loading operations. For the latter, it is only called during attribute-set
     operations; the mechanics of the [`composite()`](../composites.html#sqlalchemy.orm.composite
     "sqlalchemy.orm.composite") construct handle coercion during load operations.
+  id: totrans-349
   prefs: []
   type: TYPE_NORMAL
+  zh: 此方法在不同的情况下被调用，具体取决于父类是 [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
+    类型还是 [`MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite "sqlalchemy.ext.mutable.MutableComposite")
+    类型。在前者的情况下，它将在属性设置操作以及 ORM 加载操作期间被调用。对于后者，它仅在属性设置操作期间被调用；[`composite()`](../composites.html#sqlalchemy.orm.composite
+    "sqlalchemy.orm.composite") 构造的机制在加载操作期间处理强制转换。
 - en: 'Parameters:'
+  id: totrans-350
   prefs: []
   type: TYPE_NORMAL
+  zh: 参数：
 - en: '`key` – string name of the ORM-mapped attribute being set.'
+  id: totrans-351
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`key` – 被设置的 ORM 映射属性的字符串名称。'
 - en: '`value` – the incoming value.'
+  id: totrans-352
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`value` – 传入的值。'
 - en: 'Returns:'
+  id: totrans-353
   prefs: []
   type: TYPE_NORMAL
+  zh: 返回：
 - en: the method should return the coerced value, or raise `ValueError` if the coercion
     cannot be completed.
+  id: totrans-354
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果无法完成强制转换，则该方法应返回强制转换后的值，或引发 `ValueError`。
 - en: '[PRE91]'
+  id: totrans-355
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE91]'
 - en: Mixin that defines transparent propagation of change events on a SQLAlchemy
     “composite” object to its owning parent or parents.
+  id: totrans-356
   prefs: []
   type: TYPE_NORMAL
+  zh: 定义了对 SQLAlchemy “组合”对象的更改事件的透明传播的混合类到其拥有的父对象。
 - en: See the example in [Establishing Mutability on Composites](#mutable-composites)
     for usage information.
+  id: totrans-357
   prefs: []
   type: TYPE_NORMAL
+  zh: 请参阅 [在组合上建立可变性](#mutable-composites) 中的示例以获取用法信息。
 - en: '**Members**'
+  id: totrans-358
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[changed()](#sqlalchemy.ext.mutable.MutableComposite.changed)'
+  id: totrans-359
   prefs: []
   type: TYPE_NORMAL
+  zh: '[changed()](#sqlalchemy.ext.mutable.MutableComposite.changed)'
 - en: '**Class signature**'
+  id: totrans-360
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
     "sqlalchemy.ext.mutable.MutableComposite") ([`sqlalchemy.ext.mutable.MutableBase`](#sqlalchemy.ext.mutable.MutableBase
     "sqlalchemy.ext.mutable.MutableBase"))
+  id: totrans-361
   prefs: []
   type: TYPE_NORMAL
+  zh: class [`sqlalchemy.ext.mutable.MutableComposite`](#sqlalchemy.ext.mutable.MutableComposite
+    "sqlalchemy.ext.mutable.MutableComposite") ([`sqlalchemy.ext.mutable.MutableBase`](#sqlalchemy.ext.mutable.MutableBase
+    "sqlalchemy.ext.mutable.MutableBase"))
 - en: '[PRE92]'
+  id: totrans-362
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE92]'
 - en: Subclasses should call this method whenever change events occur.
+  id: totrans-363
   prefs: []
   type: TYPE_NORMAL
+  zh: 子类应在更改事件发生时调用此方法。
 - en: '[PRE93]'
+  id: totrans-364
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE93]'
 - en: A dictionary type that implements [`Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable").
+  id: totrans-365
   prefs: []
   type: TYPE_NORMAL
+  zh: 实现了 [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")
+    的字典类型。
 - en: The [`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
     object implements a dictionary that will emit change events to the underlying
     mapping when the contents of the dictionary are altered, including when values
     are added or removed.
+  id: totrans-366
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
+    对象实现了一个字典，在字典内容发生更改时将向基础映射发出更改事件，包括添加或移除值时。'
 - en: Note that [`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
     does **not** apply mutable tracking to the *values themselves* inside the dictionary.
     Therefore it is not a sufficient solution for the use case of tracking deep changes
@@ -1574,87 +2506,144 @@
     "sqlalchemy.ext.mutable.MutableDict") that provides appropriate coercion to the
     values placed in the dictionary so that they too are “mutable”, and emit events
     up to their parent structure.
+  id: totrans-367
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
+    **不会** 对字典内部的*值本身*应用可变跟踪。因此，它不足以解决跟踪*递归*字典结构（例如 JSON 结构）的深层更改的用例。要支持此用例，请构建一个
+    [`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")
+    的子类，以提供适当的强制转换，以便放置在字典中的值也是“可变的”，并将事件传播到其父结构。
 - en: See also
+  id: totrans-368
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")'
+  id: totrans-369
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")'
 - en: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")'
+  id: totrans-370
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")'
 - en: '**Members**'
+  id: totrans-371
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[clear()](#sqlalchemy.ext.mutable.MutableDict.clear), [coerce()](#sqlalchemy.ext.mutable.MutableDict.coerce),
     [pop()](#sqlalchemy.ext.mutable.MutableDict.pop), [popitem()](#sqlalchemy.ext.mutable.MutableDict.popitem),
     [setdefault()](#sqlalchemy.ext.mutable.MutableDict.setdefault), [update()](#sqlalchemy.ext.mutable.MutableDict.update)'
+  id: totrans-372
   prefs: []
   type: TYPE_NORMAL
+  zh: '[clear()](#sqlalchemy.ext.mutable.MutableDict.clear), [coerce()](#sqlalchemy.ext.mutable.MutableDict.coerce),
+    [pop()](#sqlalchemy.ext.mutable.MutableDict.pop), [popitem()](#sqlalchemy.ext.mutable.MutableDict.popitem),
+    [setdefault()](#sqlalchemy.ext.mutable.MutableDict.setdefault), [update()](#sqlalchemy.ext.mutable.MutableDict.update)'
 - en: '**Class signature**'
+  id: totrans-373
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.MutableDict`](#sqlalchemy.ext.mutable.MutableDict
     "sqlalchemy.ext.mutable.MutableDict") ([`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable"), `builtins.dict`, `typing.Generic`)
+  id: totrans-374
   prefs: []
   type: TYPE_NORMAL
+  zh: 类[`sqlalchemy.ext.mutable.MutableDict`](#sqlalchemy.ext.mutable.MutableDict
+    "sqlalchemy.ext.mutable.MutableDict") ([`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable"), `builtins.dict`, `typing.Generic`)
 - en: '[PRE94]'
+  id: totrans-375
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE94]'
 - en: '[PRE95]'
+  id: totrans-376
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE95]'
 - en: Convert plain dictionary to instance of this class.
+  id: totrans-377
   prefs: []
   type: TYPE_NORMAL
+  zh: 将普通字典转换为此类的实例。
 - en: '[PRE96]'
+  id: totrans-378
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE96]'
 - en: If the key is not found, return the default if given; otherwise, raise a KeyError.
+  id: totrans-379
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果找不到键，则返回默认值（如果给定）；否则，引发KeyError。
 - en: '[PRE97]'
+  id: totrans-380
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE97]'
 - en: Remove and return a (key, value) pair as a 2-tuple.
+  id: totrans-381
   prefs: []
   type: TYPE_NORMAL
+  zh: 移除并返回一个(key, value)对作为2元组。
 - en: Pairs are returned in LIFO (last-in, first-out) order. Raises KeyError if the
     dict is empty.
+  id: totrans-382
   prefs: []
   type: TYPE_NORMAL
+  zh: 键值对以LIFO（后进先出）顺序返回。如果字典为空，则引发KeyError。
 - en: '[PRE98]'
+  id: totrans-383
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE98]'
 - en: Insert key with a value of default if key is not in the dictionary.
+  id: totrans-384
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果键不在字典中，则将键插入并设置默认值。
 - en: Return the value for key if key is in the dictionary, else default.
+  id: totrans-385
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果键在字典中，则返回键的值，否则返回默认值。
 - en: '[PRE99]'
+  id: totrans-386
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE99]'
 - en: 'If E is present and has a .keys() method, then does: for k in E: D[k] = E[k]
     If E is present and lacks a .keys() method, then does: for k, v in E: D[k] = v
     In either case, this is followed by: for k in F: D[k] = F[k]'
+  id: totrans-387
   prefs: []
   type: TYPE_NORMAL
+  zh: '如果E存在并且具有.keys()方法，则执行： for k in E: D[k] = E[k] 如果E存在但缺少.keys()方法，则执行： for
+    k, v in E: D[k] = v 在任一情况下，接下来执行： for k in F: D[k] = F[k]'
 - en: '[PRE100]'
+  id: totrans-388
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE100]'
 - en: A list type that implements [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
+  id: totrans-389
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个实现了[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")的列表类型。
 - en: The [`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")
     object implements a list that will emit change events to the underlying mapping
     when the contents of the list are altered, including when values are added or
     removed.
+  id: totrans-390
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")
+    对象实现了一个列表，当列表的内容被更改时，包括添加或删除值时，将向底层映射发送更改事件。'
 - en: Note that [`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")
     does **not** apply mutable tracking to the *values themselves* inside the list.
     Therefore it is not a sufficient solution for the use case of tracking deep changes
@@ -1663,124 +2652,206 @@
     "sqlalchemy.ext.mutable.MutableList") that provides appropriate coercion to the
     values placed in the dictionary so that they too are “mutable”, and emit events
     up to their parent structure.
+  id: totrans-391
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")
+    不会对列表内部的*值本身*应用可变跟踪。因此，它不是跟踪对*递归*可变结构进行深层更改的使用案例的充分解决方案，例如 JSON 结构。为支持此使用案例，请构建[`MutableList`](#sqlalchemy.ext.mutable.MutableList
+    "sqlalchemy.ext.mutable.MutableList")的子类，该子类提供适当的强制转换以使放置在字典中的值也是“可变的”，并将事件发送到其父结构。
 - en: See also
+  id: totrans-392
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")'
+  id: totrans-393
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")'
 - en: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")'
+  id: totrans-394
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")'
 - en: '**Members**'
+  id: totrans-395
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[append()](#sqlalchemy.ext.mutable.MutableList.append), [clear()](#sqlalchemy.ext.mutable.MutableList.clear),
     [coerce()](#sqlalchemy.ext.mutable.MutableList.coerce), [extend()](#sqlalchemy.ext.mutable.MutableList.extend),
     [insert()](#sqlalchemy.ext.mutable.MutableList.insert), [is_iterable()](#sqlalchemy.ext.mutable.MutableList.is_iterable),
     [is_scalar()](#sqlalchemy.ext.mutable.MutableList.is_scalar), [pop()](#sqlalchemy.ext.mutable.MutableList.pop),
     [remove()](#sqlalchemy.ext.mutable.MutableList.remove), [reverse()](#sqlalchemy.ext.mutable.MutableList.reverse),
     [sort()](#sqlalchemy.ext.mutable.MutableList.sort)'
+  id: totrans-396
   prefs: []
   type: TYPE_NORMAL
+  zh: '[append()](#sqlalchemy.ext.mutable.MutableList.append), [clear()](#sqlalchemy.ext.mutable.MutableList.clear),
+    [coerce()](#sqlalchemy.ext.mutable.MutableList.coerce), [extend()](#sqlalchemy.ext.mutable.MutableList.extend),
+    [insert()](#sqlalchemy.ext.mutable.MutableList.insert), [is_iterable()](#sqlalchemy.ext.mutable.MutableList.is_iterable),
+    [is_scalar()](#sqlalchemy.ext.mutable.MutableList.is_scalar), [pop()](#sqlalchemy.ext.mutable.MutableList.pop),
+    [remove()](#sqlalchemy.ext.mutable.MutableList.remove), [reverse()](#sqlalchemy.ext.mutable.MutableList.reverse),
+    [sort()](#sqlalchemy.ext.mutable.MutableList.sort)'
 - en: '**Class signature**'
+  id: totrans-397
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.MutableList`](#sqlalchemy.ext.mutable.MutableList
     "sqlalchemy.ext.mutable.MutableList") ([`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable"), `builtins.list`, `typing.Generic`)
+  id: totrans-398
   prefs: []
   type: TYPE_NORMAL
+  zh: 类[`sqlalchemy.ext.mutable.MutableList`](#sqlalchemy.ext.mutable.MutableList
+    "sqlalchemy.ext.mutable.MutableList")（[`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable")，`builtins.list`，`typing.Generic`）
 - en: '[PRE101]'
+  id: totrans-399
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE101]'
 - en: Append object to the end of the list.
+  id: totrans-400
   prefs: []
   type: TYPE_NORMAL
+  zh: 将对象追加到列表末尾。
 - en: '[PRE102]'
+  id: totrans-401
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE102]'
 - en: Remove all items from list.
+  id: totrans-402
   prefs: []
   type: TYPE_NORMAL
+  zh: 从列表中删除所有项。
 - en: '[PRE103]'
+  id: totrans-403
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE103]'
 - en: Convert plain list to instance of this class.
+  id: totrans-404
   prefs: []
   type: TYPE_NORMAL
+  zh: 将普通列表转换为此类的实例。
 - en: '[PRE104]'
+  id: totrans-405
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE104]'
 - en: Extend list by appending elements from the iterable.
+  id: totrans-406
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过将来自可迭代对象的元素附加到列表来扩展列表。
 - en: '[PRE105]'
+  id: totrans-407
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE105]'
 - en: Insert object before index.
+  id: totrans-408
   prefs: []
   type: TYPE_NORMAL
+  zh: 在索引之前插入对象。
 - en: '[PRE106]'
+  id: totrans-409
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE106]'
 - en: '[PRE107]'
+  id: totrans-410
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE107]'
 - en: '[PRE108]'
+  id: totrans-411
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE108]'
 - en: Remove and return item at index (default last).
+  id: totrans-412
   prefs: []
   type: TYPE_NORMAL
+  zh: 删除并返回索引处的项（默认为最后一个）。
 - en: Raises IndexError if list is empty or index is out of range.
+  id: totrans-413
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果列表为空或索引超出范围，则引发 IndexError。
 - en: '[PRE109]'
+  id: totrans-414
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE109]'
 - en: Remove first occurrence of value.
+  id: totrans-415
   prefs: []
   type: TYPE_NORMAL
+  zh: 删除值的第一个出现。
 - en: Raises ValueError if the value is not present.
+  id: totrans-416
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果值不存在，则引发 ValueError。
 - en: '[PRE110]'
+  id: totrans-417
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE110]'
 - en: Reverse *IN PLACE*.
+  id: totrans-418
   prefs: []
   type: TYPE_NORMAL
+  zh: 就地反转。
 - en: '[PRE111]'
+  id: totrans-419
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE111]'
 - en: Sort the list in ascending order and return None.
+  id: totrans-420
   prefs: []
   type: TYPE_NORMAL
+  zh: 将列表按升序排序并返回 None。
 - en: The sort is in-place (i.e. the list itself is modified) and stable (i.e. the
     order of two equal elements is maintained).
+  id: totrans-421
   prefs: []
   type: TYPE_NORMAL
+  zh: 排序是原地进行的（即列表本身被修改）并且稳定的（即保持两个相等元素的顺序不变）。
 - en: If a key function is given, apply it once to each list item and sort them, ascending
     or descending, according to their function values.
+  id: totrans-422
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果给定了键函数，则将其应用于每个列表项一次，并根据其函数值按升序或降序对它们进行排序。
 - en: The reverse flag can be set to sort in descending order.
+  id: totrans-423
   prefs: []
   type: TYPE_NORMAL
+  zh: 反转标志可以设置为按降序排序。
 - en: '[PRE112]'
+  id: totrans-424
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE112]'
 - en: A set type that implements [`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable").
+  id: totrans-425
   prefs: []
   type: TYPE_NORMAL
+  zh: 实现了[`Mutable`](#sqlalchemy.ext.mutable.Mutable "sqlalchemy.ext.mutable.Mutable")的集合类型。
 - en: The [`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
     object implements a set that will emit change events to the underlying mapping
     when the contents of the set are altered, including when values are added or removed.
+  id: totrans-426
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
+    对象实现了一个集合，当集合的内容发生变化时，包括添加或移除值时，会向底层映射发送更改事件。'
 - en: Note that [`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
     does **not** apply mutable tracking to the *values themselves* inside the set.
     Therefore it is not a sufficient solution for the use case of tracking deep changes
@@ -1788,102 +2859,172 @@
     of [`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
     that provides appropriate coercion to the values placed in the dictionary so that
     they too are “mutable”, and emit events up to their parent structure.
+  id: totrans-427
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")
+    **不会**对集合内部的*值本身*应用可变跟踪。因此，它不是跟踪对*递归*可变结构进行深层更改的足够解决方案。为了支持这种用例，构建一个[`MutableSet`](#sqlalchemy.ext.mutable.MutableSet
+    "sqlalchemy.ext.mutable.MutableSet")的子类，提供适当的强制转换，以便放置在字典中的值也是“可变的”，并向它们的父结构发出事件。
 - en: See also
+  id: totrans-428
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")'
+  id: totrans-429
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableDict`](#sqlalchemy.ext.mutable.MutableDict "sqlalchemy.ext.mutable.MutableDict")'
 - en: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")'
+  id: totrans-430
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`MutableList`](#sqlalchemy.ext.mutable.MutableList "sqlalchemy.ext.mutable.MutableList")'
 - en: '**Members**'
+  id: totrans-431
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[add()](#sqlalchemy.ext.mutable.MutableSet.add), [clear()](#sqlalchemy.ext.mutable.MutableSet.clear),
     [coerce()](#sqlalchemy.ext.mutable.MutableSet.coerce), [difference_update()](#sqlalchemy.ext.mutable.MutableSet.difference_update),
     [discard()](#sqlalchemy.ext.mutable.MutableSet.discard), [intersection_update()](#sqlalchemy.ext.mutable.MutableSet.intersection_update),
     [pop()](#sqlalchemy.ext.mutable.MutableSet.pop), [remove()](#sqlalchemy.ext.mutable.MutableSet.remove),
     [symmetric_difference_update()](#sqlalchemy.ext.mutable.MutableSet.symmetric_difference_update),
     [update()](#sqlalchemy.ext.mutable.MutableSet.update)'
+  id: totrans-432
   prefs: []
   type: TYPE_NORMAL
+  zh: '[add()](#sqlalchemy.ext.mutable.MutableSet.add), [clear()](#sqlalchemy.ext.mutable.MutableSet.clear),
+    [coerce()](#sqlalchemy.ext.mutable.MutableSet.coerce), [difference_update()](#sqlalchemy.ext.mutable.MutableSet.difference_update),
+    [discard()](#sqlalchemy.ext.mutable.MutableSet.discard), [intersection_update()](#sqlalchemy.ext.mutable.MutableSet.intersection_update),
+    [pop()](#sqlalchemy.ext.mutable.MutableSet.pop), [remove()](#sqlalchemy.ext.mutable.MutableSet.remove),
+    [symmetric_difference_update()](#sqlalchemy.ext.mutable.MutableSet.symmetric_difference_update),
+    [update()](#sqlalchemy.ext.mutable.MutableSet.update)'
 - en: '**Class signature**'
+  id: totrans-433
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.ext.mutable.MutableSet`](#sqlalchemy.ext.mutable.MutableSet
     "sqlalchemy.ext.mutable.MutableSet") ([`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
     "sqlalchemy.ext.mutable.Mutable"), `builtins.set`, `typing.Generic`)
+  id: totrans-434
   prefs: []
   type: TYPE_NORMAL
+  zh: 类[`sqlalchemy.ext.mutable.MutableSet`](#sqlalchemy.ext.mutable.MutableSet "sqlalchemy.ext.mutable.MutableSet")（[`sqlalchemy.ext.mutable.Mutable`](#sqlalchemy.ext.mutable.Mutable
+    "sqlalchemy.ext.mutable.Mutable"), `builtins.set`, `typing.Generic`)
 - en: '[PRE113]'
+  id: totrans-435
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE113]'
 - en: Add an element to a set.
+  id: totrans-436
   prefs: []
   type: TYPE_NORMAL
+  zh: 向集合添加一个元素。
 - en: This has no effect if the element is already present.
+  id: totrans-437
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果元素已经存在，则不产生任何效果。
 - en: '[PRE114]'
+  id: totrans-438
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE114]'
 - en: Remove all elements from this set.
+  id: totrans-439
   prefs: []
   type: TYPE_NORMAL
+  zh: 从此集合中移除所有元素。
 - en: '[PRE115]'
+  id: totrans-440
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE115]'
 - en: Convert plain set to instance of this class.
+  id: totrans-441
   prefs: []
   type: TYPE_NORMAL
+  zh: 将普通集合转换为此类的实例。
 - en: '[PRE116]'
+  id: totrans-442
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE116]'
 - en: Remove all elements of another set from this set.
+  id: totrans-443
   prefs: []
   type: TYPE_NORMAL
+  zh: 从此集合中移除另一个集合的所有元素。
 - en: '[PRE117]'
+  id: totrans-444
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE117]'
 - en: Remove an element from a set if it is a member.
+  id: totrans-445
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果元素是集合的成员，则从集合中移除一个元素。
 - en: If the element is not a member, do nothing.
+  id: totrans-446
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果元素不是成员，则不执行任何操作。
 - en: '[PRE118]'
+  id: totrans-447
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE118]'
 - en: Update a set with the intersection of itself and another.
+  id: totrans-448
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用自身和另一个集合的交集更新集合。
 - en: '[PRE119]'
+  id: totrans-449
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE119]'
 - en: Remove and return an arbitrary set element. Raises KeyError if the set is empty.
+  id: totrans-450
   prefs: []
   type: TYPE_NORMAL
+  zh: 移除并返回任意集合元素。如果集合为空，则引发KeyError。
 - en: '[PRE120]'
+  id: totrans-451
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE120]'
 - en: Remove an element from a set; it must be a member.
+  id: totrans-452
   prefs: []
   type: TYPE_NORMAL
+  zh: 从集合中移除一个元素；它必须是成员。
 - en: If the element is not a member, raise a KeyError.
+  id: totrans-453
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果元素不是成员，则引发KeyError。
 - en: '[PRE121]'
+  id: totrans-454
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE121]'
 - en: Update a set with the symmetric difference of itself and another.
+  id: totrans-455
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用自身和另一个集合的对称差集更新集合。
 - en: '[PRE122]'
+  id: totrans-456
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE122]'
 - en: Update a set with the union of itself and others.
+  id: totrans-457
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用自身和其他集合的并集更新集合。
