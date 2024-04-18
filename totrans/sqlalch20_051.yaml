@@ -1,46 +1,64 @@
 - en: State Management
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 状态管理
 - en: 原文：[https://docs.sqlalchemy.org/en/20/orm/session_state_management.html](https://docs.sqlalchemy.org/en/20/orm/session_state_management.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/orm/session_state_management.html](https://docs.sqlalchemy.org/en/20/orm/session_state_management.html)
 - en: '## Quickie Intro to Object States'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 对象状态简介'
 - en: 'It’s helpful to know the states which an instance can have within a session:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 知道对象在会话中可能具有的状态是有帮助的：
 - en: '**Transient** - an instance that’s not in a session, and is not saved to the
     database; i.e. it has no database identity. The only relationship such an object
     has to the ORM is that its class has a [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
     "sqlalchemy.orm.Mapper") associated with it.'
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Transient** - 一个不在会话中的实例，也没有保存到数据库；即它没有数据库标识。这样的对象与ORM的唯一关系是其类与一个[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")相关联。'
 - en: '**Pending** - when you [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
     "sqlalchemy.orm.Session.add") a transient instance, it becomes pending. It still
     wasn’t actually flushed to the database yet, but it will be when the next flush
     occurs.'
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Pending** - 当您[`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
+    "sqlalchemy.orm.Session.add")一个瞬态实例时，它变为待定状态。它实际上还没有被刷新到数据库中，但在下一次刷新时会被刷新到数据库中。'
 - en: '**Persistent** - An instance which is present in the session and has a record
     in the database. You get persistent instances by either flushing so that the pending
     instances become persistent, or by querying the database for existing instances
     (or moving persistent instances from other sessions into your local session).'
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Persistent** - 存在于会话中并在数据库中具有记录的实例。您可以通过刷新使待定实例变为持久实例，或者通过查询数据库获取现有实例（或将其他会话中的持久实例移动到您的本地会话中）来获取持久实例。'
 - en: '**Deleted** - An instance which has been deleted within a flush, but the transaction
     has not yet completed. Objects in this state are essentially in the opposite of
     “pending” state; when the session’s transaction is committed, the object will
     move to the detached state. Alternatively, when the session’s transaction is rolled
     back, a deleted object moves *back* to the persistent state.'
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Deleted** - 在刷新中已被删除的实例，但事务尚未完成。处于此状态的对象基本上处于“待定”状态的相反状态；当会话的事务提交时，对象将移动到分离状态。或者，当会话的事务回滚时，删除的对象将*返回*到持久状态。'
 - en: '**Detached** - an instance which corresponds, or previously corresponded, to
     a record in the database, but is not currently in any session. The detached object
     will contain a database identity marker, however because it is not associated
@@ -48,18 +66,24 @@
     in a target database. Detached objects are safe to use normally, except that they
     have no ability to load unloaded attributes or attributes that were previously
     marked as “expired”.'
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Detached** - 一个对应于数据库中的记录，但目前不在任何会话中的实例。分离的对象将包含一个数据库标识标记，但是由于它没有与会话关联，因此无法确定此数据库标识是否实际存在于目标数据库中。分离的对象通常可以安全使用，但它们无法加载未加载的属性或先前标记为“过期”的属性。'
 - en: For a deeper dive into all possible state transitions, see the section [Object
     Lifecycle Events](session_events.html#session-lifecycle-events) which describes
     each transition as well as how to programmatically track each one.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 深入了解所有可能的状态转换，请参阅[对象生命周期事件](session_events.html#session-lifecycle-events)部分，其中描述了每个转换以及如何以编程方式跟踪每个转换。
 - en: Getting the Current State of an Object
+  id: totrans-10
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 获取对象的当前状态
 - en: 'The actual state of any mapped object can be viewed at any time using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
     "sqlalchemy.inspect") function on a mapped instance; this function will return
     the corresponding [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
@@ -67,76 +91,123 @@
     the object. [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
     provides, among other accessors, boolean attributes indicating the persistence
     state of the object, including:'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以随时使用[`inspect()`](../core/inspection.html#sqlalchemy.inspect "sqlalchemy.inspect")函数在任何映射对象上查看实际状态；此函数将返回管理对象的内部ORM状态的相应[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")对象。[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")提供了其他访问器，包括指示对象持久状态的布尔属性，包括：
 - en: '[`InstanceState.transient`](internals.html#sqlalchemy.orm.InstanceState.transient
     "sqlalchemy.orm.InstanceState.transient")'
+  id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.transient`](internals.html#sqlalchemy.orm.InstanceState.transient
+    "sqlalchemy.orm.InstanceState.transient")'
 - en: '[`InstanceState.pending`](internals.html#sqlalchemy.orm.InstanceState.pending
     "sqlalchemy.orm.InstanceState.pending")'
+  id: totrans-13
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.pending`](internals.html#sqlalchemy.orm.InstanceState.pending
+    "sqlalchemy.orm.InstanceState.pending")'
 - en: '[`InstanceState.persistent`](internals.html#sqlalchemy.orm.InstanceState.persistent
     "sqlalchemy.orm.InstanceState.persistent")'
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.persistent`](internals.html#sqlalchemy.orm.InstanceState.persistent
+    "sqlalchemy.orm.InstanceState.persistent")'
 - en: '[`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
     "sqlalchemy.orm.InstanceState.deleted")'
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted")'
 - en: '[`InstanceState.detached`](internals.html#sqlalchemy.orm.InstanceState.detached
     "sqlalchemy.orm.InstanceState.detached")'
+  id: totrans-16
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.detached`](internals.html#sqlalchemy.orm.InstanceState.detached
+    "sqlalchemy.orm.InstanceState.detached")'
 - en: 'E.g.:'
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如：
 - en: '[PRE0]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: See also
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Inspection of Mapped Instances](mapping_styles.html#orm-mapper-inspection-instancestate)
     - further examples of [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState")  ## Session Attributes'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: '[映射实例的检查](mapping_styles.html#orm-mapper-inspection-instancestate) - [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") 的更多示例  ## 会话属性'
 - en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
     itself acts somewhat like a set-like collection. All items present may be accessed
     using the iterator interface:'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
+    本身在某种程度上就像一个集合。可以使用迭代器接口访问所有已存在的项目：'
 - en: '[PRE1]'
+  id: totrans-22
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'And presence may be tested for using regular “contains” semantics:'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 并且可以使用常规的“包含”语义来测试存在性：
 - en: '[PRE2]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'The session is also keeping track of all newly created (i.e. pending) objects,
     all objects which have had changes since they were last loaded or saved (i.e.
     “dirty”), and everything that’s been marked as deleted:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 会话还跟踪所有新创建的（即待处理的）对象，自上次加载或保存以来发生了更改的所有对象（即“脏对象”），以及标记为已删除的所有对象：
 - en: '[PRE3]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: '(Documentation: [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
     "sqlalchemy.orm.Session.new"), [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty
     "sqlalchemy.orm.Session.dirty"), [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
     "sqlalchemy.orm.Session.deleted"), [`Session.identity_map`](session_api.html#sqlalchemy.orm.Session.identity_map
     "sqlalchemy.orm.Session.identity_map")).  ## Session Referencing Behavior'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: '（文档：[`Session.new`](session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new"),
+    [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty "sqlalchemy.orm.Session.dirty"),
+    [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted "sqlalchemy.orm.Session.deleted"),
+    [`Session.identity_map`](session_api.html#sqlalchemy.orm.Session.identity_map
+    "sqlalchemy.orm.Session.identity_map")).  ## 会话引用行为'
 - en: Objects within the session are *weakly referenced*. This means that when they
     are dereferenced in the outside application, they fall out of scope from within
     the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
@@ -144,8 +215,11 @@
     to this include objects which are pending, objects which are marked as deleted,
     or persistent objects which have pending changes on them. After a full flush,
     these collections are all empty, and all objects are again weakly referenced.
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 会话内的对象是*弱引用*的。这意味着当它们在外部应用程序中取消引用时，它们也从[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session") 中消失，并且受 Python 解释器的垃圾收集影响。这种情况的例外包括待处理的对象、标记为已删除的对象或具有待处理更改的持久对象。在完全刷新后，这些集合都为空，并且所有对象再次成为弱引用。
 - en: To cause objects in the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") to remain strongly referenced, usually a simple approach
     is all that’s needed. Examples of externally managed strong-referencing behavior
@@ -154,16 +228,25 @@
     collections can be associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session"), if desired, by placing them into the [`Session.info`](session_api.html#sqlalchemy.orm.Session.info
     "sqlalchemy.orm.Session.info") dictionary.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了使[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")中的对象保持强引用，通常只需要一个简单的方法。外部管理强引用行为的示例包括将对象加载到以其主键为键的本地字典中，或者在它们需要保持引用的时间段内加载到列表或集合中。如果需要，这些集合可以与
+    [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    关联，方法是将它们放入 [`Session.info`](session_api.html#sqlalchemy.orm.Session.info "sqlalchemy.orm.Session.info")
+    字典中。
 - en: 'An event based approach is also feasible. A simple recipe that provides “strong
     referencing” behavior for all objects as they remain within the [persistent](../glossary.html#term-persistent)
     state is as follows:'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 也可以采用基于事件的方法。一个简单的方法可以为所有对象在[持久状态](../glossary.html#term-persistent)下保持“强引用”行为，具体如下：
 - en: '[PRE4]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: Above, we intercept the [`SessionEvents.pending_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_persistent
     "sqlalchemy.orm.SessionEvents.pending_to_persistent"), [`SessionEvents.detached_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.detached_to_persistent
     "sqlalchemy.orm.SessionEvents.detached_to_persistent"), [`SessionEvents.deleted_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_persistent
@@ -174,50 +257,79 @@
     "sqlalchemy.orm.SessionEvents.persistent_to_detached") and [`SessionEvents.persistent_to_deleted()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_deleted
     "sqlalchemy.orm.SessionEvents.persistent_to_deleted") hooks to intercept objects
     as they leave the persistent state.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，我们拦截了 [`SessionEvents.pending_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_persistent
+    "sqlalchemy.orm.SessionEvents.pending_to_persistent")、[`SessionEvents.detached_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.detached_to_persistent
+    "sqlalchemy.orm.SessionEvents.detached_to_persistent")、[`SessionEvents.deleted_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_persistent
+    "sqlalchemy.orm.SessionEvents.deleted_to_persistent") 和 [`SessionEvents.loaded_as_persistent()`](events.html#sqlalchemy.orm.SessionEvents.loaded_as_persistent
+    "sqlalchemy.orm.SessionEvents.loaded_as_persistent") 事件钩子，以便拦截对象在进入[持久状态](../glossary.html#term-persistent)时的行为，并在对象离开持久状态时拦截
+    [`SessionEvents.persistent_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_detached
+    "sqlalchemy.orm.SessionEvents.persistent_to_detached") 和 [`SessionEvents.persistent_to_deleted()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_deleted
+    "sqlalchemy.orm.SessionEvents.persistent_to_deleted") 事件钩子。
 - en: 'The above function may be called for any [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") in order to provide strong-referencing behavior on a
     per-[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     basis:'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述函数可用于任何 [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")，以在每个[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")基础上提供强引用行为：
 - en: '[PRE5]'
+  id: totrans-34
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'It may also be called for any [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
     "sqlalchemy.orm.sessionmaker"):'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于任何 [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")，也可能被调用：
 - en: '[PRE6]  ## Merging'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE6]  ## 合并'
 - en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
     transfers state from an outside object into a new or already existing instance
     within a session. It also reconciles the incoming data against the state of the
     database, producing a history stream which will be applied towards the next flush,
     or alternatively can be made to produce a simple “transfer” of state without producing
     change history or accessing the database. Usage is as follows:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    将状态从外部对象传输到会话中的新实例或已存在的实例。它还将传入的数据与数据库状态进行对比，生成一个历史流，该流将被应用于下一次刷新，或者可以被设置为生成简单的状态“传输”，而不生成变更历史或访问数据库。使用方法如下：'
 - en: '[PRE7]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'When given an instance, it follows these steps:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定一个实例时，它遵循以下步骤：
 - en: It examines the primary key of the instance. If it’s present, it attempts to
     locate that instance in the local identity map. If the `load=True` flag is left
     at its default, it also checks the database for this primary key if not located
     locally.
+  id: totrans-40
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它检查实例的主键。如果存在，则尝试在本地标识映射中定位该实例。如果 `load=True` 标志保持默认设置，则还会检查数据库是否存在此主键，如果在本地找不到，则检查数据库是否存在此主键。
 - en: If the given instance has no primary key, or if no instance can be found with
     the primary key given, a new instance is created.
+  id: totrans-41
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果给定实例没有主键，或者给定的主键找不到实例，则创建一个新实例。
 - en: The state of the given instance is then copied onto the located/newly created
     instance. For attribute values which are present on the source instance, the value
     is transferred to the target instance. For attribute values that aren’t present
@@ -225,26 +337,35 @@
     [expired](../glossary.html#term-expired) from memory, which discards any locally
     present value from the target instance for that attribute, but no direct modification
     is made to the database-persisted value for that attribute.
+  id: totrans-42
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 然后将给定实例的状态复制到定位的/新创建的实例上。对于源实例上存在的属性值，该值将转移到目标实例上。对于源实例上不存在的属性值，目标实例上的相应属性将从内存中[过期](../glossary.html#term-expired)，这会丢弃目标实例的该属性的任何本地存在值，但不会对该属性的数据库持久化值进行直接修改。
 - en: If the `load=True` flag is left at its default, this copy process emits events
     and will load the target object’s unloaded collections for each attribute present
     on the source object, so that the incoming state can be reconciled against what’s
     present in the database. If `load` is passed as `False`, the incoming data is
     “stamped” directly without producing any history.
+  id: totrans-43
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 如果 `load=True` 标志保持默认设置，此复制过程会发出事件，并且将为源对象上的每个属性加载目标对象的未加载集合，以便可以根据数据库中存在的内容来协调传入状态。如果传递
+    `load` 为 `False`，则传入的数据将直接“标记”，而不产生任何历史记录。
 - en: The operation is cascaded to related objects and collections, as indicated by
     the `merge` cascade (see [Cascades](cascades.html#unitofwork-cascades)).
+  id: totrans-44
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 操作会根据 `merge` 级联（请参阅[级联](cascades.html#unitofwork-cascades)）传播到相关对象和集合。
 - en: The new instance is returned.
+  id: totrans-45
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 返回新实例。
 - en: 'With [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge"),
     the given “source” instance is not modified nor is it associated with the target
     [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
@@ -253,8 +374,13 @@
     "sqlalchemy.orm.Session.merge") is useful for taking the state of any kind of
     object structure without regard for its origins or current session associations
     and copying its state into a new session. Here’s some examples:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")，给定的“源”实例不会被修改，也不会与目标[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")关联，并且仍然可以与任意数量的其他[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")对象合并。[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")对于获取任何类型的对象结构的状态而无需考虑其来源或当前会话关联，并将其状态复制到新会话中非常有用。以下是一些示例：
 - en: An application which reads an object structure from a file and wishes to save
     it to the database might parse the file, build up the structure, and then use
     [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
@@ -265,9 +391,13 @@
     "sqlalchemy.orm.session.Session") will automatically update the database to reflect
     those changes, loading each object from the database by primary key and then updating
     its state with the new state given.
+  id: totrans-47
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从文件读取对象结构并希望将其保存到数据库的应用程序可能会解析文件，构建结构，然后使用[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")将其保存到数据库中，确保文件中的数据用于构造结构的每个元素的主键。稍后，当文件发生更改时，可以重新运行相同的过程，生成稍微不同的对象结构，然后可以再次进行`merge`，并且[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session")将自动更新数据库以反映这些更改，通过主键从数据库加载每个对象，然后使用新状态更新其状态。
 - en: An application is storing objects in an in-memory cache, shared by many [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") objects simultaneously. [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
     "sqlalchemy.orm.Session.merge") is used each time an object is retrieved from
@@ -275,9 +405,14 @@
     "sqlalchemy.orm.Session") which requests it. The cached object remains detached;
     only its state is moved into copies of itself that are local to individual [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") objects.
+  id: totrans-48
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个应用程序将对象存储在一个内存缓存中，由许多[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")对象同时共享。每次从缓存中检索对象时，都会使用[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")创建它的本地副本，以便在每个请求它的[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")中。缓存的对象保持分离状态；只有它的状态被移动到本地于各个[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")对象的副本中。
 - en: In the caching use case, it’s common to use the `load=False` flag to remove
     the overhead of reconciling the object’s state with the database. There’s also
     a “bulk” version of [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
@@ -285,9 +420,14 @@
     "sqlalchemy.orm.Query.merge_result") that was designed to work with cache-extended
     [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query") objects
     - see the section [Dogpile Caching](examples.html#examples-caching).
+  id: totrans-49
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 在缓存用例中，通常使用`load=False`标志来消除对象状态与数据库之间的开销。还有一个“批量”版本的[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")称为[`Query.merge_result()`](queryguide/query.html#sqlalchemy.orm.Query.merge_result
+    "sqlalchemy.orm.Query.merge_result")，它被设计用于与缓存扩展的[`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query")对象一起使用 - 请参阅[Dogpile Caching](examples.html#examples-caching)部分。
 - en: An application wants to transfer the state of a series of objects into a [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") maintained by a worker thread or other concurrent system.
     [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
@@ -295,19 +435,28 @@
     "sqlalchemy.orm.Session"). At the end of the operation, the parent thread/process
     maintains the objects it started with, and the thread/worker can proceed with
     local copies of those objects.
+  id: totrans-50
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个应用程序想要将一系列对象的状态转移到由工作线程或其他并发系统维护的[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")中。[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")将每个要放入新[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")中的对象复制一份。操作结束时，父线程/进程保留了其开始的对象，而线程/工作程序可以继续使用这些对象的本地副本。
 - en: In the “transfer between threads/processes” use case, the application may want
     to use the `load=False` flag as well to avoid overhead and redundant SQL queries
     as the data is transferred.
+  id: totrans-51
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 在“线程/进程之间传输”用例中，应用程序可能希望同时使用`load=False`标志，以避免开销和冗余的SQL查询，因为数据正在传输。
 - en: Merge Tips
+  id: totrans-52
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 合并提示
 - en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
     is an extremely useful method for many purposes. However, it deals with the intricate
     border between objects that are transient/detached and those that are persistent,
@@ -316,42 +465,65 @@
     state of objects. Common problems with merge usually involve some unexpected state
     regarding the object being passed to [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
     "sqlalchemy.orm.Session.merge").'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")是一个非常有用的方法，适用于许多目的。然而，它处理的是瞬态/分离对象和持久化对象之间复杂的边界，以及状态的自动转移。这里可能出现的各种各样的场景通常需要对对象状态更加谨慎的处理。合并的常见问题通常涉及到传递给[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")的对象的一些意外状态。'
 - en: 'Lets use the canonical example of the User and Address objects:'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们以用户和地址对象的典型示例为例：
 - en: '[PRE8]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'Assume a `User` object with one `Address`, already persistent:'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设一个具有一个地址的`User`对象，已经持久化：
 - en: '[PRE9]'
+  id: totrans-57
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'We now create `a1`, an object outside the session, which we’d like to merge
     on top of the existing `Address`:'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们创建了一个在会话之外的对象`a1`，我们希望将其合并到现有的`Address`上：
 - en: '[PRE10]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'A surprise would occur if we said this:'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们这样说会有一个意外的情况：
 - en: '[PRE11]'
+  id: totrans-61
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'Why is that ? We weren’t careful with our cascades. The assignment of `a1.user`
     to a persistent object cascaded to the backref of `User.addresses` and made our
     `a1` object pending, as though we had added it. Now we have *two* `Address` objects
     in the session:'
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 为什么会这样？我们没有正确处理级联。将`a1.user`分配给持久对象级联到`User.addresses`的反向引用，并使我们的`a1`对象挂起，就好像我们已经添加了它一样。现在我们的会话中有*两个*`Address`对象：
 - en: '[PRE12]'
+  id: totrans-63
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: Above, our `a1` is already pending in the session. The subsequent [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
     "sqlalchemy.orm.Session.merge") operation essentially does nothing. Cascade can
     be configured via the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
@@ -360,117 +532,183 @@
     `save-update` cascade from the `User.addresses` relationship - and usually, that
     behavior is extremely convenient. The solution here would usually be to not assign
     `a1.user` to an object already persistent in the target session.
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，我们的`a1`已经在会话中挂起。随后的[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")操作实际上什么都不做。级联可以通过[`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship")选项在[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")上配置，尽管在这种情况下，这意味着从`User.addresses`关系中删除了`save-update`级联
+    - 而且通常，那种行为非常方便。这里的解决方案通常是不将`a1.user`分配给已经存在于目标会话中的对象。
 - en: The `cascade_backrefs=False` option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") will also prevent the `Address` from being added
     to the session via the `a1.user = u1` assignment.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")的`cascade_backrefs=False`选项也将阻止通过`a1.user
+    = u1`分配将`Address`添加到会话中。'
 - en: Further detail on cascade operation is at [Cascades](cascades.html#unitofwork-cascades).
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 更多关于级联操作的细节请参阅[级联](cascades.html#unitofwork-cascades)。
 - en: 'Another example of unexpected state:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个意外状态的例子：
 - en: '[PRE13]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: Above, the assignment of `user` takes precedence over the foreign key assignment
     of `user_id`, with the end result that `None` is applied to `user_id`, causing
     a failure.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，将`user`的分配优先于`user_id`的外键分配，最终导致`user_id`应用了`None`，导致失败。
 - en: Most [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
     issues can be examined by first checking - is the object prematurely in the session
     ?
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 大多数[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")问题可以通过首先检查
+    - 对象是否过早地在会话中？
 - en: '[PRE14]'
+  id: totrans-71
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'Or is there state on the object that we don’t want ? Examining `__dict__` is
     a quick way to check:'
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者对象上有我们不想要的状态吗？检查`__dict__`是一个快速检查的方法：
 - en: '[PRE15]'
+  id: totrans-73
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Expunging
+  id: totrans-74
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 清除
 - en: 'Expunge removes an object from the Session, sending persistent instances to
     the detached state, and pending instances to the transient state:'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: Expunge将对象从会话中删除，将持久实例发送到脱机状态，将待处理实例发送到瞬态状态：
 - en: '[PRE16]'
+  id: totrans-76
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: To remove all items, call [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
     "sqlalchemy.orm.Session.expunge_all") (this method was formerly known as `clear()`).
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 要删除所有项目，请调用[`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all")（此方法以前称为`clear()`）。
 - en: '## Refreshing / Expiring'
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 刷新 / 过期'
 - en: '[Expiring](../glossary.html#term-Expiring) means that the database-persisted
     data held inside a series of object attributes is erased, in such a way that when
     those attributes are next accessed, a SQL query is emitted which will refresh
     that data from the database.'
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: '[过期](../glossary.html#term-Expiring)意味着数据库持久化数据存储在一系列对象属性中被清除，这样当下次访问这些属性时，将发出一个SQL查询，该查询将从数据库中刷新数据。'
 - en: 'When we talk about expiration of data we are usually talking about an object
     that is in the [persistent](../glossary.html#term-persistent) state. For example,
     if we load an object as follows:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们谈论数据的过期时，我们通常是指处于[持久](../glossary.html#term-persistent)状态的对象。例如，如果我们像这样加载一个对象：
 - en: '[PRE17]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'The above `User` object is persistent, and has a series of attributes present;
     if we were to look inside its `__dict__`, we’d see that state loaded:'
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述的`User`对象是持久的，并且具有一系列存在的属性；如果我们查看它的`__dict__`，我们会看到已加载的状态：
 - en: '[PRE18]'
+  id: totrans-83
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: where `id` and `name` refer to those columns in the database. `_sa_instance_state`
     is a non-database-persisted value used by SQLAlchemy internally (it refers to
     the [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
     for the instance. While not directly relevant to this section, if we want to get
     at it, we should use the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
     "sqlalchemy.inspect") function to access it).
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中`id`和`name`是数据库中的列。`_sa_instance_state`是SQLAlchemy内部使用的非数据库持久化值（它引用了实例的[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")。虽然与本节直接相关，但如果我们想要获取它，我们应该使用[`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect")函数来访问它）。
 - en: 'At this point, the state in our `User` object matches that of the loaded database
     row. But upon expiring the object using a method such as [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire"), we see that the state is removed:'
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 此时，我们`User`对象中的状态与加载的数据库行的状态相匹配。但是在使用诸如[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")之类的方法使对象过期后，我们会看到状态被删除：
 - en: '[PRE19]'
+  id: totrans-86
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: 'We see that while the internal “state” still hangs around, the values which
     correspond to the `id` and `name` columns are gone. If we were to access one of
     these columns and are watching SQL, we’d see this:'
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们看到，虽然内部的“状态”仍然存在，但与`id`和`name`列对应的值已经消失。如果我们要访问其中一列并观察SQL，我们会看到这样的情况：
 - en: '[PRE20]'
+  id: totrans-88
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'Above, upon accessing the expired attribute `user.name`, the ORM initiated
     a [lazy load](../glossary.html#term-lazy-load) to retrieve the most recent state
     from the database, by emitting a SELECT for the user row to which this user refers.
     Afterwards, the `__dict__` is again populated:'
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，在访问已过期的属性`user.name`时，ORM启动了一个[惰性加载](../glossary.html#term-lazy-load)以从数据库中检索最新状态，通过向这个用户引用的用户行发出一个SELECT。之后，`__dict__`再次被填充：
 - en: '[PRE21]'
+  id: totrans-90
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: Note
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: While we are peeking inside of `__dict__` in order to see a bit of what SQLAlchemy
     does with object attributes, we **should not modify** the contents of `__dict__`
     directly, at least as far as those attributes which the SQLAlchemy ORM is maintaining
@@ -478,68 +716,109 @@
     uses [descriptors](../glossary.html#term-descriptors) in order to track the changes
     we make to an object, and when we modify `__dict__` directly, the ORM won’t be
     able to track that we changed something.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然我们正在查看`__dict__`的内容，以便了解SQLAlchemy对对象属性的处理，但我们**不应直接修改**`__dict__`的内容，至少不应修改SQLAlchemy
+    ORM正在维护的属性（SQLA领域之外的其他属性没问题）。这是因为SQLAlchemy使用[描述符](../glossary.html#term-descriptors)来跟踪我们对对象所做的更改，当我们直接修改`__dict__`时，ORM将无法跟踪到我们做出的更改。
 - en: 'Another key behavior of both [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") is that all un-flushed changes on an object
     are discarded. That is, if we were to modify an attribute on our `User`:'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")和[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh")的另一个关键行为是，对象上的所有未刷新的更改都将被丢弃。也就是说，如果我们要修改`User`上的属性：'
 - en: '[PRE22]'
+  id: totrans-94
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: 'but then we call [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") without first calling [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
     "sqlalchemy.orm.Session.flush"), our pending value of `''user2''` is discarded:'
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是当我们在调用[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")之前没有调用[`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush")时，我们挂起的值`'user2'`将被丢弃：
 - en: '[PRE23]'
+  id: totrans-96
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
     method can be used to mark as “expired” all ORM-mapped attributes for an instance:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")方法可用于将实例的所有ORM映射属性标记为“过期”：'
 - en: '[PRE24]'
+  id: totrans-98
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: 'it can also be passed a list of string attribute names, referring to specific
     attributes to be marked as expired:'
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 它还可以传递一个字符串属性名称列表，指定要标记为过期的特定属性：
 - en: '[PRE25]'
+  id: totrans-100
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: 'The [`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
     "sqlalchemy.orm.Session.expire_all") method allows us to essentially call [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") on all objects contained within the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") at once:'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all")方法允许我们一次性对[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")中包含的所有对象调用[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")：'
 - en: '[PRE26]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: 'The [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     method has a similar interface, but instead of expiring, it emits an immediate
     SELECT for the object’s row immediately:'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")方法具有类似的接口，但是不是使过期，而是立即发出对象行的
+    SELECT：'
 - en: '[PRE27]'
+  id: totrans-104
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     also accepts a list of string attribute names, but unlike [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire"), expects at least one name to be that of a column-mapped
     attribute:'
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")还接受一个字符串属性名称的列表，但与[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")不同，它期望至少一个名称是列映射属性的名称：'
 - en: '[PRE28]'
+  id: totrans-106
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: Tip
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: 'An alternative method of refreshing which is often more flexible is to use
     the [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)
     feature of the ORM, available for [2.0 style](../glossary.html#term-2.0-style)
@@ -549,24 +828,37 @@
     "sqlalchemy.orm.Query") within [1.x style](../glossary.html#term-1.x-style) queries.
     Using this execution option, all of the ORM objects returned in the result set
     of the statement will be refreshed with data from the database:'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 通常更灵活的刷新替代方法是使用ORM的[填充现有内容](queryguide/api.html#orm-queryguide-populate-existing)功能，适用于使用[`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select")进行[2.0风格](../glossary.html#term-2.0-style)查询以及在[1.x风格](../glossary.html#term-1.x-style)查询中的[`Query.populate_existing()`](queryguide/query.html#sqlalchemy.orm.Query.populate_existing
+    "sqlalchemy.orm.Query.populate_existing")方法。使用此执行选项，语句结果集中返回的所有ORM对象都将使用来自数据库的数据进行刷新：
 - en: '[PRE29]'
+  id: totrans-109
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: See [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)
     for further detail.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 查看[填充现有内容](queryguide/api.html#orm-queryguide-populate-existing)以获取更多详细信息。
 - en: What Actually Loads
+  id: totrans-111
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 实际加载内容
 - en: 'The SELECT statement that’s emitted when an object marked with [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") or loaded with [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") varies based on several factors, including:'
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 当标记为[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")或使用[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh")加载的对象时，所发出的SELECT语句因多种因素而异，包括：
 - en: The load of expired attributes is triggered from **column-mapped attributes
     only**. While any kind of attribute can be marked as expired, including a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") - mapped attribute, accessing an expired [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
@@ -574,15 +866,22 @@
     using standard relationship-oriented lazy loading. Column-oriented attributes,
     even if expired, will not load as part of this operation, and instead will load
     when any column-oriented attribute is accessed.
+  id: totrans-113
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 仅从**列映射属性**加载过期属性。虽然可以将任何类型的属性标记为过期，包括[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") - 映射属性，但访问过期的[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")属性将仅为该属性发出加载，使用标准的基于关系的惰性加载。即使过期，基于列的属性也不会作为此操作的一部分加载，而是在访问任何基于列的属性时加载。
 - en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")-
     mapped attributes will not load in response to expired column-based attributes
     being accessed.'
+  id: totrans-114
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    映射的属性不会在访问过期的基于列的属性时加载。
 - en: Regarding relationships, [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") is more restrictive than [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") with regards to attributes that aren’t column-mapped.
@@ -591,46 +890,69 @@
     relationship-mapped attributes will actually raise an error. In any case, non-eager-loading
     [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
     attributes will not be included in any refresh operation.
+  id: totrans-115
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 关于关系，[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    在属性不是列映射的情况下比 [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") 更为严格。调用 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") 并传递一个只包括关系映射属性的名称列表将会引发错误。无论如何，非急切加载的 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 属性都不会包含在任何刷新操作中。
 - en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
     attributes configured as “eager loading” via the [`relationship.lazy`](relationship_api.html#sqlalchemy.orm.relationship.params.lazy
     "sqlalchemy.orm.relationship") parameter will load in the case of [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh"), if either no attribute names are specified,
     or if their names are included in the list of attributes to be refreshed.'
+  id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过 [`relationship.lazy`](relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") 参数配置为“急切加载”的 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 属性将在 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") 的情况下加载，如果未指定任何属性名称，或者如果它们的名称包含在要刷新的属性列表中。
 - en: Attributes that are configured as [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
     "sqlalchemy.orm.deferred") will not normally load, during either the expired-attribute
     load or during a refresh. An unloaded attribute that’s [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
     "sqlalchemy.orm.deferred") instead loads on its own when directly accessed, or
     if part of a “group” of deferred attributes where an unloaded attribute in that
     group is accessed.
+  id: totrans-117
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 配置为 [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred")
+    的属性通常不会在过期属性加载期间或刷新期间加载。当直接访问未加载的属性或者作为延迟属性组的一部分访问该组中的未加载属性时，配置为 [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") 的未加载属性将自行加载。
 - en: For expired attributes that are loaded on access, a joined-inheritance table
     mapping will emit a SELECT that typically only includes those tables for which
     unloaded attributes are present. The action here is sophisticated enough to load
     only the parent or child table, for example, if the subset of columns that were
     originally expired encompass only one or the other of those tables.
+  id: totrans-118
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于在访问时加载的过期属性，连接继承表映射将发出一个通常只包含那些存在未加载属性的表的 SELECT。在这里的操作足够复杂，以仅加载父表或子表，例如，如果最初过期的列的子集仅包含其中一个表或另一个表。
 - en: When [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     is used on a joined-inheritance table mapping, the SELECT emitted will resemble
     that of when [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
     "sqlalchemy.orm.Session.query") is used on the target object’s class. This is
     typically all those tables that are set up as part of the mapping.
+  id: totrans-119
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 当在连接继承表映射上使用 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") 时，所发出的 SELECT 与在目标对象的类上使用 [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
+    "sqlalchemy.orm.Session.query") 时的类似。这通常是映射的一部分设置的所有表。
 - en: When to Expire or Refresh
+  id: totrans-120
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 何时过期或刷新
 - en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     uses the expiration feature automatically whenever the transaction referred to
     by the session ends. Meaning, whenever [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
@@ -643,28 +965,44 @@
     state of the database is, as any number of other transactions may be affecting
     it. Only when a new transaction starts can we again have access to the current
     state of the database, at which point any number of changes may have occurred.
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    在会话引用的事务结束时自动使用过期功能。这意味着，每当调用 [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") 或 [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback")，会话中的所有对象都会过期，使用与 [`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") 方法相当的功能。其原因在于事务的结束是一个标志性的点，在此点上不再有可用于了解数据库当前状态的上下文，因为任意数量的其他事务可能正在影响它。只有当新事务开始时，我们才能再次访问数据库的当前状态，在此时可能已经发生了任意数量的更改。'
 - en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
     and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     methods are used in those cases when one wants to force an object to re-load its
     data from the database, in those cases when it is known that the current state
     of data is possibly stale. Reasons for this might include:'
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 当希望强制对象重新从数据库加载其数据时，应使用 [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") 和 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") 方法，当已知数据的当前状态可能过时时。这样做的原因可能包括：
 - en: some SQL has been emitted within the transaction outside of the scope of the
     ORM’s object handling, such as if a [`Table.update()`](../core/metadata.html#sqlalchemy.schema.Table.update
     "sqlalchemy.schema.Table.update") construct were emitted using the [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method;
+  id: totrans-123
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一些 SQL 在 ORM 对象处理范围之外的事务中被发出，比如如果使用 [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") 方法发出了 [`Table.update()`](../core/metadata.html#sqlalchemy.schema.Table.update
+    "sqlalchemy.schema.Table.update") 构造；
 - en: if the application is attempting to acquire data that is known to have been
     modified in a concurrent transaction, and it is also known that the isolation
     rules in effect allow this data to be visible.
+  id: totrans-124
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果应用程序试图获取已知在并发事务中已修改的数据，并且已知正在生效的隔离规则允许该数据可见。
 - en: The second bullet has the important caveat that “it is also known that the isolation
     rules in effect allow this data to be visible.” This means that it cannot be assumed
     that an UPDATE that happened on another database connection will yet be visible
@@ -672,67 +1010,101 @@
     "sqlalchemy.orm.Session.expire") or [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") in order to view data between ongoing transactions,
     an understanding of the isolation behavior in effect is essential.
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 第二条警告很重要，即“也已知在生效的隔离规则下，这些数据可见。”这意味着不能假设在另一个数据库连接上发生的更新在本地已经可见；在许多情况下，它是不可见的。这就是为什么如果想要在正在进行的事务之间使用
+    [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
+    或 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    查看数据，就必须了解正在生效的隔离行为。
 - en: See also
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 另见
 - en: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")'
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")'
 - en: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
     "sqlalchemy.orm.Session.expire_all")'
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") '
 - en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")'
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")'
 - en: '[Populate Existing](queryguide/api.html#orm-queryguide-populate-existing) -
     allows any ORM query to refresh objects as they would be loaded normally, refreshing
     all matching objects in the identity map against the results of a SELECT statement.'
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: '[填充现有](queryguide/api.html#orm-queryguide-populate-existing) - 允许任何 ORM 查询在
+    SELECT 语句的结果中刷新对象，就像它们通常加载一样，刷新标识映射中所有匹配的对象。'
 - en: '[isolation](../glossary.html#term-isolation) - glossary explanation of isolation
     which includes links to Wikipedia.'
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: '[隔离](../glossary.html#term-isolation) - 隔离的词汇解释，其中包括指向维基百科的链接。'
 - en: '[The SQLAlchemy Session In-Depth](https://techspot.zzzeek.org/2012/11/14/pycon-canada-the-sqlalchemy-session-in-depth/)
     - a video + slides with an in-depth discussion of the object lifecycle including
     the role of data expiration.  ## Quickie Intro to Object States'
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: '[SQLAlchemy 会话深入解析](https://techspot.zzzeek.org/2012/11/14/pycon-canada-the-sqlalchemy-session-in-depth/)
+    - 一个关于对象生命周期的深入讨论的视频 + 幻灯片，包括数据过期的角色。## 快速对象状态介绍'
 - en: 'It’s helpful to know the states which an instance can have within a session:'
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 了解实例在会话中可能具有的状态是有帮助的：
 - en: '**Transient** - an instance that’s not in a session, and is not saved to the
     database; i.e. it has no database identity. The only relationship such an object
     has to the ORM is that its class has a [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
     "sqlalchemy.orm.Mapper") associated with it.'
+  id: totrans-134
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**瞬时** - 一个不在会话中并且没有保存到数据库的实例；即它没有数据库标识。这样的对象与 ORM 的唯一关系是其类与一个 [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") 相关联。'
 - en: '**Pending** - when you [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add
     "sqlalchemy.orm.Session.add") a transient instance, it becomes pending. It still
     wasn’t actually flushed to the database yet, but it will be when the next flush
     occurs.'
+  id: totrans-135
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**待定** - 当你 [`Session.add()`](session_api.html#sqlalchemy.orm.Session.add "sqlalchemy.orm.Session.add")
+    一个瞬时实例时，它变为待定状态。它实际上还没有被刷新到数据库，但在下一次刷新时会被刷新到数据库。'
 - en: '**Persistent** - An instance which is present in the session and has a record
     in the database. You get persistent instances by either flushing so that the pending
     instances become persistent, or by querying the database for existing instances
     (or moving persistent instances from other sessions into your local session).'
+  id: totrans-136
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**持久** - 存在于会话中并且在数据库中有记录的实例。您可以通过刷新使待定实例变为持久实例，或通过查询数据库获取现有实例（或将其他会话中的持久实例移动到您的本地会话）来获得持久实例。'
 - en: '**Deleted** - An instance which has been deleted within a flush, but the transaction
     has not yet completed. Objects in this state are essentially in the opposite of
     “pending” state; when the session’s transaction is committed, the object will
     move to the detached state. Alternatively, when the session’s transaction is rolled
     back, a deleted object moves *back* to the persistent state.'
+  id: totrans-137
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**已删除** - 在刷新中已删除的实例，但事务尚未完成。处于这种状态的对象基本上与“待定”状态相反；当会话的事务提交时，对象将移至分离状态。另外，当会话的事务回滚时，已删除的对象将*回到*持久状态。'
 - en: '**Detached** - an instance which corresponds, or previously corresponded, to
     a record in the database, but is not currently in any session. The detached object
     will contain a database identity marker, however because it is not associated
@@ -740,18 +1112,24 @@
     in a target database. Detached objects are safe to use normally, except that they
     have no ability to load unloaded attributes or attributes that were previously
     marked as “expired”.'
+  id: totrans-138
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**分离** - 一个实例，它对应于或以前对应于数据库中的记录，但当前不在任何会话中。分离的对象将包含一个数据库标识标记，但由于它没有关联到会话，因此不知道此数据库标识实际上是否存在于目标数据库中。分离的对象通常是安全的使用，除了它们无法加载未加载的属性或以前标记为“过期”的属性。'
 - en: For a deeper dive into all possible state transitions, see the section [Object
     Lifecycle Events](session_events.html#session-lifecycle-events) which describes
     each transition as well as how to programmatically track each one.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 深入研究所有可能的状态转换，请参阅 [对象生命周期事件](session_events.html#session-lifecycle-events) 部分，该部分描述了每个转换以及如何以编程方式跟踪每个转换。
 - en: Getting the Current State of an Object
+  id: totrans-140
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 获取对象的当前状态
 - en: 'The actual state of any mapped object can be viewed at any time using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
     "sqlalchemy.inspect") function on a mapped instance; this function will return
     the corresponding [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
@@ -759,51 +1137,82 @@
     the object. [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
     provides, among other accessors, boolean attributes indicating the persistence
     state of the object, including:'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 任何映射对象的实际状态都可以随时使用映射实例上的 [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") 函数查看；此函数将返回管理对象的内部 ORM 状态的相应 [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") 对象。[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") 提供了其他访问器，其中包括指示对象持久性状态的布尔属性，包括：
 - en: '[`InstanceState.transient`](internals.html#sqlalchemy.orm.InstanceState.transient
     "sqlalchemy.orm.InstanceState.transient")'
+  id: totrans-142
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.transient`](internals.html#sqlalchemy.orm.InstanceState.transient
+    "sqlalchemy.orm.InstanceState.transient")'
 - en: '[`InstanceState.pending`](internals.html#sqlalchemy.orm.InstanceState.pending
     "sqlalchemy.orm.InstanceState.pending")'
+  id: totrans-143
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.pending`](internals.html#sqlalchemy.orm.InstanceState.pending
+    "sqlalchemy.orm.InstanceState.pending")'
 - en: '[`InstanceState.persistent`](internals.html#sqlalchemy.orm.InstanceState.persistent
     "sqlalchemy.orm.InstanceState.persistent")'
+  id: totrans-144
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.persistent`](internals.html#sqlalchemy.orm.InstanceState.persistent
+    "sqlalchemy.orm.InstanceState.persistent")'
 - en: '[`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
     "sqlalchemy.orm.InstanceState.deleted")'
+  id: totrans-145
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted")'
 - en: '[`InstanceState.detached`](internals.html#sqlalchemy.orm.InstanceState.detached
     "sqlalchemy.orm.InstanceState.detached")'
+  id: totrans-146
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.detached`](internals.html#sqlalchemy.orm.InstanceState.detached
+    "sqlalchemy.orm.InstanceState.detached")'
 - en: 'E.g.:'
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如：
 - en: '[PRE30]'
+  id: totrans-148
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: See also
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Inspection of Mapped Instances](mapping_styles.html#orm-mapper-inspection-instancestate)
     - further examples of [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState")'
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: '[映射实例的检查](mapping_styles.html#orm-mapper-inspection-instancestate) - 更多有关 [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") 的示例'
 - en: Getting the Current State of an Object
+  id: totrans-151
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 获取对象的当前状态
 - en: 'The actual state of any mapped object can be viewed at any time using the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
     "sqlalchemy.inspect") function on a mapped instance; this function will return
     the corresponding [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
@@ -811,82 +1220,133 @@
     the object. [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
     provides, among other accessors, boolean attributes indicating the persistence
     state of the object, including:'
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 任何映射对象的实际状态都可以随时使用映射实例上的 [`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect") 函数查看；此函数将返回管理对象的内部 ORM 状态的相应 [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") 对象。[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") 提供了其他访问器，其中包括指示对象持久性状态的布尔属性，包括：
 - en: '[`InstanceState.transient`](internals.html#sqlalchemy.orm.InstanceState.transient
     "sqlalchemy.orm.InstanceState.transient")'
+  id: totrans-153
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.transient`](internals.html#sqlalchemy.orm.InstanceState.transient
+    "sqlalchemy.orm.InstanceState.transient")'
 - en: '[`InstanceState.pending`](internals.html#sqlalchemy.orm.InstanceState.pending
     "sqlalchemy.orm.InstanceState.pending")'
+  id: totrans-154
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.pending`](internals.html#sqlalchemy.orm.InstanceState.pending
+    "sqlalchemy.orm.InstanceState.pending")'
 - en: '[`InstanceState.persistent`](internals.html#sqlalchemy.orm.InstanceState.persistent
     "sqlalchemy.orm.InstanceState.persistent")'
+  id: totrans-155
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.persistent`](internals.html#sqlalchemy.orm.InstanceState.persistent
+    "sqlalchemy.orm.InstanceState.persistent")'
 - en: '[`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
     "sqlalchemy.orm.InstanceState.deleted")'
+  id: totrans-156
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.deleted`](internals.html#sqlalchemy.orm.InstanceState.deleted
+    "sqlalchemy.orm.InstanceState.deleted")'
 - en: '[`InstanceState.detached`](internals.html#sqlalchemy.orm.InstanceState.detached
     "sqlalchemy.orm.InstanceState.detached")'
+  id: totrans-157
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`InstanceState.detached`](internals.html#sqlalchemy.orm.InstanceState.detached
+    "sqlalchemy.orm.InstanceState.detached")'
 - en: 'E.g.:'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如：
 - en: '[PRE31]'
+  id: totrans-159
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: See also
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Inspection of Mapped Instances](mapping_styles.html#orm-mapper-inspection-instancestate)
     - further examples of [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
     "sqlalchemy.orm.InstanceState")'
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: '[映射实例的检查](mapping_styles.html#orm-mapper-inspection-instancestate) - 更多有关 [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState") 的示例'
 - en: '## Session Attributes'
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 会话属性'
 - en: 'The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
     itself acts somewhat like a set-like collection. All items present may be accessed
     using the iterator interface:'
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
+    本身的行为有点像一个类似集合的集合。可以使用迭代器接口访问所有存在的项目：'
 - en: '[PRE32]'
+  id: totrans-164
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: 'And presence may be tested for using regular “contains” semantics:'
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 并且可以使用常规的“包含”语义进行测试：
 - en: '[PRE33]'
+  id: totrans-166
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: 'The session is also keeping track of all newly created (i.e. pending) objects,
     all objects which have had changes since they were last loaded or saved (i.e.
     “dirty”), and everything that’s been marked as deleted:'
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 会话还会跟踪所有新创建的（即待处理的）对象，所有自上次加载或保存以来发生更改的对象（即“脏对象”），以及所有被标记为已删除的对象：
 - en: '[PRE34]'
+  id: totrans-168
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: '(Documentation: [`Session.new`](session_api.html#sqlalchemy.orm.Session.new
     "sqlalchemy.orm.Session.new"), [`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty
     "sqlalchemy.orm.Session.dirty"), [`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
     "sqlalchemy.orm.Session.deleted"), [`Session.identity_map`](session_api.html#sqlalchemy.orm.Session.identity_map
     "sqlalchemy.orm.Session.identity_map")).'
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: （文档：[`Session.new`](session_api.html#sqlalchemy.orm.Session.new "sqlalchemy.orm.Session.new")，[`Session.dirty`](session_api.html#sqlalchemy.orm.Session.dirty
+    "sqlalchemy.orm.Session.dirty")，[`Session.deleted`](session_api.html#sqlalchemy.orm.Session.deleted
+    "sqlalchemy.orm.Session.deleted")，[`Session.identity_map`](session_api.html#sqlalchemy.orm.Session.identity_map
+    "sqlalchemy.orm.Session.identity_map")）。
 - en: '## Session Referencing Behavior'
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 会话引用行为'
 - en: Objects within the session are *weakly referenced*. This means that when they
     are dereferenced in the outside application, they fall out of scope from within
     the [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")
@@ -894,8 +1354,11 @@
     to this include objects which are pending, objects which are marked as deleted,
     or persistent objects which have pending changes on them. After a full flush,
     these collections are all empty, and all objects are again weakly referenced.
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 会话中的对象是*弱引用*的。这意味着当它们在外部应用程序中取消引用时，它们也会从[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session")中失去作用域，并且由Python解释器进行垃圾回收。这种情况的例外包括待处理对象、标记为已删除的对象或具有待处理更改的持久对象。在完全刷新后，这些集合都为空，并且所有对象再次是弱引用的。
 - en: To cause objects in the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") to remain strongly referenced, usually a simple approach
     is all that’s needed. Examples of externally managed strong-referencing behavior
@@ -904,16 +1367,24 @@
     collections can be associated with a [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session"), if desired, by placing them into the [`Session.info`](session_api.html#sqlalchemy.orm.Session.info
     "sqlalchemy.orm.Session.info") dictionary.
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 使[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.session.Session")中的对象保持强引用通常只需要简单的方法。外部管理的强引用行为示例包括将对象加载到以其主键为键的本地字典中，或者在它们需要保持引用的时间段内加载到列表或集合中。如果需要，这些集合可以与[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session")关联，方法是将它们放入[`Session.info`](session_api.html#sqlalchemy.orm.Session.info
+    "sqlalchemy.orm.Session.info")字典中。
 - en: 'An event based approach is also feasible. A simple recipe that provides “strong
     referencing” behavior for all objects as they remain within the [persistent](../glossary.html#term-persistent)
     state is as follows:'
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 还可以使用基于事件的方法。以下是一个提供了所有对象在[持久化](../glossary.html#term-persistent)状态下保持“强引用”行为的简单方案：
 - en: '[PRE35]'
+  id: totrans-174
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: Above, we intercept the [`SessionEvents.pending_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_persistent
     "sqlalchemy.orm.SessionEvents.pending_to_persistent"), [`SessionEvents.detached_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.detached_to_persistent
     "sqlalchemy.orm.SessionEvents.detached_to_persistent"), [`SessionEvents.deleted_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_persistent
@@ -924,53 +1395,83 @@
     "sqlalchemy.orm.SessionEvents.persistent_to_detached") and [`SessionEvents.persistent_to_deleted()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_deleted
     "sqlalchemy.orm.SessionEvents.persistent_to_deleted") hooks to intercept objects
     as they leave the persistent state.
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述，我们拦截了[`SessionEvents.pending_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.pending_to_persistent
+    "sqlalchemy.orm.SessionEvents.pending_to_persistent")，[`SessionEvents.detached_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.detached_to_persistent
+    "sqlalchemy.orm.SessionEvents.detached_to_persistent")，[`SessionEvents.deleted_to_persistent()`](events.html#sqlalchemy.orm.SessionEvents.deleted_to_persistent
+    "sqlalchemy.orm.SessionEvents.deleted_to_persistent")和[`SessionEvents.loaded_as_persistent()`](events.html#sqlalchemy.orm.SessionEvents.loaded_as_persistent
+    "sqlalchemy.orm.SessionEvents.loaded_as_persistent")事件钩子，以拦截对象进入[persistent](../glossary.html#term-persistent)状态转换时的情况，以及[`SessionEvents.persistent_to_detached()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_detached
+    "sqlalchemy.orm.SessionEvents.persistent_to_detached")和[`SessionEvents.persistent_to_deleted()`](events.html#sqlalchemy.orm.SessionEvents.persistent_to_deleted
+    "sqlalchemy.orm.SessionEvents.persistent_to_deleted")钩子以拦截对象离开持久状态时的情况。
 - en: 'The above function may be called for any [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") in order to provide strong-referencing behavior on a
     per-[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     basis:'
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述函数可针对任何[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")进行调用，以在每个[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")上提供强引用行为：
 - en: '[PRE36]'
+  id: totrans-177
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: 'It may also be called for any [`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker
     "sqlalchemy.orm.sessionmaker"):'
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 也可以针对任何[`sessionmaker`](session_api.html#sqlalchemy.orm.sessionmaker "sqlalchemy.orm.sessionmaker")进行调用：
 - en: '[PRE37]'
+  id: totrans-179
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: '## Merging'
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 合并'
 - en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
     transfers state from an outside object into a new or already existing instance
     within a session. It also reconciles the incoming data against the state of the
     database, producing a history stream which will be applied towards the next flush,
     or alternatively can be made to produce a simple “transfer” of state without producing
     change history or accessing the database. Usage is as follows:'
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")将外部对象的状态转移到会话中的新实例或已存在的实例中。
+    它还将传入的数据与数据库状态进行对比，生成将应用于下一个刷新的历史流，或者可以产生简单的状态“转移”而不产生更改历史或访问数据库。 使用方法如下：'
 - en: '[PRE38]'
+  id: totrans-182
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: 'When given an instance, it follows these steps:'
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 当给定一个实例时，它按以下步骤执行：
 - en: It examines the primary key of the instance. If it’s present, it attempts to
     locate that instance in the local identity map. If the `load=True` flag is left
     at its default, it also checks the database for this primary key if not located
     locally.
+  id: totrans-184
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它检查实例的主键。 如果存在，它会尝试在本地标识映射中定位该实例。 如果将`load=True`标志保留为其默认值，则还会检查数据库以获取该主键（如果未在本地找到）。
 - en: If the given instance has no primary key, or if no instance can be found with
     the primary key given, a new instance is created.
+  id: totrans-185
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果给定实例没有主键，或者无法找到给定主键的实例，则会创建一个新实例。
 - en: The state of the given instance is then copied onto the located/newly created
     instance. For attribute values which are present on the source instance, the value
     is transferred to the target instance. For attribute values that aren’t present
@@ -978,26 +1479,34 @@
     [expired](../glossary.html#term-expired) from memory, which discards any locally
     present value from the target instance for that attribute, but no direct modification
     is made to the database-persisted value for that attribute.
+  id: totrans-186
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 然后，给定实例的状态将被复制到定位/新创建的实例上。对于源实例上存在的属性值，该值将转移到目标实例。对于源实例上不存在的属性值，目标实例上的相应属性将从内存中过期，这将丢弃目标实例的该属性的任何局部存在值，但不会直接修改该属性的数据库持久化值。
 - en: If the `load=True` flag is left at its default, this copy process emits events
     and will load the target object’s unloaded collections for each attribute present
     on the source object, so that the incoming state can be reconciled against what’s
     present in the database. If `load` is passed as `False`, the incoming data is
     “stamped” directly without producing any history.
+  id: totrans-187
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 如果`load=True`标志保持其默认状态，则此复制过程会触发事件，并且将为源对象上的每个属性加载目标对象的未加载集合，以便对入站状态进行与数据库中存在的内容进行对比。如果传递了`load`为`False`，则传入的数据将直接“盖章”，而不产生任何历史记录。
 - en: The operation is cascaded to related objects and collections, as indicated by
     the `merge` cascade (see [Cascades](cascades.html#unitofwork-cascades)).
+  id: totrans-188
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 操作会级联到相关对象和集合，如`merge`级联所示（见[级联](cascades.html#unitofwork-cascades)）。
 - en: The new instance is returned.
+  id: totrans-189
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 返回新实例。
 - en: 'With [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge"),
     the given “source” instance is not modified nor is it associated with the target
     [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
@@ -1006,8 +1515,13 @@
     "sqlalchemy.orm.Session.merge") is useful for taking the state of any kind of
     object structure without regard for its origins or current session associations
     and copying its state into a new session. Here’s some examples:'
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")，给定的“源”实例不会被修改，也不会与目标[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")关联，并且仍然可用于与任意数量的其他[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")对象合并。[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")对于将任何类型的对象结构的状态复制到新会话中而不考虑其来源或当前会话关联很有用。以下是一些示例：
 - en: An application which reads an object structure from a file and wishes to save
     it to the database might parse the file, build up the structure, and then use
     [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
@@ -1018,9 +1532,13 @@
     "sqlalchemy.orm.session.Session") will automatically update the database to reflect
     those changes, loading each object from the database by primary key and then updating
     its state with the new state given.
+  id: totrans-191
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从文件读取对象结构并希望将其保存到数据库的应用程序可能会解析文件，构建结构，然后使用[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")将其保存到数据库，确保使用文件中的数据来制定结构的每个元素的主键。稍后，当文件发生更改时，可以重新运行相同的过程，生成稍微不同的对象结构，然后可以再次进行合并，并且[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.session.Session")将自动更新数据库以反映这些更改，通过主键从数据库加载每个对象，然后使用给定的新状态更新其状态。
 - en: An application is storing objects in an in-memory cache, shared by many [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") objects simultaneously. [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
     "sqlalchemy.orm.Session.merge") is used each time an object is retrieved from
@@ -1028,9 +1546,14 @@
     "sqlalchemy.orm.Session") which requests it. The cached object remains detached;
     only its state is moved into copies of itself that are local to individual [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") objects.
+  id: totrans-192
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个应用程序将对象存储在一个内存缓存中，被许多[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")对象同时共享。每次从缓存中检索对象时，都会使用[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")在请求该对象的每个[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")中创建一个本地副本。缓存的对象保持分离状态；只有其状态被移动到各自局部的[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")对象的副本中。
 - en: In the caching use case, it’s common to use the `load=False` flag to remove
     the overhead of reconciling the object’s state with the database. There’s also
     a “bulk” version of [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
@@ -1038,9 +1561,14 @@
     "sqlalchemy.orm.Query.merge_result") that was designed to work with cache-extended
     [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query") objects
     - see the section [Dogpile Caching](examples.html#examples-caching).
+  id: totrans-193
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 在缓存用例中，通常使用`load=False`标志来消除对象状态与数据库之间的协调开销。还有一个与缓存扩展[`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query")对象一起工作的“批量”版本的[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")，称为[`Query.merge_result()`](queryguide/query.html#sqlalchemy.orm.Query.merge_result
+    "sqlalchemy.orm.Query.merge_result")，请参见[Dogpile Caching](examples.html#examples-caching)部分。
 - en: An application wants to transfer the state of a series of objects into a [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") maintained by a worker thread or other concurrent system.
     [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
@@ -1048,19 +1576,28 @@
     "sqlalchemy.orm.Session"). At the end of the operation, the parent thread/process
     maintains the objects it started with, and the thread/worker can proceed with
     local copies of those objects.
+  id: totrans-194
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个应用程序希望将一系列对象的状态转移到由工作线程或其他并发系统维护的[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")中。[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")会为要放入这个新[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")的每个对象创建一个副本。操作结束时，父线程/进程保留其开始的对象，而线程/工作线程可以继续使用这些对象的本地副本。
 - en: In the “transfer between threads/processes” use case, the application may want
     to use the `load=False` flag as well to avoid overhead and redundant SQL queries
     as the data is transferred.
+  id: totrans-195
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 在“线程/进程之间传输”用例中，应用程序可能还想使用`load=False`标志，以避免在数据传输时产生额外开销和冗余的SQL查询。
 - en: Merge Tips
+  id: totrans-196
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 合并提示
 - en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
     is an extremely useful method for many purposes. However, it deals with the intricate
     border between objects that are transient/detached and those that are persistent,
@@ -1069,42 +1606,65 @@
     state of objects. Common problems with merge usually involve some unexpected state
     regarding the object being passed to [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
     "sqlalchemy.orm.Session.merge").'
+  id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")是一个非常有用的方法，适用于许多目的。然而，它处理的是瞬态/分离对象和持久对象之间复杂的边界，以及状态的自动传输。这里可能出现的各种场景通常需要更加谨慎地处理对象的状态。合并常见问题通常涉及传递给[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")的对象的一些意外状态。'
 - en: 'Lets use the canonical example of the User and Address objects:'
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们使用用户和地址对象的典型示例：
 - en: '[PRE39]'
+  id: totrans-199
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: 'Assume a `User` object with one `Address`, already persistent:'
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设一个具有一个`Address`的`User`对象，已经是持久的：
 - en: '[PRE40]'
+  id: totrans-201
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: 'We now create `a1`, an object outside the session, which we’d like to merge
     on top of the existing `Address`:'
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们创建`a1`，一个在会话之外的对象，我们希望将其合并到现有的`Address`上：
 - en: '[PRE41]'
+  id: totrans-203
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: 'A surprise would occur if we said this:'
+  id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们这样说，将会出现一个意外情况：
 - en: '[PRE42]'
+  id: totrans-205
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: 'Why is that ? We weren’t careful with our cascades. The assignment of `a1.user`
     to a persistent object cascaded to the backref of `User.addresses` and made our
     `a1` object pending, as though we had added it. Now we have *two* `Address` objects
     in the session:'
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 为什么会这样？我们没有仔细处理级联。将`a1.user`分配给持久对象，级联到了`User.addresses`的反向引用，并使我们的`a1`对象挂起，就像我们已经将其添加一样。现在我们在会话中有*两个*`Address`对象：
 - en: '[PRE43]'
+  id: totrans-207
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: Above, our `a1` is already pending in the session. The subsequent [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
     "sqlalchemy.orm.Session.merge") operation essentially does nothing. Cascade can
     be configured via the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
@@ -1113,46 +1673,72 @@
     `save-update` cascade from the `User.addresses` relationship - and usually, that
     behavior is extremely convenient. The solution here would usually be to not assign
     `a1.user` to an object already persistent in the target session.
+  id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的例子中，我们的`a1`已经在会话中处于挂起状态。随后的[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")操作实际上什么也没做。级联可以通过[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")上的`relationship.cascade`选项进行配置，尽管在这种情况下，这意味着从`User.addresses`关系中删除`save-update`级联
+    - 通常，这种行为非常方便。在这里的解决方案通常是不将`a1.user`分配给目标会话中已经持久化的对象。
 - en: The `cascade_backrefs=False` option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") will also prevent the `Address` from being added
     to the session via the `a1.user = u1` assignment.
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")的`cascade_backrefs=False`选项还将通过`a1.user
+    = u1`赋值阻止将`Address`添加到会话中。'
 - en: Further detail on cascade operation is at [Cascades](cascades.html#unitofwork-cascades).
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: 有关级联操作的进一步细节，请参见[Cascades](cascades.html#unitofwork-cascades)。
 - en: 'Another example of unexpected state:'
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个意外状态的例子：
 - en: '[PRE44]'
+  id: totrans-212
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: Above, the assignment of `user` takes precedence over the foreign key assignment
     of `user_id`, with the end result that `None` is applied to `user_id`, causing
     a failure.
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的例子中，`user`的赋值优先于`user_id`的外键赋值，其最终结果是将`None`应用于`user_id`，导致失败。
 - en: Most [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
     issues can be examined by first checking - is the object prematurely in the session
     ?
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: 大多数[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")问题可以通过首先检查对象是否过早出现在会话中来检查。
 - en: '[PRE45]'
+  id: totrans-215
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: 'Or is there state on the object that we don’t want ? Examining `__dict__` is
     a quick way to check:'
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者对象上有我们不想要的状态吗？检查`__dict__`是快速检查的一种方式：
 - en: '[PRE46]'
+  id: totrans-217
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: Merge Tips
+  id: totrans-218
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 合并提示
 - en: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
     is an extremely useful method for many purposes. However, it deals with the intricate
     border between objects that are transient/detached and those that are persistent,
@@ -1161,42 +1747,66 @@
     state of objects. Common problems with merge usually involve some unexpected state
     regarding the object being passed to [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
     "sqlalchemy.orm.Session.merge").'
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")对于许多目的非常有用。但是，它处理的是瞬态/游离对象与持久对象之间复杂的边界，以及状态的自动转移。这里可能出现的各种各样的场景通常需要更加谨慎的对象状态处理。与合并相关的常见问题通常涉及到传递给[`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge")的对象的一些意外状态。'
 - en: 'Lets use the canonical example of the User and Address objects:'
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们使用用户和地址对象的典型示例：
 - en: '[PRE47]'
+  id: totrans-221
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: 'Assume a `User` object with one `Address`, already persistent:'
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设已经持久化了一个具有一个`Address`的`User`对象：
 - en: '[PRE48]'
+  id: totrans-223
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: 'We now create `a1`, an object outside the session, which we’d like to merge
     on top of the existing `Address`:'
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们创建了一个在会话之外的对象`a1`，我们希望将其合并到现有的`Address`上：
 - en: '[PRE49]'
+  id: totrans-225
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: 'A surprise would occur if we said this:'
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们这样说，就会出现意外的情况：
 - en: '[PRE50]'
+  id: totrans-227
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: 'Why is that ? We weren’t careful with our cascades. The assignment of `a1.user`
     to a persistent object cascaded to the backref of `User.addresses` and made our
     `a1` object pending, as though we had added it. Now we have *two* `Address` objects
     in the session:'
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 为什么会这样？我们没有小心处理级联。将 `a1.user` 分配给持久对象级联到了 `User.addresses` 的反向引用，并使我们的 `a1`
+    对象处于待定状态，就好像我们已经将其添加了一样。现在我们会话中有 *两个* `Address` 对象。
 - en: '[PRE51]'
+  id: totrans-229
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: Above, our `a1` is already pending in the session. The subsequent [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
     "sqlalchemy.orm.Session.merge") operation essentially does nothing. Cascade can
     be configured via the [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
@@ -1205,117 +1815,184 @@
     `save-update` cascade from the `User.addresses` relationship - and usually, that
     behavior is extremely convenient. The solution here would usually be to not assign
     `a1.user` to an object already persistent in the target session.
+  id: totrans-230
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面，我们的 `a1` 已经在会话中处于待定状态。随后的 [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge
+    "sqlalchemy.orm.Session.merge") 操作实质上什么也不做。级联可以通过 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 上的 [`relationship.cascade`](relationship_api.html#sqlalchemy.orm.relationship.params.cascade
+    "sqlalchemy.orm.relationship") 选项进行配置，尽管在这种情况下，它意味着从 `User.addresses` 关系中删除了 `save-update`
+    级联 - 通常，这种行为非常方便。在这种情况下，解决方案通常是不将 `a1.user` 分配给目标会话中已经持久的对象。
 - en: The `cascade_backrefs=False` option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") will also prevent the `Address` from being added
     to the session via the `a1.user = u1` assignment.
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    的 `cascade_backrefs=False` 选项还会防止通过 `a1.user = u1` 赋值将 `Address` 添加到会话中。'
 - en: Further detail on cascade operation is at [Cascades](cascades.html#unitofwork-cascades).
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 关于级联操作的进一步细节请参见 [级联](cascades.html#unitofwork-cascades)。
 - en: 'Another example of unexpected state:'
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个意外状态的例子：
 - en: '[PRE52]'
+  id: totrans-234
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: Above, the assignment of `user` takes precedence over the foreign key assignment
     of `user_id`, with the end result that `None` is applied to `user_id`, causing
     a failure.
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面，`user` 的赋值优先于 `user_id` 的外键赋值，结果是 `None` 被应用于 `user_id`，导致失败。
 - en: Most [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
     issues can be examined by first checking - is the object prematurely in the session
     ?
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 大多数 [`Session.merge()`](session_api.html#sqlalchemy.orm.Session.merge "sqlalchemy.orm.Session.merge")
+    问题可以通过首先检查对象是否过早出现在会话中来检查。
 - en: '[PRE53]'
+  id: totrans-237
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: 'Or is there state on the object that we don’t want ? Examining `__dict__` is
     a quick way to check:'
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者对象上是否有我们不希望的状态？检查 `__dict__` 是一种快速检查的方法：
 - en: '[PRE54]'
+  id: totrans-239
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: Expunging
+  id: totrans-240
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: Expunging
 - en: 'Expunge removes an object from the Session, sending persistent instances to
     the detached state, and pending instances to the transient state:'
+  id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: Expunge 从会话中移除一个对象，将持久实例发送到分离状态，将待定实例发送到瞬态状态：
 - en: '[PRE55]'
+  id: totrans-242
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: To remove all items, call [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
     "sqlalchemy.orm.Session.expunge_all") (this method was formerly known as `clear()`).
+  id: totrans-243
   prefs: []
   type: TYPE_NORMAL
+  zh: 要删除所有项目，请调用 [`Session.expunge_all()`](session_api.html#sqlalchemy.orm.Session.expunge_all
+    "sqlalchemy.orm.Session.expunge_all")（此方法以前称为 `clear()`）。
 - en: '## Refreshing / Expiring'
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 刷新 / 到期'
 - en: '[Expiring](../glossary.html#term-Expiring) means that the database-persisted
     data held inside a series of object attributes is erased, in such a way that when
     those attributes are next accessed, a SQL query is emitted which will refresh
     that data from the database.'
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
+  zh: '[到期](../glossary.html#term-Expiring) 意味着数据库持久化的数据被擦除，当下次访问这些属性时，会发出一个 SQL 查询，该查询将从数据库刷新该数据。'
 - en: 'When we talk about expiration of data we are usually talking about an object
     that is in the [persistent](../glossary.html#term-persistent) state. For example,
     if we load an object as follows:'
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们谈论数据的到期时，通常是指处于 [持久](../glossary.html#term-persistent) 状态的对象。例如，如果我们加载一个对象如下：
 - en: '[PRE56]'
+  id: totrans-247
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: 'The above `User` object is persistent, and has a series of attributes present;
     if we were to look inside its `__dict__`, we’d see that state loaded:'
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述的 `User` 对象是持久的，并且具有一系列属性；如果我们查看它的 `__dict__`，我们会看到加载的状态：
 - en: '[PRE57]'
+  id: totrans-249
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: where `id` and `name` refer to those columns in the database. `_sa_instance_state`
     is a non-database-persisted value used by SQLAlchemy internally (it refers to
     the [`InstanceState`](internals.html#sqlalchemy.orm.InstanceState "sqlalchemy.orm.InstanceState")
     for the instance. While not directly relevant to this section, if we want to get
     at it, we should use the [`inspect()`](../core/inspection.html#sqlalchemy.inspect
     "sqlalchemy.inspect") function to access it).
+  id: totrans-250
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中 `id` 和 `name` 指的是数据库中的那些列。 `_sa_instance_state` 是 SQLAlchemy 内部使用的非数据库持久化值（它指的是实例的[`InstanceState`](internals.html#sqlalchemy.orm.InstanceState
+    "sqlalchemy.orm.InstanceState")。虽然与本节无直接关系，但如果我们想访问它，应该使用[`inspect()`](../core/inspection.html#sqlalchemy.inspect
+    "sqlalchemy.inspect")函数来访问它）。
 - en: 'At this point, the state in our `User` object matches that of the loaded database
     row. But upon expiring the object using a method such as [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire"), we see that the state is removed:'
+  id: totrans-251
   prefs: []
   type: TYPE_NORMAL
+  zh: 此时，我们的 `User` 对象中的状态与加载的数据库行的状态相匹配。但是在使用诸如[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")这样的方法使对象过期后，我们发现状态已被删除：
 - en: '[PRE58]'
+  id: totrans-252
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: 'We see that while the internal “state” still hangs around, the values which
     correspond to the `id` and `name` columns are gone. If we were to access one of
     these columns and are watching SQL, we’d see this:'
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们发现，虽然内部的“状态”仍然存在，但对应于 `id` 和 `name` 列的值已经消失了。如果我们尝试访问其中一个列，并且正在观察 SQL，我们会看到这样的情况：
 - en: '[PRE59]'
+  id: totrans-254
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: 'Above, upon accessing the expired attribute `user.name`, the ORM initiated
     a [lazy load](../glossary.html#term-lazy-load) to retrieve the most recent state
     from the database, by emitting a SELECT for the user row to which this user refers.
     Afterwards, the `__dict__` is again populated:'
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，访问过期属性 `user.name` 后，ORM 启动了一个[延迟加载](../glossary.html#term-lazy-load)以从数据库中检索最新的状态，通过发出一个
+    SELECT 来检索与此用户相关联的用户行。然后，`__dict__` 再次被填充：
 - en: '[PRE60]'
+  id: totrans-256
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: Note
+  id: totrans-257
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: While we are peeking inside of `__dict__` in order to see a bit of what SQLAlchemy
     does with object attributes, we **should not modify** the contents of `__dict__`
     directly, at least as far as those attributes which the SQLAlchemy ORM is maintaining
@@ -1323,68 +2000,113 @@
     uses [descriptors](../glossary.html#term-descriptors) in order to track the changes
     we make to an object, and when we modify `__dict__` directly, the ORM won’t be
     able to track that we changed something.
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们窥视 `__dict__` 以了解 SQLAlchemy 处理对象属性的一些情况时，我们**不应直接修改** `__dict__` 的内容，至少在
+    SQLAlchemy ORM 维护的属性方面不应该这样做（SQLA领域之外的其他属性没问题）。这是因为 SQLAlchemy 使用[描述符](../glossary.html#term-descriptors)来跟踪我们对对象所做的更改，当我们直接修改
+    `__dict__` 时，ORM 将无法跟踪到我们做了什么更改。
 - en: 'Another key behavior of both [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") is that all un-flushed changes on an object
     are discarded. That is, if we were to modify an attribute on our `User`:'
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")和[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh")的另一个关键行为是，对象上的所有未刷新的更改都将被丢弃。也就是说，如果我们要修改我们的 `User`
+    上的属性：'
 - en: '[PRE61]'
+  id: totrans-260
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE61]'
 - en: 'but then we call [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") without first calling [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
     "sqlalchemy.orm.Session.flush"), our pending value of `''user2''` is discarded:'
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是当我们在首先调用[`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush")之前调用[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")时，我们挂起的值 `'user2'` 就会被丢弃：
 - en: '[PRE62]'
+  id: totrans-262
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE62]'
 - en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
     method can be used to mark as “expired” all ORM-mapped attributes for an instance:'
+  id: totrans-263
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")方法可用于标记实例的所有
+    ORM 映射属性为“过期”状态：'
 - en: '[PRE63]'
+  id: totrans-264
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE63]'
 - en: 'it can also be passed a list of string attribute names, referring to specific
     attributes to be marked as expired:'
+  id: totrans-265
   prefs: []
   type: TYPE_NORMAL
+  zh: 它还可以传递一个字符串属性名称的列表，指示特定属性将被标记为过期：
 - en: '[PRE64]'
+  id: totrans-266
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE64]'
 - en: 'The [`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
     "sqlalchemy.orm.Session.expire_all") method allows us to essentially call [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") on all objects contained within the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") at once:'
+  id: totrans-267
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") 方法允许我们一次性对 [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 中包含的所有对象调用 [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")：'
 - en: '[PRE65]'
+  id: totrans-268
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE65]'
 - en: 'The [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     method has a similar interface, but instead of expiring, it emits an immediate
     SELECT for the object’s row immediately:'
+  id: totrans-269
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    方法具有类似的接口，但不是过期，而是立即发出对象行的 SELECT：'
 - en: '[PRE66]'
+  id: totrans-270
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE66]'
 - en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     also accepts a list of string attribute names, but unlike [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire"), expects at least one name to be that of a column-mapped
     attribute:'
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    也接受一个字符串属性名称列表，但与 [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") 不同，它希望至少有一个名称是列映射属性的名称：'
 - en: '[PRE67]'
+  id: totrans-272
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE67]'
 - en: Tip
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: 'An alternative method of refreshing which is often more flexible is to use
     the [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)
     feature of the ORM, available for [2.0 style](../glossary.html#term-2.0-style)
@@ -1394,24 +2116,41 @@
     "sqlalchemy.orm.Query") within [1.x style](../glossary.html#term-1.x-style) queries.
     Using this execution option, all of the ORM objects returned in the result set
     of the statement will be refreshed with data from the database:'
+  id: totrans-274
   prefs: []
   type: TYPE_NORMAL
+  zh: 通常更灵活的刷新方法是使用 ORM 的 [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)
+    功能，该功能适用于具有 [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select") 的 [2.0 样式](../glossary.html#term-2.0-style)
+    查询以及 [`Query.populate_existing()`](queryguide/query.html#sqlalchemy.orm.Query.populate_existing
+    "sqlalchemy.orm.Query.populate_existing") 方法的 [1.x 样式](../glossary.html#term-1.x-style)
+    查询。使用这种执行选项，语句结果集中返回的所有 ORM 对象都将使用数据库中的数据进行刷新：
 - en: '[PRE68]'
+  id: totrans-275
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE68]'
 - en: See [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)
     for further detail.
+  id: totrans-276
   prefs: []
   type: TYPE_NORMAL
+  zh: 有关详细信息，请参见 [Populate Existing](queryguide/api.html#orm-queryguide-populate-existing)。
 - en: What Actually Loads
+  id: totrans-277
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 实际加载的内容
 - en: 'The SELECT statement that’s emitted when an object marked with [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") or loaded with [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") varies based on several factors, including:'
+  id: totrans-278
   prefs: []
   type: TYPE_NORMAL
+  zh: 当标记为 [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
+    或使用 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    加载的对象时，发出的 SELECT 语句基于几个因素而变化：
 - en: The load of expired attributes is triggered from **column-mapped attributes
     only**. While any kind of attribute can be marked as expired, including a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") - mapped attribute, accessing an expired [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
@@ -1419,15 +2158,22 @@
     using standard relationship-oriented lazy loading. Column-oriented attributes,
     even if expired, will not load as part of this operation, and instead will load
     when any column-oriented attribute is accessed.
+  id: totrans-279
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 过期属性的加载仅从**列映射属性**触发。虽然可以将任何类型的属性标记为过期，包括 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") - 映射属性，但访问过期的 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 属性将仅为该属性发出加载，使用标准的关联导向延迟加载。即使已过期，列导向属性也不会作为此操作的一部分加载，而是在访问任何列导向属性时加载。
 - en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")-
     mapped attributes will not load in response to expired column-based attributes
     being accessed.'
+  id: totrans-280
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 响应于访问过期的基于列的属性时，[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")-映射属性不会加载。
 - en: Regarding relationships, [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") is more restrictive than [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") with regards to attributes that aren’t column-mapped.
@@ -1436,46 +2182,71 @@
     relationship-mapped attributes will actually raise an error. In any case, non-eager-loading
     [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
     attributes will not be included in any refresh operation.
+  id: totrans-281
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 关于关系，与 [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
+    相比，[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    对于未映射到列的属性更加严格。调用 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") 并传递仅包括关系映射属性的名称列表实际上会引发错误。无论如何，非“eager loading”
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    属性都不会包含在任何刷新操作中。
 - en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
     attributes configured as “eager loading” via the [`relationship.lazy`](relationship_api.html#sqlalchemy.orm.relationship.params.lazy
     "sqlalchemy.orm.relationship") parameter will load in the case of [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh"), if either no attribute names are specified,
     or if their names are included in the list of attributes to be refreshed.'
+  id: totrans-282
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    属性通过 [`relationship.lazy`](relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship") 参数配置为“eager loading”时，如果未指定属性名称，或者属性名称包含在要刷新的属性列表中，则在
+    [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
+    的情况下加载。'
 - en: Attributes that are configured as [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
     "sqlalchemy.orm.deferred") will not normally load, during either the expired-attribute
     load or during a refresh. An unloaded attribute that’s [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
     "sqlalchemy.orm.deferred") instead loads on its own when directly accessed, or
     if part of a “group” of deferred attributes where an unloaded attribute in that
     group is accessed.
+  id: totrans-283
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 配置为 [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred")
+    的属性通常不会在过期属性加载或刷新期间加载。当直接访问未加载的属性时，或者如果未加载的属性是一组“deferred”属性的一部分，其中访问了该组中的未加载属性，则[`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred") 属性将自行加载。
 - en: For expired attributes that are loaded on access, a joined-inheritance table
     mapping will emit a SELECT that typically only includes those tables for which
     unloaded attributes are present. The action here is sophisticated enough to load
     only the parent or child table, for example, if the subset of columns that were
     originally expired encompass only one or the other of those tables.
+  id: totrans-284
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于在访问时加载的过期属性，连接继承表映射将发出一个 SELECT，该 SELECT 通常仅包括那些存在未加载属性的表。在这里的操作足够复杂，可以仅加载父表或子表，例如，如果最初过期的列的子集仅涵盖这两个表中的一个。
 - en: When [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     is used on a joined-inheritance table mapping, the SELECT emitted will resemble
     that of when [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
     "sqlalchemy.orm.Session.query") is used on the target object’s class. This is
     typically all those tables that are set up as part of the mapping.
+  id: totrans-285
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 当在连接继承表映射上使用 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") 时，发出的 SELECT 将类似于在目标对象的类上使用 [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
+    "sqlalchemy.orm.Session.query") 时的情况。这通常是作为映射的一部分设置的所有表。
 - en: When to Expire or Refresh
+  id: totrans-286
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 何时过期或刷新
 - en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     uses the expiration feature automatically whenever the transaction referred to
     by the session ends. Meaning, whenever [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
@@ -1488,28 +2259,45 @@
     state of the database is, as any number of other transactions may be affecting
     it. Only when a new transaction starts can we again have access to the current
     state of the database, at which point any number of changes may have occurred.
+  id: totrans-287
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    在会话结束时自动使用到期特性。意思是，每当调用 [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") 或 [`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback") 时，[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 中的所有对象都会过期，使用与 [`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") 方法相当的特性。其理由是事务的结束是一个界定点，在此之后没有更多的上下文可用于了解数据库的当前状态，因为可能有任意数量的其他事务正在影响它。只有在新事务开始时，我们才能再次访问数据库的当前状态，在这一点上可能发生了任意数量的更改。'
 - en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
     and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     methods are used in those cases when one wants to force an object to re-load its
     data from the database, in those cases when it is known that the current state
     of data is possibly stale. Reasons for this might include:'
+  id: totrans-288
   prefs: []
   type: TYPE_NORMAL
+  zh: 当希望强制对象从数据库重新加载其数据时，使用 [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") 和 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") 方法，在这些情况下，已知当前数据可能过时。 这样做的原因可能包括：
 - en: some SQL has been emitted within the transaction outside of the scope of the
     ORM’s object handling, such as if a [`Table.update()`](../core/metadata.html#sqlalchemy.schema.Table.update
     "sqlalchemy.schema.Table.update") construct were emitted using the [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method;
+  id: totrans-289
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 ORM 对象处理范围之外的事务内发出了一些 SQL，例如，如果使用 [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") 方法发出了 [`Table.update()`](../core/metadata.html#sqlalchemy.schema.Table.update
+    "sqlalchemy.schema.Table.update") 构造；
 - en: if the application is attempting to acquire data that is known to have been
     modified in a concurrent transaction, and it is also known that the isolation
     rules in effect allow this data to be visible.
+  id: totrans-290
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果应用程序试图获取在并发事务中已知已被修改的数据，并且已知正在生效的隔离规则允许将此数据可见。
 - en: The second bullet has the important caveat that “it is also known that the isolation
     rules in effect allow this data to be visible.” This means that it cannot be assumed
     that an UPDATE that happened on another database connection will yet be visible
@@ -1517,44 +2305,71 @@
     "sqlalchemy.orm.Session.expire") or [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") in order to view data between ongoing transactions,
     an understanding of the isolation behavior in effect is essential.
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
+  zh: 第二条要点是“已知正在生效的隔离规则允许将此数据可见。” 这意味着不能假设在另一个数据库连接上发生的 UPDATE 在本地这里就可见；在许多情况下，不会是这样。
+    这就是为什么如果希望在正在进行的事务之间使用 [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire") 或 [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh") 来查看数据，对生效的隔离行为有所了解是必要的原因。
 - en: See also
+  id: totrans-292
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")'
+  id: totrans-293
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")'
 - en: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
     "sqlalchemy.orm.Session.expire_all")'
+  id: totrans-294
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all")'
 - en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")'
+  id: totrans-295
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")'
 - en: '[Populate Existing](queryguide/api.html#orm-queryguide-populate-existing) -
     allows any ORM query to refresh objects as they would be loaded normally, refreshing
     all matching objects in the identity map against the results of a SELECT statement.'
+  id: totrans-296
   prefs: []
   type: TYPE_NORMAL
+  zh: '[填充现有对象](queryguide/api.html#orm-queryguide-populate-existing) - 允许任何ORM查询像通常加载对象一样刷新对象，针对与SELECT语句的结果相匹配的所有匹配对象在标识映射中进行刷新。'
 - en: '[isolation](../glossary.html#term-isolation) - glossary explanation of isolation
     which includes links to Wikipedia.'
+  id: totrans-297
   prefs: []
   type: TYPE_NORMAL
+  zh: '[隔离](../glossary.html#term-isolation) - 隔离的词汇解释，其中包括指向维基百科的链接。'
 - en: '[The SQLAlchemy Session In-Depth](https://techspot.zzzeek.org/2012/11/14/pycon-canada-the-sqlalchemy-session-in-depth/)
     - a video + slides with an in-depth discussion of the object lifecycle including
     the role of data expiration.'
+  id: totrans-298
   prefs: []
   type: TYPE_NORMAL
+  zh: '[SQLAlchemy会话深入解析](https://techspot.zzzeek.org/2012/11/14/pycon-canada-the-sqlalchemy-session-in-depth/)
+    - 一个视频+幻灯片，深入讨论对象生命周期，包括数据过期的作用。'
 - en: What Actually Loads
+  id: totrans-299
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 实际加载情况
 - en: 'The SELECT statement that’s emitted when an object marked with [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") or loaded with [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") varies based on several factors, including:'
+  id: totrans-300
   prefs: []
   type: TYPE_NORMAL
+  zh: 当一个对象被标记为[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")或通过[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh")加载时，所发出的SELECT语句会基于几个因素而变化，包括：
 - en: The load of expired attributes is triggered from **column-mapped attributes
     only**. While any kind of attribute can be marked as expired, including a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") - mapped attribute, accessing an expired [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
@@ -1562,15 +2377,22 @@
     using standard relationship-oriented lazy loading. Column-oriented attributes,
     even if expired, will not load as part of this operation, and instead will load
     when any column-oriented attribute is accessed.
+  id: totrans-301
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 过期属性的加载仅仅是从**基于列的属性**触发的。虽然任何类型的属性都可以被标记为过期，包括[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") - 映射属性，但访问过期的[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")属性将仅对该属性进行加载，使用标准的基于关系的惰性加载。基于列的属性，即使过期，也不会作为此操作的一部分加载，而是在访问任何基于列的属性时加载。
 - en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")-
     mapped attributes will not load in response to expired column-based attributes
     being accessed.'
+  id: totrans-302
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")-
+    映射属性在访问到过期的基于列的属性时不会加载。'
 - en: Regarding relationships, [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") is more restrictive than [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
     "sqlalchemy.orm.Session.expire") with regards to attributes that aren’t column-mapped.
@@ -1579,46 +2401,67 @@
     relationship-mapped attributes will actually raise an error. In any case, non-eager-loading
     [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
     attributes will not be included in any refresh operation.
+  id: totrans-303
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 关于关系，[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")比[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")更严格，因为它不会加载那些非列映射的属性。调用[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh")并传递一个只包括关系映射属性的名称列表将会引发错误。在任何情况下，非急加载的[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")属性都不会包含在任何刷新操作中。
 - en: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
     attributes configured as “eager loading” via the [`relationship.lazy`](relationship_api.html#sqlalchemy.orm.relationship.params.lazy
     "sqlalchemy.orm.relationship") parameter will load in the case of [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh"), if either no attribute names are specified,
     or if their names are included in the list of attributes to be refreshed.'
+  id: totrans-304
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过[`relationship.lazy`](relationship_api.html#sqlalchemy.orm.relationship.params.lazy
+    "sqlalchemy.orm.relationship")参数配置为“急加载”的[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")属性在[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh")的情况下会加载，如果未指定属性名称，或者如果它们的名称包含在要刷新的属性列表中。
 - en: Attributes that are configured as [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
     "sqlalchemy.orm.deferred") will not normally load, during either the expired-attribute
     load or during a refresh. An unloaded attribute that’s [`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
     "sqlalchemy.orm.deferred") instead loads on its own when directly accessed, or
     if part of a “group” of deferred attributes where an unloaded attribute in that
     group is accessed.
+  id: totrans-305
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 配置为[`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred "sqlalchemy.orm.deferred")的属性通常不会在过期属性加载或刷新期间加载。一个未加载的属性如果是[`deferred()`](queryguide/columns.html#sqlalchemy.orm.deferred
+    "sqlalchemy.orm.deferred")，那么当直接访问时或者作为“组”中的未加载属性之一在组中的其他未加载属性被访问时会加载。
 - en: For expired attributes that are loaded on access, a joined-inheritance table
     mapping will emit a SELECT that typically only includes those tables for which
     unloaded attributes are present. The action here is sophisticated enough to load
     only the parent or child table, for example, if the subset of columns that were
     originally expired encompass only one or the other of those tables.
+  id: totrans-306
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于在访问时加载的已过期属性，一个联合继承表映射将会发出一个SELECT语句，通常只包括那些存在未加载属性的表。这里的操作足够复杂，可以只加载父表或子表，例如，如果原始已过期的列子集仅涵盖其中一个表。
 - en: When [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     is used on a joined-inheritance table mapping, the SELECT emitted will resemble
     that of when [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
     "sqlalchemy.orm.Session.query") is used on the target object’s class. This is
     typically all those tables that are set up as part of the mapping.
+  id: totrans-307
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 当在联合继承表映射上使用[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh")时，所发出的SELECT将类似于在目标对象的类上使用[`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
+    "sqlalchemy.orm.Session.query")时的情况。这通常是设置为映射的一部分的所有表。
 - en: When to Expire or Refresh
+  id: totrans-308
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 何时过期或刷新
 - en: The [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     uses the expiration feature automatically whenever the transaction referred to
     by the session ends. Meaning, whenever [`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
@@ -1631,28 +2474,44 @@
     state of the database is, as any number of other transactions may be affecting
     it. Only when a new transaction starts can we again have access to the current
     state of the database, at which point any number of changes may have occurred.
+  id: totrans-309
   prefs: []
   type: TYPE_NORMAL
+  zh: 当[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")引用的事务结束时，会自动使用到期特性。这意味着，无论何时调用[`Session.commit()`](session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit")或[`Session.rollback()`](session_api.html#sqlalchemy.orm.Session.rollback
+    "sqlalchemy.orm.Session.rollback")，[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")中的所有对象都将过期，使用与[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all")方法相当的特性。其理由在于，事务结束是一个标记点，此时不再有上下文可用以知晓数据库的当前状态，因为任何数量的其他事务可能正在影响它。只有当新事务启动时，我们才能再次访问数据库的当前状态，在这时可能已经发生了任意数量的更改。
 - en: 'The [`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")
     and [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")
     methods are used in those cases when one wants to force an object to re-load its
     data from the database, in those cases when it is known that the current state
     of data is possibly stale. Reasons for this might include:'
+  id: totrans-310
   prefs: []
   type: TYPE_NORMAL
+  zh: 当希望强制对象从数据库重新加载数据时，可以使用[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")和[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh")方法，这种情况下已知当前数据状态可能过时。 这样做的原因可能包括：
 - en: some SQL has been emitted within the transaction outside of the scope of the
     ORM’s object handling, such as if a [`Table.update()`](../core/metadata.html#sqlalchemy.schema.Table.update
     "sqlalchemy.schema.Table.update") construct were emitted using the [`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method;
+  id: totrans-311
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在ORM对象处理范围之外的事务中发出了一些SQL，比如使用[`Session.execute()`](session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute")方法发出了[`Table.update()`](../core/metadata.html#sqlalchemy.schema.Table.update
+    "sqlalchemy.schema.Table.update")构造;
 - en: if the application is attempting to acquire data that is known to have been
     modified in a concurrent transaction, and it is also known that the isolation
     rules in effect allow this data to be visible.
+  id: totrans-312
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果应用程序试图获取已知在并发事务中已被修改的数据，并且已知生效的隔离规则允许查看这些数据。
 - en: The second bullet has the important caveat that “it is also known that the isolation
     rules in effect allow this data to be visible.” This means that it cannot be assumed
     that an UPDATE that happened on another database connection will yet be visible
@@ -1660,32 +2519,53 @@
     "sqlalchemy.orm.Session.expire") or [`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
     "sqlalchemy.orm.Session.refresh") in order to view data between ongoing transactions,
     an understanding of the isolation behavior in effect is essential.
+  id: totrans-313
   prefs: []
   type: TYPE_NORMAL
+  zh: 第二个要点是“已知生效的隔离规则允许查看这些数据。” 这意味着不能假设在另一个数据库连接上发生的UPDATE在本地这里就能看到；在许多情况下，是不会看到的。
+    这就是为什么如果想要在进行中的事务之间查看数据，就需要了解生效的隔离行为，从而使用[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire
+    "sqlalchemy.orm.Session.expire")或[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh
+    "sqlalchemy.orm.Session.refresh")。
 - en: See also
+  id: totrans-314
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")'
+  id: totrans-315
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire()`](session_api.html#sqlalchemy.orm.Session.expire "sqlalchemy.orm.Session.expire")'
 - en: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
     "sqlalchemy.orm.Session.expire_all")'
+  id: totrans-316
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.expire_all()`](session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all")'
 - en: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")'
+  id: totrans-317
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session.refresh()`](session_api.html#sqlalchemy.orm.Session.refresh "sqlalchemy.orm.Session.refresh")'
 - en: '[Populate Existing](queryguide/api.html#orm-queryguide-populate-existing) -
     allows any ORM query to refresh objects as they would be loaded normally, refreshing
     all matching objects in the identity map against the results of a SELECT statement.'
+  id: totrans-318
   prefs: []
   type: TYPE_NORMAL
+  zh: '[填充现有对象](queryguide/api.html#orm-queryguide-populate-existing) - 允许任何ORM查询刷新对象，就像它们通常加载一样，根据SELECT语句的结果刷新标识映射中的所有匹配对象。'
 - en: '[isolation](../glossary.html#term-isolation) - glossary explanation of isolation
     which includes links to Wikipedia.'
+  id: totrans-319
   prefs: []
   type: TYPE_NORMAL
+  zh: '[隔离](../glossary.html#term-isolation) - 隔离的词汇解释，包括指向维基百科的链接。'
 - en: '[The SQLAlchemy Session In-Depth](https://techspot.zzzeek.org/2012/11/14/pycon-canada-the-sqlalchemy-session-in-depth/)
     - a video + slides with an in-depth discussion of the object lifecycle including
     the role of data expiration.'
+  id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: '[SQLAlchemy会话深入解析](https://techspot.zzzeek.org/2012/11/14/pycon-canada-the-sqlalchemy-session-in-depth/)
+    - 一个视频+幻灯片，深入讨论对象生命周期，包括数据过期的作用。'
