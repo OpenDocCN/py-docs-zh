@@ -3,15 +3,18 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: ORM-启用的INSERT、UPDATE和DELETE语句
 - en: 原文：[https://docs.sqlalchemy.org/en/20/orm/queryguide/dml.html](https://docs.sqlalchemy.org/en/20/orm/queryguide/dml.html)
   id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/orm/queryguide/dml.html](https://docs.sqlalchemy.org/en/20/orm/queryguide/dml.html)
 - en: About this Document
   id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 关于本文档
 - en: This section makes use of ORM mappings first illustrated in the [SQLAlchemy
     Unified Tutorial](../../tutorial/index.html#unified-tutorial), shown in the section
     [Declaring Mapped Classes](../../tutorial/metadata.html#tutorial-declaring-mapped-classes),
@@ -20,10 +23,12 @@
   id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节利用了首次在[SQLAlchemy 统一教程](../../tutorial/index.html#unified-tutorial)中展示的ORM映射，如[声明映射类](../../tutorial/metadata.html#tutorial-declaring-mapped-classes)一节所示，以及[映射类继承层次结构](../inheritance.html)一节中展示的继承映射。
 - en: '[View the ORM setup for this page](_dml_setup.html).'
   id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: '[查看此页面的ORM设置](_dml_setup.html)。'
 - en: The [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method, in addition to handling ORM-enabled
     [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
@@ -37,20 +42,25 @@
   id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了处理ORM启用的[`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select)对象外，[`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute")方法还可以容纳ORM启用的[`Insert`](../../core/dml.html#sqlalchemy.sql.expression.Insert)、[`Update`](../../core/dml.html#sqlalchemy.sql.expression.Update)和[`Delete`](../../core/dml.html#sqlalchemy.sql.expression.Delete)对象，它们分别以各种方式用于一次性插入、更新或删除多个数据库行。此外，还有特定于方言的支持ORM启用的“upserts”，这是一种自动使用UPDATE来处理已经存在的行的INSERT语句。
 - en: 'The following table summarizes the calling forms that are discussed in this
     document:'
   id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 下表总结了本文讨论的调用形式：
 - en: '| ORM Use Case | DML Construct Used | Data is passed using … | Supports RETURNING?
     | Supports Multi-Table Mappings? |'
   id: totrans-7
   prefs: []
   type: TYPE_TB
+  zh: '| ORM用例 | 使用的DML构造 | 使用以下方式传递数据 | 是否支持RETURNING？ | 是否支持多表映射？ |'
 - en: '| --- | --- | --- | --- | --- |'
   id: totrans-8
   prefs: []
   type: TYPE_TB
+  zh: '| --- | --- | --- | --- | --- |'
 - en: '| [ORM Bulk INSERT Statements](#orm-queryguide-bulk-insert) | [`insert()`](../../core/dml.html#sqlalchemy.sql.expression.insert
     "sqlalchemy.sql.expression.insert") | List of dictionaries to [`Session.execute.params`](../session_api.html#sqlalchemy.orm.Session.execute.params.params
     "sqlalchemy.orm.Session.execute") | [yes](#orm-queryguide-bulk-insert-returning)
@@ -58,6 +68,10 @@
   id: totrans-9
   prefs: []
   type: TYPE_TB
+  zh: '| [ORM批量插入语句](#orm-queryguide-bulk-insert) | [`insert()`](../../core/dml.html#sqlalchemy.sql.expression.insert
+    "sqlalchemy.sql.expression.insert") | 字典列表到[`Session.execute.params`](../session_api.html#sqlalchemy.orm.Session.execute.params.params
+    "sqlalchemy.orm.Session.execute") | [是](#orm-queryguide-bulk-insert-returning)
+    | [是](#orm-queryguide-insert-joined-table-inheritance) |'
 - en: '| [ORM Bulk Insert with SQL Expressions](#orm-queryguide-bulk-insert-w-sql)
     | [`insert()`](../../core/dml.html#sqlalchemy.sql.expression.insert "sqlalchemy.sql.expression.insert")
     | [`Session.execute.params`](../session_api.html#sqlalchemy.orm.Session.execute.params.params
@@ -67,6 +81,11 @@
   id: totrans-10
   prefs: []
   type: TYPE_TB
+  zh: '| [使用SQL表达式的ORM批量插入](#orm-queryguide-bulk-insert-w-sql) | [`insert()`](../../core/dml.html#sqlalchemy.sql.expression.insert
+    "sqlalchemy.sql.expression.insert") | 使用[`Insert.values()`](../../core/dml.html#sqlalchemy.sql.expression.Insert.values
+    "sqlalchemy.sql.expression.Insert.values")的[`Session.execute.params`](../session_api.html#sqlalchemy.orm.Session.execute.params.params
+    "sqlalchemy.orm.Session.execute") | [是](#orm-queryguide-bulk-insert-w-sql) | [是](#orm-queryguide-insert-joined-table-inheritance)
+    |'
 - en: '| [ORM Bulk Insert with Per Row SQL Expressions](#orm-queryguide-insert-values)
     | [`insert()`](../../core/dml.html#sqlalchemy.sql.expression.insert "sqlalchemy.sql.expression.insert")
     | List of dictionaries to [`Insert.values()`](../../core/dml.html#sqlalchemy.sql.expression.Insert.values
@@ -833,22 +852,31 @@
   id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 2.0 版中更改：将 [`Update`](../../core/dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update") 结构传递给 [`Session.execute()`](../session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") 方法以及参数字典列表现在调用“批量更新”，这使用的是与旧版 [`Session.bulk_update_mappings()`](../session_api.html#sqlalchemy.orm.Session.bulk_update_mappings
+    "sqlalchemy.orm.Session.bulk_update_mappings") 方法相同的功能。这与 1.x 系列中的行为更改不同，在 1.x
+    系列中，[`Update`](../../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
+    仅受到显式 WHERE 条件和内联 VALUES 的支持。
 - en: '### Disabling Bulk ORM Update by Primary Key for an UPDATE statement with multiple
     parameter sets'
   id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 禁用对具有多个参数集的 UPDATE 语句进行按主键的 ORM 批量更新'
 - en: 'The ORM Bulk Update by Primary Key feature, which runs an UPDATE statement
     per record which includes WHERE criteria for each primary key value, is automatically
     used when:'
   id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 当：
 - en: the UPDATE statement given is against an ORM entity
   id: totrans-95
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 给出的 UPDATE 语句针对 ORM 实体
 - en: the [`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     is used to execute the statement, and not a Core [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection")
@@ -856,11 +884,15 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '[`Session`](../session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    用于执行语句，而不是核心 [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")'
 - en: The parameters passed are a **list of dictionaries**.
   id: totrans-97
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 传递的参数是**字典列表**。
 - en: 'In order to invoke an UPDATE statement without using “ORM Bulk Update by Primary
     Key”, invoke the statement against the [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") directly using the [`Session.connection()`](../session_api.html#sqlalchemy.orm.Session.connection
@@ -869,6 +901,9 @@
   id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了调用不使用“按主键的 ORM 批量更新”的 UPDATE 语句，直接使用 [`Session.connection()`](../session_api.html#sqlalchemy.orm.Session.connection
+    "sqlalchemy.orm.Session.connection") 方法对当前事务获取 [`Connection`](../../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") 执行语句：
 - en: '[PRE15]'
   id: totrans-99
   prefs: []
@@ -878,12 +913,14 @@
   id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[per-row ORM Bulk Update by Primary Key requires that records contain primary
     key values](../../errors.html#error-bupq)  ### Bulk UPDATE by Primary Key for
     Joined Table Inheritance'
   id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: '[按主键每行的 ORM 批量更新要求记录包含主键值](../../errors.html#error-bupq)  ### 联合表继承的按主键批量更新'
 - en: ORM bulk update has similar behavior to ORM bulk insert when using mappings
     with joined table inheritance; as described at [Bulk INSERT for Joined Table Inheritance](#orm-queryguide-insert-joined-table-inheritance),
     the bulk UPDATE operation will emit an UPDATE statement for each table represented
@@ -892,14 +929,18 @@
   id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用具有联合表继承的映射时，ORM 批量更新的行为与使用映射进行批量插入时类似；如 [联合表继承的批量插入](#orm-queryguide-insert-joined-table-inheritance)
+    中所述，批量更新操作将为映射中表示的每个表发出一条 UPDATE 语句，其中给定的参数包括要更新的值（不受影响的表将被跳过）。
 - en: 'Example:'
   id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: '示例:'
 - en: '[PRE16]  ### Legacy Session Bulk UPDATE Methods'
   id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE16]  ### 旧版会话批量更新方法'
 - en: As discussed at [Legacy Session Bulk INSERT Methods](#orm-queryguide-legacy-bulk-insert),
     the [`Session.bulk_update_mappings()`](../session_api.html#sqlalchemy.orm.Session.bulk_update_mappings
     "sqlalchemy.orm.Session.bulk_update_mappings") method of [`Session`](../session_api.html#sqlalchemy.orm.Session
@@ -996,12 +1037,15 @@
   id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: '### ORM-启用的 Update 和 Delete 的重要说明和注意事项'
 - en: The ORM-enabled UPDATE and DELETE features bypass ORM [unit of work](../../glossary.html#term-unit-of-work)
     automation in favor of being able to emit a single UPDATE or DELETE statement
     that matches multiple rows at once without complexity.
   id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: ORM 启用的 UPDATE 和 DELETE 功能绕过 ORM [工作单元](../../glossary.html#term-unit-of-work)
+    自动化，以便能够发出一条匹配多行的 UPDATE 或 DELETE 语句，而不会复杂化。
 - en: The operations do not offer in-Python cascading of relationships - it is assumed
     that ON UPDATE CASCADE and/or ON DELETE CASCADE is configured for any foreign
     key references which require it, otherwise the database may emit an integrity
@@ -1012,6 +1056,8 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 操作不提供 Python 中的关系级联功能 - 假定任何需要的外键引用都已配置为 ON UPDATE CASCADE 和/或 ON DELETE CASCADE，否则如果强制执行外键引用，则数据库可能会发出完整性违规。有关一些示例，请参阅[使用外键
+    ON DELETE cascade 与 ORM 关系](../cascades.html#passive-deletes)的注意事项。
 - en: After the UPDATE or DELETE, dependent objects in the [`Session`](../session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") which were impacted by an ON UPDATE CASCADE or ON DELETE
     CASCADE on related tables, particularly objects that refer to rows that have now
@@ -1024,6 +1070,12 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 UPDATE 或 DELETE 之后，[`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 中受到影响的依赖对象，特别是那些引用现在已被删除的行的 ON UPDATE CASCADE 或 ON DELETE
+    CASCADE 的相关表的对象，可能仍然引用这些对象。此问题在 [`Session`](../session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 过期时解决，通常发生在 [`Session.commit()`](../session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit") 时或可以通过使用 [`Session.expire_all()`](../session_api.html#sqlalchemy.orm.Session.expire_all
+    "sqlalchemy.orm.Session.expire_all") 强制执行。
 - en: ORM-enabled UPDATEs and DELETEs do not handle joined table inheritance automatically.
     See the section [UPDATE/DELETE with Custom WHERE Criteria for Joined Table Inheritance](#orm-queryguide-update-delete-joined-inh)
     for notes on how to work with joined-inheritance mappings.
@@ -1031,6 +1083,8 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 启用 ORM 的 UPDATE 和 DELETE 不会自动处理连接的表继承。有关如何处理连接继承映射的说明，请参阅[具有自定义 WHERE 条件的连接表继承的
+    UPDATE/DELETE](#orm-queryguide-update-delete-joined-inh)部分。
 - en: The WHERE criteria needed in order to limit the polymorphic identity to specific
     subclasses for single-table-inheritance mappings **is included automatically**
     . This only applies to a subclass mapper that has no table of its own.
@@ -1038,6 +1092,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为了将单表继承映射的多态标识限制为特定子类所需的 WHERE 条件**会自动包含**。这仅适用于没有自己表的子类映射器。
 - en: The [`with_loader_criteria()`](api.html#sqlalchemy.orm.with_loader_criteria
     "sqlalchemy.orm.with_loader_criteria") option **is supported** by ORM update and
     delete operations; criteria here will be added to that of the UPDATE or DELETE
@@ -1047,6 +1102,8 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: ORM 更新和删除操作支持 [`with_loader_criteria()`](api.html#sqlalchemy.orm.with_loader_criteria
+    "sqlalchemy.orm.with_loader_criteria") 选项；此处的条件将被添加到正在发出的 UPDATE 或 DELETE 语句的条件中，并在“同步”过程中考虑。
 - en: 'In order to intercept ORM-enabled UPDATE and DELETE operations with event handlers,
     use the [`SessionEvents.do_orm_execute()`](../events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
     "sqlalchemy.orm.SessionEvents.do_orm_execute") event.  ### Selecting a Synchronization
@@ -1055,6 +1112,8 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '要拦截启用 ORM 的 UPDATE 和 DELETE 操作以使用事件处理程序，请使用[`SessionEvents.do_orm_execute()`](../events.html#sqlalchemy.orm.SessionEvents.do_orm_execute
+    "sqlalchemy.orm.SessionEvents.do_orm_execute")事件。  ### 选择同步策略'
 - en: When making use of [`update()`](../../core/dml.html#sqlalchemy.sql.expression.update
     "sqlalchemy.sql.expression.update") or [`delete()`](../../core/dml.html#sqlalchemy.sql.expression.delete
     "sqlalchemy.sql.expression.delete") in conjunction with ORM-enabled execution
