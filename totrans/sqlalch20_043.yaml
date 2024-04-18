@@ -1,27 +1,40 @@
 - en: Writing SELECT statements for Inheritance Mappings
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 编写继承映射的 SELECT 语句
 - en: 原文：[https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html](https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html](https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html)
 - en: About this Document
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 关于本文档
 - en: This section makes use of ORM mappings configured using the [ORM Inheritance](../inheritance.html)
     feature, described at [Mapping Class Inheritance Hierarchies](../inheritance.html).
     The emphasis will be on [Joined Table Inheritance](../inheritance.html#joined-inheritance)
     as this is the most intricate ORM querying case.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节利用了使用 [ORM 继承](../inheritance.html) 功能配置的 ORM 映射，描述在 [映射类继承层次结构](../inheritance.html)
+    中。重点将放在 [连接表继承](../inheritance.html#joined-inheritance)，因为这是最复杂的 ORM 查询情况。
 - en: '[View the ORM setup for this page](_inheritance_setup.html).'
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: '[查看此页面的 ORM 设置](_inheritance_setup.html)。'
 - en: SELECTing from the base class vs. specific sub-classes
+  id: totrans-5
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 从基类 vs. 特定子类进行 SELECT
 - en: 'A SELECT statement constructed against a class in a joined inheritance hierarchy
     will query against the table to which the class is mapped, as well as any super-tables
     present, using JOIN to link them together. The query would then return objects
@@ -30,11 +43,17 @@
     row to determine the correct type. The query below is established against the
     `Manager` subclass of `Employee`, which then returns a result that will contain
     only objects of type `Manager`:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 构建在连接继承层次结构中的类上的 SELECT 语句将针对将类映射到的表以及任何现有的超级表进行查询，并使用 JOIN 将它们链接在一起。然后，查询将返回请求类型的对象以及请求类型的任何子类型，使用每行中的
+    [鉴别器](../../glossary.html#term-discriminator) 值来确定正确的类型。下面的查询是针对 `Employee` 的
+    `Manager` 子类建立的，然后返回的结果将只包含 `Manager` 类型的对象：
 - en: '[PRE0]'
+  id: totrans-7
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: When the SELECT statement is against the base class in the hierarchy, the default
     behavior is that only that class’ table will be included in the rendered SQL and
     JOIN will not be used. As in all cases, the [discriminator](../../glossary.html#term-discriminator)
@@ -44,16 +63,23 @@
     corresponding to sub-tables will start in an un-loaded state, loading automatically
     when accessed. The loading of sub-attributes is configurable to be more “eager”
     in a variety of ways, discussed later in this section.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 当 SELECT 语句针对继承层次结构中的基类时，默认行为是仅将该类的表包括在渲染的 SQL 中，并且不使用 JOIN。与所有情况一样，[鉴别器](../../glossary.html#term-discriminator)
+    列用于区分不同的请求子类型，然后返回任何可能的子类型的对象。返回的对象将具有对应于基表的属性填充，对应于子表的属性将以未加载状态开始，在访问时自动加载。子属性的加载可配置为以多种方式更“急切”，在本节后面讨论。
 - en: 'The example below creates a query against the `Employee` superclass. This indicates
     that objects of any type, including `Manager`, `Engineer`, and `Employee`, may
     be within the result set:'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面的示例创建了针对 `Employee` 超类的查询。这表示结果集中可能包含任何类型的对象，包括 `Manager`、`Engineer` 和 `Employee`：
 - en: '[PRE1]'
+  id: totrans-10
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'Above, the additional tables for `Manager` and `Engineer` were not included
     in the SELECT, which means that the returned objects will not yet contain data
     represented from those tables, in this example the `.manager_name` attribute of
@@ -61,11 +87,18 @@
     class. These attributes start out in the [expired](../../glossary.html#term-expired)
     state, and will automatically populate themselves when first accessed using [lazy
     loading](../../glossary.html#term-lazy-loading):'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的例子中，未包括 `Manager` 和 `Engineer` 的附加表在 SELECT 中，这意味着返回的对象尚未包含来自那些表中表示的数据，在本例中是
+    `Manager` 类的 `.manager_name` 属性以及 `Engineer` 类的 `.engineer_info` 属性。这些属性起始状态为
+    [过期](../../glossary.html#term-expired)，当首次使用 [延迟加载](../../glossary.html#term-lazy-loading)
+    访问时，它们将自动填充：
 - en: '[PRE2]'
+  id: totrans-12
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: This lazy load behavior is not desirable if a large number of objects have been
     loaded, in the case that the consuming application will need to be accessing subclass-specific
     attributes, as this would be an example of the [N plus one](../../glossary.html#term-N-plus-one)
@@ -77,11 +110,17 @@
     constructs that provide solutions to these two issues in different ways, the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") loader option and the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") entity construct.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果加载了大量对象，则此惰性加载行为并不理想，因为消费应用程序将需要访问特定于子类的属性，这将是[N加一](../../glossary.html#term-N-plus-one)问题的一个例子，每行都会发出额外的SQL。这些额外的SQL可能会影响性能，并且也与使用[asyncio](../extensions/asyncio.html)等方法不兼容。此外，在我们对`Employee`对象的查询中，由于查询仅针对基本表，我们无法添加涉及特定于子类的属性（如`Manager`或`Engineer`）的SQL条件。接下来的两个部分详细介绍了两种不同方式解决这两个问题的构造，[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")加载器选项和[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")实体构造。
 - en: '## Using selectin_polymorphic()'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 使用 selectin_polymorphic()'
 - en: To address the issue of performance when accessing attributes on subclasses,
     the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
     loader strategy may be used to [eagerly load](../../glossary.html#term-eagerly-load)
@@ -90,40 +129,61 @@
     "sqlalchemy.orm.selectinload") relationship loader strategy to emit an additional
     SELECT statement against each sub-table for objects loaded in the hierarchy, using
     `IN` to query for additional rows based on primary key.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 要解决在访问子类属性时的性能问题，可以使用[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")加载策略，以便一次性[急切地加载](../../glossary.html#term-eagerly-load)这些附加属性。此加载选项的工作方式类似于[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload")关系加载策略，对于在层次结构中加载的对象，会对每个子表发出额外的SELECT语句，使用`IN`来根据主键查询附加行。
 - en: '[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
     accepts as its arguments the base entity that is being queried, followed by a
     sequence of subclasses of that entity for which their specific attributes should
     be loaded for incoming rows:'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")接受作为其参数的基本实体，该实体正在被查询，然后是该实体的子类序列，对于这些子类，应为传入的行加载其特定属性：'
 - en: '[PRE3]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'The [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
     construct is then used as a loader option, passing it to the [`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
     "sqlalchemy.sql.expression.Select.options") method of [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select"). The example illustrates the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") to eagerly load columns local to both the
     `Manager` and `Engineer` subclasses:'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，使用[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")构造作为加载器选项，将其传递给[`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
+    "sqlalchemy.sql.expression.Select.options")方法的[`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select")。该示例说明了如何使用[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")来急切加载`Manager`和`Engineer`子类的本地列：
 - en: '[PRE4]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'The above example illustrates two additional SELECT statements being emitted
     in order to eagerly fetch additional attributes such as `Engineer.engineer_info`
     as well as `Manager.manager_name`. We can now access these sub-attributes on the
     objects that were loaded without any additional SQL statements being emitted:'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述示例说明了发出两个额外的SELECT语句，以便急切地获取附加属性，例如`Engineer.engineer_info`和`Manager.manager_name`。现在，我们可以在加载的对象上访问这些子属性，而无需发出任何额外的SQL语句：
 - en: '[PRE5]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Tip
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: The [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
     loader option does not yet optimize for the fact that the base `employee` table
     does not need to be included in the second two “eager load” queries; hence in
@@ -132,11 +192,18 @@
     [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
     relationship strategy which is more sophisticated in this regard and can factor
     out the JOIN when not needed.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    加载选项尚未针对基础 `employee` 表的情况进行优化，因此在第二个和第三个“急加载”查询中不需要包含 `employee` 表；因此在上面的示例中，我们看到从
+    `employee` 到 `manager` 和 `engineer` 的 JOIN，即使 `employee` 的列已经加载。这与 [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") 关系策略形成对比，在这方面更为复杂，并且在不需要时可以排除 JOIN。'
 - en: '### Applying selectin_polymorphic() to an existing eager load'
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 对现有急加载应用 selectin_polymorphic()'
 - en: 'In addition to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") being specified as an option for a top-level
     entity loaded by a statement, we may also indicate [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
@@ -150,20 +217,37 @@
     form, the first argument is implicit from the previous loader option (in this
     case [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")),
     so we only indicate the additional target subclasses we wish to load:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了将 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    指定为由语句加载的顶级实体的选项外，我们还可以指示在现有加载目标上应用 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")。由于我们的[设置](_inheritance_setup.html)映射包含一个父
+    `Company` 实体，其具有引用 `Employee` 实体的 `Company.employees` [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")，我们可以说明针对 `Company` 实体的 SELECT，它急加载所有 `Employee`
+    对象以及其子类型的所有属性，如下所示，通过将 [`Load.selectin_polymorphic()`](relationships.html#sqlalchemy.orm.Load.selectin_polymorphic
+    "sqlalchemy.orm.Load.selectin_polymorphic") 作为链式加载器选项应用；在此形式中，第一个参数是从前一个加载器选项隐式获取的（在本例中为
+    [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")），因此我们仅指示要加载的附加目标子类：
 - en: '[PRE6]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: See also
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[Eager Loading of Polymorphic Subtypes](#eagerloading-polymorphic-subtypes)
     - illustrates the equivalent example as above using [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") instead  ### Applying loader options to the
     subclasses loaded by selectin_polymorphic'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: '[多态子类型的急加载](#eagerloading-polymorphic-subtypes) - 演示了使用 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 而不是上述等效示例的示例  ### 将加载选项应用于由 selectin_polymorphic
+    加载的子类'
 - en: The SELECT statements emitted by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") are themselves ORM statements, so we may
     also add other loader options (such as those documented at [Relationship Loading
@@ -171,25 +255,40 @@
     to specific subclasses. These options should be applied as **siblings** to a [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") option, that is, comma separated within
     `select.options()`.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    发出的 SELECT 语句本身是 ORM 语句，因此我们还可以添加其他加载选项（例如文档中记录的那些位于 [关系加载技术](relationships.html#orm-queryguide-relationship-loaders)）
+    ，这些选项引用特定的子类。这些选项应该作为**同级**应用于 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 选项，即在 `select.options()` 内用逗号分隔。'
 - en: 'For example, if we considered that the `Manager` mapper had a [one to many](../basic_relationships.html#relationship-patterns-o2m)
     relationship to an entity called `Paperwork`, we could combine the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
     "sqlalchemy.orm.selectinload") to eagerly load this collection on all `Manager`
     objects, where the sub-attributes of `Manager` objects were also themselves eagerly
     loaded:'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，如果我们考虑`Manager`映射器与名为`Paperwork`的实体之间有[一对多](../basic_relationships.html#relationship-patterns-o2m)关系，我们可以结合使用[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")和[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload")来急加载所有`Manager`对象上的这个集合，其中`Manager`对象的子属性也会被急加载：
 - en: '[PRE7]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: '#### Applying loader options when selectin_polymorphic is itself a sub-option'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: '#### 当选择`selectin_polymorphic`本身作为子选项时应用加载器选项'
 - en: New in version 2.0.21.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 版本 2.0.21 中新增。
 - en: 'The previous section illustrated [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
     "sqlalchemy.orm.selectinload") used as sibling options, both used within a single
@@ -202,31 +301,50 @@
     Below we combine the two examples to load `Company.employees`, also loading the
     attributes for the `Manager` and `Engineer` classes, as well as eagerly loading
     the ``Manager.paperwork`` attribute:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 前面的章节介绍了[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")和[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload")作为兄弟选项使用的示例，两者都在单个调用`select.options()`内使用。 如果目标实体已经从父关系加载，例如在示例[将`selectin_polymorphic()`应用于现有的急加载](#polymorphic-selectin-as-loader-option-target)中，我们可以使用[`Load.options()`](relationships.html#sqlalchemy.orm.Load.options
+    "sqlalchemy.orm.Load.options")方法应用此“兄弟”模式，该方法将子选项应用于父级，如在[使用`Load.options()`指定子选项](relationships.html#orm-queryguide-relationship-sub-options)中所示。
+    下面我们结合这两个示例，加载`Company.employees`，同时加载`Manager`和`Engineer`类的属性，以及急加载`Manager.paperwork`属性：
 - en: '[PRE8]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: Configuring selectin_polymorphic() on mappers
+  id: totrans-36
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 配置 mappers 上的 `selectin_polymorphic()`
 - en: 'The behavior of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") may be configured on specific mappers so
     that it takes place by default, by using the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
     "sqlalchemy.orm.Mapper") parameter, using the value `"selectin"` on a per-subclass
     basis. The example below illustrates the use of this parameter within `Engineer`
     and `Manager` subclasses:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以在特定的 mappers 上配置[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")的行为，以便默认生效，通过使用[`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper")参数，在每个子类基础上使用值`"selectin"`。 下面的示例演示了在 `Engineer` 和 `Manager`
+    子类中使用此参数的情况：
 - en: '[PRE9]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'With the above mapping, SELECT statements against the `Employee` class will
     automatically assume the use of `selectin_polymorphic(Employee, [Engineer, Manager])`
     as a loader option when the statement is emitted.  ## Using with_polymorphic()'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: '使用上述映射，针对`Employee`类的SELECT语句在发出语句时会自动假定使用`selectin_polymorphic(Employee, [Engineer,
+    Manager])`作为加载器选项。  ## 使用`with_polymorphic()`'
 - en: In contrast to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") which affects only the loading of objects,
     the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
@@ -237,8 +355,13 @@
     "sqlalchemy.orm.with_polymorphic") offers a means of writing a SELECT statement
     across several inherited classes at once with the ability to add filtering criteria
     based on individual sub-tables.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 与仅影响对象加载的 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    相比，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    构造影响了多态结构的 SQL 查询如何呈现，通常是作为一系列左外连接到每个包含的子表的 LEFT OUTER JOIN。这个连接结构被称为 **多态可选择项**。通过同时提供几个子表的视图，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 提供了一种一次跨越多个继承类写 SELECT 语句的方法，并能够根据各个子表添加过滤条件的能力。
 - en: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     is essentially a special form of the [`aliased()`](api.html#sqlalchemy.orm.aliased
     "sqlalchemy.orm.aliased") construct. It accepts as its arguments a similar form
@@ -246,45 +369,75 @@
     which is the base entity that is being queried, followed by a sequence of subclasses
     of that entity for which their specific attributes should be loaded for incoming
     rows:'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    本质上是 [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") 构造的一种特殊形式。它接受的参数形式与
+    [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    类似，即被查询的基本实体，后跟一系列该实体的子类，其特定属性应该被加载到传入的行中：'
 - en: '[PRE10]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'In order to indicate that all subclasses should be part of the entity, [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") will also accept the string `"*"`, which may
     be passed in place of the sequence of classes to indicate all classes (note this
     is not yet supported by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic")):'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了指示所有子类都应该成为实体的一部分，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 还将接受字符串 `"*"`，该字符串可以替代类序列以指示所有类（请注意，这目前还不被
+    [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    支持）：
 - en: '[PRE11]'
+  id: totrans-44
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'The example below illustrates the same operation as illustrated in the previous
     section, to load all columns for `Manager` and `Engineer` at once:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面的示例演示了与前一节中演示的相同操作，一次加载所有 `Manager` 和 `Engineer` 的所有列：
 - en: '[PRE12]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic"), attributes on subclasses are already loaded:'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 与 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    一样，子类的属性已经被加载：
 - en: '[PRE13]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: As the default selectable produced by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") uses LEFT OUTER JOIN, from a database point
     of view the query is not as well optimized as the approach that [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") takes, with simple SELECT statements using
     only JOINs emitted on a per-table basis.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    默认生成的可选择项使用 LEFT OUTER JOIN，从数据库的角度来看，查询并不像 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 所采用的方法那样优化，简单的 SELECT 语句仅使用基于每个表的 JOIN
+    发出。
 - en: '### Filtering Subclass Attributes with with_polymorphic()'
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 使用 with_polymorphic() 过滤子类属性'
 - en: 'The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     construct makes available the attributes on the included subclass mappers, by
     including namespaces that allow references to subclasses. The `employee_poly`
@@ -293,11 +446,19 @@
     of the polymorphic SELECT. In the example below, we can use the [`or_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.or_
     "sqlalchemy.sql.expression.or_") construct to create criteria against both classes
     at once:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    构造使包含的子类映射器上的属性可用，通过包含允许对子类的引用的命名空间。在前一节中创建的 `employee_poly` 构造包括名为 `.Engineer`
+    和 `.Manager` 的属性，这些属性为 `Engineer` 和 `Manager` 提供了关于多态 SELECT 的命名空间。在下面的示例中，我们可以使用
+    [`or_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.or_ "sqlalchemy.sql.expression.or_")
+    构造同时针对两个类创建条件：'
 - en: '[PRE14]  ### Using aliasing with with_polymorphic'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE14]  ### 使用别名化与 with_polymorphic'
 - en: The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     construct, as a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased
     "sqlalchemy.orm.aliased"), also provides the basic feature that [`aliased()`](api.html#sqlalchemy.orm.aliased
@@ -305,8 +466,14 @@
     selectable itself. Specifically this means two or more [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") entities, referring to the same class hierarchy,
     can be used at once in a single statement.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    构造，作为 [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    的特例，也提供了 [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased")
+    的基本功能，即对多态可选择本身的“别名化”。具体来说，这意味着两个或更多个引用相同类层次结构的 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 实体可以同时在单个语句中使用。'
 - en: To use this feature with a joined inheritance mapping, we typically want to
     pass two parameters, [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
     "sqlalchemy.orm.with_polymorphic") as well as [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
@@ -316,8 +483,14 @@
     "sqlalchemy.orm.with_polymorphic") parameter is specific to the default LEFT OUTER
     JOIN polymorphic selectable and indicates that a more optimized form of aliasing
     should be used in the statement.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在连接继承映射中使用此功能，通常我们希望传递两个参数，[`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") 以及 [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic")。[`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") 参数表示多态可选择应该由此构造唯一的别名引用。[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") 参数是特定于默认的 LEFT OUTER JOIN 多态可选择，并指示语句中应使用更优化的别名化形式。
 - en: 'To illustrate this feature, the example below emits a SELECT for two separate
     polymorphic entities, `Employee` joined with `Engineer`, and `Employee` joined
     with `Manager`. Since these two polymorphic entities will both be including the
@@ -327,26 +500,41 @@
     be joined with each other in some way, as illustrated below where the entities
     are joined on the `company_id` column along with some additional limiting criteria
     against the `Employee` / `Manager` entity:'
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了说明这个特性，下面的示例发出了一个选择两个单独的多态实体，`Employee` 与 `Engineer` 连接，以及 `Employee` 与 `Manager`
+    连接的 SELECT。由于这两个多态实体都将在其多态可选择中包含基本的 `employee` 表，必须应用别名以区分这个表在其两个不同的上下文中。这两个多态实体被视为两个独立的表，因此通常需要以某种方式相互连接，如下所示，在这里实体在
+    `company_id` 列上与彼此连接，并附加一些额外的限制条件针对 `Employee` / `Manager` 实体：
 - en: '[PRE15]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: In the above example, the behavior of [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
     "sqlalchemy.orm.with_polymorphic") is that the polymorphic selectables remain
     as a LEFT OUTER JOIN of their individual tables, which themselves are given anonymous
     alias names. There is also a right-nested JOIN produced.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的例子中，[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") 的行为是，多态可选项保持为其各自表的 LEFT OUTER JOIN，这些表本身被赋予匿名别名。还生成了一个右嵌套
+    JOIN。
 - en: 'When omitting the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
     "sqlalchemy.orm.with_polymorphic") parameter, the usual behavior is that each
     polymorphic selectable is enclosed within a subquery, producing a more verbose
     form:'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 当省略[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat "sqlalchemy.orm.with_polymorphic")
+    参数时，通常行为是每个多态可选项都被包含在子查询中，产生更加冗长的形式：
 - en: '[PRE16]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'The above form historically has been more portable to backends that didn’t
     necessarily have support for right-nested JOINs, and it additionally may be appropriate
     when the “polymorphic selectable” used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
@@ -354,8 +542,11 @@
     as is the case when using mappings such as [concrete table inheritance](../inheritance.html#concrete-inheritance)
     mappings as well as when using alternative polymorphic selectables in general.  ###
     Configuring with_polymorphic() on mappers'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: '上述形式在历史上更容易移植到不一定支持右嵌套 JOIN 的后端，并且在使用诸如[具体表继承](../inheritance.html#concrete-inheritance)映射以及一般情况下使用替代多态可选项时，可能也是合适的。  ###
+    在映射上配置 with_polymorphic()'
 - en: As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic"), the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") construct also supports a mapper-configured
@@ -364,11 +555,19 @@
     the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
     "sqlalchemy.orm.Mapper") parameter on a per-subclass basis, passing the value
     `"inline"`.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 与 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    类似，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    构造也支持一个经过映射配置的版本，可以通过两种不同的方式进行配置，要么在基类上使用 `mapper.with_polymorphic` 参数，要么以更现代的形式在每个子类上使用
+    [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") 参数，传递值为 `"inline"`。
 - en: Warning
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告
 - en: For joined inheritance mappings, prefer explicit use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") within queries, or for implicit eager subclass
     loading use [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
@@ -377,38 +576,62 @@
     invokes complex heuristics intended to rewrite the FROM clauses within SELECT
     statements that can interfere with construction of more complex statements, particularly
     those with nested subqueries that refer to the same mapped entity.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于加入继承映射，更倾向于在查询中明确使用 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") ，或者对于隐式的子类急加载使用 [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") 以 `"selectin"` 为参数，而不是使用本节中描述的映射级别的 `mapper.with_polymorphic`
+    参数。该参数调用了旨在重写 SELECT 语句中的 FROM 子句的复杂启发式规则，可能会干扰更复杂语句的构建，尤其是那些涉及到引用同一映射实体的嵌套子查询的语句。
 - en: 'For example, we may state our `Employee` mapping using [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
     "sqlalchemy.orm.Mapper") as `"inline"` as below:'
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，我们可以使用以下方式声明我们的 `Employee` 映射，将 [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") 设为 `"inline"`：
 - en: '[PRE17]'
+  id: totrans-65
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'With the above mapping, SELECT statements against the `Employee` class will
     automatically assume the use of `with_polymorphic(Employee, [Engineer, Manager])`
     as the primary entity when the statement is emitted:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于上述映射，针对 `Employee` 类的 SELECT 语句将自动假设在发出语句时使用 `with_polymorphic(Employee, [Engineer,
+    Manager])` 作为主要实体：
 - en: '[PRE18]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: 'When using mapper-level “with polymorphic”, queries can also refer to the subclass
     entities directly, where they implicitly represent the joined tables in the polymorphic
     query. Above, we can freely refer to `Manager` and `Engineer` directly against
     the default `Employee` entity:'
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用映射器级“with polymorphic”时，查询也可以直接引用子类实体，其中它们隐式地表示多态查询中的连接表。在上面的例子中，我们可以自由地直接引用
+    `Manager` 和 `Engineer` 对默认的 `Employee` 实体进行查询：
 - en: '[PRE19]'
+  id: totrans-69
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: However, if we needed to refer to the `Employee` entity or its sub entities
     in separate, aliased contexts, we would again make direct use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") to define these aliased entities as illustrated
     in [Using aliasing with with_polymorphic](#with-polymorphic-aliasing).
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，如果我们需要在单独的别名上下文中引用 `Employee` 实体或其子实体，我们将再次直接使用 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 来定义这些别名实体，如 [使用别名与 with_polymorphic](#with-polymorphic-aliasing)
+    中所示。
 - en: 'For more centralized control over the polymorphic selectable, the more legacy
     form of mapper-level polymorphic control may be used which is the [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
     "sqlalchemy.orm.Mapper") parameter, configured on the base class. This parameter
@@ -416,11 +639,18 @@
     "sqlalchemy.orm.with_polymorphic") construct, however common use with a joined
     inheritance mapping is the plain asterisk, indicating all sub-tables should be
     LEFT OUTER JOINED, as in:'
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于对多态可选的更集中的控制，可以使用更传统的映射器级多态控制形式，即 [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") 参数，配置在基类上。此参数接受与 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 构造相当的参数，然而，在连接继承映射中的常见用法是使用普通的星号，表示所有子表都应该进行
+    LEFT OUTER JOIN，如下所示：
 - en: '[PRE20]'
+  id: totrans-72
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'Overall, the LEFT OUTER JOIN format used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") and by options such as [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
     "sqlalchemy.orm.Mapper") may be cumbersome from a SQL and database optimizer point
@@ -431,8 +661,16 @@
     of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     on a per-query basis only as needed.  ## Joining to specific sub-types or with_polymorphic()
     entities'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: '总的来说，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    和诸如 [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") 这样的选项使用的 LEFT OUTER JOIN 格式可能从 SQL 和数据库优化器的角度来看会比较繁琐；对于连接继承映射中子类属性的一般加载，应该更倾向于使用
+    [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    方法，或者将 [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") 设置为 `"selectin"` 的映射器级等效，只在需要时才在每个查询基础上使用 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")。  ## 加入到特定子类型或 with_polymorphic() 实体'
 - en: 'As a [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     entity is a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased"),
     in order to treat a polymorphic entity as the target of a join, specifically when
@@ -446,115 +684,178 @@
     which is configured in the [setup](_inheritance_setup.html) to link to `Employee`
     objects, using a [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     entity as the target:'
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")实体是[`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased")的一种特殊情况，在将多态实体视为连接的目标时，特别是在使用[`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")构造作为ON子句时，我们使用与常规别名相同的技术，如在[Using Relationship to
+    join between aliased targets](select.html#orm-queryguide-joining-relationships-aliased)中详细说明的，最简洁的方式是使用[`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type")。在下面的示例中，我们演示了从父实体`Company`沿着一对多关系`Company.employees`进行连接，该关系在[setup](_inheritance_setup.html)中配置为链接到`Employee`对象，使用一个[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")实体作为目标：
 - en: '[PRE21]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: 'More directly, [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
     "sqlalchemy.orm.PropComparator.of_type") is also used with inheritance mappings
     of any kind to limit a join along a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") to a particular sub-type of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship")’s target. The above query could be written strictly
     in terms of `Engineer` targets as follows:'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 更直接地说，[`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type")也与任何类型的继承映射一起使用，以将一个[`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")的连接限制为特定的子类型。上面的查询可以严格按照`Engineer`目标来编写，如下所示：
 - en: '[PRE22]'
+  id: totrans-77
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: It can be observed above that joining to the `Engineer` target directly, rather
     than the “polymorphic selectable” of `with_polymorphic(Employee, [Engineer])`
     has the useful characteristic of using an inner JOIN rather than a LEFT OUTER
     JOIN, which is generally more performant from a SQL optimizer point of view.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 从上面可以观察到，直接加入到`Engineer`目标，而不是使用`with_polymorphic(Employee, [Engineer])`的“多态可选择”具有一个有用的特性，即使用内连接而不是左外连接，从SQL优化器的角度来看，这通常更具性能。
 - en: '### Eager Loading of Polymorphic Subtypes'
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 多态子类型的急切加载'
 - en: The use of [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
     "sqlalchemy.orm.PropComparator.of_type") illustrated with the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
     "sqlalchemy.sql.expression.Select.join") method in the previous section may also
     be applied equivalently to [relationship loader options](relationships.html#orm-queryguide-relationship-loaders),
     such as [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
     and [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload").
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 在前一节中用[`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join")方法演示的[`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type")也可以等效地应用于[relationship loader options](relationships.html#orm-queryguide-relationship-loaders)，如[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload")和[`joinedload()`](relationships.html#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload")。
 - en: 'As a basic example, if we wished to load `Company` objects, and additionally
     eagerly load all elements of `Company.employees` using the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") construct against the full hierarchy, we may
     write:'
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为一个基本示例，如果我们希望加载`Company`对象，并且使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")构造来对整个层次结构的`Company.employees`的所有元素进行急切加载，我们可以编写如下代码：
 - en: '[PRE23]'
+  id: totrans-82
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: The above query may be compared directly to the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") version illustrated in the previous section
     [Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target).
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述查询可以直接与前一节中[将`selectin_polymorphic()`应用于现有的急加载](#polymorphic-selectin-as-loader-option-target)中的[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")版本进行比较。
 - en: See also
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target)
     - illustrates the equivalent example as above using [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") instead  ## SELECT Statements for Single
     Inheritance Mappings'
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: '[将`selectin_polymorphic()`应用于现有的急加载](#polymorphic-selectin-as-loader-option-target)
+    - 演示了使用[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")相同等效的示例，而不是上面的例子。
+    ## 单一继承映射的SELECT语句'
 - en: Single Table Inheritance Setup
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 单一表继承设置
 - en: This section discusses single table inheritance, described at [Single Table
     Inheritance](../inheritance.html#single-inheritance), which uses a single table
     to represent multiple classes in a hierarchy.
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节讨论单表继承，描述在[单表继承](../inheritance.html#single-inheritance)中使用单个表表示层次结构中的多个类。
 - en: '[View the ORM setup for this section](_single_inheritance.html).'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: '[查看本节的ORM设置](_single_inheritance.html)。'
 - en: In contrast to joined inheritance mappings, the construction of SELECT statements
     for single inheritance mappings tends to be simpler since for an all-single-inheritance
     hierarchy, there’s only one table.
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 与联接继承映射相比，对于单一继承映射，构造SELECT语句往往更简单，因为对于全部单一继承层次结构，只有一个表。
 - en: Regardless of whether or not the inheritance hierarchy is all single-inheritance
     or has a mixture of joined and single inheritance, SELECT statements for single
     inheritance differentiate queries against the base class vs. a subclass by limiting
     the SELECT statement with additional WHERE criteria.
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 无论继承层次结构是否全是单一继承或具有联接和单一继承的混合，单一继承的SELECT语句都通过添加额外的WHERE条件来区分针对基类和子类的查询。
 - en: 'As an example, a query for the single-inheritance example mapping of `Employee`
     will load objects of type `Manager`, `Engineer` and `Employee` using a simple
     SELECT of the table:'
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，对于`Employee`的单一继承示例映射的查询将使用简单的表SELECT加载`Manager`、`Engineer`和`Employee`类型的对象：
 - en: '[PRE24]'
+  id: totrans-92
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: 'When a load is emitted for a specific subclass, additional criteria is added
     to the SELECT that limits the rows, such as below where a SELECT against the `Engineer`
     entity is performed:'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 当针对特定子类发出加载时，会向SELECT添加限制行的其他条件，例如下面对`Engineer`实体执行的SELECT：
 - en: '[PRE25]'
+  id: totrans-94
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: Optimizing Attribute Loads for Single Inheritance
+  id: totrans-95
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 优化单一继承的属性加载
 - en: 'The default behavior of single inheritance mappings regarding how attributes
     on subclasses are SELECTed is similar to that of joined inheritance, in that subclass-specific
     attributes still emit a second SELECT by default. In the example below, a single
     `Employee` of type `Manager` is loaded, however since the requested class is `Employee`,
     the `Manager.manager_name` attribute is not present by default, and an additional
     SELECT is emitted when it’s accessed:'
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 单一继承映射关于如何选择子类上的属性的默认行为与联接继承的行为类似，即子类特定的属性仍然默认发出第二个SELECT。在下面的示例中，加载一个`Manager`类型的单个`Employee`，但由于请求的类是`Employee`，所以默认情况下不会出现`Manager.manager_name`属性，并且当访问时会发出额外的SELECT：
 - en: '[PRE26]'
+  id: totrans-97
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: 'To alter this behavior, the same general concepts used to eagerly load these
     additional attributes used in joined inheritance loading apply to single inheritance
     as well, including use of the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
@@ -562,11 +863,17 @@
     "sqlalchemy.orm.with_polymorphic") option, the latter of which simply includes
     the additional columns and from a SQL perspective is more efficient for single-inheritance
     mappers:'
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 要更改此行为，对于单一继承以及联接继承加载中使用的额外属性的急加载，同样的一般概念也适用于单一继承，包括使用[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")选项以及[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")选项，后者简单地包含了额外的列，并且从SQL的角度来看，对于单一继承映射更有效：
 - en: '[PRE27]'
+  id: totrans-99
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: 'Since the overhead of loading single-inheritance subclass mappings is usually
     minimal, it’s therefore recommended that single inheritance mappings include the
     [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
@@ -574,79 +881,123 @@
     where loading of their specific subclass attributes is expected to be common.
     An example illustrating the [setup](_single_inheritance.html), modified to include
     this option, is below:'
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于加载单继承子类映射的开销通常很小，因此建议对于那些预计加载其特定子类属性是常见的子类，包括 [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") 参数，并将其设置为 `"inline"`。下面是一个示例，说明了包含此选项的 [设置](_single_inheritance.html)：
 - en: '[PRE28]'
+  id: totrans-101
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: 'With the above mapping, the `Manager` and `Engineer` classes will have their
     columns included in SELECT statements against the `Employee` entity automatically:'
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据上述映射，`Manager` 和 `Engineer` 类将自动在针对 `Employee` 实体的 SELECT 语句中包含它们的列：
 - en: '[PRE29]'
+  id: totrans-103
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: Inheritance Loading API
+  id: totrans-104
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 继承加载 API
 - en: '| Object Name | Description |'
+  id: totrans-105
   prefs: []
   type: TYPE_TB
+  zh: '| 对象名称 | 描述 |'
 - en: '| --- | --- |'
+  id: totrans-106
   prefs: []
   type: TYPE_TB
+  zh: '| --- | --- |'
 - en: '| [selectin_polymorphic](#sqlalchemy.orm.selectin_polymorphic)(base_cls, classes)
     | Indicate an eager load should take place for all attributes specific to a subclass.
     |'
+  id: totrans-107
   prefs: []
   type: TYPE_TB
+  zh: '| [selectin_polymorphic](#sqlalchemy.orm.selectin_polymorphic)(base_cls, classes)
+    | 指示应对子类的所有属性进行急切加载。 |'
 - en: '| [with_polymorphic](#sqlalchemy.orm.with_polymorphic)(base, classes[, selectable,
     flat, ...]) | Produce an [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass
     "sqlalchemy.orm.util.AliasedClass") construct which specifies columns for descendant
     mappers of the given base. |'
+  id: totrans-108
   prefs: []
   type: TYPE_TB
+  zh: '| [with_polymorphic](#sqlalchemy.orm.with_polymorphic)(base, classes[, selectable,
+    flat, ...]) | 生成一个 [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass
+    "sqlalchemy.orm.util.AliasedClass") 构造，指定给定基类的后代映射器的列。 |'
 - en: '[PRE30]'
+  id: totrans-109
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: Produce an [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass "sqlalchemy.orm.util.AliasedClass")
     construct which specifies columns for descendant mappers of the given base.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成一个 [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass "sqlalchemy.orm.util.AliasedClass")
+    构造，指定给定基类的后代映射器的列。
 - en: Using this method will ensure that each descendant mapper’s tables are included
     in the FROM clause, and will allow filter() criterion to be used against those
     tables. The resulting instances will also have those columns already loaded so
     that no “post fetch” of those columns will be required.
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用此方法将确保每个后代映射器的表都包含在 FROM 子句中，并允许对这些表使用 filter() 条件。结果实例还将已加载这些列，因此不需要对这些列进行“后获取”。
 - en: See also
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Using with_polymorphic()](#with-polymorphic) - full discussion of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic").'
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用 with_polymorphic()](#with-polymorphic) - 对 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 的全面讨论。'
 - en: 'Parameters:'
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 参数：
 - en: '`base` – Base class to be aliased.'
+  id: totrans-115
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`base` – 要别名化的基类。'
 - en: '`classes` – a single class or mapper, or list of class/mappers, which inherit
     from the base class. Alternatively, it may also be the string `''*''`, in which
     case all descending mapped classes will be added to the FROM clause.'
+  id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`classes` – 一个类或映射器，或类/映射器列表，它们都继承自基类。或者，它也可以是字符串 `''*''`，在这种情况下，所有下降映射的类都将添加到
+    FROM 子句中。'
 - en: '`aliased` – when True, the selectable will be aliased. For a JOIN, this means
     the JOIN will be SELECTed from inside of a subquery unless the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
     "sqlalchemy.orm.with_polymorphic") flag is set to True, which is recommended for
     simpler use cases.'
+  id: totrans-117
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`aliased` – 当为 True 时，可选择的将被别名化。对于 JOIN，这意味着 JOIN 将从子查询中进行 SELECT，除非设置了 [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") 标志为 True，这对于简单的用例是推荐的。'
 - en: '`flat` – Boolean, will be passed through to the [`FromClause.alias()`](../../core/selectable.html#sqlalchemy.sql.expression.FromClause.alias
     "sqlalchemy.sql.expression.FromClause.alias") call so that aliases of [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
     "sqlalchemy.sql.expression.Join") objects will alias the individual tables inside
@@ -654,13 +1005,18 @@
     modern databases with regards to right-nested joins and generally produces more
     efficient queries. Setting this flag is recommended as long as the resulting SQL
     is functional.'
+  id: totrans-118
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`flat` – 布尔值，将传递给[`FromClause.alias()`](../../core/selectable.html#sqlalchemy.sql.expression.FromClause.alias
+    "sqlalchemy.sql.expression.FromClause.alias")调用，以便联接对象的别名别名联接内部的各个表，而不是创建子查询。这通常由所有现代数据库支持，关于右嵌套联接通常会产生更有效的查询。建议设置此标志，只要生成的SQL是功能性的。'
 - en: '`selectable` –'
+  id: totrans-119
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`selectable` –'
 - en: a table or subquery that will be used in place of the generated FROM clause.
     This argument is required if any of the desired classes use concrete table inheritance,
     since SQLAlchemy currently cannot generate UNIONs among tables automatically.
@@ -668,68 +1024,97 @@
     mapped by every mapped class. Otherwise, the unaccounted mapped columns will result
     in their table being appended directly to the FROM clause which will usually lead
     to incorrect results.
+  id: totrans-120
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 将用于替代生成的FROM子句的表或子查询。如果任何所需类使用具体表继承，则此参数是必需的，因为SQLAlchemy当前无法自动生成表之间的UNION。如果使用，`selectable`参数必须表示每个映射类映射的所有表和列的完整集。否则，未考虑的映射列将直接附加到FROM子句，这通常会导致不正确的结果。
 - en: When left at its default value of `False`, the polymorphic selectable assigned
     to the base mapper is used for selecting rows. However, it may also be passed
     as `None`, which will bypass the configured polymorphic selectable and instead
     construct an ad-hoc selectable for the target classes given; for joined table
     inheritance this will be a join that includes all target mappers and their subclasses.
+  id: totrans-121
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 当保持其默认值`False`时，将为选择行使用分配给基本映射器的多态可选择对象。但是，也可以将其传递为`None`，这将绕过配置的多态可选择对象，并代替构造给定目标类的临时可选择对象；对于联接表继承，这将是一个包含所有目标映射器及其子类的联接。
 - en: '`polymorphic_on` – a column to be used as the “discriminator” column for the
     given selectable. If not given, the polymorphic_on attribute of the base classes’
     mapper will be used, if any. This is useful for mappings that don’t have polymorphic
     loading behavior by default.'
+  id: totrans-122
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`polymorphic_on` – 用作给定可选择对象的“判别器”列。如果未提供，则将使用基类映射器的`polymorphic_on`属性（如果有）。这对于默认没有多态加载行为的映射非常有用。'
 - en: '`innerjoin` – if True, an INNER JOIN will be used. This should only be specified
     if querying for one specific subtype only'
+  id: totrans-123
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`innerjoin` – 如果为True，则使用INNER JOIN。只有在仅查询一个特定的子类型时才应指定此选项'
 - en: '`adapt_on_names` –'
+  id: totrans-124
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`adapt_on_names` –'
 - en: Passes through the [`aliased.adapt_on_names`](api.html#sqlalchemy.orm.aliased.params.adapt_on_names
     "sqlalchemy.orm.aliased") parameter to the aliased object. This may be useful
     in situations where the given selectable is not directly related to the existing
     mapped selectable.
+  id: totrans-125
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 通过[`aliased.adapt_on_names`](api.html#sqlalchemy.orm.aliased.params.adapt_on_names
+    "sqlalchemy.orm.aliased")参数传递到别名对象。在给定可选择对象与现有映射的可选择对象没有直接关联的情况下，这可能会有所帮助。
 - en: New in version 1.4.33.
+  id: totrans-126
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 自版本1.4.33起新增。
 - en: '[PRE31]'
+  id: totrans-127
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: Indicate an eager load should take place for all attributes specific to a subclass.
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 指示应针对特定子类的所有属性进行急加载。
 - en: This uses an additional SELECT with IN against all matched primary key values,
     and is the per-query analogue to the `"selectin"` setting on the `mapper.polymorphic_load`
     parameter.
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 这使用额外的SELECT与所有匹配的主键值进行IN比较，并且是与`mapper.polymorphic_load`参数上的`"selectin"`设置对应的每个查询的类似物。
 - en: New in version 1.2.
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 自版本1.2起新增。
 - en: See also
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Using selectin_polymorphic()](#polymorphic-selectin)'
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用`selectin_polymorphic()`](#polymorphic-selectin)'
 - en: SELECTing from the base class vs. specific sub-classes
+  id: totrans-133
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 从基类 vs. 特定子类进行SELECT
 - en: 'A SELECT statement constructed against a class in a joined inheritance hierarchy
     will query against the table to which the class is mapped, as well as any super-tables
     present, using JOIN to link them together. The query would then return objects
@@ -738,11 +1123,15 @@
     row to determine the correct type. The query below is established against the
     `Manager` subclass of `Employee`, which then returns a result that will contain
     only objects of type `Manager`:'
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于联合继承层次结构中的类构建的SELECT语句将查询该类映射到的表，以及任何存在的超级表，使用JOIN将它们链接在一起。然后，该查询将返回请求类型的对象以及请求类型的任何子类型，使用每行中的[鉴别器](../../glossary.html#term-discriminator)值来确定正确的类型。下面的查询是针对`Employee`的`Manager`子类建立的，然后返回的结果将仅包含`Manager`类型的对象：
 - en: '[PRE32]'
+  id: totrans-135
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: When the SELECT statement is against the base class in the hierarchy, the default
     behavior is that only that class’ table will be included in the rendered SQL and
     JOIN will not be used. As in all cases, the [discriminator](../../glossary.html#term-discriminator)
@@ -752,16 +1141,22 @@
     corresponding to sub-tables will start in an un-loaded state, loading automatically
     when accessed. The loading of sub-attributes is configurable to be more “eager”
     in a variety of ways, discussed later in this section.
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 当SELECT语句针对层次结构中的基类时，默认行为是仅包括该类的表在渲染的SQL中，并且不会使用JOIN。与所有情况一样，[鉴别器](../../glossary.html#term-discriminator)列用于区分不同的请求子类型，然后结果是返回任何可能的子类型的对象。返回的对象将具有与基本表对应的属性填充，而与子表对应的属性将以未加载状态开始，在访问时自动加载。子属性的加载可配置为以各种方式更加“急切”，这将在本节后面讨论。
 - en: 'The example below creates a query against the `Employee` superclass. This indicates
     that objects of any type, including `Manager`, `Engineer`, and `Employee`, may
     be within the result set:'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面的示例创建了针对`Employee`超类的查询。这表示结果集中可能包含任何类型的对象，包括`Manager`、`Engineer`和`Employee`：
 - en: '[PRE33]'
+  id: totrans-138
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: 'Above, the additional tables for `Manager` and `Engineer` were not included
     in the SELECT, which means that the returned objects will not yet contain data
     represented from those tables, in this example the `.manager_name` attribute of
@@ -769,11 +1164,15 @@
     class. These attributes start out in the [expired](../../glossary.html#term-expired)
     state, and will automatically populate themselves when first accessed using [lazy
     loading](../../glossary.html#term-lazy-loading):'
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，并未包括`Manager`和`Engineer`的附加表在SELECT中，这意味着返回的对象尚不包含来自这些表的数据，例如本示例中`Manager`类的`.manager_name`属性以及`Engineer`类的`.engineer_info`属性。这些属性起始处于[过期](../../glossary.html#term-expired)状态，并且在首次访问时将自动填充自己，使用[延迟加载](../../glossary.html#term-lazy-loading)：
 - en: '[PRE34]'
+  id: totrans-140
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: This lazy load behavior is not desirable if a large number of objects have been
     loaded, in the case that the consuming application will need to be accessing subclass-specific
     attributes, as this would be an example of the [N plus one](../../glossary.html#term-N-plus-one)
@@ -785,11 +1184,17 @@
     constructs that provide solutions to these two issues in different ways, the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") loader option and the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") entity construct.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果已加载大量对象，则此惰性加载行为是不可取的，因为消费应用程序将需要访问特定于子类的属性，这将是一个[ N加一](../../glossary.html#term-N-plus-one)问题的示例，每行发出额外的SQL。这些额外的SQL可能会影响性能，并且还可能与诸如使用[asyncio](../extensions/asyncio.html)等方法不兼容。此外，在我们对`Employee`对象的查询中，由于查询仅针对基本表，因此我们无法以`Manager`或`Engineer`的术语添加涉及特定于子类的属性的SQL条件。接下来的两个部分详细介绍了两种以不同方式解决这两个问题的构造，[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")加载器选项和[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")实体构造。
 - en: '## Using selectin_polymorphic()'
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 使用selectin_polymorphic()'
 - en: To address the issue of performance when accessing attributes on subclasses,
     the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
     loader strategy may be used to [eagerly load](../../glossary.html#term-eagerly-load)
@@ -798,40 +1203,61 @@
     "sqlalchemy.orm.selectinload") relationship loader strategy to emit an additional
     SELECT statement against each sub-table for objects loaded in the hierarchy, using
     `IN` to query for additional rows based on primary key.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了解决在访问子类属性时的性能问题，可以使用[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")加载器策略，一次性预加载这些额外的属性到许多对象中。此加载器选项的工作方式类似于[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload")关系加载器策略，针对加载在层次结构中的对象发出额外的SELECT语句，使用`IN`查询基于主键的额外行。
 - en: '[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
     accepts as its arguments the base entity that is being queried, followed by a
     sequence of subclasses of that entity for which their specific attributes should
     be loaded for incoming rows:'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")接受作为参数被查询的基本实体，然后是该实体的一系列子类，这些子类的特定属性应加载到传入的行中：'
 - en: '[PRE35]'
+  id: totrans-145
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: 'The [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
     construct is then used as a loader option, passing it to the [`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
     "sqlalchemy.sql.expression.Select.options") method of [`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select"). The example illustrates the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") to eagerly load columns local to both the
     `Manager` and `Engineer` subclasses:'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")构造被用作加载器选项，将其传递给[`Select.options()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.options
+    "sqlalchemy.sql.expression.Select.options")方法[`Select`](../../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select")。该示例说明了使用[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")急切加载`Manager`和`Engineer`子类本地列的用法：
 - en: '[PRE36]'
+  id: totrans-147
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: 'The above example illustrates two additional SELECT statements being emitted
     in order to eagerly fetch additional attributes such as `Engineer.engineer_info`
     as well as `Manager.manager_name`. We can now access these sub-attributes on the
     objects that were loaded without any additional SQL statements being emitted:'
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面的示例说明了额外发出的两个额外的SELECT语句，以便急切地获取额外的属性，如`Engineer.engineer_info`和`Manager.manager_name`。我们现在可以访问这些被加载的对象上的子属性，而不需要发出任何额外的SQL语句：
 - en: '[PRE37]'
+  id: totrans-149
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: Tip
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: The [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
     loader option does not yet optimize for the fact that the base `employee` table
     does not need to be included in the second two “eager load” queries; hence in
@@ -840,11 +1266,18 @@
     [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
     relationship strategy which is more sophisticated in this regard and can factor
     out the JOIN when not needed.
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    加载选项尚未针对基本的 `employee` 表进行优化，因此在第二和第三个“急加载”查询中不需要包含 `employee` 表；因此，在上面的示例中，我们看到了从
+    `employee` 到 `manager` 和 `engineer` 的 JOIN，即使 `employee` 的列已经加载。这与[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") 关系策略形成对比，在这方面更加复杂，并且在不需要时可以消除 JOIN。'
 - en: '### Applying selectin_polymorphic() to an existing eager load'
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 将 selectin_polymorphic() 应用于现有的急加载'
 - en: 'In addition to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") being specified as an option for a top-level
     entity loaded by a statement, we may also indicate [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
@@ -858,20 +1291,36 @@
     form, the first argument is implicit from the previous loader option (in this
     case [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")),
     so we only indicate the additional target subclasses we wish to load:'
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了将 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    指定为由语句加载的顶级实体的选项之外，我们还可以在现有加载的目标上指示 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")。由于我们的[设置](_inheritance_setup.html)映射包括一个带有引用
+    `Employee` 实体的 `Company.employees` [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 的父 `Company` 实体，我们可以说明针对 `Company` 实体进行的 SELECT，该
+    SELECT 急切加载所有 `Employee` 对象以及其子类型上的所有属性，方法是将 [`Load.selectin_polymorphic()`](relationships.html#sqlalchemy.orm.Load.selectin_polymorphic
+    "sqlalchemy.orm.Load.selectin_polymorphic") 应用为链接的加载选项；在此形式中，第一个参数从前一个加载选项隐式获得（在本例中为
+    [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")），因此我们只指示我们希望加载的附加目标子类：
 - en: '[PRE38]'
+  id: totrans-154
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: See also
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[Eager Loading of Polymorphic Subtypes](#eagerloading-polymorphic-subtypes)
     - illustrates the equivalent example as above using [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") instead  ### Applying loader options to the
     subclasses loaded by selectin_polymorphic'
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: '[多态子类型的急加载](#eagerloading-polymorphic-subtypes) - 展示了使用 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 的相同示例 ### 将加载选项应用于由 selectin_polymorphic 加载的子类'
 - en: The SELECT statements emitted by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") are themselves ORM statements, so we may
     also add other loader options (such as those documented at [Relationship Loading
@@ -879,25 +1328,41 @@
     to specific subclasses. These options should be applied as **siblings** to a [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") option, that is, comma separated within
     `select.options()`.
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    发出的 SELECT 语句本身是 ORM 语句，因此我们还可以添加其他加载选项（例如文档中记录的[关系加载技术](relationships.html#orm-queryguide-relationship-loaders)）
+    ，这些选项引用特定的子类。这些选项应作为**兄弟**应用于 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 选项，即在 `select.options()` 中用逗号分隔。'
 - en: 'For example, if we considered that the `Manager` mapper had a [one to many](../basic_relationships.html#relationship-patterns-o2m)
     relationship to an entity called `Paperwork`, we could combine the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
     "sqlalchemy.orm.selectinload") to eagerly load this collection on all `Manager`
     objects, where the sub-attributes of `Manager` objects were also themselves eagerly
     loaded:'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，如果我们考虑 `Manager` 映射器与名为 `Paperwork` 的实体之间有[一对多](../basic_relationships.html#relationship-patterns-o2m)关系，我们可以结合使用
+    [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    和 [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    在所有 `Manager` 对象上急加载此集合，其中 `Manager` 对象的子属性也被急加载：
 - en: '[PRE39]'
+  id: totrans-159
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: '#### Applying loader options when selectin_polymorphic is itself a sub-option'
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: '#### 当 selectin_polymorphic 本身是子选项时应用加载器选项'
 - en: New in version 2.0.21.
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 2.0.21 版中的新功能。
 - en: 'The previous section illustrated [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
     "sqlalchemy.orm.selectinload") used as sibling options, both used within a single
@@ -910,34 +1375,59 @@
     Below we combine the two examples to load `Company.employees`, also loading the
     attributes for the `Manager` and `Engineer` classes, as well as eagerly loading
     the ``Manager.paperwork`` attribute:'
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 前一节说明了 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    和 [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    作为兄弟选项的用法，都在单个对 `select.options()` 的调用中使用。 如果目标实体已经从父关系加载，例如在[将 selectin_polymorphic()
+    应用于现有的急加载](#polymorphic-selectin-as-loader-option-target)示例中，我们可以使用 [`Load.options()`](relationships.html#sqlalchemy.orm.Load.options
+    "sqlalchemy.orm.Load.options") 方法应用此“兄弟”模式，该方法将子选项应用于父选项，如在[使用 Load.options()
+    指定子选项](relationships.html#orm-queryguide-relationship-sub-options)示例中说明的。 下面我们结合两个示例，加载
+    `Company.employees`，还加载 `Manager` 和 `Engineer` 类的属性，以及急加载 ``Manager.paperwork``
+    属性：
 - en: '[PRE40]'
+  id: totrans-163
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: Configuring selectin_polymorphic() on mappers
+  id: totrans-164
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 配置 mappers 上的 selectin_polymorphic()
 - en: 'The behavior of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") may be configured on specific mappers so
     that it takes place by default, by using the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
     "sqlalchemy.orm.Mapper") parameter, using the value `"selectin"` on a per-subclass
     basis. The example below illustrates the use of this parameter within `Engineer`
     and `Manager` subclasses:'
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以在特定的 mappers 上配置 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 的行为，以便默认情况下执行，通过使用 [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") 参数，在每个子类基础上使用值 `"selectin"`。 以下示例说明了在 `Engineer` 和 `Manager`
+    子类中使用此参数的用法：
 - en: '[PRE41]'
+  id: totrans-166
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: With the above mapping, SELECT statements against the `Employee` class will
     automatically assume the use of `selectin_polymorphic(Employee, [Engineer, Manager])`
     as a loader option when the statement is emitted.
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 以上映射，针对 `Employee` 类的 SELECT 语句在发出语句时将自动假定使用 `selectin_polymorphic(Employee,
+    [Engineer, Manager])` 作为加载器选项。
 - en: '### Applying selectin_polymorphic() to an existing eager load'
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 将 selectin_polymorphic() 应用于现有的急加载'
 - en: 'In addition to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") being specified as an option for a top-level
     entity loaded by a statement, we may also indicate [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
@@ -951,22 +1441,40 @@
     form, the first argument is implicit from the previous loader option (in this
     case [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")),
     so we only indicate the additional target subclasses we wish to load:'
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 在指定为语句加载的顶级实体选项时，除了 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 之外，我们还可以在现有加载的目标上指示 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")。由于我们的 [设置](_inheritance_setup.html) 映射包括一个父
+    `Company` 实体，其具有引用到 `Employee` 实体的 `Company.employees` [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")，我们可以如下所示对 `Company` 实体进行选择，该选择会急切地加载所有 `Employee`
+    对象以及其子类型的所有属性，方法是将 [`Load.selectin_polymorphic()`](relationships.html#sqlalchemy.orm.Load.selectin_polymorphic
+    "sqlalchemy.orm.Load.selectin_polymorphic") 应用为链接的加载器选项；在这种形式中，第一个参数是从上一个加载器选项中隐含的（在本例中是
+    [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")），因此我们只指示我们希望加载的附加目标子类：
 - en: '[PRE42]'
+  id: totrans-170
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: See also
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[Eager Loading of Polymorphic Subtypes](#eagerloading-polymorphic-subtypes)
     - illustrates the equivalent example as above using [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") instead'
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: '[多态子类型的急切加载](#eagerloading-polymorphic-subtypes) - 使用 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 演示了与上述相同的等效示例'
 - en: '### Applying loader options to the subclasses loaded by selectin_polymorphic'
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 将加载器选项应用于由 selectin_polymorphic 加载的子类'
 - en: The SELECT statements emitted by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") are themselves ORM statements, so we may
     also add other loader options (such as those documented at [Relationship Loading
@@ -974,25 +1482,40 @@
     to specific subclasses. These options should be applied as **siblings** to a [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") option, that is, comma separated within
     `select.options()`.
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 由 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    发出的 SELECT 语句本身是 ORM 语句，因此我们也可以添加其他加载器选项（例如文档中记录的那些位于 [关系加载技术](relationships.html#orm-queryguide-relationship-loaders)），这些选项是指特定的子类。这些选项应作为
+    **selectin_polymorphic()** 选项的 **siblings** 应用，即在 `select.options()` 中用逗号分隔。
 - en: 'For example, if we considered that the `Manager` mapper had a [one to many](../basic_relationships.html#relationship-patterns-o2m)
     relationship to an entity called `Paperwork`, we could combine the use of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
     "sqlalchemy.orm.selectinload") to eagerly load this collection on all `Manager`
     objects, where the sub-attributes of `Manager` objects were also themselves eagerly
     loaded:'
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，如果我们考虑到 `Manager` 映射器有一个 [一对多](../basic_relationships.html#relationship-patterns-o2m)
+    关系，指向一个名为 `Paperwork` 的实体，我们可以结合使用 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 和 [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload") 来急切地加载所有 `Manager` 对象上的此集合，其中 `Manager` 对象的子属性也被急切地加载：
 - en: '[PRE43]'
+  id: totrans-176
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: '#### Applying loader options when selectin_polymorphic is itself a sub-option'
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: '#### 当 selectin_polymorphic 本身是子选项时应用加载器选项'
 - en: New in version 2.0.21.
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 新版本 2.0.21 中新增。
 - en: 'The previous section illustrated [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
     "sqlalchemy.orm.selectinload") used as sibling options, both used within a single
@@ -1005,15 +1528,23 @@
     Below we combine the two examples to load `Company.employees`, also loading the
     attributes for the `Manager` and `Engineer` classes, as well as eagerly loading
     the ``Manager.paperwork`` attribute:'
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 前一节说明了[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")和[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload")作为兄弟选项使用的示例，两者都在单个调用`select.options()`中使用。如果目标实体已经从父关系中加载，就像在[将selectin_polymorphic()应用于现有的急加载](#polymorphic-selectin-as-loader-option-target)的示例中一样，我们可以使用[`Load.options()`](relationships.html#sqlalchemy.orm.Load.options
+    "sqlalchemy.orm.Load.options")方法应用这种“兄弟”模式，将子选项应用于父选项，如在[使用Load.options()指定子选项](relationships.html#orm-queryguide-relationship-sub-options)中所示。下面我们结合这两个示例来加载`Company.employees`，同时加载`Manager`和`Engineer`类的属性，以及急加载`Manager.paperwork`属性：
 - en: '[PRE44]  #### Applying loader options when selectin_polymorphic is itself a
     sub-option'
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE44]  #### 当selectin_polymorphic本身是子选项时应用加载器选项'
 - en: New in version 2.0.21.
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 2.0.21版本中的新功能。
 - en: 'The previous section illustrated [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") and [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
     "sqlalchemy.orm.selectinload") used as sibling options, both used within a single
@@ -1026,34 +1557,52 @@
     Below we combine the two examples to load `Company.employees`, also loading the
     attributes for the `Manager` and `Engineer` classes, as well as eagerly loading
     the ``Manager.paperwork`` attribute:'
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 前一节说明了[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")和[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload")作为兄弟选项使用的示例，两者都在单个调用`select.options()`中使用。如果目标实体已经从父关系中加载，就像在[将selectin_polymorphic()应用于现有的急加载](#polymorphic-selectin-as-loader-option-target)的示例中一样，我们可以使用[`Load.options()`](relationships.html#sqlalchemy.orm.Load.options
+    "sqlalchemy.orm.Load.options")方法应用这种“兄弟”模式，将子选项应用于父选项，如在[使用Load.options()指定子选项](relationships.html#orm-queryguide-relationship-sub-options)中所示。下面我们结合这两个示例来加载`Company.employees`，同时加载`Manager`和`Engineer`类的属性，以及急加载`Manager.paperwork`属性：
 - en: '[PRE45]'
+  id: totrans-183
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: Configuring selectin_polymorphic() on mappers
+  id: totrans-184
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 配置selectin_polymorphic()在映射器上
 - en: 'The behavior of [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") may be configured on specific mappers so
     that it takes place by default, by using the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
     "sqlalchemy.orm.Mapper") parameter, using the value `"selectin"` on a per-subclass
     basis. The example below illustrates the use of this parameter within `Engineer`
     and `Manager` subclasses:'
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")的行为可以在特定的映射器上进行配置，以便默认情况下发生，通过使用[`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper")参数，在每个子类上使用值`"selectin"`。下面的示例说明了在`Engineer`和`Manager`子类中使用此参数的方法：'
 - en: '[PRE46]'
+  id: totrans-186
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: With the above mapping, SELECT statements against the `Employee` class will
     automatically assume the use of `selectin_polymorphic(Employee, [Engineer, Manager])`
     as a loader option when the statement is emitted.
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用上述映射，针对`Employee`类的SELECT语句在发出语句时将自动假定使用`selectin_polymorphic(Employee, [Engineer,
+    Manager])`作为加载选项。
 - en: '## Using with_polymorphic()'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 使用with_polymorphic()'
 - en: In contrast to [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") which affects only the loading of objects,
     the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
@@ -1064,8 +1613,13 @@
     "sqlalchemy.orm.with_polymorphic") offers a means of writing a SELECT statement
     across several inherited classes at once with the ability to add filtering criteria
     based on individual sub-tables.
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 与仅影响对象加载的 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    相比，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    构造影响多态结构的 SQL 查询的呈现方式，通常作为一系列 LEFT OUTER JOIN 到每个包含的子表。这个连接结构称为 **多态可选择**。通过提供一次查看多个子表的视图，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 提供了一种一次跨多个继承类编写 SELECT 语句的方法，并能够根据各个子表添加过滤条件。
 - en: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     is essentially a special form of the [`aliased()`](api.html#sqlalchemy.orm.aliased
     "sqlalchemy.orm.aliased") construct. It accepts as its arguments a similar form
@@ -1073,45 +1627,74 @@
     which is the base entity that is being queried, followed by a sequence of subclasses
     of that entity for which their specific attributes should be loaded for incoming
     rows:'
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    本质上是 [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") 构造的一种特殊形式。它接受的参数形式与
+    [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    相似，即被查询的基本实体，后跟一系列这个实体的子类，用于加载其特定属性的传入行：'
 - en: '[PRE47]'
+  id: totrans-191
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: 'In order to indicate that all subclasses should be part of the entity, [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") will also accept the string `"*"`, which may
     be passed in place of the sequence of classes to indicate all classes (note this
     is not yet supported by [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic")):'
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了指示所有子类都应该成为实体的一部分，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 还将接受字符串 `"*"`，它可以在类序列的位置传递，以表示所有类（请注意，[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 尚不支持这一点）：
 - en: '[PRE48]'
+  id: totrans-193
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: 'The example below illustrates the same operation as illustrated in the previous
     section, to load all columns for `Manager` and `Engineer` at once:'
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面的示例演示了与前一节中相同操作的示例，一次加载 `Manager` 和 `Engineer` 的所有列：
 - en: '[PRE49]'
+  id: totrans-195
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: 'As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic"), attributes on subclasses are already loaded:'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 与 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    类似，子类上的属性已经加载：
 - en: '[PRE50]'
+  id: totrans-197
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: As the default selectable produced by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") uses LEFT OUTER JOIN, from a database point
     of view the query is not as well optimized as the approach that [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") takes, with simple SELECT statements using
     only JOINs emitted on a per-table basis.
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    生成的默认可选择使用 LEFT OUTER JOIN，从数据库的角度来看，查询不像 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 采用的方法那样优化，后者仅使用 JOINs 在每个表上发出简单的 SELECT
+    语句。
 - en: '### Filtering Subclass Attributes with with_polymorphic()'
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 使用 with_polymorphic() 过滤子类属性'
 - en: 'The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     construct makes available the attributes on the included subclass mappers, by
     including namespaces that allow references to subclasses. The `employee_poly`
@@ -1120,11 +1703,19 @@
     of the polymorphic SELECT. In the example below, we can use the [`or_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.or_
     "sqlalchemy.sql.expression.or_") construct to create criteria against both classes
     at once:'
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    构造使包含的子类映射器上的属性可用，通过包含允许引用子类的命名空间。 上一节中创建的 `employee_poly` 构造包含名为 `.Engineer`
+    和 `.Manager` 的属性，这些属性在多态 SELECT 的术语中为 `Engineer` 和 `Manager` 提供命名空间。 在下面的示例中，我们可以使用
+    [`or_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.or_ "sqlalchemy.sql.expression.or_")
+    构造同时针对两个类创建条件：'
 - en: '[PRE51]  ### Using aliasing with with_polymorphic'
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE51]  ### 使用 `with_polymorphic` 进行别名处理'
 - en: The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     construct, as a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased
     "sqlalchemy.orm.aliased"), also provides the basic feature that [`aliased()`](api.html#sqlalchemy.orm.aliased
@@ -1132,8 +1723,14 @@
     selectable itself. Specifically this means two or more [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") entities, referring to the same class hierarchy,
     can be used at once in a single statement.
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    构造作为 [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") 的一种特殊情况，还提供了
+    [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased") 的基本功能，即对多态可选择本身进行“别名”处理。
+    具体来说，这意味着两个或多个引用相同类层次结构的 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 实体可以同时在单个语句中使用。'
 - en: To use this feature with a joined inheritance mapping, we typically want to
     pass two parameters, [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
     "sqlalchemy.orm.with_polymorphic") as well as [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
@@ -1143,8 +1740,14 @@
     "sqlalchemy.orm.with_polymorphic") parameter is specific to the default LEFT OUTER
     JOIN polymorphic selectable and indicates that a more optimized form of aliasing
     should be used in the statement.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在联合继承映射中使用此功能，通常需要传递两个参数，[`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") 和 [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic")。 [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic") 参数指示多态可选择应该使用本结构唯一的别名来引用。 [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic") 参数特定于默认的 LEFT OUTER JOIN 多态可选择，并指示在语句中应使用更优化的别名形式。
 - en: 'To illustrate this feature, the example below emits a SELECT for two separate
     polymorphic entities, `Employee` joined with `Engineer`, and `Employee` joined
     with `Manager`. Since these two polymorphic entities will both be including the
@@ -1154,26 +1757,39 @@
     be joined with each other in some way, as illustrated below where the entities
     are joined on the `company_id` column along with some additional limiting criteria
     against the `Employee` / `Manager` entity:'
+  id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了说明此功能，下面的示例发出了对两个单独的多态实体 `Employee` 与 `Engineer`，以及 `Employee` 与 `Manager`
+    的 SELECT。由于这两个多态实体都将在其多态可选择中包括基本的 `employee` 表，因此必须应用别名以区分此表在其两个不同的上下文中。 这两个多态实体被视为两个单独的表，因此通常需要以某种方式彼此连接，如下例所示，其中实体在
+    `company_id` 列上与彼此连接，并附加一些针对 `Employee` / `Manager` 实体的额外限制条件：
 - en: '[PRE52]'
+  id: totrans-205
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: In the above example, the behavior of [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
     "sqlalchemy.orm.with_polymorphic") is that the polymorphic selectables remain
     as a LEFT OUTER JOIN of their individual tables, which themselves are given anonymous
     alias names. There is also a right-nested JOIN produced.
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic")的行为是多态选择保持为它们各自表的LEFT OUTER JOIN，这些表本身被赋予匿名别名。还生成了右嵌套JOIN。
 - en: 'When omitting the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
     "sqlalchemy.orm.with_polymorphic") parameter, the usual behavior is that each
     polymorphic selectable is enclosed within a subquery, producing a more verbose
     form:'
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 当省略[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat "sqlalchemy.orm.with_polymorphic")参数时，通常的行为是将每个多态可选择包含在子查询中，产生更冗长的形式：
 - en: '[PRE53]'
+  id: totrans-208
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: 'The above form historically has been more portable to backends that didn’t
     necessarily have support for right-nested JOINs, and it additionally may be appropriate
     when the “polymorphic selectable” used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
@@ -1181,8 +1797,12 @@
     as is the case when using mappings such as [concrete table inheritance](../inheritance.html#concrete-inheritance)
     mappings as well as when using alternative polymorphic selectables in general.  ###
     Configuring with_polymorphic() on mappers'
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述形式在历史上更容易移植到不一定支持右嵌套JOIN的后端，并且在使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")时，“多态可选择”不是表的简单LEFT OUTER JOIN时，如使用[具体表继承](../inheritance.html#concrete-inheritance)映射以及一般情况下使用替代多态可选择时，此形式也可能是合适的。###
+    在映射器上配置with_polymorphic()
 - en: As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic"), the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") construct also supports a mapper-configured
@@ -1191,11 +1811,17 @@
     the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
     "sqlalchemy.orm.Mapper") parameter on a per-subclass basis, passing the value
     `"inline"`.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: 与[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")相似，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")构造也支持由映射器配置的版本，可以通过两种不同的方式进行配置，要么在基类上使用`mapper.with_polymorphic`参数，要么以更现代的形式在每个子类上使用[`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper")参数，传递值`"inline"`。
 - en: Warning
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告
 - en: For joined inheritance mappings, prefer explicit use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") within queries, or for implicit eager subclass
     loading use [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
@@ -1204,38 +1830,59 @@
     invokes complex heuristics intended to rewrite the FROM clauses within SELECT
     statements that can interfere with construction of more complex statements, particularly
     those with nested subqueries that refer to the same mapped entity.
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于加入继承映射，请优先在查询中显式使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")，或者对于隐式急切子类加载使用[`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper")与`"selectin"`，而不是使用本节中描述的映射器级`mapper.with_polymorphic`参数。此参数调用旨在重写SELECT语句中的FROM子句的复杂启发式方法，可能会干扰构造更复杂语句的构造，特别是那些引用相同映射实体的嵌套子查询。
 - en: 'For example, we may state our `Employee` mapping using [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
     "sqlalchemy.orm.Mapper") as `"inline"` as below:'
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，我们可以使用[`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper")将我们的`Employee`映射声明为`"inline"`，如下所示：
 - en: '[PRE54]'
+  id: totrans-214
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: 'With the above mapping, SELECT statements against the `Employee` class will
     automatically assume the use of `with_polymorphic(Employee, [Engineer, Manager])`
     as the primary entity when the statement is emitted:'
+  id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用上述映射，针对`Employee`类的SELECT语句将自动假定在发出语句时将使用`with_polymorphic(Employee, [Engineer,
+    Manager])`作为主要实体：
 - en: '[PRE55]'
+  id: totrans-216
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: 'When using mapper-level “with polymorphic”, queries can also refer to the subclass
     entities directly, where they implicitly represent the joined tables in the polymorphic
     query. Above, we can freely refer to `Manager` and `Engineer` directly against
     the default `Employee` entity:'
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用映射器级“with polymorphic”时，查询也可以直接引用子类实体，其中它们隐式地表示多态查询中的连接表。在上面的例子中，我们可以自由地针对默认的`Employee`实体直接引用`Manager`和`Engineer`：
 - en: '[PRE56]'
+  id: totrans-218
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: However, if we needed to refer to the `Employee` entity or its sub entities
     in separate, aliased contexts, we would again make direct use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") to define these aliased entities as illustrated
     in [Using aliasing with with_polymorphic](#with-polymorphic-aliasing).
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是，如果我们需要在单独的别名上下文中引用`Employee`实体或其子实体，我们将再次直接使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 来定义这些别名实体，如[使用 with_polymorphic 进行别名处理](#with-polymorphic-aliasing)中所示。
 - en: 'For more centralized control over the polymorphic selectable, the more legacy
     form of mapper-level polymorphic control may be used which is the [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
     "sqlalchemy.orm.Mapper") parameter, configured on the base class. This parameter
@@ -1243,11 +1890,18 @@
     "sqlalchemy.orm.with_polymorphic") construct, however common use with a joined
     inheritance mapping is the plain asterisk, indicating all sub-tables should be
     LEFT OUTER JOINED, as in:'
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了更集中地控制多态可选项，可以使用更传统的映射器级多态控制形式，即[`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") 参数，配置在基类上。此参数接受的参数与[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 构造类似，但在联合继承映射中的常见用法是纯星号，表示所有子表应该LEFT OUTER
+    JOIN，如下所示：
 - en: '[PRE57]'
+  id: totrans-221
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: 'Overall, the LEFT OUTER JOIN format used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") and by options such as [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
     "sqlalchemy.orm.Mapper") may be cumbersome from a SQL and database optimizer point
@@ -1257,8 +1911,16 @@
     "sqlalchemy.orm.Mapper") to `"selectin"` should likely be preferred, making use
     of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     on a per-query basis only as needed.  ### Filtering Subclass Attributes with with_polymorphic()'
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: '总的来说，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    和 [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper") 等选项所使用的 LEFT OUTER JOIN 格式从 SQL 和数据库优化器的角度来看可能比较繁琐；对于联合继承映射中子类属性的一般加载，可能更倾向于使用
+    [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")
+    方法，或者将其映射级别等效设置为 [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") 为`"selectin"`，仅在需要时基于每个查询使用 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")。  ### 使用 with_polymorphic 过滤子类属性'
 - en: 'The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     construct makes available the attributes on the included subclass mappers, by
     including namespaces that allow references to subclasses. The `employee_poly`
@@ -1267,14 +1929,22 @@
     of the polymorphic SELECT. In the example below, we can use the [`or_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.or_
     "sqlalchemy.sql.expression.or_") construct to create criteria against both classes
     at once:'
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
+    构造使得包含的子类映射器上的属性可用，通过包含允许引用子类的命名空间。在上一节中创建的`employee_poly`构造包括名为`.Engineer`和`.Manager`的属性，它们为多态SELECT提供了`Engineer`和`Manager`的命名空间。在下面的示例中，我们可以使用[`or_()`](../../core/sqlelement.html#sqlalchemy.sql.expression.or_
+    "sqlalchemy.sql.expression.or_") 构造同时对两个类创建条件：'
 - en: '[PRE58]'
+  id: totrans-224
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: '### Using aliasing with with_polymorphic'
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 使用 with_polymorphic 进行别名处理'
 - en: The [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     construct, as a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased
     "sqlalchemy.orm.aliased"), also provides the basic feature that [`aliased()`](api.html#sqlalchemy.orm.aliased
@@ -1282,8 +1952,13 @@
     selectable itself. Specifically this means two or more [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") entities, referring to the same class hierarchy,
     can be used at once in a single statement.
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")构造，作为[`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased")的一个特例，还提供了[`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased")的基本特性，即多态可选项本身的“别名”。具体来说，这意味着两个或多个指向相同类层次结构的[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")实体可以同时在单个语句中使用。'
 - en: To use this feature with a joined inheritance mapping, we typically want to
     pass two parameters, [`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
     "sqlalchemy.orm.with_polymorphic") as well as [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
@@ -1293,8 +1968,14 @@
     "sqlalchemy.orm.with_polymorphic") parameter is specific to the default LEFT OUTER
     JOIN polymorphic selectable and indicates that a more optimized form of aliasing
     should be used in the statement.
+  id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在连接继承映射中使用此功能，通常我们希望传递两个参数，[`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic")以及[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic")。[`with_polymorphic.aliased`](#sqlalchemy.orm.with_polymorphic.params.aliased
+    "sqlalchemy.orm.with_polymorphic")参数指示多态可选项应该被引用为此结构唯一的别名。[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic")参数是特定于默认的LEFT OUTER JOIN多态可选项，并指示在语句中应该使用更优化的别名形式。
 - en: 'To illustrate this feature, the example below emits a SELECT for two separate
     polymorphic entities, `Employee` joined with `Engineer`, and `Employee` joined
     with `Manager`. Since these two polymorphic entities will both be including the
@@ -1304,37 +1985,54 @@
     be joined with each other in some way, as illustrated below where the entities
     are joined on the `company_id` column along with some additional limiting criteria
     against the `Employee` / `Manager` entity:'
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了说明这个特性，下面的示例发出了一个选择两个单独的多态实体，`Employee`与`Engineer`连接，以及`Employee`与`Manager`连接。由于这两个多态实体都将包含基本的`employee`表在其多态可选项中，必须应用别名以便在它们的两个不同的上下文中区分此表。这两个多态实体被视为两个单独的表，并且通常需要以某种方式相互连接，如下所示，在`company_id`列上与`Employee`
+    / `Manager`实体一起加入了一些额外的限制条件：
 - en: '[PRE59]'
+  id: totrans-229
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: In the above example, the behavior of [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
     "sqlalchemy.orm.with_polymorphic") is that the polymorphic selectables remain
     as a LEFT OUTER JOIN of their individual tables, which themselves are given anonymous
     alias names. There is also a right-nested JOIN produced.
+  id: totrans-230
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic")的行为是，多态的可选项仍然保持为它们各自表的LEFT OUTER JOIN，并且它们本身被赋予匿名别名。还会产生右嵌套的JOIN。
 - en: 'When omitting the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
     "sqlalchemy.orm.with_polymorphic") parameter, the usual behavior is that each
     polymorphic selectable is enclosed within a subquery, producing a more verbose
     form:'
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: 当省略[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat "sqlalchemy.orm.with_polymorphic")参数时，通常行为是每个多态可选项被封装在一个子查询中，生成更详细的形式：
 - en: '[PRE60]'
+  id: totrans-232
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: The above form historically has been more portable to backends that didn’t necessarily
     have support for right-nested JOINs, and it additionally may be appropriate when
     the “polymorphic selectable” used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") is not a simple LEFT OUTER JOIN of tables,
     as is the case when using mappings such as [concrete table inheritance](../inheritance.html#concrete-inheritance)
     mappings as well as when using alternative polymorphic selectables in general.
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述形式在历史上更容易移植到不一定支持右嵌套JOIN的后端，并且在使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")时，“多态选择”不是简单的左外连接表时，例如使用[具体表继承](../inheritance.html#concrete-inheritance)映射以及一般情况下使用替代多态选择时，可能更合适。
 - en: '### Configuring with_polymorphic() on mappers'
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 在映射器上配置with_polymorphic()'
 - en: As is the case with [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic"), the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") construct also supports a mapper-configured
@@ -1343,11 +2041,16 @@
     the [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
     "sqlalchemy.orm.Mapper") parameter on a per-subclass basis, passing the value
     `"inline"`.
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 与[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic "sqlalchemy.orm.selectin_polymorphic")一样，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")构造也支持一个通过映射器配置的版本，可以通过两种不同的方式配置，一种是在基类上使用`mapper.with_polymorphic`参数，另一种是在每个子类上使用更现代的形式，在`Mapper.polymorphic_load`参数上传递值`"inline"`。
 - en: Warning
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告
 - en: For joined inheritance mappings, prefer explicit use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") within queries, or for implicit eager subclass
     loading use [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
@@ -1356,38 +2059,59 @@
     invokes complex heuristics intended to rewrite the FROM clauses within SELECT
     statements that can interfere with construction of more complex statements, particularly
     those with nested subqueries that refer to the same mapped entity.
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于加入继承映射，请优先在查询中显式使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")，或者对于隐式急切子类加载，请使用[`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper")与`"selectin"`，而不是使用本节中描述的映射器级别的`mapper.with_polymorphic`参数。此参数调用复杂的启发式算法，旨在重写SELECT语句中的FROM子句，可能会干扰更复杂语句的构建，特别是那些引用相同映射实体的嵌套子查询。
 - en: 'For example, we may state our `Employee` mapping using [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
     "sqlalchemy.orm.Mapper") as `"inline"` as below:'
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，我们可以使用[`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper")将我们的`Employee`映射状态声明为“inline”，如下所示：
 - en: '[PRE61]'
+  id: totrans-239
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE61]'
 - en: 'With the above mapping, SELECT statements against the `Employee` class will
     automatically assume the use of `with_polymorphic(Employee, [Engineer, Manager])`
     as the primary entity when the statement is emitted:'
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
+  zh: 有了上述映射，针对`Employee`类的SELECT语句在发出语句时将自动假定使用`with_polymorphic(Employee, [Engineer,
+    Manager])`作为主要实体：
 - en: '[PRE62]'
+  id: totrans-241
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE62]'
 - en: 'When using mapper-level “with polymorphic”, queries can also refer to the subclass
     entities directly, where they implicitly represent the joined tables in the polymorphic
     query. Above, we can freely refer to `Manager` and `Engineer` directly against
     the default `Employee` entity:'
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用映射器级别的“多态”时，查询还可以直接引用子类实体，在这里它们隐式地代表了多态查询中的联接表。在上面的示例中，我们可以自由地直接引用`Manager`和`Engineer`对默认的`Employee`实体进行查询：
 - en: '[PRE63]'
+  id: totrans-243
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE63]'
 - en: However, if we needed to refer to the `Employee` entity or its sub entities
     in separate, aliased contexts, we would again make direct use of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") to define these aliased entities as illustrated
     in [Using aliasing with with_polymorphic](#with-polymorphic-aliasing).
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是，如果我们需要在单独的别名上下文中引用`Employee`实体或其子实体，我们将再次直接使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")来定义这些别名实体，如[使用别名与with_polymorphic](#with-polymorphic-aliasing)中所示。
 - en: 'For more centralized control over the polymorphic selectable, the more legacy
     form of mapper-level polymorphic control may be used which is the [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
     "sqlalchemy.orm.Mapper") parameter, configured on the base class. This parameter
@@ -1395,11 +2119,18 @@
     "sqlalchemy.orm.with_polymorphic") construct, however common use with a joined
     inheritance mapping is the plain asterisk, indicating all sub-tables should be
     LEFT OUTER JOINED, as in:'
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了更加集中地控制多态可选择的内容，可以使用更为传统的映射器级别多态控制形式，即[`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper")参数，配置在基类上。该参数接受与[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")构造类似的参数，但在连接继承映射中的常见用法是使用纯*号，表示应该LEFT OUTER
+    JOIN所有子表，例如：
 - en: '[PRE64]'
+  id: totrans-246
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE64]'
 - en: Overall, the LEFT OUTER JOIN format used by [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") and by options such as [`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
     "sqlalchemy.orm.Mapper") may be cumbersome from a SQL and database optimizer point
@@ -1409,11 +2140,20 @@
     "sqlalchemy.orm.Mapper") to `"selectin"` should likely be preferred, making use
     of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     on a per-query basis only as needed.
+  id: totrans-247
   prefs: []
   type: TYPE_NORMAL
+  zh: 总的来说，[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")所使用的LEFT
+    OUTER JOIN格式以及诸如[`Mapper.with_polymorphic`](../mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper")等选项，从SQL和数据库优化器的角度来看可能有些繁琐；对于连接继承映射中子类属性的一般加载，应该优先考虑[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")方法，或者在映射器级别设置[`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper")为`"selectin"`，只在需要时在每个查询中使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")。
 - en: '## Joining to specific sub-types or with_polymorphic() entities'
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 连接到特定子类型或with_polymorphic()实体'
 - en: 'As a [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     entity is a special case of [`aliased()`](api.html#sqlalchemy.orm.aliased "sqlalchemy.orm.aliased"),
     in order to treat a polymorphic entity as the target of a join, specifically when
@@ -1427,148 +2167,237 @@
     which is configured in the [setup](_inheritance_setup.html) to link to `Employee`
     objects, using a [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")
     entity as the target:'
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic "sqlalchemy.orm.with_polymorphic")实体是[`aliased()`](api.html#sqlalchemy.orm.aliased
+    "sqlalchemy.orm.aliased")的一个特殊情况，为了将多态实体视为连接的目标，特别是在使用[`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")构造作为ON子句时，我们使用与常规别名相同的技术，如[Using Relationship to
+    join between aliased targets](select.html#orm-queryguide-joining-relationships-aliased)中详细描述的，最简洁的方法是使用[`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type")。在下面的示例中，我们说明了从父`Company`实体沿着一对多关系`Company.employees`进行连接，该关系在[setup](_inheritance_setup.html)中配置为链接到`Employee`对象，使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")实体作为目标：
 - en: '[PRE65]'
+  id: totrans-250
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE65]'
 - en: 'More directly, [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
     "sqlalchemy.orm.PropComparator.of_type") is also used with inheritance mappings
     of any kind to limit a join along a [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") to a particular sub-type of the [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship")’s target. The above query could be written strictly
     in terms of `Engineer` targets as follows:'
+  id: totrans-251
   prefs: []
   type: TYPE_NORMAL
+  zh: 更直接地，[`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") 也用于任何类型的继承映射，以限制 [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 中的连接到 [`relationship()`](../relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 的特定子类型。上述查询可以严格按照 `Engineer` 目标编写如下：
 - en: '[PRE66]'
+  id: totrans-252
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE66]'
 - en: It can be observed above that joining to the `Engineer` target directly, rather
     than the “polymorphic selectable” of `with_polymorphic(Employee, [Engineer])`
     has the useful characteristic of using an inner JOIN rather than a LEFT OUTER
     JOIN, which is generally more performant from a SQL optimizer point of view.
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 如上所示，直接加入到 `Engineer` 目标，而不是 `with_polymorphic(Employee, [Engineer])` 的 “多态可选择项”，具有使用内连接而不是左外连接的有用特性，从
+    SQL 优化器的角度来看，通常更具性能。
 - en: '### Eager Loading of Polymorphic Subtypes'
+  id: totrans-254
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 多态子类型的急加载'
 - en: The use of [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
     "sqlalchemy.orm.PropComparator.of_type") illustrated with the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
     "sqlalchemy.sql.expression.Select.join") method in the previous section may also
     be applied equivalently to [relationship loader options](relationships.html#orm-queryguide-relationship-loaders),
     such as [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
     and [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload").
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用 [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type") 方法的示例见前一节中的 [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join") 方法，同样可以等效地应用于[关系加载器选项](relationships.html#orm-queryguide-relationship-loaders)，例如
+    [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
+    和 [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload")。
 - en: 'As a basic example, if we wished to load `Company` objects, and additionally
     eagerly load all elements of `Company.employees` using the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") construct against the full hierarchy, we may
     write:'
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为基本示例，如果我们希望加载 `Company` 对象，并且另外急加载 `Company.employees` 的所有元素，使用 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 构造针对完整层次结构，我们可以编写如下：
 - en: '[PRE67]'
+  id: totrans-257
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE67]'
 - en: The above query may be compared directly to the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") version illustrated in the previous section
     [Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target).
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述查询可直接与前一节中演示的 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 版本进行比较 [将 selectin_polymorphic() 应用于现有急加载](#polymorphic-selectin-as-loader-option-target)。
 - en: See also
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: 另见
 - en: '[Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target)
     - illustrates the equivalent example as above using [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") instead  ### Eager Loading of Polymorphic
     Subtypes'
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
+  zh: '[将 selectin_polymorphic() 应用于现有急加载](#polymorphic-selectin-as-loader-option-target)
+    - 演示了与上述相同的等效示例，使用 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 替代 ### 多态子类型的急加载'
 - en: The use of [`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
     "sqlalchemy.orm.PropComparator.of_type") illustrated with the [`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
     "sqlalchemy.sql.expression.Select.join") method in the previous section may also
     be applied equivalently to [relationship loader options](relationships.html#orm-queryguide-relationship-loaders),
     such as [`selectinload()`](relationships.html#sqlalchemy.orm.selectinload "sqlalchemy.orm.selectinload")
     and [`joinedload()`](relationships.html#sqlalchemy.orm.joinedload "sqlalchemy.orm.joinedload").
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用[`PropComparator.of_type()`](../internals.html#sqlalchemy.orm.PropComparator.of_type
+    "sqlalchemy.orm.PropComparator.of_type")方法，如前一节中的[`Select.join()`](../../core/selectable.html#sqlalchemy.sql.expression.Select.join
+    "sqlalchemy.sql.expression.Select.join")方法所示，也可以等效地应用于[关系加载器选项](relationships.html#orm-queryguide-relationship-loaders)，例如[`selectinload()`](relationships.html#sqlalchemy.orm.selectinload
+    "sqlalchemy.orm.selectinload")和[`joinedload()`](relationships.html#sqlalchemy.orm.joinedload
+    "sqlalchemy.orm.joinedload")。
 - en: 'As a basic example, if we wished to load `Company` objects, and additionally
     eagerly load all elements of `Company.employees` using the [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic") construct against the full hierarchy, we may
     write:'
+  id: totrans-262
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为基本示例，如果我们希望加载`Company`对象，并使用[`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")构造针对完整层次结构的，同时急切地加载`Company.employees`的所有元素，我们可以写成：
 - en: '[PRE68]'
+  id: totrans-263
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE68]'
 - en: The above query may be compared directly to the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") version illustrated in the previous section
     [Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target).
+  id: totrans-264
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述查询可以直接与前一节中[将selectin_polymorphic()应用于现有急切加载](#polymorphic-selectin-as-loader-option-target)中所示的[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")版本进行比较。
 - en: See also
+  id: totrans-265
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Applying selectin_polymorphic() to an existing eager load](#polymorphic-selectin-as-loader-option-target)
     - illustrates the equivalent example as above using [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
     "sqlalchemy.orm.selectin_polymorphic") instead'
+  id: totrans-266
   prefs: []
   type: TYPE_NORMAL
+  zh: '[将selectin_polymorphic()应用于现有急切加载](#polymorphic-selectin-as-loader-option-target)
+    - 演示了与上述相同的例子，但使用了[`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic")代替'
 - en: '## SELECT Statements for Single Inheritance Mappings'
+  id: totrans-267
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 单一继承映射的SELECT语句'
 - en: Single Table Inheritance Setup
+  id: totrans-268
   prefs: []
   type: TYPE_NORMAL
+  zh: 单一表继承设置
 - en: This section discusses single table inheritance, described at [Single Table
     Inheritance](../inheritance.html#single-inheritance), which uses a single table
     to represent multiple classes in a hierarchy.
+  id: totrans-269
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节讨论单一表继承，描述在[单一表继承](../inheritance.html#single-inheritance)中使用单个表来表示层次结构中的多个类。
 - en: '[View the ORM setup for this section](_single_inheritance.html).'
+  id: totrans-270
   prefs: []
   type: TYPE_NORMAL
+  zh: '[查看此部分的ORM设置](_single_inheritance.html)。'
 - en: In contrast to joined inheritance mappings, the construction of SELECT statements
     for single inheritance mappings tends to be simpler since for an all-single-inheritance
     hierarchy, there’s only one table.
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
+  zh: 与连接继承映射相比，为单一继承映射构造SELECT语句通常更简单，因为对于全单一继承层次结构，只有一个表。
 - en: Regardless of whether or not the inheritance hierarchy is all single-inheritance
     or has a mixture of joined and single inheritance, SELECT statements for single
     inheritance differentiate queries against the base class vs. a subclass by limiting
     the SELECT statement with additional WHERE criteria.
+  id: totrans-272
   prefs: []
   type: TYPE_NORMAL
+  zh: 无论继承层次结构是全单一继承还是具有混合连接和单一继承，单一继承的SELECT语句通过使用附加的WHERE条件限制SELECT语句来区分对基类和子类的查询。
 - en: 'As an example, a query for the single-inheritance example mapping of `Employee`
     will load objects of type `Manager`, `Engineer` and `Employee` using a simple
     SELECT of the table:'
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，针对`Employee`的单一继承示例映射的查询将使用表的简单SELECT来加载`Manager`、`Engineer`和`Employee`类型的对象：
 - en: '[PRE69]'
+  id: totrans-274
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE69]'
 - en: 'When a load is emitted for a specific subclass, additional criteria is added
     to the SELECT that limits the rows, such as below where a SELECT against the `Engineer`
     entity is performed:'
+  id: totrans-275
   prefs: []
   type: TYPE_NORMAL
+  zh: 当为特定子类发出加载时，将向SELECT中添加附加条件以限制行，例如在下面执行针对`Engineer`实体的SELECT：
 - en: '[PRE70]'
+  id: totrans-276
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE70]'
 - en: Optimizing Attribute Loads for Single Inheritance
+  id: totrans-277
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 优化单一继承的属性加载
 - en: 'The default behavior of single inheritance mappings regarding how attributes
     on subclasses are SELECTed is similar to that of joined inheritance, in that subclass-specific
     attributes still emit a second SELECT by default. In the example below, a single
     `Employee` of type `Manager` is loaded, however since the requested class is `Employee`,
     the `Manager.manager_name` attribute is not present by default, and an additional
     SELECT is emitted when it’s accessed:'
+  id: totrans-278
   prefs: []
   type: TYPE_NORMAL
+  zh: 单继承映射关于如何 SELECT 子类上的属性的默认行为类似于连接继承的行为，即子类特定的属性默认情况下仍然会发出第二个 SELECT。在下面的示例中，加载了类型为
+    `Manager` 的单个 `Employee`，但是由于请求的类是 `Employee`，所以 `Manager.manager_name` 属性默认情况下不会存在，并且在访问时会发出额外的
+    SELECT：
 - en: '[PRE71]'
+  id: totrans-279
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE71]'
 - en: 'To alter this behavior, the same general concepts used to eagerly load these
     additional attributes used in joined inheritance loading apply to single inheritance
     as well, including use of the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
@@ -1576,11 +2405,17 @@
     "sqlalchemy.orm.with_polymorphic") option, the latter of which simply includes
     the additional columns and from a SQL perspective is more efficient for single-inheritance
     mappers:'
+  id: totrans-280
   prefs: []
   type: TYPE_NORMAL
+  zh: 要改变这种行为，对于单继承，与连接继承加载中使用的相同的一般概念也适用于急切地加载这些额外属性，包括使用 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 选项以及 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 选项，后者只是简单地包含了额外的列，并且从 SQL 视角来看对于单继承映射更为高效：
 - en: '[PRE72]'
+  id: totrans-281
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE72]'
 - en: 'Since the overhead of loading single-inheritance subclass mappings is usually
     minimal, it’s therefore recommended that single inheritance mappings include the
     [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
@@ -1588,33 +2423,50 @@
     where loading of their specific subclass attributes is expected to be common.
     An example illustrating the [setup](_single_inheritance.html), modified to include
     this option, is below:'
+  id: totrans-282
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于加载单继承子类映射的开销通常很小，因此建议单继承映射在那些预计其特定子类属性加载是常见的子类中包含 [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper") 参数，并将其设置为 `"inline"`。下面是一个修改后的示例，说明了这个设置的一个示例：
 - en: '[PRE73]'
+  id: totrans-283
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE73]'
 - en: 'With the above mapping, the `Manager` and `Engineer` classes will have their
     columns included in SELECT statements against the `Employee` entity automatically:'
+  id: totrans-284
   prefs: []
   type: TYPE_NORMAL
+  zh: 有了上面的映射，`Manager` 和 `Engineer` 类将自动在针对 `Employee` 实体的 SELECT 语句中包含它们的列：
 - en: '[PRE74]'
+  id: totrans-285
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE74]'
 - en: Optimizing Attribute Loads for Single Inheritance
+  id: totrans-286
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 优化单继承属性加载
 - en: 'The default behavior of single inheritance mappings regarding how attributes
     on subclasses are SELECTed is similar to that of joined inheritance, in that subclass-specific
     attributes still emit a second SELECT by default. In the example below, a single
     `Employee` of type `Manager` is loaded, however since the requested class is `Employee`,
     the `Manager.manager_name` attribute is not present by default, and an additional
     SELECT is emitted when it’s accessed:'
+  id: totrans-287
   prefs: []
   type: TYPE_NORMAL
+  zh: 单继承映射关于如何 SELECT 子类上的属性的默认行为类似于连接继承的行为，即子类特定的属性默认情况下仍然会发出第二个 SELECT。在下面的示例中，加载了类型为
+    `Manager` 的单个 `Employee`，但是由于请求的类是 `Employee`，所以 `Manager.manager_name` 属性默认情况下不会存在，并且在访问时会发出额外的
+    SELECT：
 - en: '[PRE75]'
+  id: totrans-288
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE75]'
 - en: 'To alter this behavior, the same general concepts used to eagerly load these
     additional attributes used in joined inheritance loading apply to single inheritance
     as well, including use of the [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
@@ -1622,11 +2474,17 @@
     "sqlalchemy.orm.with_polymorphic") option, the latter of which simply includes
     the additional columns and from a SQL perspective is more efficient for single-inheritance
     mappers:'
+  id: totrans-289
   prefs: []
   type: TYPE_NORMAL
+  zh: 要改变这种行为，对于单继承，与连接继承加载中使用的相同的一般概念也适用于急切地加载这些额外属性，包括使用 [`selectin_polymorphic()`](#sqlalchemy.orm.selectin_polymorphic
+    "sqlalchemy.orm.selectin_polymorphic") 选项以及 [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 选项，后者只是简单地包含了额外的列，并且从 SQL 视角来看对于单继承映射更为高效：
 - en: '[PRE76]'
+  id: totrans-290
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE76]'
 - en: 'Since the overhead of loading single-inheritance subclass mappings is usually
     minimal, it’s therefore recommended that single inheritance mappings include the
     [`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
@@ -1634,79 +2492,121 @@
     where loading of their specific subclass attributes is expected to be common.
     An example illustrating the [setup](_single_inheritance.html), modified to include
     this option, is below:'
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于加载单继承子类映射的开销通常很小，因此建议在那些预计其特定子类属性的加载是常见的单继承映射中，将[`Mapper.polymorphic_load`](../mapping_api.html#sqlalchemy.orm.Mapper.params.polymorphic_load
+    "sqlalchemy.orm.Mapper")参数设置为`"inline"`。下面是一个示例，演示了[setup](_single_inheritance.html)如何修改以包含此选项：
 - en: '[PRE77]'
+  id: totrans-292
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE77]'
 - en: 'With the above mapping, the `Manager` and `Engineer` classes will have their
     columns included in SELECT statements against the `Employee` entity automatically:'
+  id: totrans-293
   prefs: []
   type: TYPE_NORMAL
+  zh: 有了上面的映射，`Manager`和`Engineer`类的列将自动包含在针对`Employee`实体的SELECT语句中：
 - en: '[PRE78]'
+  id: totrans-294
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE78]'
 - en: Inheritance Loading API
+  id: totrans-295
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 继承加载API
 - en: '| Object Name | Description |'
+  id: totrans-296
   prefs: []
   type: TYPE_TB
+  zh: '| 对象名称 | 描述 |'
 - en: '| --- | --- |'
+  id: totrans-297
   prefs: []
   type: TYPE_TB
+  zh: '| --- | --- |'
 - en: '| [selectin_polymorphic](#sqlalchemy.orm.selectin_polymorphic)(base_cls, classes)
     | Indicate an eager load should take place for all attributes specific to a subclass.
     |'
+  id: totrans-298
   prefs: []
   type: TYPE_TB
+  zh: '| [selectin_polymorphic](#sqlalchemy.orm.selectin_polymorphic)(base_cls, classes)
+    | 指示应针对特定子类的所有属性进行急切加载。 |'
 - en: '| [with_polymorphic](#sqlalchemy.orm.with_polymorphic)(base, classes[, selectable,
     flat, ...]) | Produce an [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass
     "sqlalchemy.orm.util.AliasedClass") construct which specifies columns for descendant
     mappers of the given base. |'
+  id: totrans-299
   prefs: []
   type: TYPE_TB
+  zh: '| [with_polymorphic](#sqlalchemy.orm.with_polymorphic)(base, classes[, selectable,
+    flat, ...]) | 产生一个[`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass "sqlalchemy.orm.util.AliasedClass")构造，该构造指定了给定基类的后代映射器的列。
+    |'
 - en: '[PRE79]'
+  id: totrans-300
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE79]'
 - en: Produce an [`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass "sqlalchemy.orm.util.AliasedClass")
     construct which specifies columns for descendant mappers of the given base.
+  id: totrans-301
   prefs: []
   type: TYPE_NORMAL
+  zh: 产生一个[`AliasedClass`](api.html#sqlalchemy.orm.util.AliasedClass "sqlalchemy.orm.util.AliasedClass")构造，该构造指定了给定基类的后代映射器的列。
 - en: Using this method will ensure that each descendant mapper’s tables are included
     in the FROM clause, and will allow filter() criterion to be used against those
     tables. The resulting instances will also have those columns already loaded so
     that no “post fetch” of those columns will be required.
+  id: totrans-302
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用这种方法将确保每个子类映射器的表都包含在FROM子句中，并允许对这些表使用filter()条件。结果实例也将已经加载了那些列，因此不需要对这些列进行“后获取”。
 - en: See also
+  id: totrans-303
   prefs: []
   type: TYPE_NORMAL
+  zh: 请参阅
 - en: '[Using with_polymorphic()](#with-polymorphic) - full discussion of [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
     "sqlalchemy.orm.with_polymorphic").'
+  id: totrans-304
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用with_polymorphic()](#with-polymorphic) - [`with_polymorphic()`](#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic")的全面讨论。'
 - en: 'Parameters:'
+  id: totrans-305
   prefs: []
   type: TYPE_NORMAL
+  zh: 参数：
 - en: '`base` – Base class to be aliased.'
+  id: totrans-306
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`base` – 要别名化的基类。'
 - en: '`classes` – a single class or mapper, or list of class/mappers, which inherit
     from the base class. Alternatively, it may also be the string `''*''`, in which
     case all descending mapped classes will be added to the FROM clause.'
+  id: totrans-307
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`classes` – 单个类或映射器，或者继承自基类的类/映射器列表。或者，它也可以是字符串`''*''`，在这种情况下，所有下降的映射类将被添加到FROM子句中。'
 - en: '`aliased` – when True, the selectable will be aliased. For a JOIN, this means
     the JOIN will be SELECTed from inside of a subquery unless the [`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
     "sqlalchemy.orm.with_polymorphic") flag is set to True, which is recommended for
     simpler use cases.'
+  id: totrans-308
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`aliased` – 当为True时，可选择的将被别名。对于JOIN，这意味着JOIN将从子查询中SELECT，除非设置了[`with_polymorphic.flat`](#sqlalchemy.orm.with_polymorphic.params.flat
+    "sqlalchemy.orm.with_polymorphic")标志为True，这对于更简单的用例是推荐的。'
 - en: '`flat` – Boolean, will be passed through to the [`FromClause.alias()`](../../core/selectable.html#sqlalchemy.sql.expression.FromClause.alias
     "sqlalchemy.sql.expression.FromClause.alias") call so that aliases of [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
     "sqlalchemy.sql.expression.Join") objects will alias the individual tables inside
@@ -1714,13 +2614,20 @@
     modern databases with regards to right-nested joins and generally produces more
     efficient queries. Setting this flag is recommended as long as the resulting SQL
     is functional.'
+  id: totrans-309
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`flat` – 布尔值，将被传递到 [`FromClause.alias()`](../../core/selectable.html#sqlalchemy.sql.expression.FromClause.alias
+    "sqlalchemy.sql.expression.FromClause.alias") 调用，以便 [`Join`](../../core/selectable.html#sqlalchemy.sql.expression.Join
+    "sqlalchemy.sql.expression.Join") 对象的别名将别名为加入内的各个表，而不是创建子查询。这通常受到所有现代数据库的支持，关于右嵌套连接，通常会生成更有效的查询。只要生成的
+    SQL 有效，建议设置此标志。'
 - en: '`selectable` –'
+  id: totrans-310
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`selectable` –'
 - en: a table or subquery that will be used in place of the generated FROM clause.
     This argument is required if any of the desired classes use concrete table inheritance,
     since SQLAlchemy currently cannot generate UNIONs among tables automatically.
@@ -1728,61 +2635,92 @@
     mapped by every mapped class. Otherwise, the unaccounted mapped columns will result
     in their table being appended directly to the FROM clause which will usually lead
     to incorrect results.
+  id: totrans-311
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 将用于替代生成的 FROM 子句的表或子查询。如果所需的任何类使用具体表继承，这个参数是必需的，因为 SQLAlchemy 目前无法自动在表之间生成 UNION。如果使用，`selectable`
+    参数必须表示每个映射类映射的所有表和列的完整集。否则，未解释的映射列将直接附加到 FROM 子句，这通常会导致结果不正确。
 - en: When left at its default value of `False`, the polymorphic selectable assigned
     to the base mapper is used for selecting rows. However, it may also be passed
     as `None`, which will bypass the configured polymorphic selectable and instead
     construct an ad-hoc selectable for the target classes given; for joined table
     inheritance this will be a join that includes all target mappers and their subclasses.
+  id: totrans-312
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 当将其保留在默认值 `False` 时，分配给基本 mapper 的多态可选择将用于选择行。但是，它也可以传递为 `None`，这将绕过配置的多态可选择，而是为给定的目标类构造一个临时选择;
+    对于联接表继承，这将是包含所有目标映射器及其子类的联接。
 - en: '`polymorphic_on` – a column to be used as the “discriminator” column for the
     given selectable. If not given, the polymorphic_on attribute of the base classes’
     mapper will be used, if any. This is useful for mappings that don’t have polymorphic
     loading behavior by default.'
+  id: totrans-313
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`polymorphic_on` – 作为给定可选择对象的“鉴别器”列使用的列。如果未给出，则将使用基类的 mapper 的 polymorphic_on
+    属性（如果有）。这对于默认不具有多态加载行为的映射非常有用。'
 - en: '`innerjoin` – if True, an INNER JOIN will be used. This should only be specified
     if querying for one specific subtype only'
+  id: totrans-314
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`innerjoin` – 如果为 True，将使用 INNER JOIN。只有在仅查询一个特定子类型时才应指定此选项'
 - en: '`adapt_on_names` –'
+  id: totrans-315
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`adapt_on_names` –'
 - en: Passes through the [`aliased.adapt_on_names`](api.html#sqlalchemy.orm.aliased.params.adapt_on_names
     "sqlalchemy.orm.aliased") parameter to the aliased object. This may be useful
     in situations where the given selectable is not directly related to the existing
     mapped selectable.
+  id: totrans-316
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 将 [`aliased.adapt_on_names`](api.html#sqlalchemy.orm.aliased.params.adapt_on_names
+    "sqlalchemy.orm.aliased.params.adapt_on_names") 参数传递给别名对象。在给定可选择对象与现有映射可选择对象不直接相关的情况下，这可能会很有用。
 - en: New in version 1.4.33.
+  id: totrans-317
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 新版本 1.4.33 中新增。
 - en: '[PRE80]'
+  id: totrans-318
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE80]'
 - en: Indicate an eager load should take place for all attributes specific to a subclass.
+  id: totrans-319
   prefs: []
   type: TYPE_NORMAL
+  zh: 表示应该对子类特定的所有属性进行急切加载。
 - en: This uses an additional SELECT with IN against all matched primary key values,
     and is the per-query analogue to the `"selectin"` setting on the `mapper.polymorphic_load`
     parameter.
+  id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: 这使用了一个额外的 SELECT 与所有匹配的主键值进行 IN 操作，它是对 `mapper.polymorphic_load` 参数上的 `"selectin"`
+    设置的每个查询的类似。
 - en: New in version 1.2.
+  id: totrans-321
   prefs: []
   type: TYPE_NORMAL
+  zh: 新版本 1.2 中新增。
 - en: See also
+  id: totrans-322
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[Using selectin_polymorphic()](#polymorphic-selectin)'
+  id: totrans-323
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用 selectin_polymorphic()](#polymorphic-selectin)'
