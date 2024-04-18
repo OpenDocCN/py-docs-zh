@@ -1,42 +1,62 @@
 - en: Special Relationship Persistence Patterns
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 特殊的关系持久性模式
 - en: 原文：[https://docs.sqlalchemy.org/en/20/orm/relationship_persistence.html](https://docs.sqlalchemy.org/en/20/orm/relationship_persistence.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/orm/relationship_persistence.html](https://docs.sqlalchemy.org/en/20/orm/relationship_persistence.html)
 - en: '## Rows that point to themselves / Mutually Dependent Rows'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 指向自身的行 / 相互依赖的行'
 - en: 'This is a very specific case where relationship() must perform an INSERT and
     a second UPDATE in order to properly populate a row (and vice versa an UPDATE
     and DELETE in order to delete without violating foreign key constraints). The
     two use cases are:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一种非常特殊的情况，其中relationship()必须执行一个INSERT和一个第二个UPDATE，以正确填充一行（反之亦然，为了删除而执行一个UPDATE和DELETE，而不违反外键约束）。这两种用例是：
 - en: A table contains a foreign key to itself, and a single row will have a foreign
     key value pointing to its own primary key.
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个表包含对自身的外键，而且单个行将具有指向其自身主键的外键值。
 - en: Two tables each contain a foreign key referencing the other table, with a row
     in each table referencing the other.
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 两个表都包含对另一个表的外键引用，每个表中的一行引用另一个表中的另一行。
 - en: 'For example:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如：
 - en: '[PRE0]'
+  id: totrans-7
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'Or:'
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 或：
 - en: '[PRE1]'
+  id: totrans-9
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: In the first case, a row points to itself. Technically, a database that uses
     sequences such as PostgreSQL or Oracle can INSERT the row at once using a previously
     generated value, but databases which rely upon autoincrement-style primary key
@@ -45,8 +65,12 @@
     during flush, so unless you are populating the primary key/foreign key columns
     directly, [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") needs to use two statements.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第一种情况下，一行指向自身。从技术上讲，使用诸如PostgreSQL或Oracle之类的序列的数据库可以使用先前生成的值一次性插入行，但是依赖于自增样式主键标识符的数据库不能。[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")始终假定在刷新期间以“父/子”模型进行行填充，因此除非直接填充主键/外键列，否则[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")需要使用两个语句。
 - en: In the second case, the “widget” row must be inserted before any referring “entry”
     rows, but then the “favorite_entry_id” column of that “widget” row cannot be set
     until the “entry” rows have been generated. In this case, it’s typically impossible
@@ -56,8 +80,11 @@
     databases support) and if the identifiers were populated manually (again essentially
     bypassing [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship")).
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第二种情况下，“widget”行必须在引用的“entry”行之前插入，但是那个“widget”行的“favorite_entry_id”列在生成“entry”行之前无法设置。在这种情况下，通常无法仅使用两个INSERT语句插入“widget”和“entry”行；必须执行UPDATE以保持外键约束满足。例外情况是如果外键配置为“延迟至提交”（一些数据库支持的功能），并且标识符是手动填充的（再次基本上绕过[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")）。
 - en: 'To enable the usage of a supplementary UPDATE statement, we use the [`relationship.post_update`](relationship_api.html#sqlalchemy.orm.relationship.params.post_update
     "sqlalchemy.orm.relationship") option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship"). This specifies that the linkage between the two
@@ -67,30 +94,45 @@
     preferably the many-to-one side. Below we illustrate a complete example, including
     two [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")
     constructs:'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 要启用补充UPDATE语句的使用，我们使用[`relationship.post_update`](relationship_api.html#sqlalchemy.orm.relationship.params.post_update
+    "sqlalchemy.orm.relationship")选项的[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")。这指定了在两个行都被INSERTED之后应使用UPDATE语句创建两行之间的关联；它还导致在发出DELETE之前通过UPDATE将行解除关联。该标志应该放置在*一个*关系上，最好是一对多的一侧。以下我们举例说明了一个完整的例子，包括两个[`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey")构造：
 - en: '[PRE2]'
+  id: totrans-13
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'When a structure against the above configuration is flushed, the “widget” row
     will be INSERTed minus the “favorite_entry_id” value, then all the “entry” rows
     will be INSERTed referencing the parent “widget” row, and then an UPDATE statement
     will populate the “favorite_entry_id” column of the “widget” table (it’s one row
     at a time for the time being):'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 当针对上述配置的结构被刷新时，“widget”行将会插入，但不包括“favorite_entry_id”值，然后所有的“entry”行将被插入，引用父“widget”行，然后一个UPDATE语句将填充“widget”表的“favorite_entry_id”列（目前每次一行）：
 - en: '[PRE3]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'An additional configuration we can specify is to supply a more comprehensive
     foreign key constraint on `Widget`, such that it’s guaranteed that `favorite_entry_id`
     refers to an `Entry` that also refers to this `Widget`. We can use a composite
     foreign key, as illustrated below:'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以指定的另一个配置是在`Widget`上提供一个更全面的外键约束，以确保`favorite_entry_id`引用的是也引用此`Widget`的`Entry`。我们可以使用复合外键，如下所示：
 - en: '[PRE4]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'The above mapping features a composite [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
     "sqlalchemy.schema.ForeignKeyConstraint") bridging the `widget_id` and `favorite_entry_id`
     columns. To ensure that `Widget.widget_id` remains an “autoincrementing” column
@@ -100,46 +142,71 @@
     "sqlalchemy.orm.relationship") we must limit those columns considered as part
     of the foreign key for the purposes of joining and cross-population.  ## Mutable
     Primary Keys / Update Cascades'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面的映射具有一个复合[`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint")，连接`widget_id`和`favorite_entry_id`列。为了确保`Widget.widget_id`保持为“自动增量”列，我们在[`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column")上的`autoincrement`参数上指定值`"ignore_fk"`，并且在每个[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")上，我们必须限制那些被视为外键的列，以用于连接和交叉填充。##可变主键/更新级联
 - en: When the primary key of an entity changes, related items which reference the
     primary key must also be updated as well. For databases which enforce referential
     integrity, the best strategy is to use the database’s ON UPDATE CASCADE functionality
     in order to propagate primary key changes to referenced foreign keys - the values
     cannot be out of sync for any moment unless the constraints are marked as “deferrable”,
     that is, not enforced until the transaction completes.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 当实体的主键更改时，引用主键的相关项也必须更新。对于强制实施引用完整性的数据库，最佳策略是使用数据库的`ON UPDATE CASCADE`功能，以便将主键更改传播到引用的外键
+    - 在事务完成之前，值不能不同步，除非约束标记为“可延迟”。
 - en: 'It is **highly recommended** that an application which seeks to employ natural
     primary keys with mutable values to use the `ON UPDATE CASCADE` capabilities of
     the database. An example mapping which illustrates this is:'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 强烈建议一个希望使用可变值的自然主键的应用程序使用数据库的`ON UPDATE CASCADE`功能。一个说明此功能的示例映射是：
 - en: '[PRE5]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Above, we illustrate `onupdate="cascade"` on the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
     "sqlalchemy.schema.ForeignKey") object, and we also illustrate the `mysql_engine='InnoDB'`
     setting which, on a MySQL backend, ensures that the `InnoDB` engine supporting
     referential integrity is used. When using SQLite, referential integrity should
     be enabled, using the configuration described at [Foreign Key Support](../dialects/sqlite.html#sqlite-foreign-keys).
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，我们在[`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey")对象上说明了`onupdate="cascade"`，并且我们还说明了`mysql_engine='InnoDB'`设置，在MySQL后端上，确保使用支持引用完整性的`InnoDB`引擎。在使用SQLite时，应启用引用完整性，使用[Foreign
+    Key Support](../dialects/sqlite.html#sqlite-foreign-keys)中描述的配置。
 - en: See also
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 也请参阅
 - en: '[Using foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes)
     - supporting ON DELETE CASCADE with relationships'
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用ORM关系的外键ON DELETE级联](cascades.html#passive-deletes) - 支持使用关系的ON DELETE CASCADE'
 - en: '`mapper.passive_updates` - similar feature on [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
     "sqlalchemy.orm.Mapper")'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: '`mapper.passive_updates` - 类似[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")上的功能'
 - en: Simulating limited ON UPDATE CASCADE without foreign key support
+  id: totrans-26
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 模拟有限的ON UPDATE CASCADE，没有外键支持
 - en: In those cases when a database that does not support referential integrity is
     used, and natural primary keys with mutable values are in play, SQLAlchemy offers
     a feature in order to allow propagation of primary key values to already-referenced
@@ -150,8 +217,13 @@
     pragma is not used. The Oracle database also has no support for `ON UPDATE CASCADE`,
     but because it still enforces referential integrity, needs constraints to be marked
     as deferrable so that SQLAlchemy can emit UPDATE statements.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 在使用不支持引用完整性的数据库，并且使用具有可变值的自然主键时，SQLAlchemy 提供了一个功能，允许将主键值传播到已引用的外键到**有限**程度，通过针对立即引用主键列的外键列发出
+    UPDATE 语句，其值已更改。没有引用完整性功能的主要平台是当使用 `MyISAM` 存储引擎时的 MySQL，以及当没有使用 `PRAGMA foreign_keys=ON`
+    时的 SQLite。Oracle 数据库也不支持 `ON UPDATE CASCADE`，但因为它仍然强制执行引用完整性，需要将约束标记为可延迟，以便 SQLAlchemy
+    可以发出 UPDATE 语句。
 - en: The feature is enabled by setting the [`relationship.passive_updates`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_updates
     "sqlalchemy.orm.relationship") flag to `False`, most preferably on a one-to-many
     or many-to-many [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
@@ -160,72 +232,109 @@
     in the collection referred to by the parent object with a changing primary key
     value. This also implies that collections will be fully loaded into memory if
     not already locally present.
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过将 [`relationship.passive_updates`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_updates
+    "sqlalchemy.orm.relationship") 标志设置为 `False`，最好是在一对多或多对多的 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 上。当“更新”不再是“被动”的时候，这表明 SQLAlchemy 将为父对象引用的集合中的对象单独发出
+    UPDATE 语句，这些对象的主键值会发生变化。这还意味着如果集合尚未在本地存在，集合将被完全加载到内存中。
 - en: 'Our previous mapping using `passive_updates=False` looks like:'
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们之前使用 `passive_updates=False` 的映射如下：
 - en: '[PRE6]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'Key limitations of `passive_updates=False` include:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: '`passive_updates=False` 的关键限制包括：'
 - en: it performs much more poorly than direct database ON UPDATE CASCADE, because
     it needs to fully pre-load affected collections using SELECT and also must emit
     UPDATE statements against those values, which it will attempt to run in “batches”
     but still runs on a per-row basis at the DBAPI level.
+  id: totrans-32
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它的性能远远不及直接数据库的 ON UPDATE CASCADE，因为它需要使用 SELECT 完全预加载受影响的集合，并且还必须发出针对这些值的 UPDATE
+    语句，它将尝试以“批量”的方式运行，但仍然在 DBAPI 级别上按行运行。
 - en: the feature cannot “cascade” more than one level. That is, if mapping X has
     a foreign key which refers to the primary key of mapping Y, but then mapping Y’s
     primary key is itself a foreign key to mapping Z, `passive_updates=False` cannot
     cascade a change in primary key value from `Z` to `X`.
+  id: totrans-33
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 该功能无法“级联”超过一个级别。也就是说，如果映射 X 有一个外键引用映射 Y 的主键，但是然后映射 Y 的主键本身是映射 Z 的外键，`passive_updates=False`
+    无法将主键值从 `Z` 级联到 `X`。
 - en: Configuring `passive_updates=False` only on the many-to-one side of a relationship
     will not have a full effect, as the unit of work searches only through the current
     identity map for objects that may be referencing the one with a mutating primary
     key, not throughout the database.
+  id: totrans-34
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 仅在关系的多对一方配置 `passive_updates=False` 将不会产生完全的效果，因为工作单元仅在当前身份映射中搜索可能引用具有变异主键的对象，而不是在整个数据库中搜索。
 - en: 'As virtually all databases other than Oracle now support `ON UPDATE CASCADE`,
     it is highly recommended that traditional `ON UPDATE CASCADE` support be used
     in the case that natural and mutable primary key values are in use.  ## Rows that
     point to themselves / Mutually Dependent Rows'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于现在除了 Oracle 外，几乎所有数据库都支持 `ON UPDATE CASCADE`，因此强烈建议在使用自然且可变的主键值时使用传统的 `ON
+    UPDATE CASCADE` 支持。## 指向自身的行 / 相互依赖的行
 - en: 'This is a very specific case where relationship() must perform an INSERT and
     a second UPDATE in order to properly populate a row (and vice versa an UPDATE
     and DELETE in order to delete without violating foreign key constraints). The
     two use cases are:'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个非常特殊的情况，其中关系（`relationship()`）必须执行 INSERT 和第二个 UPDATE，以便正确填充一行（反之亦然，执行 UPDATE
+    和 DELETE 以删除而不违反外键约束）。这两种用例是：
 - en: A table contains a foreign key to itself, and a single row will have a foreign
     key value pointing to its own primary key.
+  id: totrans-37
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一张表包含一个指向自身的外键，而且一行将具有指向自己主键的外键值。
 - en: Two tables each contain a foreign key referencing the other table, with a row
     in each table referencing the other.
+  id: totrans-38
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 两个表分别包含一个外键引用另一个表，每个表中的一行引用另一个表。
 - en: 'For example:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如：
 - en: '[PRE7]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'Or:'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者：
 - en: '[PRE8]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: In the first case, a row points to itself. Technically, a database that uses
     sequences such as PostgreSQL or Oracle can INSERT the row at once using a previously
     generated value, but databases which rely upon autoincrement-style primary key
@@ -234,8 +343,12 @@
     during flush, so unless you are populating the primary key/foreign key columns
     directly, [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") needs to use two statements.
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第一种情况下，一行指向自身。从技术上讲，使用序列（如 PostgreSQL 或 Oracle）的数据库可以使用先前生成的值一次性插入行，但依赖自动增量样式主键标识符的数据库则不能。[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")始终假定在刷新期间使用“父/子”模型来填充行，因此除非直接填充主键/外键列，否则 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 需要使用两个语句。
 - en: In the second case, the “widget” row must be inserted before any referring “entry”
     rows, but then the “favorite_entry_id” column of that “widget” row cannot be set
     until the “entry” rows have been generated. In this case, it’s typically impossible
@@ -245,8 +358,12 @@
     databases support) and if the identifiers were populated manually (again essentially
     bypassing [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship")).
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第二种情况下，“widget”行必须在任何引用的“entry”行之前插入，但然后该“widget”行的“favorite_entry_id”列在生成“entry”行之前不能设置。在这种情况下，通常不可能只使用两个
+    INSERT 语句插入“widget”和“entry”行；必须执行 UPDATE 以保持外键约束得到满足。异常情况是，如果外键配置为“延迟到提交”（某些数据库支持的功能），并且标识符是手动填充的（再次基本上绕过[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")）。
 - en: 'To enable the usage of a supplementary UPDATE statement, we use the [`relationship.post_update`](relationship_api.html#sqlalchemy.orm.relationship.params.post_update
     "sqlalchemy.orm.relationship") option of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship"). This specifies that the linkage between the two
@@ -256,30 +373,48 @@
     preferably the many-to-one side. Below we illustrate a complete example, including
     two [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")
     constructs:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了启用补充的 UPDATE 语句的使用，我们使用[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")的[`relationship.post_update`](relationship_api.html#sqlalchemy.orm.relationship.params.post_update
+    "sqlalchemy.orm.relationship")选项。这指定在两行都被插入后使用 UPDATE 语句创建两行之间的连接；它还导致在发出 DELETE
+    之前，通过 UPDATE 将行彼此解除关联。这个标志应该放在其中*一个*关系上，最好是多对一的关系。下面我们举个完整的例子，包括两个[`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey")构造：
 - en: '[PRE9]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'When a structure against the above configuration is flushed, the “widget” row
     will be INSERTed minus the “favorite_entry_id” value, then all the “entry” rows
     will be INSERTed referencing the parent “widget” row, and then an UPDATE statement
     will populate the “favorite_entry_id” column of the “widget” table (it’s one row
     at a time for the time being):'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 当针对上述配置刷新结构时，将插入“widget”行，但不包括“favorite_entry_id”值，然后将插入所有“entry”行，引用父“widget”行，然后将“widget”表的“favorite_entry_id”列的
+    UPDATE 语句（目前一次一行）填充：
 - en: '[PRE10]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'An additional configuration we can specify is to supply a more comprehensive
     foreign key constraint on `Widget`, such that it’s guaranteed that `favorite_entry_id`
     refers to an `Entry` that also refers to this `Widget`. We can use a composite
     foreign key, as illustrated below:'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以指定的另一个配置是在 `Widget` 上提供更全面的外键约束，以确保 `favorite_entry_id` 指向也指向此 `Widget`
+    的 `Entry`。我们可以使用复合外键，如下所示：
 - en: '[PRE11]'
+  id: totrans-50
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: The above mapping features a composite [`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
     "sqlalchemy.schema.ForeignKeyConstraint") bridging the `widget_id` and `favorite_entry_id`
     columns. To ensure that `Widget.widget_id` remains an “autoincrementing” column
@@ -288,49 +423,80 @@
     "sqlalchemy.schema.Column"), and additionally on each [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") we must limit those columns considered as part
     of the foreign key for the purposes of joining and cross-population.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述映射展示了一个由[`ForeignKeyConstraint`](../core/constraints.html#sqlalchemy.schema.ForeignKeyConstraint
+    "sqlalchemy.schema.ForeignKeyConstraint")组成的复合键，连接着 `widget_id` 和 `favorite_entry_id`
+    列。为了确保 `Widget.widget_id` 仍然是一个“自增”的列，我们在[`Column`](../core/metadata.html#sqlalchemy.schema.Column
+    "sqlalchemy.schema.Column")上指定了 [`Column.autoincrement`](../core/metadata.html#sqlalchemy.schema.Column.params.autoincrement
+    "sqlalchemy.schema.Column") 的值为 `"ignore_fk"`，并且在每个[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")上，我们必须限制那些被视为外键的列以进行连接和交叉填充。
 - en: '## Mutable Primary Keys / Update Cascades'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 可变主键 / 更新级联'
 - en: When the primary key of an entity changes, related items which reference the
     primary key must also be updated as well. For databases which enforce referential
     integrity, the best strategy is to use the database’s ON UPDATE CASCADE functionality
     in order to propagate primary key changes to referenced foreign keys - the values
     cannot be out of sync for any moment unless the constraints are marked as “deferrable”,
     that is, not enforced until the transaction completes.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 当实体的主键发生变化时，引用该主键的相关项也必须进行更新。对于强制执行引用完整性的数据库，最佳策略是使用数据库的 ON UPDATE CASCADE 功能，以便将主键更改传播到引用的外键
+    - 除非约束被标记为“可延迟”，即不执行直到事务完成，否则值不能在任何时刻不同步。
 - en: 'It is **highly recommended** that an application which seeks to employ natural
     primary keys with mutable values to use the `ON UPDATE CASCADE` capabilities of
     the database. An example mapping which illustrates this is:'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: '**强烈建议**希望使用可变值的自然主键的应用程序使用数据库的 `ON UPDATE CASCADE` 功能。一个示例映射如下：'
 - en: '[PRE12]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: Above, we illustrate `onupdate="cascade"` on the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
     "sqlalchemy.schema.ForeignKey") object, and we also illustrate the `mysql_engine='InnoDB'`
     setting which, on a MySQL backend, ensures that the `InnoDB` engine supporting
     referential integrity is used. When using SQLite, referential integrity should
     be enabled, using the configuration described at [Foreign Key Support](../dialects/sqlite.html#sqlite-foreign-keys).
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上文中，我们在 [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") 对象上说明了 `onupdate="cascade"`，并且我们还说明了 `mysql_engine='InnoDB'`
+    设置，该设置在 MySQL 后端上确保使用支持引用完整性的 `InnoDB` 引擎。在使用 SQLite 时，应启用引用完整性，使用 [外键支持](../dialects/sqlite.html#sqlite-foreign-keys)
+    中描述的配置。
 - en: See also
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 请参阅
 - en: '[Using foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes)
     - supporting ON DELETE CASCADE with relationships'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用ORM关系的外键ON DELETE级联](cascades.html#passive-deletes) - 支持使用关系的 ON DELETE
+    CASCADE'
 - en: '`mapper.passive_updates` - similar feature on [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
     "sqlalchemy.orm.Mapper")'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: '`mapper.passive_updates` - [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper") 上的类似功能'
 - en: Simulating limited ON UPDATE CASCADE without foreign key support
+  id: totrans-60
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 模拟有限的无外键支持的 ON UPDATE CASCADE
 - en: In those cases when a database that does not support referential integrity is
     used, and natural primary keys with mutable values are in play, SQLAlchemy offers
     a feature in order to allow propagation of primary key values to already-referenced
@@ -341,8 +507,11 @@
     pragma is not used. The Oracle database also has no support for `ON UPDATE CASCADE`,
     but because it still enforces referential integrity, needs constraints to be marked
     as deferrable so that SQLAlchemy can emit UPDATE statements.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用不支持引用完整性的数据库，并且存在具有可变值的自然主键时，SQLAlchemy提供了一项功能，以允许在**有限**范围内传播主键值到已引用的外键，方法是针对立即引用其值已更改的主键列发出UPDATE语句来更新外键列。不支持引用完整性功能的主要平台是在使用`MyISAM`存储引擎时的MySQL，以及在未使用`PRAGMA
+    foreign_keys=ON`指示的情况下的SQLite。Oracle数据库也不支持`ON UPDATE CASCADE`，但因为它仍然强制执行引用完整性，所以需要将约束标记为可延迟，以便SQLAlchemy可以发出UPDATE语句。
 - en: The feature is enabled by setting the [`relationship.passive_updates`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_updates
     "sqlalchemy.orm.relationship") flag to `False`, most preferably on a one-to-many
     or many-to-many [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
@@ -351,47 +520,67 @@
     in the collection referred to by the parent object with a changing primary key
     value. This also implies that collections will be fully loaded into memory if
     not already locally present.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过将[`relationship.passive_updates`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_updates
+    "sqlalchemy.orm.relationship")标志设置为`False`来启用此功能，最好是在一对多或多对多的[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")上。当“更新”不再“被动”时，这表示SQLAlchemy将为引用具有更改的主键值的父对象的集合中的对象单独发出UPDATE语句。这也意味着如果集合尚未在本地存在，那么集合将完全加载到内存中。
 - en: 'Our previous mapping using `passive_updates=False` looks like:'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们以前使用`passive_updates=False`的映射如下：
 - en: '[PRE13]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: 'Key limitations of `passive_updates=False` include:'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: '`passive_updates=False`的关键限制包括：'
 - en: it performs much more poorly than direct database ON UPDATE CASCADE, because
     it needs to fully pre-load affected collections using SELECT and also must emit
     UPDATE statements against those values, which it will attempt to run in “batches”
     but still runs on a per-row basis at the DBAPI level.
+  id: totrans-66
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它的性能比直接的数据库ON UPDATE CASCADE要差得多，因为它需要使用SELECT完全预加载受影响的集合，并且还必须针对这些值发出UPDATE语句，尽管它将尝试以“批处理”的方式运行，但仍然是在DBAPI级别上逐行运行。
 - en: the feature cannot “cascade” more than one level. That is, if mapping X has
     a foreign key which refers to the primary key of mapping Y, but then mapping Y’s
     primary key is itself a foreign key to mapping Z, `passive_updates=False` cannot
     cascade a change in primary key value from `Z` to `X`.
+  id: totrans-67
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 此功能不能“级联”超过一级。也就是说，如果映射X具有一个外键，它引用映射Y的主键，但然后映射Y的主键本身是对映射Z的外键，则`passive_updates=False`不能将主键值从`Z`级联更改到`X`。
 - en: Configuring `passive_updates=False` only on the many-to-one side of a relationship
     will not have a full effect, as the unit of work searches only through the current
     identity map for objects that may be referencing the one with a mutating primary
     key, not throughout the database.
+  id: totrans-68
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 仅在关系的多对一一侧上配置`passive_updates=False`将不会产生完全效果，因为工作单元仅通过当前身份映射搜索可能引用具有变异主键的对象，而不是在整个数据库中搜索。
 - en: As virtually all databases other than Oracle now support `ON UPDATE CASCADE`,
     it is highly recommended that traditional `ON UPDATE CASCADE` support be used
     in the case that natural and mutable primary key values are in use.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于几乎所有的数据库现在都支持`ON UPDATE CASCADE`，因此强烈建议在使用自然且可变的主键值时使用传统的`ON UPDATE CASCADE`支持。
 - en: Simulating limited ON UPDATE CASCADE without foreign key support
+  id: totrans-70
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 模拟无外键支持的有限ON UPDATE CASCADE
 - en: In those cases when a database that does not support referential integrity is
     used, and natural primary keys with mutable values are in play, SQLAlchemy offers
     a feature in order to allow propagation of primary key values to already-referenced
@@ -402,8 +591,13 @@
     pragma is not used. The Oracle database also has no support for `ON UPDATE CASCADE`,
     but because it still enforces referential integrity, needs constraints to be marked
     as deferrable so that SQLAlchemy can emit UPDATE statements.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 在使用不支持引用完整性的数据库且存在可变值的自然主键的情况下，SQLAlchemy 提供了一种功能，允许在已经引用了外键的情况下将主键值传播到一个**有限**程度，通过针对立即引用已更改主键列值的主键列的
+    UPDATE 语句进行发射。主要没有引用完整性功能的平台是在使用 `MyISAM` 存储引擎时的 MySQL，以及在不使用 `PRAGMA foreign_keys=ON`
+    pragma 的情况下的 SQLite。Oracle 数据库也不支持 `ON UPDATE CASCADE`，但由于它仍然强制引用完整性，需要将约束标记为可延迟，以便
+    SQLAlchemy 可以发出 UPDATE 语句。
 - en: The feature is enabled by setting the [`relationship.passive_updates`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_updates
     "sqlalchemy.orm.relationship") flag to `False`, most preferably on a one-to-many
     or many-to-many [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
@@ -412,40 +606,62 @@
     in the collection referred to by the parent object with a changing primary key
     value. This also implies that collections will be fully loaded into memory if
     not already locally present.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过将 [`relationship.passive_updates`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_updates
+    "sqlalchemy.orm.relationship") 标志设置为 `False` 来启用此功能，最好在一对多或多对多的 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 上设置。当“更新”不再是“被动”的时候，这表明 SQLAlchemy 将针对父对象引用的集合中的对象单独发出
+    UPDATE 语句，而这些对象具有正在更改的主键值。这也意味着，如果集合尚未在本地存在，集合将被完全加载到内存中。
 - en: 'Our previous mapping using `passive_updates=False` looks like:'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们之前使用 `passive_updates=False` 的映射如下所示：
 - en: '[PRE14]'
+  id: totrans-74
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'Key limitations of `passive_updates=False` include:'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: '`passive_updates=False` 的关键限制包括：'
 - en: it performs much more poorly than direct database ON UPDATE CASCADE, because
     it needs to fully pre-load affected collections using SELECT and also must emit
     UPDATE statements against those values, which it will attempt to run in “batches”
     but still runs on a per-row basis at the DBAPI level.
+  id: totrans-76
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它的性能远远不如直接的数据库 ON UPDATE CASCADE，因为它需要使用 SELECT 完全预加载受影响的集合，并且还必须发出针对这些值的 UPDATE
+    语句，尽管它会尝试以“批量”的方式运行，但仍然在 DBAPI 级别逐行运行。
 - en: the feature cannot “cascade” more than one level. That is, if mapping X has
     a foreign key which refers to the primary key of mapping Y, but then mapping Y’s
     primary key is itself a foreign key to mapping Z, `passive_updates=False` cannot
     cascade a change in primary key value from `Z` to `X`.
+  id: totrans-77
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 该功能无法“级联”超过一级。也就是说，如果映射 X 有一个外键引用到映射 Y 的主键，但映射 Y 的主键本身是映射 Z 的外键，`passive_updates=False`
+    无法将来自 `Z` 到 `X` 的主键值更改级联。
 - en: Configuring `passive_updates=False` only on the many-to-one side of a relationship
     will not have a full effect, as the unit of work searches only through the current
     identity map for objects that may be referencing the one with a mutating primary
     key, not throughout the database.
+  id: totrans-78
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 仅在关系的多对一侧配置 `passive_updates=False` 不会产生完全效果，因为工作单元仅在当前标识映射中搜索可能引用具有突变主键的对象，而不是在整个数据库中搜索。
 - en: As virtually all databases other than Oracle now support `ON UPDATE CASCADE`,
     it is highly recommended that traditional `ON UPDATE CASCADE` support be used
     in the case that natural and mutable primary key values are in use.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于除 Oracle 外的几乎所有数据库现在都支持 `ON UPDATE CASCADE`，因此强烈建议在使用自然和可变主键值的情况下使用传统的 `ON
+    UPDATE CASCADE` 支持。
