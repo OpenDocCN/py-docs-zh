@@ -2561,12 +2561,14 @@
   id: totrans-312
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，所示的具体映射显示了子类以及基类映射到单独的表中。在具体继承用例中，常见的情况是基类在数据库中不表示，只有子类。换句话说，基类是“抽象的”。
 - en: 'Normally, when one would like to map two different subclasses to individual
     tables, and leave the base class unmapped, this can be achieved very easily. When
     using Declarative, just declare the base class with the `__abstract__` indicator:'
   id: totrans-313
   prefs: []
   type: TYPE_NORMAL
+  zh: 通常，当一个人想要将两个不同的子类映射到单独的表中，并且保留基类未映射时，这可以非常容易地实现。当使用声明式时，只需使用`__abstract__`指示符声明基类：
 - en: '[PRE70]'
   id: totrans-314
   prefs: []
@@ -2581,6 +2583,7 @@
   id: totrans-315
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上述代码中，我们实际上没有使用SQLAlchemy的继承映射功能；我们可以正常加载和持久化`Manager`和`Engineer`的实例。然而，当我们需要进行**多态查询**时，情况就会发生变化，也就是说，我们希望发出`select(Employee)`并返回一组`Manager`和`Engineer`实例。这将我们带回到具体继承的领域，我们必须构建一个针对`Employee`的特殊映射器才能实现这一点。
 - en: To modify our concrete inheritance example to illustrate an “abstract” base
     that is capable of polymorphic loading, we will have only an `engineer` and a
     `manager` table and no `employee` table, however the `Employee` mapper will be
@@ -2590,12 +2593,17 @@
   id: totrans-316
   prefs: []
   type: TYPE_NORMAL
+  zh: 要修改我们的具体继承示例，以说明能够进行多态加载的“抽象”基类，我们将只有一个`engineer`和一个`manager`表，而没有`employee`表，但`Employee`映射器将直接映射到“多态联合”，而不是将其局部指定给[`Mapper.with_polymorphic`](mapping_api.html#sqlalchemy.orm.Mapper.params.with_polymorphic
+    "sqlalchemy.orm.Mapper")参数。
 - en: 'To help with this, Declarative offers a variant of the [`ConcreteBase`](extensions/declarative/index.html#sqlalchemy.ext.declarative.ConcreteBase
     "sqlalchemy.ext.declarative.ConcreteBase") class called [`AbstractConcreteBase`](extensions/declarative/index.html#sqlalchemy.ext.declarative.AbstractConcreteBase
     "sqlalchemy.ext.declarative.AbstractConcreteBase") which achieves this automatically:'
   id: totrans-317
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了帮助解决这个问题，Declarative提供了一种名为[`AbstractConcreteBase`](extensions/declarative/index.html#sqlalchemy.ext.declarative.AbstractConcreteBase
+    "sqlalchemy.ext.declarative.AbstractConcreteBase")的[`ConcreteBase`](extensions/declarative/index.html#sqlalchemy.ext.declarative.ConcreteBase
+    "sqlalchemy.ext.declarative.ConcreteBase")类的变体，可以自动实现这一点：
 - en: '[PRE71]'
   id: totrans-318
   prefs: []
@@ -2614,11 +2622,15 @@
   id: totrans-319
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的代码中，调用了[`registry.configure()`](mapping_api.html#sqlalchemy.orm.registry.configure
+    "sqlalchemy.orm.registry.configure")方法，这将触发`Employee`类实际映射；在配置步骤之前，该类没有映射，因为它将从中查询的子表尚未定义。这个过程比[`ConcreteBase`](extensions/declarative/index.html#sqlalchemy.ext.declarative.ConcreteBase
+    "sqlalchemy.ext.declarative.ConcreteBase")的过程更复杂，因为必须延迟基类的整个映射，直到所有的子类都已声明。通过像上面这样的映射，只能持久化`Manager`和`Engineer`的实例；对`Employee`类进行查询将始终生成`Manager`和`Engineer`对象。
 - en: 'Using the above mapping, queries can be produced in terms of the `Employee`
     class and any attributes that are locally declared upon it, such as the `Employee.name`:'
   id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用上述映射，可以按照`Employee`类和在其上本地声明的任何属性生成查询，例如`Employee.name`：
 - en: '[PRE72]'
   id: totrans-321
   prefs: []
@@ -2777,6 +2789,8 @@
   id: totrans-342
   prefs: []
   type: TYPE_NORMAL
+  zh: 在具体继承的情况下，映射关系是具有挑战性的，因为不同的类不共享一个表。如果关系只涉及特定的类，比如我们之前示例中的 `Company` 和 `Manager`
+    之间的关系，那么不需要特殊步骤，因为这只是两个相关的表。
 - en: 'However, if `Company` is to have a one-to-many relationship to `Employee`,
     indicating that the collection may include both `Engineer` and `Manager` objects,
     that implies that `Employee` must have polymorphic loading capabilities and also
@@ -2785,6 +2799,8 @@
   id: totrans-343
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，如果 `Company` 要与 `Employee` 有一对多的关系，表明集合可能包括 `Engineer` 和 `Manager` 对象，这意味着
+    `Employee` 必须具有多态加载能力，并且每个相关的表都必须有一个外键返回到 `company` 表。这样的配置示例如下：
 - en: '[PRE78]'
   id: totrans-344
   prefs: []
@@ -2803,6 +2819,13 @@
   id: totrans-345
   prefs: []
   type: TYPE_NORMAL
+  zh: 具体继承和关系的下一个复杂性涉及当我们希望 `Employee`、`Manager` 和 `Engineer` 中的一个或全部自身参考 `Company`
+    时。对于这种情况，SQLAlchemy 在 `Employee` 上有特殊的行为，即一个链接到 `Company` 的 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 放置在 `Employee` 上，当在实例级别执行时，**不适用**于 `Manager` 和
+    `Engineer` 类。相反，必须对每个类应用不同的 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")。为了实现作为 `Company.employees` 的相反的三个单独关系的双向行为，使用了
+    [`relationship.back_populates`](relationship_api.html#sqlalchemy.orm.relationship.params.back_populates
+    "sqlalchemy.orm.relationship") 参数：
 - en: '[PRE79]'
   id: totrans-346
   prefs: []
@@ -2814,11 +2837,13 @@
   id: totrans-347
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述限制与当前实现相关，包括具体继承类不共享超类的任何属性，因此需要设置不同的关系。
 - en: Loading Concrete Inheritance Mappings
   id: totrans-348
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 加载具体继承映射
 - en: The options for loading with concrete inheritance are limited; generally, if
     polymorphic loading is configured on the mapper using one of the declarative concrete
     mixins, it can’t be modified at query time in current SQLAlchemy versions. Normally,
@@ -2829,3 +2854,5 @@
   id: totrans-349
   prefs: []
   type: TYPE_NORMAL
+  zh: 具体继承加载选项有限；一般来说，如果在映射器上配置了多态加载，使用其中一个声明性的具体混合类，那么在当前的 SQLAlchemy 版本中它就不能在查询时进行修改。通常，[`with_polymorphic()`](queryguide/inheritance.html#sqlalchemy.orm.with_polymorphic
+    "sqlalchemy.orm.with_polymorphic") 函数应该能够覆盖具体加载使用的样式，然而由于当前的限制，这还不被支持。
