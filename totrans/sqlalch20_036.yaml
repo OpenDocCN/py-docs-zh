@@ -1,11 +1,15 @@
 - en: Working with Large Collections
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 处理大型集合
 - en: 原文：[https://docs.sqlalchemy.org/en/20/orm/large_collections.html](https://docs.sqlalchemy.org/en/20/orm/large_collections.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文链接：[https://docs.sqlalchemy.org/en/20/orm/large_collections.html](https://docs.sqlalchemy.org/en/20/orm/large_collections.html)
 - en: The default behavior of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") is to fully load the contents of collections into
     memory, based on a configured [loader strategy](queryguide/relationships.html#orm-queryguide-relationship-loaders)
@@ -14,30 +18,47 @@
     loaded, but in most cases will require population when the collection itself is
     mutated, as well as in cases where the owning object is to be deleted by the unit
     of work system.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")的默认行为是根据配置的
+    [加载策略](queryguide/relationships.html#orm-queryguide-relationship-loaders) 完全将集合内容加载到内存中，该加载策略控制何时以及如何从数据库加载这些内容。
+    相关集合可能不仅在访问时加载到内存中，或者急切地加载，而且在集合本身发生变化时以及在由工作单元系统删除所有者对象时也需要进行填充。'
 - en: When a related collection is potentially very large, it may not be feasible
     for such a collection to be populated into memory under any circumstances, as
     the operation may be overly consuming of time, network and memory resources.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 当相关集合可能非常大时，无论在任何情况下将这样的集合加载到内存中都可能不可行，因为这样的操作可能会过度消耗时间、网络和内存资源。
 - en: This section includes API features intended to allow [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") to be used with large collections while maintaining
     adequate performance.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节包括旨在允许[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")与大型集合一起使用并保持足够性能的 API 特性。
 - en: '## Write Only Relationships'
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 仅写关系'
 - en: 'The **write only** loader strategy is the primary means of configuring a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") that will remain writeable, but will not load its
     contents into memory. A write-only ORM configuration in modern type-annotated
     Declarative form is illustrated below:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: '**仅写**加载器策略是配置[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")的主要方法，该方法将保持可写性，但不会加载其内容到内存中。 下面是使用现代类型注释的声明式形式的仅写
+    ORM 配置的示例：'
 - en: '[PRE0]'
+  id: totrans-7
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Above, the `account_transactions` relationship is configured not using the ordinary
     [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped") annotation,
     but instead using the [`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
@@ -47,95 +68,144 @@
     "sqlalchemy.orm.WriteOnlyMapped") annotation is an alternative form of the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
     "sqlalchemy.orm.Mapped") annotation which indicate the use of the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection") collection type on instances of the object.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述示例中，`account_transactions` 关系不是使用普通的[`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped")注释配置的，而是使用[`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped
+    "sqlalchemy.orm.WriteOnlyMapped")类型注释配置的，在运行时会将 `lazy="write_only"` 的 [加载策略](queryguide/relationships.html#orm-queryguide-relationship-loaders)
+    分配给目标 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")。
+    [`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
+    注释是 [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped") 注释的替代形式，指示对象实例上使用
+    [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    集合类型。
 - en: 'The above [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") configuration also includes several elements that
     are specific to what action to take when `Account` objects are deleted, as well
     as when `AccountTransaction` objects are removed from the `account_transactions`
     collection. These elements are:'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")配置还包括几个元素，这些元素是特定于删除
+    `Account` 对象时要采取的操作以及从 `account_transactions` 集合中移除 `AccountTransaction` 对象时要采取的操作。
+    这些元素包括：
 - en: '`passive_deletes=True` - allows the [unit of work](../glossary.html#term-unit-of-work)
     to forego having to load the collection when `Account` is deleted; see [Using
     foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes).'
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`passive_deletes=True` - 允许[工作单元](../glossary.html#term-unit-of-work)在删除`Account`时无需加载集合；参见[使用ORM关系进行外键级联删除](cascades.html#passive-deletes)。'
 - en: '`ondelete="cascade"` configured on the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
     "sqlalchemy.schema.ForeignKey") constraint. This is also detailed at [Using foreign
     key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes).'
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在[`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey "sqlalchemy.schema.ForeignKey")约束上配置`ondelete="cascade"`。这也在[使用ORM关系进行外键级联删除](cascades.html#passive-deletes)中详细说明。
 - en: '`cascade="all, delete-orphan"` - instructs the [unit of work](../glossary.html#term-unit-of-work)
     to delete `AccountTransaction` objects when they are removed from the collection.
     See [delete-orphan](cascades.html#cascade-delete-orphan) in the [Cascades](cascades.html#unitofwork-cascades)
     document.'
+  id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`cascade="all, delete-orphan"` - 指示[工作单元](../glossary.html#term-unit-of-work)在从集合中删除时删除`AccountTransaction`对象。请参见[delete-orphan](cascades.html#cascade-delete-orphan)中的[Cascades](cascades.html#unitofwork-cascades)文档。'
 - en: 'New in version 2.0: Added “Write only” relationship loaders.'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 2.0版本新增：“仅写入”关系加载器。
 - en: Creating and Persisting New Write Only Collections
+  id: totrans-14
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 创建和持久化新的仅写入集合
 - en: 'The write-only collection allows for direct assignment of the collection as
     a whole **only** for [transient](../glossary.html#term-transient) or [pending](../glossary.html#term-pending)
     objects. With our above mapping, this indicates we can create a new `Account`
     object with a sequence of `AccountTransaction` objects to be added to a [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session"). Any Python iterable may be used as the source of objects
     to start, where below we use a Python `list`:'
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 写入-仅集合仅允许对[瞬态](../glossary.html#term-transient)或[挂起](../glossary.html#term-pending)对象直接分配集合。根据我们上面的映射，这表示我们可以创建一个新的`Account`对象，其中包含一系列要添加到[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")中的`AccountTransaction`对象。任何Python可迭代对象都可以用作要开始的对象的来源，下面我们使用Python
+    `list`：
 - en: '[PRE1]'
+  id: totrans-16
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'Once an object is database-persisted (i.e. in the [persistent](../glossary.html#term-persistent)
     or [detached](../glossary.html#term-detached) state), the collection has the ability
     to be extended with new items as well as the ability for individual items to be
     removed. However, the collection may **no longer be re-assigned with a full replacement
     collection**, as such an operation requires that the previous collection is fully
     loaded into memory in order to reconcile the old entries with the new ones:'
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦对象被持久化到数据库（即处于[持久化](../glossary.html#term-persistent)或[分离](../glossary.html#term-detached)状态），该集合就具有扩展新项目的能力，以及删除单个项目的能力。但是，该集合可能**不再重新分配一个完整的替换集合**，因为这样的操作需要将先前的集合完全加载到内存中，以便将旧条目与新条目进行协调：
 - en: '[PRE2]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Adding New Items to an Existing Collection
+  id: totrans-19
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 向现有集合添加新项目
 - en: 'For write-only collections of persistent objects, modifications to the collection
     using [unit of work](../glossary.html#term-unit-of-work) processes may proceed
     only by using the [`WriteOnlyCollection.add()`](#sqlalchemy.orm.WriteOnlyCollection.add
     "sqlalchemy.orm.WriteOnlyCollection.add"), [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") and [`WriteOnlyCollection.remove()`](#sqlalchemy.orm.WriteOnlyCollection.remove
     "sqlalchemy.orm.WriteOnlyCollection.remove") methods:'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于持久对象的写入-仅集合，使用[工作单元](../glossary.html#term-unit-of-work)过程对集合进行修改只能通过使用[`WriteOnlyCollection.add()`](#sqlalchemy.orm.WriteOnlyCollection.add
+    "sqlalchemy.orm.WriteOnlyCollection.add")、[`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all")和[`WriteOnlyCollection.remove()`](#sqlalchemy.orm.WriteOnlyCollection.remove
+    "sqlalchemy.orm.WriteOnlyCollection.remove")方法进行：
 - en: '[PRE3]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: The items added above are held in a pending queue within the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") until the next flush, at which point they are INSERTed
     into the database, assuming the added objects were previously [transient](../glossary.html#term-transient).
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述添加的项目将在[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")中的挂起队列中保留，直到下一次刷新，在此刻它们将被插入到数据库中，假设添加的对象之前是[瞬态的](../glossary.html#term-transient)。
 - en: Querying Items
+  id: totrans-23
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 查询项目
 - en: The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     does not at any point store a reference to the current contents of the collection,
     nor does it have any behavior where it would directly emit a SELECT to the database
     in order to load them; the overriding assumption is that the collection may contain
     many thousands or millions of rows, and should never be fully loaded into memory
     as a side effect of any other operation.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    在任何时候都不会存储对集合当前内容的引用，也不具有直接发出 SELECT 到数据库以加载它们的行为；其覆盖的假设是集合可能包含数千或数百万行，并且不应作为任何其他操作的副作用而完全加载到内存中。'
 - en: Instead, the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     includes SQL-generating helpers such as [`WriteOnlyCollection.select()`](#sqlalchemy.orm.WriteOnlyCollection.select
     "sqlalchemy.orm.WriteOnlyCollection.select"), which will generate a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
@@ -144,18 +214,28 @@
     in order to SELECT any range of rows desired, as well as invoked using features
     like [server side cursors](queryguide/api.html#orm-queryguide-yield-per) for processes
     that wish to iterate through the full collection in a memory-efficient manner.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 相反，[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    包括诸如[`WriteOnlyCollection.select()`](#sqlalchemy.orm.WriteOnlyCollection.select
+    "sqlalchemy.orm.WriteOnlyCollection.select")之类的生成SQL的助手，该方法将生成一个预先配置了当前父行的正确WHERE
+    / FROM条件的[`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")构造，然后可以进一步修改以选择所需的任何行范围，以及使用像[服务器端游标](queryguide/api.html#orm-queryguide-yield-per)之类的特性来调用以便以内存高效的方式迭代完整集合的进程。
 - en: 'The statement generated is illustrated below. Note it also includes ORDER BY
     criteria, indicated in the example mapping by the [`relationship.order_by`](relationship_api.html#sqlalchemy.orm.relationship.params.order_by
     "sqlalchemy.orm.relationship") parameter of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship"); this criteria would be omitted if the parameter
     were not configured:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面是生成的语句的示例。请注意，它还包括在示例映射中由[`relationship.order_by`](relationship_api.html#sqlalchemy.orm.relationship.params.order_by
+    "sqlalchemy.orm.relationship")参数指示的ORDER BY条件；如果未配置该参数，则将省略此条件：
 - en: '[PRE4]'
+  id: totrans-27
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'We may use this [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select") construct along with the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") in order to query for `AccountTransaction` objects,
@@ -167,15 +247,27 @@
     returned; in the example below, additional WHERE criteria to load only “debit”
     account transactions is added, along with “LIMIT 10” to retrieve only the first
     ten rows:'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以使用这个[`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select")构造与[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")一起来查询`AccountTransaction`对象，最容易的是使用[`Session.scalars()`](session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars")方法，该方法将返回直接生成ORM对象的[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")。通常，但不是必须的，[`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select")可能会进一步修改以限制返回的记录；在下面的示例中，还添加了额外的WHERE条件，以仅加载“debit”账户交易，以及“LIMIT
+    10”以仅检索前十行：
 - en: '[PRE5]'
+  id: totrans-29
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Removing Items
+  id: totrans-30
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 删除项目
 - en: 'Individual items that are loaded in the [persistent](../glossary.html#term-persistent)
     state against the current [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") may be marked for removal from the collection using
@@ -185,65 +277,97 @@
     The example below illustrates removal of an individual `AccountTransaction` item,
     which per [cascade](cascades.html#unitofwork-cascades) settings results in a DELETE
     of that row:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 在当前[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")中加载的个体项可能会被标记为要从集合中删除，使用[`WriteOnlyCollection.remove()`](#sqlalchemy.orm.WriteOnlyCollection.remove
+    "sqlalchemy.orm.WriteOnlyCollection.remove")方法。当操作继续时，刷新过程将隐式地将对象视为已经是集合的一部分。下面的示例说明了如何删除单个`AccountTransaction`项，根据[级联](cascades.html#unitofwork-cascades)设置，将导致删除该行：
 - en: '[PRE6]'
+  id: totrans-32
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: As with any ORM-mapped collection, object removal may proceed either to de-associate
     the object from the collection while leaving the object present in the database,
     or may issue a DELETE for its row, based on the [delete-orphan](cascades.html#cascade-delete-orphan)
     configuration of the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship").
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 与任何ORM映射的集合一样，对象的删除可以按照解除与集合的关联并将对象保留在数据库中的方式进行，也可以根据[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")的[delete-orphan](cascades.html#cascade-delete-orphan)配置发出其行的DELETE。
 - en: Collection removal without deletion involves setting foreign key columns to
     NULL for a [one-to-many](basic_relationships.html#relationship-patterns-o2m) relationship,
     or deleting the corresponding association row for a [many-to-many](basic_relationships.html#relationships-many-to-many)
     relationship.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 在不删除的情况下删除集合涉及将外键列设置为NULL以进行[一对多](basic_relationships.html#relationship-patterns-o2m)关系，或者删除相应的关联行以进行[多对多](basic_relationships.html#relationships-many-to-many)关系。
 - en: Bulk INSERT of New Items
+  id: totrans-35
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 新项目的批量插入
 - en: The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     can generate DML constructs such as [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
     "sqlalchemy.sql.expression.Insert") objects, which may be used in an ORM context
     to produce bulk insert behavior. See the section [ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     for an overview of ORM bulk inserts.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")可以生成DML构造，例如[`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert")对象，可在ORM上下文中使用以产生批量插入行为。请参阅[ORM 批量 INSERT 语句](queryguide/dml.html#orm-queryguide-bulk-insert)部分，了解ORM批量插入的概述。'
 - en: One to Many Collections
+  id: totrans-37
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 一对多集合
 - en: 'For a **regular one to many collection only**, the [`WriteOnlyCollection.insert()`](#sqlalchemy.orm.WriteOnlyCollection.insert
     "sqlalchemy.orm.WriteOnlyCollection.insert") method will produce an [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
     "sqlalchemy.sql.expression.Insert") construct which is pre-established with VALUES
     criteria corresponding to the parent object. As this VALUES criteria is entirely
     against the related table, the statement can be used to INSERT new rows that will
     at the same time become new records in the related collection:'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 仅针对**常规的一对多集合**，[`WriteOnlyCollection.insert()`](#sqlalchemy.orm.WriteOnlyCollection.insert
+    "sqlalchemy.orm.WriteOnlyCollection.insert")方法将生成一个预先建立了与父对象相对应的VALUES条件的[`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert")构造。由于这个VALUES条件完全针对相关表，因此该语句可用于插入新的行，这些新行同时将成为相关集合中的新记录：
 - en: '[PRE7]'
+  id: totrans-39
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: See also
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     - in the [ORM Querying Guide](queryguide/index.html)'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: '[ORM 批量 INSERT 语句](queryguide/dml.html#orm-queryguide-bulk-insert) - 在[ORM
+    查询指南](queryguide/index.html)中'
 - en: '[One To Many](basic_relationships.html#relationship-patterns-o2m) - at [Basic
     Relationship Patterns](basic_relationships.html#relationship-patterns)'
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: '[一对多](basic_relationships.html#relationship-patterns-o2m) - 在[基本关系模式](basic_relationships.html#relationship-patterns)中'
 - en: Many to Many Collections
+  id: totrans-43
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 多对多集合
 - en: For a **many to many collection**, the relationship between two classes involves
     a third table that is configured using the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
     "sqlalchemy.orm.relationship") parameter of [`relationship`](relationship_api.html#sqlalchemy.orm.relationship
@@ -253,47 +377,72 @@
     and those records then passed to the [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") method where the unit of work process
     will proceed to persist them as part of the collection.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于一个**多对多集合**，两个类之间的关系涉及一个使用[`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship")参数配置的第三个表的情况，通过[`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all")方法，可以先分别批量插入新记录，然后检索它们，并将这些记录传递给`WriteOnlyCollection.add_all()`方法，单位操作过程将继续将它们作为集合的一部分进行持久化。
 - en: 'Supposing a class `BankAudit` referred to many `AccountTransaction` records
     using a many-to-many table:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设一个类`BankAudit`使用一个多对多表引用了许多`AccountTransaction`记录：
 - en: '[PRE8]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'To illustrate the two operations, we add more `AccountTransaction` objects
     using bulk insert, which we retrieve using RETURNING by adding `returning(AccountTransaction)`
     to the bulk INSERT statement (note that we could just as easily use existing `AccountTransaction`
     objects as well):'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了说明这两个操作，我们使用批量插入添加更多的`AccountTransaction`对象，通过在批量插入语句中添加`returning(AccountTransaction)`来使用RETURNING检索它们（请注意，我们也可以同样轻松地使用现有的`AccountTransaction`对象）：
 - en: '[PRE9]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'With a list of `AccountTransaction` objects ready, the [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") method is used to associate many
     rows at once with a new `BankAudit` object:'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 准备好一个`AccountTransaction`对象列表后，可以使用[`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all")方法一次性将许多行与一个新的`BankAudit`对象关联起来：
 - en: '[PRE10]'
+  id: totrans-50
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: See also
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参见
 - en: '[ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     - in the [ORM Querying Guide](queryguide/index.html)'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: '[ORM批量插入语句](queryguide/dml.html#orm-queryguide-bulk-insert) - 在[ORM查询指南](queryguide/index.html)中'
 - en: '[Many To Many](basic_relationships.html#relationships-many-to-many) - at [Basic
     Relationship Patterns](basic_relationships.html#relationship-patterns)'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: '[多对多](basic_relationships.html#relationships-many-to-many) - 在[基本关系模式](basic_relationships.html#relationship-patterns)中'
 - en: Bulk UPDATE and DELETE of Items
+  id: totrans-54
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 项目的批量更新和删除
 - en: In a similar way in which [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection") can generate [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select") constructs with WHERE criteria pre-established,
@@ -302,66 +451,100 @@
     "sqlalchemy.sql.expression.Delete") constructs with that same WHERE criteria,
     to allow criteria-oriented UPDATE and DELETE statements against the elements in
     a large collection.
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 类似于[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")可以预先建立WHERE条件生成[`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select")构造的方式，它也可以生成具有相同WHERE条件的[`Update`](../core/dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update")和[`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete
+    "sqlalchemy.sql.expression.Delete")构造，以允许针对大集合中的元素进行基于条件的UPDATE和DELETE语句。
 - en: One To Many Collections
+  id: totrans-56
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 一对多集合
 - en: As is the case with INSERT, this feature is most straightforward with **one
     to many collections**.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 就像插入（INSERT）一样，这个特性在**一对多集合**中最直接。
 - en: 'In the example below, the [`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
     "sqlalchemy.orm.WriteOnlyCollection.update") method is used to generate an UPDATE
     statement is emitted against the elements in the collection, locating rows where
     the “amount” is equal to `-800` and adding the amount of `200` to them:'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下面的示例中，使用[`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
+    "sqlalchemy.orm.WriteOnlyCollection.update")方法生成一个UPDATE语句，针对集合中的元素，定位“amount”等于`-800`的行，并将`200`的数量添加到它们中：
 - en: '[PRE11]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'In a similar way, [`WriteOnlyCollection.delete()`](#sqlalchemy.orm.WriteOnlyCollection.delete
     "sqlalchemy.orm.WriteOnlyCollection.delete") will produce a DELETE statement that
     is invoked in the same way:'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 类似地，[`WriteOnlyCollection.delete()`](#sqlalchemy.orm.WriteOnlyCollection.delete
+    "sqlalchemy.orm.WriteOnlyCollection.delete")将生成一个DELETE语句，以相同的方式调用：
 - en: '[PRE12]'
+  id: totrans-61
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: Many to Many Collections
+  id: totrans-62
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: '**多对多集合**'
 - en: Tip
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: The techniques here involve multi-table UPDATE expressions, which are slightly
     more advanced.
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的技术涉及到稍微高级的多表更新表达式。
 - en: For bulk UPDATE and DELETE of **many to many collections**, in order for an
     UPDATE or DELETE statement to relate to the primary key of the parent object,
     the association table must be explicitly part of the UPDATE/DELETE statement,
     which requires either that the backend includes supports for non-standard SQL
     syntaxes, or extra explicit steps when constructing the UPDATE or DELETE statement.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于**多对多集合**的批量更新和删除，为了使UPDATE或DELETE语句与父对象的主键相关联，关联表必须明确地成为UPDATE/DELETE语句的一部分，这要求后端包括对非标准SQL语法的支持，或者在构造UPDATE或DELETE语句时需要额外的显式步骤。
 - en: 'For backends that support multi-table versions of UPDATE, the [`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
     "sqlalchemy.orm.WriteOnlyCollection.update") method should work without extra
     steps for a many-to-many collection, as in the example below where an UPDATE is
     emitted against `AccountTransaction` objects in terms of the many-to-many `BankAudit.account_transactions`
     collection:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于支持多表版本的UPDATE的后端，[`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
+    "sqlalchemy.orm.WriteOnlyCollection.update")方法应该可以在多对多集合上工作，就像下面的示例中对`AccountTransaction`对象进行的UPDATE一样，涉及多对多的`BankAudit.account_transactions`集合：
 - en: '[PRE13]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: The above statement automatically makes use of “UPDATE..FROM” syntax, supported
     by SQLite and others, to name the additional `audit_transaction` table in the
     WHERE clause.
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述语句自动使用“UPDATE..FROM”语法，由SQLite和其他后端支持，在WHERE子句中命名附加的`audit_transaction`表。
 - en: 'To UPDATE or DELETE a many-to-many collection where multi-table syntax is not
     available, the many-to-many criteria may be moved into SELECT that for example
     may be combined with IN to match rows. The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
@@ -370,191 +553,309 @@
     us, making use of the [`Select.with_only_columns()`](../core/selectable.html#sqlalchemy.sql.expression.Select.with_only_columns
     "sqlalchemy.sql.expression.Select.with_only_columns") method to produce a [scalar
     subquery](../glossary.html#term-scalar-subquery):'
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 要更新或删除多对多集合，其中不支持多表语法的情况下，多对多条件可以移动到SELECT中，例如可以与IN组合以匹配行。[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection")在这里仍然对我们有所帮助，因为我们使用[`WriteOnlyCollection.select()`](#sqlalchemy.orm.WriteOnlyCollection.select
+    "sqlalchemy.orm.WriteOnlyCollection.select")方法为我们生成此SELECT，利用[`Select.with_only_columns()`](../core/selectable.html#sqlalchemy.sql.expression.Select.with_only_columns
+    "sqlalchemy.sql.expression.Select.with_only_columns")方法生成[标量子查询](../glossary.html#term-scalar-subquery)：
 - en: '[PRE14]'
+  id: totrans-70
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: Write Only Collections - API Documentation
+  id: totrans-71
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 只写集合 - API文档
 - en: '| Object Name | Description |'
+  id: totrans-72
   prefs: []
   type: TYPE_TB
+  zh: '| 对象名称 | 描述 |'
 - en: '| --- | --- |'
+  id: totrans-73
   prefs: []
   type: TYPE_TB
+  zh: '| --- | --- |'
 - en: '| [WriteOnlyCollection](#sqlalchemy.orm.WriteOnlyCollection) | Write-only collection
     which can synchronize changes into the attribute event system. |'
+  id: totrans-74
   prefs: []
   type: TYPE_TB
+  zh: '| [WriteOnlyCollection](#sqlalchemy.orm.WriteOnlyCollection) | 只写集合可以将更改同步到属性事件系统中。
+    |'
 - en: '| [WriteOnlyMapped](#sqlalchemy.orm.WriteOnlyMapped) | Represent the ORM mapped
     attribute type for a “write only” relationship. |'
+  id: totrans-75
   prefs: []
   type: TYPE_TB
+  zh: '| [WriteOnlyMapped](#sqlalchemy.orm.WriteOnlyMapped) | 代表“只写”关系的ORM映射属性类型。
+    |'
 - en: '[PRE15]'
+  id: totrans-76
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Write-only collection which can synchronize changes into the attribute event
     system.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 只写集合可以将更改同步到属性事件系统中。
 - en: The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     is used in a mapping by using the `"write_only"` lazy loading strategy with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship"). For background on this configuration, see [Write
     Only Relationships](#write-only-relationship).
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")在映射中使用“write_only”延迟加载策略与[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")一起。有关此配置的背景，请参阅[只写关系](#write-only-relationship)。
 - en: New in version 2.0.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 2.0版本中的新功能。
 - en: See also
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Write Only Relationships](#write-only-relationship)'
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: '[只写关系](#write-only-relationship)'
 - en: '**Members**'
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[add()](#sqlalchemy.orm.WriteOnlyCollection.add), [add_all()](#sqlalchemy.orm.WriteOnlyCollection.add_all),
     [delete()](#sqlalchemy.orm.WriteOnlyCollection.delete), [insert()](#sqlalchemy.orm.WriteOnlyCollection.insert),
     [remove()](#sqlalchemy.orm.WriteOnlyCollection.remove), [select()](#sqlalchemy.orm.WriteOnlyCollection.select),
     [update()](#sqlalchemy.orm.WriteOnlyCollection.update)'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: '[add()](#sqlalchemy.orm.WriteOnlyCollection.add), [add_all()](#sqlalchemy.orm.WriteOnlyCollection.add_all),
+    [delete()](#sqlalchemy.orm.WriteOnlyCollection.delete), [insert()](#sqlalchemy.orm.WriteOnlyCollection.insert),
+    [remove()](#sqlalchemy.orm.WriteOnlyCollection.remove), [select()](#sqlalchemy.orm.WriteOnlyCollection.select),
+    [update()](#sqlalchemy.orm.WriteOnlyCollection.update)'
 - en: '**Class signature**'
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.orm.WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection") (`sqlalchemy.orm.writeonly.AbstractCollectionWriter`)
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 类[`sqlalchemy.orm.WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection") (`sqlalchemy.orm.writeonly.AbstractCollectionWriter`)
 - en: '[PRE16]'
+  id: totrans-86
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: Add an item to this [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 将一个项添加到此[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")中。
 - en: The given item will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定项将在下一个刷新时以父实例的集合的形式持久化到数据库中。
 - en: '[PRE17]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: Add an iterable of items to this [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 将一个可迭代的项添加到此[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")中。
 - en: The given items will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定的项将在下一个刷新时以父实例的集合的形式持久化到数据库中。
 - en: '[PRE18]'
+  id: totrans-92
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: Produce a [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
     which will refer to rows in terms of this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成一个[`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")，该语句将以此实例本地的[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection")的形式引用行。
 - en: '[PRE19]'
+  id: totrans-94
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: For one-to-many collections, produce a [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
     "sqlalchemy.sql.expression.Insert") which will insert new rows in terms of this
     this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于一对多的集合，生成一个[`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert "sqlalchemy.sql.expression.Insert")，该语句将以此实例本地的[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection")的形式插入新的行。
 - en: This construct is only supported for a [`Relationship`](internals.html#sqlalchemy.orm.Relationship
     "sqlalchemy.orm.Relationship") that does **not** include the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
     "sqlalchemy.orm.relationship") parameter. For relationships that refer to a many-to-many
     table, use ordinary bulk insert techniques to produce new objects, then use `AbstractCollectionWriter.add_all()`
     to associate them with the collection.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 此构造仅支持不包括[`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship")参数的[`Relationship`](internals.html#sqlalchemy.orm.Relationship
+    "sqlalchemy.orm.Relationship")。对于指向多对多表的关系，请使用普通的批量插入技术来生成新对象，然后使用`AbstractCollectionWriter.add_all()`将它们与集合关联起来。
 - en: '[PRE20]'
+  id: totrans-97
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: Remove an item from this [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 从此[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")中移除一个项。
 - en: The given item will be removed from the parent instance’s collection on the
     next flush.
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一个刷新时，给定项将从父实例的集合中移除。
 - en: '[PRE21]'
+  id: totrans-100
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: Produce a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select") construct that represents the rows within
     this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成一个[`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")构造，表示此实例本地的[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection")中的行。
 - en: '[PRE22]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: Produce a [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
     which will refer to rows in terms of this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成一个[`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")，该语句将以此实例本地的[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection")的形式引用行。
 - en: '[PRE23]'
+  id: totrans-104
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: Represent the ORM mapped attribute type for a “write only” relationship.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 表示“只写”关系的ORM映射属性类型。
 - en: The [`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
     type annotation may be used in an [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
     mapping to indicate that the `lazy="write_only"` loader strategy should be used
     for a particular [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship").
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
+    类型注释可以在[带注释的声明性表](declarative_tables.html#orm-declarative-mapped-column)映射中使用，以指示对于特定的[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")应使用`lazy="write_only"`加载策略。'
 - en: 'E.g.:'
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如：
 - en: '[PRE24]'
+  id: totrans-108
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: See the section [Write Only Relationships](#write-only-relationship) for background.
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 有关背景，请参阅[仅写关系](#write-only-relationship)部分。
 - en: New in version 2.0.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 2.0 版中的新功能。
 - en: See also
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 请参阅还有
 - en: '[Write Only Relationships](#write-only-relationship) - complete background'
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: '[仅写关系](#write-only-relationship) - 完整背景'
 - en: '[`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
     - includes legacy [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
     support'
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
+    - 包含遗留的[`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")支持'
 - en: '**Class signature**'
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: 'class [`sqlalchemy.orm.WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
     (`sqlalchemy.orm.base._MappedAnnotationBase`)  ## Dynamic Relationship Loaders'
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: '类[`sqlalchemy.orm.WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
+    (`sqlalchemy.orm.base._MappedAnnotationBase`)  ## 动态关系加载器'
 - en: Legacy Feature
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 遗留特性
 - en: The “dynamic” lazy loader strategy is the legacy form of what is now the “write_only”
     strategy described in the section [Write Only Relationships](#write-only-relationship).
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: “动态”延迟加载策略是现在在[仅写关系](#write-only-relationship)部分中描述的“write_only”策略的遗留形式。
 - en: The “dynamic” strategy produces a legacy [`Query`](queryguide/query.html#sqlalchemy.orm.Query
     "sqlalchemy.orm.Query") object from the related collection. However, a major drawback
     of “dynamic” relationships is that there are several cases where the collection
@@ -562,15 +863,22 @@
     with careful programming and testing on a case-by-case basis. Therefore, for truly
     large collection management, the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection") should be preferred.
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: “动态”策略从相关集合中生成一个遗留的[`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")对象。然而，“动态”关系的一个主要缺点是，有几种情况下集合会完全迭代，其中一些是不明显的，只能通过细心的编程和逐案的测试来预防。因此，对于真正大型集合管理，应优先考虑[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection")。
 - en: The dynamic loader is also not compatible with the [Asynchronous I/O (asyncio)](extensions/asyncio.html)
     extension. It can be used with some limitations, as indicated in [Asyncio dynamic
     guidelines](extensions/asyncio.html#dynamic-asyncio), but again the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection"), which is fully compatible with asyncio,
     should be preferred.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 动态加载器也与[异步 I/O（asyncio）](extensions/asyncio.html)扩展不兼容。可以在一些限制下使用，如[Asyncio
+    动态指南](extensions/asyncio.html#dynamic-asyncio)中所示，但再次建议优先考虑与 asyncio 完全兼容的[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection")。
 - en: The dynamic relationship strategy allows configuration of a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") which when accessed on an instance will return
     a legacy [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
@@ -583,165 +891,275 @@
     along with rudimentary collection mutation methods such as [`AppenderQuery.append()`](#sqlalchemy.orm.AppenderQuery.append
     "sqlalchemy.orm.AppenderQuery.append") and [`AppenderQuery.remove()`](#sqlalchemy.orm.AppenderQuery.remove
     "sqlalchemy.orm.AppenderQuery.remove").
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 动态关系策略允许配置一个 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")，当在实例上访问时，将返回一个旧版的 [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") 对象，而不是集合。然后可以进一步修改返回的 [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") 对象，以便基于过滤条件迭代数据库集合。返回的 [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") 对象是 [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
+    的实例，它结合了 [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    的加载和迭代行为，以及 rudimentary 集合变异方法，如 [`AppenderQuery.append()`](#sqlalchemy.orm.AppenderQuery.append
+    "sqlalchemy.orm.AppenderQuery.append") 和 [`AppenderQuery.remove()`](#sqlalchemy.orm.AppenderQuery.remove
+    "sqlalchemy.orm.AppenderQuery.remove")。
 - en: 'The “dynamic” loader strategy may be configured with type-annotated Declarative
     form using the [`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
     annotation class:'
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以使用带有类型注释的 Declarative 形式配置“动态”加载器策略，使用 [`DynamicMapped`](#sqlalchemy.orm.DynamicMapped
+    "sqlalchemy.orm.DynamicMapped") 注解类：
 - en: '[PRE25]'
+  id: totrans-122
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: 'Above, the `User.posts` collection on an individual `User` object will return
     the [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
     object, which is a subclass of [`Query`](queryguide/query.html#sqlalchemy.orm.Query
     "sqlalchemy.orm.Query") that also supports basic collection mutation operations:'
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上述情况下，单个 `User` 对象上的 `User.posts` 集合将返回 [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery
+    "sqlalchemy.orm.AppenderQuery") 对象，它是 [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") 的子类，还支持基本的集合变异操作：
 - en: '[PRE26]'
+  id: totrans-124
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: 'The dynamic relationship supports limited write operations, via the [`AppenderQuery.append()`](#sqlalchemy.orm.AppenderQuery.append
     "sqlalchemy.orm.AppenderQuery.append") and [`AppenderQuery.remove()`](#sqlalchemy.orm.AppenderQuery.remove
     "sqlalchemy.orm.AppenderQuery.remove") methods:'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 动态关系支持有限的写入操作，通过 [`AppenderQuery.append()`](#sqlalchemy.orm.AppenderQuery.append
+    "sqlalchemy.orm.AppenderQuery.append") 和 [`AppenderQuery.remove()`](#sqlalchemy.orm.AppenderQuery.remove
+    "sqlalchemy.orm.AppenderQuery.remove") 方法：
 - en: '[PRE27]'
+  id: totrans-126
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: Since the read side of the dynamic relationship always queries the database,
     changes to the underlying collection will not be visible until the data has been
     flushed. However, as long as “autoflush” is enabled on the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") in use, this will occur automatically each time the
     collection is about to emit a query.
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于动态关系的读取端总是查询数据库，对基础集合的更改直到数据刷新后才可见。然而，只要所使用的 [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 启用了“自动刷新”，这将在每次集合即将发出查询时自动发生。
 - en: Dynamic Relationship Loaders - API
+  id: totrans-128
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 动态关系加载器 - API
 - en: '| Object Name | Description |'
+  id: totrans-129
   prefs: []
   type: TYPE_TB
+  zh: '| 对象名称 | 描述 |'
 - en: '| --- | --- |'
+  id: totrans-130
   prefs: []
   type: TYPE_TB
+  zh: '| --- | --- |'
 - en: '| [AppenderQuery](#sqlalchemy.orm.AppenderQuery) | A dynamic query that supports
     basic collection storage operations. |'
+  id: totrans-131
   prefs: []
   type: TYPE_TB
+  zh: '| [AppenderQuery](#sqlalchemy.orm.AppenderQuery) | 支持基本集合存储操作的动态查询。 |'
 - en: '| [DynamicMapped](#sqlalchemy.orm.DynamicMapped) | Represent the ORM mapped
     attribute type for a “dynamic” relationship. |'
+  id: totrans-132
   prefs: []
   type: TYPE_TB
+  zh: '| [DynamicMapped](#sqlalchemy.orm.DynamicMapped) | 代表“动态”关系的 ORM 映射属性类型。 |'
 - en: '[PRE28]'
+  id: totrans-133
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: A dynamic query that supports basic collection storage operations.
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 支持基本集合存储操作的动态查询。
 - en: Methods on [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
     include all methods of [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query"),
     plus additional methods used for collection persistence.
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
+    上的方法包括 [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    的所有方法，以及用于集合持久化的附加方法。'
 - en: '**Members**'
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: '**成员**'
 - en: '[add()](#sqlalchemy.orm.AppenderQuery.add), [add_all()](#sqlalchemy.orm.AppenderQuery.add_all),
     [append()](#sqlalchemy.orm.AppenderQuery.append), [count()](#sqlalchemy.orm.AppenderQuery.count),
     [extend()](#sqlalchemy.orm.AppenderQuery.extend), [remove()](#sqlalchemy.orm.AppenderQuery.remove)'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: '[add()](#sqlalchemy.orm.AppenderQuery.add), [add_all()](#sqlalchemy.orm.AppenderQuery.add_all),
+    [append()](#sqlalchemy.orm.AppenderQuery.append), [count()](#sqlalchemy.orm.AppenderQuery.count),
+    [extend()](#sqlalchemy.orm.AppenderQuery.extend), [remove()](#sqlalchemy.orm.AppenderQuery.remove)'
 - en: '**Class signature**'
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.orm.AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
     (`sqlalchemy.orm.dynamic.AppenderMixin`, [`sqlalchemy.orm.Query`](queryguide/query.html#sqlalchemy.orm.Query
     "sqlalchemy.orm.Query"))
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 类 [`sqlalchemy.orm.AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
+    (`sqlalchemy.orm.dynamic.AppenderMixin`, [`sqlalchemy.orm.Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query"))
 - en: '[PRE29]'
+  id: totrans-140
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: '*inherited from the* `AppenderMixin.add()` *method of* `AppenderMixin`'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* `AppenderMixin.add()` *方法的* `AppenderMixin`'
 - en: Add an item to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery").
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 将项目添加到此 [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")。
 - en: The given item will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定的项目将在下一次 flush 时以父实例集合的形式持久化到数据库中。
 - en: This method is provided to assist in delivering forwards-compatibility with
     the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     collection class.
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 此方法旨在帮助与 [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    集合类实现向前兼容。
 - en: New in version 2.0.
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: 版本 2.0 中的新功能。
 - en: '[PRE30]'
+  id: totrans-146
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: '*inherited from the* `AppenderMixin.add_all()` *method of* `AppenderMixin`'
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* `AppenderMixin.add_all()` *方法的* `AppenderMixin`'
 - en: Add an iterable of items to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery
     "sqlalchemy.orm.AppenderQuery").
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 将可迭代项目添加到此 [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")。
 - en: The given items will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定的项目将在下一次 flush 时以父实例集合的形式持久化到数据库中。
 - en: This method is provided to assist in delivering forwards-compatibility with
     the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     collection class.
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 此方法旨在帮助与 [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    集合类实现向前兼容。
 - en: New in version 2.0.
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: 版本 2.0 中的新功能。
 - en: '[PRE31]'
+  id: totrans-152
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: '*inherited from the* `AppenderMixin.append()` *method of* `AppenderMixin`'
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* `AppenderMixin.append()` *方法的* `AppenderMixin`'
 - en: Append an item to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery").
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: 将项目追加到此 [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")。
 - en: The given item will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定的项目将在下一次 flush 时以父实例集合的形式持久化到数据库中。
 - en: '[PRE32]'
+  id: totrans-156
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: '*inherited from the* `AppenderMixin.count()` *method of* `AppenderMixin`'
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* `AppenderMixin.count()` *方法的* `AppenderMixin`'
 - en: Return a count of rows this the SQL formed by this [`Query`](queryguide/query.html#sqlalchemy.orm.Query
     "sqlalchemy.orm.Query") would return.
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 返回此 [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    形成的 SQL 返回的行数。
 - en: 'This generates the SQL for this Query as follows:'
+  id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将生成此查询的 SQL 如下：
 - en: '[PRE33]'
+  id: totrans-160
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: The above SQL returns a single row, which is the aggregate value of the count
     function; the [`Query.count()`](queryguide/query.html#sqlalchemy.orm.Query.count
     "sqlalchemy.orm.Query.count") method then returns that single integer value.
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述 SQL 返回一行，即计数函数的聚合值；然后 [`Query.count()`](queryguide/query.html#sqlalchemy.orm.Query.count
+    "sqlalchemy.orm.Query.count") 方法返回该单个整数值。
 - en: Warning
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告
 - en: It is important to note that the value returned by count() is **not the same
     as the number of ORM objects that this Query would return from a method such as
     the .all() method**. The [`Query`](queryguide/query.html#sqlalchemy.orm.Query
@@ -749,115 +1167,188 @@
     entries based on primary key**, meaning if the same primary key value would appear
     in the results more than once, only one object of that primary key would be present.
     This does not apply to a query that is against individual columns.
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 需要注意的是，count() 返回的值**与此 Query 从诸如 .all() 方法返回的 ORM 对象数量不同**。当 [`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query") 对象被要求返回完整实体时，将根据主键对条目进行去重，这意味着如果相同的主键值在结果中出现多次，则仅存在一个该主键的对象。这不适用于针对个别列的查询。
 - en: See also
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[My Query does not return the same number of objects as query.count() tells
     me - why?](../faq/sessions.html#faq-query-deduplicating)'
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: '[我的查询返回的对象数量与 query.count() 告诉我的不同 - 为什么？](../faq/sessions.html#faq-query-deduplicating)'
 - en: 'For fine grained control over specific columns to count, to skip the usage
     of a subquery or otherwise control of the FROM clause, or to use other aggregate
     functions, use [`expression.func`](../core/sqlelement.html#sqlalchemy.sql.expression.func
     "sqlalchemy.sql.expression.func") expressions in conjunction with [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
     "sqlalchemy.orm.Session.query"), i.e.:'
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 若要对特定列进行精细化计数控制，跳过子查询的使用或以其他方式控制 FROM 子句，或使用其他聚合函数，请将 [`expression.func`](../core/sqlelement.html#sqlalchemy.sql.expression.func
+    "sqlalchemy.sql.expression.func") 表达式与 [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
+    "sqlalchemy.orm.Session.query") 结合使用，例如：
 - en: '[PRE34]'
+  id: totrans-167
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: See also
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[2.0 Migration - ORM Usage](../changelog/migration_20.html#migration-20-query-usage)'
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: '[2.0 迁移 - ORM 使用](../changelog/migration_20.html#migration-20-query-usage)'
 - en: '[PRE35]'
+  id: totrans-170
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: '*inherited from the* `AppenderMixin.extend()` *method of* `AppenderMixin`'
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* `AppenderMixin.extend()` *方法的* `AppenderMixin`'
 - en: Add an iterable of items to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery
     "sqlalchemy.orm.AppenderQuery").
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 将项目的可迭代对象添加到此[`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")中。
 - en: The given items will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定的项目将在下次 flush 时以父实例的集合的形式持久化到数据库中。
 - en: '[PRE36]'
+  id: totrans-174
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: '*inherited from the* `AppenderMixin.remove()` *method of* `AppenderMixin`'
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: '*继承自* `AppenderMixin.remove()` *方法的* `AppenderMixin`'
 - en: Remove an item from this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery").
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 从此 [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
+    中移除一个项目。
 - en: The given item will be removed from the parent instance’s collection on the
     next flush.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 下次 flush 时，给定的项目将从父实例的集合中移除。
 - en: '[PRE37]'
+  id: totrans-178
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: Represent the ORM mapped attribute type for a “dynamic” relationship.
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 表示“动态”关系的 ORM 映射属性类型。
 - en: The [`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
     type annotation may be used in an [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
     mapping to indicate that the `lazy="dynamic"` loader strategy should be used for
     a particular [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship").
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
+    类型注释可以在 [注释的声明性表](declarative_tables.html#orm-declarative-mapped-column) 映射中使用，以指示应该为特定的
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    使用 `lazy="dynamic"` 加载策略。'
 - en: Legacy Feature
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 传统功能
 - en: The “dynamic” lazy loader strategy is the legacy form of what is now the “write_only”
     strategy described in the section [Write Only Relationships](#write-only-relationship).
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: “dynamic” 懒加载策略是现在称为“write_only”策略的传统形式，详情请参见 [写入关系](#write-only-relationship)
+    部分。
 - en: 'E.g.:'
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如：
 - en: '[PRE38]'
+  id: totrans-184
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: See the section [Dynamic Relationship Loaders](#dynamic-relationship) for background.
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 请参阅 [动态关系加载器](#dynamic-relationship) 部分以了解背景知识。
 - en: New in version 2.0.
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 2.0 版中新增。
 - en: See also
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Dynamic Relationship Loaders](#dynamic-relationship) - complete background'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: '[动态关系加载器](#dynamic-relationship) - 完整背景'
 - en: '[`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
     - fully 2.0 style version'
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
+    - 完全 2.0 版本的风格'
 - en: '**Class signature**'
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: 'class [`sqlalchemy.orm.DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
     (`sqlalchemy.orm.base._MappedAnnotationBase`)  ## Setting RaiseLoad'
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: '类 [`sqlalchemy.orm.DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
+    (`sqlalchemy.orm.base._MappedAnnotationBase`)  ## 设置 RaiseLoad'
 - en: 'A “raise”-loaded relationship will raise an [`InvalidRequestError`](../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
     "sqlalchemy.exc.InvalidRequestError") where the attribute would normally emit
     a lazy load:'
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 当属性通常会发出懒加载时，“raise”-loaded 关系将引发一个[`InvalidRequestError`](../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
+    "sqlalchemy.exc.InvalidRequestError")：
 - en: '[PRE39]'
+  id: totrans-193
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: Above, attribute access on the `children` collection will raise an exception
     if it was not previously populated. This includes read access but for collections
     will also affect write access, as collections can’t be mutated without first loading
@@ -867,26 +1358,39 @@
     the “raise” strategy will cause unloaded attributes to raise immediately if accessed.
     The raise strategy is also available on a query option basis using the [`raiseload()`](queryguide/relationships.html#sqlalchemy.orm.raiseload
     "sqlalchemy.orm.raiseload") loader option.
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，如果 `children` 集合之前未填充，则对该集合进行属性访问将引发异常。这包括读取访问，但对于集合还将影响写入访问，因为集合不能在未加载的情况下进行突变。这样做的原因是确保应用程序在某个特定上下文中不会发出任何意外的惰性加载。与必须通过
+    SQL 日志来确定所有必要属性是否已急切加载相比，"raise" 策略将在访问时立即引发未加载的属性。raise 策略也可基于查询选项使用 [`raiseload()`](queryguide/relationships.html#sqlalchemy.orm.raiseload
+    "sqlalchemy.orm.raiseload") 加载器选项。
 - en: See also
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Preventing unwanted lazy loads using raiseload](queryguide/relationships.html#prevent-lazy-with-raiseload)'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用 raiseload 防止不必要的惰性加载](queryguide/relationships.html#prevent-lazy-with-raiseload)'
 - en: Using Passive Deletes
+  id: totrans-197
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用被动删除
 - en: An important aspect of collection management in SQLAlchemy is that when an object
     that refers to a collection is deleted, SQLAlchemy needs to consider the objects
     that are inside this collection. Those objects will need to be de-associated from
     the parent, which for a one-to-many collection would mean that foreign key columns
     are set to NULL, or based on [cascade](cascades.html#unitofwork-cascades) settings,
     may instead want to emit a DELETE for these rows.
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: SQLAlchemy 中集合管理的一个重要方面是，当删除引用集合的对象时，SQLAlchemy 需要考虑到位于此集合内部的对象。这些对象将需要与父对象解除关联，对于一对多集合，这意味着外键列将被设置为
+    NULL，或者根据 [级联](cascades.html#unitofwork-cascades) 设置，可能希望为这些行发出 DELETE。
 - en: The [unit of work](../glossary.html#term-unit-of-work) process only considers
     objects on a row-by-row basis, meaning a DELETE operation implies that all rows
     within a collection must be fully loaded into memory inside the flush process.
@@ -898,24 +1402,39 @@
     "sqlalchemy.orm.relationship") on the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") construct; the foreign key constraints in use must
     also be correctly configured.
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
+  zh: '[工作单元](../glossary.html#term-unit-of-work) 过程只考虑逐行处理对象，这意味着 DELETE 操作意味着集合内的所有行必须在刷新过程中完全加载到内存中。对于大型集合来说，这是不可行的，因此我们转而依靠数据库自身的能力，使用外键
+    ON DELETE 规则自动更新或删除行，指示工作单元无需实际加载这些行即可处理它们。可以通过配置 [`relationship.passive_deletes`](relationship_api.html#sqlalchemy.orm.relationship.params.passive_deletes
+    "sqlalchemy.orm.relationship") 在 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 构造上来指示工作单元以此方式工作；正在使用的外键约束也必须正确配置。'
 - en: For further detail on a complete “passive delete” configuration, see the section
     [Using foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes).
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 有关完整的“被动删除”配置的进一步细节，请参阅章节 [使用 ORM 关系与外键 ON DELETE 级联](cascades.html#passive-deletes)。
 - en: '## Write Only Relationships'
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 只写关系'
 - en: 'The **write only** loader strategy is the primary means of configuring a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") that will remain writeable, but will not load its
     contents into memory. A write-only ORM configuration in modern type-annotated
     Declarative form is illustrated below:'
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: '**只写** 加载器策略是配置 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 的主要手段，它将保持可写，但不会加载其内容到内存中。现代类型注释的 Declarative 形式中的只写
+    ORM 配置示例如下：'
 - en: '[PRE40]'
+  id: totrans-203
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: Above, the `account_transactions` relationship is configured not using the ordinary
     [`Mapped`](internals.html#sqlalchemy.orm.Mapped "sqlalchemy.orm.Mapped") annotation,
     but instead using the [`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
@@ -925,95 +1444,149 @@
     "sqlalchemy.orm.WriteOnlyMapped") annotation is an alternative form of the [`Mapped`](internals.html#sqlalchemy.orm.Mapped
     "sqlalchemy.orm.Mapped") annotation which indicate the use of the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection") collection type on instances of the object.
+  id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述的 `account_transactions` 关系不是使用普通的 [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") 注解配置的，而是使用 [`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped
+    "sqlalchemy.orm.WriteOnlyMapped") 类型注解，在运行时将 `lazy="write_only"` 的[加载策略](queryguide/relationships.html#orm-queryguide-relationship-loaders)分配给目标
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")。[`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped
+    "sqlalchemy.orm.WriteOnlyMapped") 注解是 [`Mapped`](internals.html#sqlalchemy.orm.Mapped
+    "sqlalchemy.orm.Mapped") 注解的替代形式，表示在对象实例上使用 [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection") 集合类型。
 - en: 'The above [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") configuration also includes several elements that
     are specific to what action to take when `Account` objects are deleted, as well
     as when `AccountTransaction` objects are removed from the `account_transactions`
     collection. These elements are:'
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述的 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    配置还包括几个元素，用于指定在删除 `Account` 对象以及从 `account_transactions` 集合中移除 `AccountTransaction`
+    对象时要执行的操作。这些元素是：
 - en: '`passive_deletes=True` - allows the [unit of work](../glossary.html#term-unit-of-work)
     to forego having to load the collection when `Account` is deleted; see [Using
     foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes).'
+  id: totrans-206
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`passive_deletes=True` - 允许[工作单元](../glossary.html#term-unit-of-work)在删除 `Account`
+    时不必加载集合；请参阅[使用 ORM 关系进行级联删除](cascades.html#passive-deletes)。'
 - en: '`ondelete="cascade"` configured on the [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
     "sqlalchemy.schema.ForeignKey") constraint. This is also detailed at [Using foreign
     key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes).'
+  id: totrans-207
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`ondelete="cascade"` 配置在 [`ForeignKey`](../core/constraints.html#sqlalchemy.schema.ForeignKey
+    "sqlalchemy.schema.ForeignKey") 约束上。这也在 [使用 ORM 关系进行级联删除](cascades.html#passive-deletes)
+    中详细说明。'
 - en: '`cascade="all, delete-orphan"` - instructs the [unit of work](../glossary.html#term-unit-of-work)
     to delete `AccountTransaction` objects when they are removed from the collection.
     See [delete-orphan](cascades.html#cascade-delete-orphan) in the [Cascades](cascades.html#unitofwork-cascades)
     document.'
+  id: totrans-208
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`cascade="all, delete-orphan"` - 指示[工作单元](../glossary.html#term-unit-of-work)在从集合中删除
+    `AccountTransaction` 对象时删除它们。请参阅 [delete-orphan](cascades.html#cascade-delete-orphan)
+    中的[Cascades](cascades.html#unitofwork-cascades)文档。'
 - en: 'New in version 2.0: Added “Write only” relationship loaders.'
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 2.0 版本中的新功能：添加了“只写”关系加载器。
 - en: Creating and Persisting New Write Only Collections
+  id: totrans-210
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 创建和持久化新的只写集合
 - en: 'The write-only collection allows for direct assignment of the collection as
     a whole **only** for [transient](../glossary.html#term-transient) or [pending](../glossary.html#term-pending)
     objects. With our above mapping, this indicates we can create a new `Account`
     object with a sequence of `AccountTransaction` objects to be added to a [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session"). Any Python iterable may be used as the source of objects
     to start, where below we use a Python `list`:'
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 只写集合允许**仅**对[瞬态](../glossary.html#term-transient)或[待处理](../glossary.html#term-pending)对象进行集合的直接赋值。通过我们上述的映射，这表示我们可以创建一个新的
+    `Account` 对象，并将一系列 `AccountTransaction` 对象添加到 [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 中。任何 Python 可迭代对象都可以作为对象的来源，下面我们使用了 Python 的 `list`：
 - en: '[PRE41]'
+  id: totrans-212
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: 'Once an object is database-persisted (i.e. in the [persistent](../glossary.html#term-persistent)
     or [detached](../glossary.html#term-detached) state), the collection has the ability
     to be extended with new items as well as the ability for individual items to be
     removed. However, the collection may **no longer be re-assigned with a full replacement
     collection**, as such an operation requires that the previous collection is fully
     loaded into memory in order to reconcile the old entries with the new ones:'
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦对象已经持久化到数据库（即处于[持久化](../glossary.html#term-persistent)或[分离](../glossary.html#term-detached)状态），集合就具有了扩展新项目以及删除单个项目的能力。但是，集合可能**不能再重新分配为完整的替换集合**，因为这样的操作需要将先前的集合完全加载到内存中，以便将旧条目与新条目进行协调：
 - en: '[PRE42]'
+  id: totrans-214
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: Adding New Items to an Existing Collection
+  id: totrans-215
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 向现有集合添加新项目
 - en: 'For write-only collections of persistent objects, modifications to the collection
     using [unit of work](../glossary.html#term-unit-of-work) processes may proceed
     only by using the [`WriteOnlyCollection.add()`](#sqlalchemy.orm.WriteOnlyCollection.add
     "sqlalchemy.orm.WriteOnlyCollection.add"), [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") and [`WriteOnlyCollection.remove()`](#sqlalchemy.orm.WriteOnlyCollection.remove
     "sqlalchemy.orm.WriteOnlyCollection.remove") methods:'
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于持久化对象的只写集合，使用[工作单元](../glossary.html#term-unit-of-work)过程修改集合只能通过使用[`WriteOnlyCollection.add()`](#sqlalchemy.orm.WriteOnlyCollection.add
+    "sqlalchemy.orm.WriteOnlyCollection.add")、[`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all") 和 [`WriteOnlyCollection.remove()`](#sqlalchemy.orm.WriteOnlyCollection.remove
+    "sqlalchemy.orm.WriteOnlyCollection.remove") 方法进行：
 - en: '[PRE43]'
+  id: totrans-217
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: The items added above are held in a pending queue within the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") until the next flush, at which point they are INSERTed
     into the database, assuming the added objects were previously [transient](../glossary.html#term-transient).
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面添加的项目在 [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    内部保持在挂起队列中，直到下一次刷新，在此时它们被插入到数据库中，假设添加的对象之前是[瞬态的](../glossary.html#term-transient)。
 - en: Querying Items
+  id: totrans-219
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 查询项目
 - en: The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     does not at any point store a reference to the current contents of the collection,
     nor does it have any behavior where it would directly emit a SELECT to the database
     in order to load them; the overriding assumption is that the collection may contain
     many thousands or millions of rows, and should never be fully loaded into memory
     as a side effect of any other operation.
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    在任何时候都不会存储对集合当前内容的引用，也不会具有直接发出 SELECT 到数据库以加载它们的行为；覆盖的假设是集合可能包含许多千万个行，并且绝不应作为任何其他操作的副作用完全加载到内存中。'
 - en: Instead, the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     includes SQL-generating helpers such as [`WriteOnlyCollection.select()`](#sqlalchemy.orm.WriteOnlyCollection.select
     "sqlalchemy.orm.WriteOnlyCollection.select"), which will generate a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
@@ -1022,18 +1595,30 @@
     in order to SELECT any range of rows desired, as well as invoked using features
     like [server side cursors](queryguide/api.html#orm-queryguide-yield-per) for processes
     that wish to iterate through the full collection in a memory-efficient manner.
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 相反，[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    包括 SQL 生成助手，如 [`WriteOnlyCollection.select()`](#sqlalchemy.orm.WriteOnlyCollection.select
+    "sqlalchemy.orm.WriteOnlyCollection.select")，它将生成一个预先配置了当前父行的正确 WHERE / FROM 条件的
+    [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    构造，然后可以进一步修改以选择所需的任何行范围，以及使用诸如[服务器端游标](queryguide/api.html#orm-queryguide-yield-per)等功能调用，以便以内存有效的方式迭代通过整个集合。
 - en: 'The statement generated is illustrated below. Note it also includes ORDER BY
     criteria, indicated in the example mapping by the [`relationship.order_by`](relationship_api.html#sqlalchemy.orm.relationship.params.order_by
     "sqlalchemy.orm.relationship") parameter of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship"); this criteria would be omitted if the parameter
     were not configured:'
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成的语句如下所示。请注意，示例映射中包括 ORDER BY 标准，由 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 的 [`relationship.order_by`](relationship_api.html#sqlalchemy.orm.relationship.params.order_by
+    "sqlalchemy.orm.relationship") 参数指示；如果未配置该参数，则会省略此标准：
 - en: '[PRE44]'
+  id: totrans-223
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: 'We may use this [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select") construct along with the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") in order to query for `AccountTransaction` objects,
@@ -1045,15 +1630,27 @@
     returned; in the example below, additional WHERE criteria to load only “debit”
     account transactions is added, along with “LIMIT 10” to retrieve only the first
     ten rows:'
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以使用这个 [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") 结构以及 [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 来查询 `AccountTransaction` 对象，最简单的方法是使用 [`Session.scalars()`](session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") 方法，该方法将直接返回一个 [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")，其中包含 ORM 对象。通常情况下，虽然不是必需的，但[`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") 可能会进一步修改以限制返回的记录；在下面的示例中，添加了额外的 WHERE 条件，仅加载“借方”账户交易，并且使用“LIMIT
+    10”只检索前十行：
 - en: '[PRE45]'
+  id: totrans-225
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: Removing Items
+  id: totrans-226
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 移除项目
 - en: 'Individual items that are loaded in the [persistent](../glossary.html#term-persistent)
     state against the current [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") may be marked for removal from the collection using
@@ -1063,65 +1660,100 @@
     The example below illustrates removal of an individual `AccountTransaction` item,
     which per [cascade](cascades.html#unitofwork-cascades) settings results in a DELETE
     of that row:'
+  id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 在当前 [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    中加载到[持久](../glossary.html#term-persistent)状态的个别项目可以使用[`WriteOnlyCollection.remove()`](#sqlalchemy.orm.WriteOnlyCollection.remove
+    "sqlalchemy.orm.WriteOnlyCollection.remove") 方法标记为从集合中移除。在操作继续时，刷新过程将隐式考虑对象已经是集合的一部分。下面的示例说明了删除单个
+    `AccountTransaction` 项目，根据 [cascade](cascades.html#unitofwork-cascades) 设置，会导致删除该行：
 - en: '[PRE46]'
+  id: totrans-228
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: As with any ORM-mapped collection, object removal may proceed either to de-associate
     the object from the collection while leaving the object present in the database,
     or may issue a DELETE for its row, based on the [delete-orphan](cascades.html#cascade-delete-orphan)
     configuration of the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship").
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
+  zh: 与任何 ORM 映射的集合一样，对象移除可以根据[`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 的 [delete-orphan](cascades.html#cascade-delete-orphan)
+    配置，要么取消与集合的关联，同时保留对象在数据库中的存在，要么根据配置发出对其行的 DELETE 请求。
 - en: Collection removal without deletion involves setting foreign key columns to
     NULL for a [one-to-many](basic_relationships.html#relationship-patterns-o2m) relationship,
     or deleting the corresponding association row for a [many-to-many](basic_relationships.html#relationships-many-to-many)
     relationship.
+  id: totrans-230
   prefs: []
   type: TYPE_NORMAL
+  zh: 不删除的集合移除涉及将外键列设置为 NULL（对于[一对多](basic_relationships.html#relationship-patterns-o2m)关系）或删除相应的关联行（对于[多对多](basic_relationships.html#relationships-many-to-many)关系）。
 - en: Bulk INSERT of New Items
+  id: totrans-231
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 新项目的批量插入
 - en: The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     can generate DML constructs such as [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
     "sqlalchemy.sql.expression.Insert") objects, which may be used in an ORM context
     to produce bulk insert behavior. See the section [ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     for an overview of ORM bulk inserts.
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")可以生成诸如[`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert")对象之类的 DML 构造，这些构造可以在 ORM 上下文中用于生成批量插入行为。有关
+    ORM 批量插入的概述，请参阅[ORM 批量插入语句](queryguide/dml.html#orm-queryguide-bulk-insert)部分。'
 - en: One to Many Collections
+  id: totrans-233
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 一对多集合
 - en: 'For a **regular one to many collection only**, the [`WriteOnlyCollection.insert()`](#sqlalchemy.orm.WriteOnlyCollection.insert
     "sqlalchemy.orm.WriteOnlyCollection.insert") method will produce an [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
     "sqlalchemy.sql.expression.Insert") construct which is pre-established with VALUES
     criteria corresponding to the parent object. As this VALUES criteria is entirely
     against the related table, the statement can be used to INSERT new rows that will
     at the same time become new records in the related collection:'
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于**普通的一对多集合**，[`WriteOnlyCollection.insert()`](#sqlalchemy.orm.WriteOnlyCollection.insert
+    "sqlalchemy.orm.WriteOnlyCollection.insert")方法将产生一个预先建立了与父对象对应的VALUES条件的[`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert")构造。由于这个VALUES条件完全针对相关表，所以该语句可以用于插入新行，这些新行将同时成为相关集合中的新记录：
 - en: '[PRE47]'
+  id: totrans-235
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: See also
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     - in the [ORM Querying Guide](queryguide/index.html)'
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: '[ORM 批量插入语句](queryguide/dml.html#orm-queryguide-bulk-insert) - 在[ORM 查询指南](queryguide/index.html)中'
 - en: '[One To Many](basic_relationships.html#relationship-patterns-o2m) - at [Basic
     Relationship Patterns](basic_relationships.html#relationship-patterns)'
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: '[一对多](basic_relationships.html#relationship-patterns-o2m) - 在[基本关系模式](basic_relationships.html#relationship-patterns)中'
 - en: Many to Many Collections
+  id: totrans-239
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 多对多集合
 - en: For a **many to many collection**, the relationship between two classes involves
     a third table that is configured using the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
     "sqlalchemy.orm.relationship") parameter of [`relationship`](relationship_api.html#sqlalchemy.orm.relationship
@@ -1131,47 +1763,76 @@
     and those records then passed to the [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") method where the unit of work process
     will proceed to persist them as part of the collection.
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于**多对多集合**，两个类之间的关系涉及第三个表，该表使用[`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship")参数配置[`relationship`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship")。要使用[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection")批量插入此类型的集合中的行，可以先单独批量插入新记录，然后使用 RETURNING
+    检索，然后将这些记录传递给[`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all")方法，工作单元过程将继续将其作为集合的一部分持久化。
 - en: 'Supposing a class `BankAudit` referred to many `AccountTransaction` records
     using a many-to-many table:'
+  id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设一个类`BankAudit`通过多对多表引用了许多`AccountTransaction`记录：
 - en: '[PRE48]'
+  id: totrans-242
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: 'To illustrate the two operations, we add more `AccountTransaction` objects
     using bulk insert, which we retrieve using RETURNING by adding `returning(AccountTransaction)`
     to the bulk INSERT statement (note that we could just as easily use existing `AccountTransaction`
     objects as well):'
+  id: totrans-243
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了说明这两个操作，我们使用批量插入添加了更多的`AccountTransaction`对象，我们通过在批量INSERT语句中添加`returning(AccountTransaction)`来检索它们
+    (注意我们也可以使用现有的`AccountTransaction`对象)：
 - en: '[PRE49]'
+  id: totrans-244
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: 'With a list of `AccountTransaction` objects ready, the [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") method is used to associate many
     rows at once with a new `BankAudit` object:'
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
+  zh: 有了一系列准备好的`AccountTransaction`对象，可以使用[`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all")方法一次性将许多行与新的`BankAudit`对象关联起来：
 - en: '[PRE50]'
+  id: totrans-246
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: See also
+  id: totrans-247
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     - in the [ORM Querying Guide](queryguide/index.html)'
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
+  zh: '[ORM 批量插入语句](queryguide/dml.html#orm-queryguide-bulk-insert) - 在[ORM 查询指南](queryguide/index.html)中'
 - en: '[Many To Many](basic_relationships.html#relationships-many-to-many) - at [Basic
     Relationship Patterns](basic_relationships.html#relationship-patterns)'
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
+  zh: '[多对多](basic_relationships.html#relationships-many-to-many) - 位于[基本关系模式](basic_relationships.html#relationship-patterns)'
 - en: Bulk UPDATE and DELETE of Items
+  id: totrans-250
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Items的批量UPDATE和DELETE
 - en: In a similar way in which [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection") can generate [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select") constructs with WHERE criteria pre-established,
@@ -1180,66 +1841,100 @@
     "sqlalchemy.sql.expression.Delete") constructs with that same WHERE criteria,
     to allow criteria-oriented UPDATE and DELETE statements against the elements in
     a large collection.
+  id: totrans-251
   prefs: []
   type: TYPE_NORMAL
+  zh: 与[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")类似，它可以生成带有预先建立的WHERE条件的[`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select")结构，也可以生成带有相同WHERE条件的[`Update`](../core/dml.html#sqlalchemy.sql.expression.Update
+    "sqlalchemy.sql.expression.Update")和[`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete
+    "sqlalchemy.sql.expression.Delete")结构，以允许针对大型集合中的元素进行基于条件的UPDATE和DELETE语句。
 - en: One To Many Collections
+  id: totrans-252
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 一对多集合
 - en: As is the case with INSERT, this feature is most straightforward with **one
     to many collections**.
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 与INSERT一样，这个特性对于**一对多集合**来说最为直接。
 - en: 'In the example below, the [`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
     "sqlalchemy.orm.WriteOnlyCollection.update") method is used to generate an UPDATE
     statement is emitted against the elements in the collection, locating rows where
     the “amount” is equal to `-800` and adding the amount of `200` to them:'
+  id: totrans-254
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下面的示例中，[`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
+    "sqlalchemy.orm.WriteOnlyCollection.update")方法用于生成一条UPDATE语句，针对集合中的元素发出，定位“amount”等于`-800`的行，并将`200`的数量添加到它们：
 - en: '[PRE51]'
+  id: totrans-255
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: 'In a similar way, [`WriteOnlyCollection.delete()`](#sqlalchemy.orm.WriteOnlyCollection.delete
     "sqlalchemy.orm.WriteOnlyCollection.delete") will produce a DELETE statement that
     is invoked in the same way:'
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
+  zh: 类似地，[`WriteOnlyCollection.delete()`](#sqlalchemy.orm.WriteOnlyCollection.delete
+    "sqlalchemy.orm.WriteOnlyCollection.delete")将生成一个DELETE语句，以相同的方式调用：
 - en: '[PRE52]'
+  id: totrans-257
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: Many to Many Collections
+  id: totrans-258
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 多对多集合
 - en: Tip
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: The techniques here involve multi-table UPDATE expressions, which are slightly
     more advanced.
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里涉及到稍微高级的多表UPDATE表达式技巧。
 - en: For bulk UPDATE and DELETE of **many to many collections**, in order for an
     UPDATE or DELETE statement to relate to the primary key of the parent object,
     the association table must be explicitly part of the UPDATE/DELETE statement,
     which requires either that the backend includes supports for non-standard SQL
     syntaxes, or extra explicit steps when constructing the UPDATE or DELETE statement.
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于**多对多集合**的批量UPDATE和DELETE，为了使UPDATE或DELETE语句与父对象的主键相关联，必须显式地将关联表包含在UPDATE/DELETE语句中，这要求后端要么包括对非标准SQL语法的支持，要么在构建UPDATE或DELETE语句时需要额外的显式步骤。
 - en: 'For backends that support multi-table versions of UPDATE, the [`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
     "sqlalchemy.orm.WriteOnlyCollection.update") method should work without extra
     steps for a many-to-many collection, as in the example below where an UPDATE is
     emitted against `AccountTransaction` objects in terms of the many-to-many `BankAudit.account_transactions`
     collection:'
+  id: totrans-262
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于支持多表版本UPDATE的后端，[`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
+    "sqlalchemy.orm.WriteOnlyCollection.update")方法应该可以直接用于多对多集合，就像下面的示例中针对多对多`BankAudit.account_transactions`集合中的`AccountTransaction`对象发出UPDATE一样：
 - en: '[PRE53]'
+  id: totrans-263
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: The above statement automatically makes use of “UPDATE..FROM” syntax, supported
     by SQLite and others, to name the additional `audit_transaction` table in the
     WHERE clause.
+  id: totrans-264
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述语句自动使用了“UPDATE..FROM”语法，该语法由SQLite和其他数据库支持，以在WHERE子句中命名额外的`audit_transaction`表。
 - en: 'To UPDATE or DELETE a many-to-many collection where multi-table syntax is not
     available, the many-to-many criteria may be moved into SELECT that for example
     may be combined with IN to match rows. The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
@@ -1248,242 +1943,360 @@
     us, making use of the [`Select.with_only_columns()`](../core/selectable.html#sqlalchemy.sql.expression.Select.with_only_columns
     "sqlalchemy.sql.expression.Select.with_only_columns") method to produce a [scalar
     subquery](../glossary.html#term-scalar-subquery):'
+  id: totrans-265
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE54]'
+  id: totrans-266
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: Write Only Collections - API Documentation
+  id: totrans-267
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: '| Object Name | Description |'
+  id: totrans-268
   prefs: []
   type: TYPE_TB
 - en: '| --- | --- |'
+  id: totrans-269
   prefs: []
   type: TYPE_TB
 - en: '| [WriteOnlyCollection](#sqlalchemy.orm.WriteOnlyCollection) | Write-only collection
     which can synchronize changes into the attribute event system. |'
+  id: totrans-270
   prefs: []
   type: TYPE_TB
 - en: '| [WriteOnlyMapped](#sqlalchemy.orm.WriteOnlyMapped) | Represent the ORM mapped
     attribute type for a “write only” relationship. |'
+  id: totrans-271
   prefs: []
   type: TYPE_TB
 - en: '[PRE55]'
+  id: totrans-272
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: Write-only collection which can synchronize changes into the attribute event
     system.
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
 - en: The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     is used in a mapping by using the `"write_only"` lazy loading strategy with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship"). For background on this configuration, see [Write
     Only Relationships](#write-only-relationship).
+  id: totrans-274
   prefs: []
   type: TYPE_NORMAL
 - en: New in version 2.0.
+  id: totrans-275
   prefs: []
   type: TYPE_NORMAL
 - en: See also
+  id: totrans-276
   prefs: []
   type: TYPE_NORMAL
 - en: '[Write Only Relationships](#write-only-relationship)'
+  id: totrans-277
   prefs: []
   type: TYPE_NORMAL
 - en: '**Members**'
+  id: totrans-278
   prefs: []
   type: TYPE_NORMAL
 - en: '[add()](#sqlalchemy.orm.WriteOnlyCollection.add), [add_all()](#sqlalchemy.orm.WriteOnlyCollection.add_all),
     [delete()](#sqlalchemy.orm.WriteOnlyCollection.delete), [insert()](#sqlalchemy.orm.WriteOnlyCollection.insert),
     [remove()](#sqlalchemy.orm.WriteOnlyCollection.remove), [select()](#sqlalchemy.orm.WriteOnlyCollection.select),
     [update()](#sqlalchemy.orm.WriteOnlyCollection.update)'
+  id: totrans-279
   prefs: []
   type: TYPE_NORMAL
 - en: '**Class signature**'
+  id: totrans-280
   prefs: []
   type: TYPE_NORMAL
 - en: class [`sqlalchemy.orm.WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection") (`sqlalchemy.orm.writeonly.AbstractCollectionWriter`)
+  id: totrans-281
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE56]'
+  id: totrans-282
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: Add an item to this [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-283
   prefs: []
   type: TYPE_NORMAL
 - en: The given item will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-284
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE57]'
+  id: totrans-285
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: Add an iterable of items to this [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-286
   prefs: []
   type: TYPE_NORMAL
 - en: The given items will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-287
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE58]'
+  id: totrans-288
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: Produce a [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
     which will refer to rows in terms of this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-289
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE59]'
+  id: totrans-290
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: For one-to-many collections, produce a [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
     "sqlalchemy.sql.expression.Insert") which will insert new rows in terms of this
     this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于一对多集合，产生一个 [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert "sqlalchemy.sql.expression.Insert")，该插入将以此实例本地
+    [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    为条件插入新的行。
 - en: This construct is only supported for a [`Relationship`](internals.html#sqlalchemy.orm.Relationship
     "sqlalchemy.orm.Relationship") that does **not** include the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
     "sqlalchemy.orm.relationship") parameter. For relationships that refer to a many-to-many
     table, use ordinary bulk insert techniques to produce new objects, then use `AbstractCollectionWriter.add_all()`
     to associate them with the collection.
+  id: totrans-292
   prefs: []
   type: TYPE_NORMAL
+  zh: 此构造仅支持不包含 [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") 参数的 [`Relationship`](internals.html#sqlalchemy.orm.Relationship
+    "sqlalchemy.orm.Relationship")。对于引用到多对多表的关系，请使用普通的批量插入技术来产生新对象，然后使用 `AbstractCollectionWriter.add_all()`
+    将其与集合关联起来。
 - en: '[PRE60]'
+  id: totrans-293
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: Remove an item from this [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-294
   prefs: []
   type: TYPE_NORMAL
+  zh: 从此 [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    中移除一个项目。
 - en: The given item will be removed from the parent instance’s collection on the
     next flush.
+  id: totrans-295
   prefs: []
   type: TYPE_NORMAL
+  zh: 给定的项目将在下次刷新时从父实例的集合中移除。
 - en: '[PRE61]'
+  id: totrans-296
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE61]'
 - en: Produce a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select") construct that represents the rows within
     this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-297
   prefs: []
   type: TYPE_NORMAL
+  zh: 产生一个 [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select "sqlalchemy.sql.expression.Select")
+    构造，表示此实例本地 [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    中的行。
 - en: '[PRE62]'
+  id: totrans-298
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE62]'
 - en: Produce a [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
     which will refer to rows in terms of this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-299
   prefs: []
   type: TYPE_NORMAL
+  zh: 产生一个 [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")，该更新将参考以此实例本地为条件的行的
+    [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")。
 - en: '[PRE63]'
+  id: totrans-300
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE63]'
 - en: Represent the ORM mapped attribute type for a “write only” relationship.
+  id: totrans-301
   prefs: []
   type: TYPE_NORMAL
+  zh: 表示“只写”关系的 ORM 映射属性类型。
 - en: The [`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
     type annotation may be used in an [Annotated Declarative Table](declarative_tables.html#orm-declarative-mapped-column)
     mapping to indicate that the `lazy="write_only"` loader strategy should be used
     for a particular [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship").
+  id: totrans-302
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
+    类型注释可以在 [带注释的声明性表](declarative_tables.html#orm-declarative-mapped-column) 映射中使用，以指示特定的
+    [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship "sqlalchemy.orm.relationship")
+    应使用 `lazy="write_only"` 加载策略。'
 - en: 'E.g.:'
+  id: totrans-303
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如：
 - en: '[PRE64]'
+  id: totrans-304
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE64]'
 - en: See the section [Write Only Relationships](#write-only-relationship) for background.
+  id: totrans-305
   prefs: []
   type: TYPE_NORMAL
+  zh: 参见章节 [只写关系](#write-only-relationship) 了解背景。
 - en: New in version 2.0.
+  id: totrans-306
   prefs: []
   type: TYPE_NORMAL
+  zh: 新版本 2.0 中新增。
 - en: See also
+  id: totrans-307
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Write Only Relationships](#write-only-relationship) - complete background'
+  id: totrans-308
   prefs: []
   type: TYPE_NORMAL
+  zh: '[只写关系](#write-only-relationship) - 完整的背景'
 - en: '[`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
     - includes legacy [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
     support'
+  id: totrans-309
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
+    - 包含旧的 [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
+    支持'
 - en: '**Class signature**'
+  id: totrans-310
   prefs: []
   type: TYPE_NORMAL
+  zh: '**类签名**'
 - en: class [`sqlalchemy.orm.WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
     (`sqlalchemy.orm.base._MappedAnnotationBase`)
+  id: totrans-311
   prefs: []
   type: TYPE_NORMAL
+  zh: 类 [`sqlalchemy.orm.WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
+    (`sqlalchemy.orm.base._MappedAnnotationBase`)
 - en: Creating and Persisting New Write Only Collections
+  id: totrans-312
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 创建和持久化新的只写集合
 - en: 'The write-only collection allows for direct assignment of the collection as
     a whole **only** for [transient](../glossary.html#term-transient) or [pending](../glossary.html#term-pending)
     objects. With our above mapping, this indicates we can create a new `Account`
     object with a sequence of `AccountTransaction` objects to be added to a [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session"). Any Python iterable may be used as the source of objects
     to start, where below we use a Python `list`:'
+  id: totrans-313
   prefs: []
   type: TYPE_NORMAL
+  zh: 仅写集合允许直接将集合整体分配为**仅**用于[瞬态](../glossary.html#term-transient)或[待处理](../glossary.html#term-pending)对象。根据我们上面的映射，这表示我们可以创建一个新的
+    `Account` 对象，其中包含要添加到[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")中的一系列
+    `AccountTransaction` 对象。任何 Python 可迭代对象都可以用作要开始的对象的源，下面我们使用 Python `list`：
 - en: '[PRE65]'
+  id: totrans-314
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE65]'
 - en: 'Once an object is database-persisted (i.e. in the [persistent](../glossary.html#term-persistent)
     or [detached](../glossary.html#term-detached) state), the collection has the ability
     to be extended with new items as well as the ability for individual items to be
     removed. However, the collection may **no longer be re-assigned with a full replacement
     collection**, as such an operation requires that the previous collection is fully
     loaded into memory in order to reconcile the old entries with the new ones:'
+  id: totrans-315
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦对象被数据库持久化（即处于[持久化](../glossary.html#term-persistent)或[分离](../glossary.html#term-detached)状态），集合就有能力扩展新项目以及个别项目的能力被移除。但是，集合可能**不再被重新分配为完整替换集合**，因为这样的操作要求以前的集合完全加载到内存中，以便将旧条目与新条目进行对比：
 - en: '[PRE66]'
+  id: totrans-316
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE66]'
 - en: Adding New Items to an Existing Collection
+  id: totrans-317
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 向现有集合添加新项目
 - en: 'For write-only collections of persistent objects, modifications to the collection
     using [unit of work](../glossary.html#term-unit-of-work) processes may proceed
     only by using the [`WriteOnlyCollection.add()`](#sqlalchemy.orm.WriteOnlyCollection.add
     "sqlalchemy.orm.WriteOnlyCollection.add"), [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") and [`WriteOnlyCollection.remove()`](#sqlalchemy.orm.WriteOnlyCollection.remove
     "sqlalchemy.orm.WriteOnlyCollection.remove") methods:'
+  id: totrans-318
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于持久对象的仅写集合，使用[unit of work](../glossary.html#term-unit-of-work)过程对集合进行修改只能使用[`WriteOnlyCollection.add()`](#sqlalchemy.orm.WriteOnlyCollection.add
+    "sqlalchemy.orm.WriteOnlyCollection.add")、[`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all")和[`WriteOnlyCollection.remove()`](#sqlalchemy.orm.WriteOnlyCollection.remove
+    "sqlalchemy.orm.WriteOnlyCollection.remove")方法：
 - en: '[PRE67]'
+  id: totrans-319
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE67]'
 - en: The items added above are held in a pending queue within the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") until the next flush, at which point they are INSERTed
     into the database, assuming the added objects were previously [transient](../glossary.html#term-transient).
+  id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述添加的项目在[`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")中被保留在待处理队列中，直到下一个
+    flush，此时它们被插入到数据库中，假设添加的对象之前是[瞬态](../glossary.html#term-transient)的。
 - en: Querying Items
+  id: totrans-321
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 查询项目
 - en: The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     does not at any point store a reference to the current contents of the collection,
     nor does it have any behavior where it would directly emit a SELECT to the database
     in order to load them; the overriding assumption is that the collection may contain
     many thousands or millions of rows, and should never be fully loaded into memory
     as a side effect of any other operation.
+  id: totrans-322
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")不会在任何时候存储对集合当前内容的引用，也不会有任何直接发出
+    SELECT 到数据库以加载它们的行为；其覆盖的假设是集合可能包含许多千万个或数百万个行，并且不应作为任何其他操作的副作用完全加载到内存中。'
 - en: Instead, the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     includes SQL-generating helpers such as [`WriteOnlyCollection.select()`](#sqlalchemy.orm.WriteOnlyCollection.select
     "sqlalchemy.orm.WriteOnlyCollection.select"), which will generate a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
@@ -1492,18 +2305,29 @@
     in order to SELECT any range of rows desired, as well as invoked using features
     like [server side cursors](queryguide/api.html#orm-queryguide-yield-per) for processes
     that wish to iterate through the full collection in a memory-efficient manner.
+  id: totrans-323
   prefs: []
   type: TYPE_NORMAL
+  zh: 相反，[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    包括生成 SQL 的辅助工具，如 [`WriteOnlyCollection.select()`](#sqlalchemy.orm.WriteOnlyCollection.select
+    "sqlalchemy.orm.WriteOnlyCollection.select")，它将生成一个预先配置了正确的 WHERE / FROM 条件的 [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") 构造，然后可以进一步修改以选择所需的任何行范围，还可以使用 [服务器端游标](queryguide/api.html#orm-queryguide-yield-per)
+    进行调用，以便以内存有效的方式遍历整个集合。
 - en: 'The statement generated is illustrated below. Note it also includes ORDER BY
     criteria, indicated in the example mapping by the [`relationship.order_by`](relationship_api.html#sqlalchemy.orm.relationship.params.order_by
     "sqlalchemy.orm.relationship") parameter of [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship"); this criteria would be omitted if the parameter
     were not configured:'
+  id: totrans-324
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面说明了生成的语句。请注意，示例映射中的 [`relationship.order_by`](relationship_api.html#sqlalchemy.orm.relationship.params.order_by
+    "sqlalchemy.orm.relationship") 参数指示了 ORDER BY 条件；如果未配置该参数，则该条件将被省略：
 - en: '[PRE68]'
+  id: totrans-325
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE68]'
 - en: 'We may use this [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select") construct along with the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") in order to query for `AccountTransaction` objects,
@@ -1515,15 +2339,27 @@
     returned; in the example below, additional WHERE criteria to load only “debit”
     account transactions is added, along with “LIMIT 10” to retrieve only the first
     ten rows:'
+  id: totrans-326
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以使用此 [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") 构造以及 [`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 来查询 `AccountTransaction` 对象，最简单的方法是使用 [`Session.scalars()`](session_api.html#sqlalchemy.orm.Session.scalars
+    "sqlalchemy.orm.Session.scalars") 方法，该方法将返回一个直接产生 ORM 对象的 [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")。通常情况下，但不是必需的，会进一步修改 [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
+    "sqlalchemy.sql.expression.Select") 以限制返回的记录；在下面的示例中，添加了额外的 WHERE 条件以仅加载 “借方”
+    账户交易，并添加了 “LIMIT 10” 以仅检索前十行：
 - en: '[PRE69]'
+  id: totrans-327
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE69]'
 - en: Removing Items
+  id: totrans-328
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 删除项目
 - en: 'Individual items that are loaded in the [persistent](../glossary.html#term-persistent)
     state against the current [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") may be marked for removal from the collection using
@@ -1533,65 +2369,104 @@
     The example below illustrates removal of an individual `AccountTransaction` item,
     which per [cascade](cascades.html#unitofwork-cascades) settings results in a DELETE
     of that row:'
+  id: totrans-329
   prefs: []
   type: TYPE_NORMAL
+  zh: 在当前 [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    中针对持久状态的单个加载项目可以使用 [`WriteOnlyCollection.remove()`](#sqlalchemy.orm.WriteOnlyCollection.remove
+    "sqlalchemy.orm.WriteOnlyCollection.remove") 方法标记为从集合中删除。当操作进行时，刷新过程将隐式考虑对象已经是集合的一部分。下面的示例说明了如何删除单个
+    `AccountTransaction` 项目，根据 [级联](cascades.html#unitofwork-cascades) 设置，这将导致删除该行：
 - en: '[PRE70]'
+  id: totrans-330
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE70]'
 - en: As with any ORM-mapped collection, object removal may proceed either to de-associate
     the object from the collection while leaving the object present in the database,
     or may issue a DELETE for its row, based on the [delete-orphan](cascades.html#cascade-delete-orphan)
     configuration of the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship").
+  id: totrans-331
   prefs: []
   type: TYPE_NORMAL
+  zh: 与任何 ORM 映射的集合一样，对象的移除可以选择将对象与集合解除关联，同时保留对象在数据库中，或者可以基于 [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
+    "sqlalchemy.orm.relationship") 的 [delete-orphan](cascades.html#cascade-delete-orphan)
+    配置发出其行的 DELETE。
 - en: Collection removal without deletion involves setting foreign key columns to
     NULL for a [one-to-many](basic_relationships.html#relationship-patterns-o2m) relationship,
     or deleting the corresponding association row for a [many-to-many](basic_relationships.html#relationships-many-to-many)
     relationship.
+  id: totrans-332
   prefs: []
   type: TYPE_NORMAL
+  zh: 在不删除的情况下移除集合涉及将外键列设置为 NULL（对于 [一对多](basic_relationships.html#relationship-patterns-o2m)
+    关系）或删除相应的关联行（对于 [多对多](basic_relationships.html#relationships-many-to-many) 关系）。
 - en: Bulk INSERT of New Items
+  id: totrans-333
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 批量插入新项目
 - en: The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     can generate DML constructs such as [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
     "sqlalchemy.sql.expression.Insert") objects, which may be used in an ORM context
     to produce bulk insert behavior. See the section [ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     for an overview of ORM bulk inserts.
+  id: totrans-334
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
+    可以生成诸如 [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert "sqlalchemy.sql.expression.Insert")
+    对象之类的 DML 构造，这些构造可以在 ORM 上下文中用于产生批量插入行为。参见 [ORM 批量插入语句](queryguide/dml.html#orm-queryguide-bulk-insert)
+    章节了解 ORM 批量插入的概述。'
 - en: One to Many Collections
+  id: totrans-335
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 一对多集合
 - en: 'For a **regular one to many collection only**, the [`WriteOnlyCollection.insert()`](#sqlalchemy.orm.WriteOnlyCollection.insert
     "sqlalchemy.orm.WriteOnlyCollection.insert") method will produce an [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
     "sqlalchemy.sql.expression.Insert") construct which is pre-established with VALUES
     criteria corresponding to the parent object. As this VALUES criteria is entirely
     against the related table, the statement can be used to INSERT new rows that will
     at the same time become new records in the related collection:'
+  id: totrans-336
   prefs: []
   type: TYPE_NORMAL
+  zh: 仅适用于**常规的一对多集合**，[`WriteOnlyCollection.insert()`](#sqlalchemy.orm.WriteOnlyCollection.insert
+    "sqlalchemy.orm.WriteOnlyCollection.insert") 方法将产生一个预先设定了与父对象相对应的 VALUES 条件的 [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
+    "sqlalchemy.sql.expression.Insert") 构造。由于这个 VALUES 条件完全针对相关表，该语句可用于插入新行，这些新行将同时成为相关集合中的新记录：
 - en: '[PRE71]'
+  id: totrans-337
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE71]'
 - en: See also
+  id: totrans-338
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     - in the [ORM Querying Guide](queryguide/index.html)'
+  id: totrans-339
   prefs: []
   type: TYPE_NORMAL
+  zh: '[ORM 批量插入语句](queryguide/dml.html#orm-queryguide-bulk-insert) - 在 [ORM 查询指南](queryguide/index.html)
+    中'
 - en: '[One To Many](basic_relationships.html#relationship-patterns-o2m) - at [Basic
     Relationship Patterns](basic_relationships.html#relationship-patterns)'
+  id: totrans-340
   prefs: []
   type: TYPE_NORMAL
+  zh: '[一对多](basic_relationships.html#relationship-patterns-o2m) - 在 [基本关系模式](basic_relationships.html#relationship-patterns)
+    中'
 - en: Many to Many Collections
+  id: totrans-341
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 多对多集合
 - en: For a **many to many collection**, the relationship between two classes involves
     a third table that is configured using the [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
     "sqlalchemy.orm.relationship") parameter of [`relationship`](relationship_api.html#sqlalchemy.orm.relationship
@@ -1601,44 +2476,63 @@
     and those records then passed to the [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") method where the unit of work process
     will proceed to persist them as part of the collection.
+  id: totrans-342
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于**多对多集合**，两个类之间的关系涉及使用 [`relationship.secondary`](relationship_api.html#sqlalchemy.orm.relationship.params.secondary
+    "sqlalchemy.orm.relationship") 参数配置的第三个表的情况。要使用 [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
+    "sqlalchemy.orm.WriteOnlyCollection") 批量插入此类型的集合中的行，新记录可能首先单独进行批量插入，然后使用 RETURNING
+    检索，然后将这些记录传递给 [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
+    "sqlalchemy.orm.WriteOnlyCollection.add_all") 方法，在这个过程中，工作单元将会将它们作为集合的一部分持久化。
 - en: 'Supposing a class `BankAudit` referred to many `AccountTransaction` records
     using a many-to-many table:'
+  id: totrans-343
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE72]'
+  id: totrans-344
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE72]'
 - en: 'To illustrate the two operations, we add more `AccountTransaction` objects
     using bulk insert, which we retrieve using RETURNING by adding `returning(AccountTransaction)`
     to the bulk INSERT statement (note that we could just as easily use existing `AccountTransaction`
     objects as well):'
+  id: totrans-345
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE73]'
+  id: totrans-346
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE73]'
 - en: 'With a list of `AccountTransaction` objects ready, the [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") method is used to associate many
     rows at once with a new `BankAudit` object:'
+  id: totrans-347
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE74]'
+  id: totrans-348
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE74]'
 - en: See also
+  id: totrans-349
   prefs: []
   type: TYPE_NORMAL
 - en: '[ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     - in the [ORM Querying Guide](queryguide/index.html)'
+  id: totrans-350
   prefs: []
   type: TYPE_NORMAL
 - en: '[Many To Many](basic_relationships.html#relationships-many-to-many) - at [Basic
     Relationship Patterns](basic_relationships.html#relationship-patterns)'
+  id: totrans-351
   prefs: []
   type: TYPE_NORMAL
 - en: One to Many Collections
+  id: totrans-352
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
@@ -1648,23 +2542,30 @@
     criteria corresponding to the parent object. As this VALUES criteria is entirely
     against the related table, the statement can be used to INSERT new rows that will
     at the same time become new records in the related collection:'
+  id: totrans-353
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE75]'
+  id: totrans-354
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE75]'
 - en: See also
+  id: totrans-355
   prefs: []
   type: TYPE_NORMAL
 - en: '[ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     - in the [ORM Querying Guide](queryguide/index.html)'
+  id: totrans-356
   prefs: []
   type: TYPE_NORMAL
 - en: '[One To Many](basic_relationships.html#relationship-patterns-o2m) - at [Basic
     Relationship Patterns](basic_relationships.html#relationship-patterns)'
+  id: totrans-357
   prefs: []
   type: TYPE_NORMAL
 - en: Many to Many Collections
+  id: totrans-358
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
@@ -1677,44 +2578,58 @@
     and those records then passed to the [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") method where the unit of work process
     will proceed to persist them as part of the collection.
+  id: totrans-359
   prefs: []
   type: TYPE_NORMAL
 - en: 'Supposing a class `BankAudit` referred to many `AccountTransaction` records
     using a many-to-many table:'
+  id: totrans-360
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE76]'
+  id: totrans-361
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE76]'
 - en: 'To illustrate the two operations, we add more `AccountTransaction` objects
     using bulk insert, which we retrieve using RETURNING by adding `returning(AccountTransaction)`
     to the bulk INSERT statement (note that we could just as easily use existing `AccountTransaction`
     objects as well):'
+  id: totrans-362
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE77]'
+  id: totrans-363
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE77]'
 - en: 'With a list of `AccountTransaction` objects ready, the [`WriteOnlyCollection.add_all()`](#sqlalchemy.orm.WriteOnlyCollection.add_all
     "sqlalchemy.orm.WriteOnlyCollection.add_all") method is used to associate many
     rows at once with a new `BankAudit` object:'
+  id: totrans-364
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE78]'
+  id: totrans-365
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE78]'
 - en: See also
+  id: totrans-366
   prefs: []
   type: TYPE_NORMAL
 - en: '[ORM Bulk INSERT Statements](queryguide/dml.html#orm-queryguide-bulk-insert)
     - in the [ORM Querying Guide](queryguide/index.html)'
+  id: totrans-367
   prefs: []
   type: TYPE_NORMAL
 - en: '[Many To Many](basic_relationships.html#relationships-many-to-many) - at [Basic
     Relationship Patterns](basic_relationships.html#relationship-patterns)'
+  id: totrans-368
   prefs: []
   type: TYPE_NORMAL
 - en: Bulk UPDATE and DELETE of Items
+  id: totrans-369
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1726,42 +2641,54 @@
     "sqlalchemy.sql.expression.Delete") constructs with that same WHERE criteria,
     to allow criteria-oriented UPDATE and DELETE statements against the elements in
     a large collection.
+  id: totrans-370
   prefs: []
   type: TYPE_NORMAL
 - en: One To Many Collections
+  id: totrans-371
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: As is the case with INSERT, this feature is most straightforward with **one
     to many collections**.
+  id: totrans-372
   prefs: []
   type: TYPE_NORMAL
 - en: 'In the example below, the [`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
     "sqlalchemy.orm.WriteOnlyCollection.update") method is used to generate an UPDATE
     statement is emitted against the elements in the collection, locating rows where
     the “amount” is equal to `-800` and adding the amount of `200` to them:'
+  id: totrans-373
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE79]'
+  id: totrans-374
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE79]'
 - en: 'In a similar way, [`WriteOnlyCollection.delete()`](#sqlalchemy.orm.WriteOnlyCollection.delete
     "sqlalchemy.orm.WriteOnlyCollection.delete") will produce a DELETE statement that
     is invoked in the same way:'
+  id: totrans-375
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE80]'
+  id: totrans-376
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE80]'
 - en: Many to Many Collections
+  id: totrans-377
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-378
   prefs: []
   type: TYPE_NORMAL
 - en: The techniques here involve multi-table UPDATE expressions, which are slightly
     more advanced.
+  id: totrans-379
   prefs: []
   type: TYPE_NORMAL
 - en: For bulk UPDATE and DELETE of **many to many collections**, in order for an
@@ -1769,6 +2696,7 @@
     the association table must be explicitly part of the UPDATE/DELETE statement,
     which requires either that the backend includes supports for non-standard SQL
     syntaxes, or extra explicit steps when constructing the UPDATE or DELETE statement.
+  id: totrans-380
   prefs: []
   type: TYPE_NORMAL
 - en: 'For backends that support multi-table versions of UPDATE, the [`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
@@ -1776,14 +2704,18 @@
     steps for a many-to-many collection, as in the example below where an UPDATE is
     emitted against `AccountTransaction` objects in terms of the many-to-many `BankAudit.account_transactions`
     collection:'
+  id: totrans-381
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE81]'
+  id: totrans-382
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE81]'
 - en: The above statement automatically makes use of “UPDATE..FROM” syntax, supported
     by SQLite and others, to name the additional `audit_transaction` table in the
     WHERE clause.
+  id: totrans-383
   prefs: []
   type: TYPE_NORMAL
 - en: 'To UPDATE or DELETE a many-to-many collection where multi-table syntax is not
@@ -1794,45 +2726,59 @@
     us, making use of the [`Select.with_only_columns()`](../core/selectable.html#sqlalchemy.sql.expression.Select.with_only_columns
     "sqlalchemy.sql.expression.Select.with_only_columns") method to produce a [scalar
     subquery](../glossary.html#term-scalar-subquery):'
+  id: totrans-384
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE82]'
+  id: totrans-385
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE82]'
 - en: One To Many Collections
+  id: totrans-386
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: As is the case with INSERT, this feature is most straightforward with **one
     to many collections**.
+  id: totrans-387
   prefs: []
   type: TYPE_NORMAL
 - en: 'In the example below, the [`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
     "sqlalchemy.orm.WriteOnlyCollection.update") method is used to generate an UPDATE
     statement is emitted against the elements in the collection, locating rows where
     the “amount” is equal to `-800` and adding the amount of `200` to them:'
+  id: totrans-388
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE83]'
+  id: totrans-389
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE83]'
 - en: 'In a similar way, [`WriteOnlyCollection.delete()`](#sqlalchemy.orm.WriteOnlyCollection.delete
     "sqlalchemy.orm.WriteOnlyCollection.delete") will produce a DELETE statement that
     is invoked in the same way:'
+  id: totrans-390
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE84]'
+  id: totrans-391
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE84]'
 - en: Many to Many Collections
+  id: totrans-392
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-393
   prefs: []
   type: TYPE_NORMAL
 - en: The techniques here involve multi-table UPDATE expressions, which are slightly
     more advanced.
+  id: totrans-394
   prefs: []
   type: TYPE_NORMAL
 - en: For bulk UPDATE and DELETE of **many to many collections**, in order for an
@@ -1840,6 +2786,7 @@
     the association table must be explicitly part of the UPDATE/DELETE statement,
     which requires either that the backend includes supports for non-standard SQL
     syntaxes, or extra explicit steps when constructing the UPDATE or DELETE statement.
+  id: totrans-395
   prefs: []
   type: TYPE_NORMAL
 - en: 'For backends that support multi-table versions of UPDATE, the [`WriteOnlyCollection.update()`](#sqlalchemy.orm.WriteOnlyCollection.update
@@ -1847,14 +2794,18 @@
     steps for a many-to-many collection, as in the example below where an UPDATE is
     emitted against `AccountTransaction` objects in terms of the many-to-many `BankAudit.account_transactions`
     collection:'
+  id: totrans-396
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE85]'
+  id: totrans-397
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE85]'
 - en: The above statement automatically makes use of “UPDATE..FROM” syntax, supported
     by SQLite and others, to name the additional `audit_transaction` table in the
     WHERE clause.
+  id: totrans-398
   prefs: []
   type: TYPE_NORMAL
 - en: 'To UPDATE or DELETE a many-to-many collection where multi-table syntax is not
@@ -1865,104 +2816,137 @@
     us, making use of the [`Select.with_only_columns()`](../core/selectable.html#sqlalchemy.sql.expression.Select.with_only_columns
     "sqlalchemy.sql.expression.Select.with_only_columns") method to produce a [scalar
     subquery](../glossary.html#term-scalar-subquery):'
+  id: totrans-399
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE86]'
+  id: totrans-400
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE86]'
 - en: Write Only Collections - API Documentation
+  id: totrans-401
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: '| Object Name | Description |'
+  id: totrans-402
   prefs: []
   type: TYPE_TB
 - en: '| --- | --- |'
+  id: totrans-403
   prefs: []
   type: TYPE_TB
 - en: '| [WriteOnlyCollection](#sqlalchemy.orm.WriteOnlyCollection) | Write-only collection
     which can synchronize changes into the attribute event system. |'
+  id: totrans-404
   prefs: []
   type: TYPE_TB
 - en: '| [WriteOnlyMapped](#sqlalchemy.orm.WriteOnlyMapped) | Represent the ORM mapped
     attribute type for a “write only” relationship. |'
+  id: totrans-405
   prefs: []
   type: TYPE_TB
 - en: '[PRE87]'
+  id: totrans-406
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE87]'
 - en: Write-only collection which can synchronize changes into the attribute event
     system.
+  id: totrans-407
   prefs: []
   type: TYPE_NORMAL
 - en: The [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     is used in a mapping by using the `"write_only"` lazy loading strategy with [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship"). For background on this configuration, see [Write
     Only Relationships](#write-only-relationship).
+  id: totrans-408
   prefs: []
   type: TYPE_NORMAL
 - en: New in version 2.0.
+  id: totrans-409
   prefs: []
   type: TYPE_NORMAL
 - en: See also
+  id: totrans-410
   prefs: []
   type: TYPE_NORMAL
 - en: '[Write Only Relationships](#write-only-relationship)'
+  id: totrans-411
   prefs: []
   type: TYPE_NORMAL
 - en: '**Members**'
+  id: totrans-412
   prefs: []
   type: TYPE_NORMAL
 - en: '[add()](#sqlalchemy.orm.WriteOnlyCollection.add), [add_all()](#sqlalchemy.orm.WriteOnlyCollection.add_all),
     [delete()](#sqlalchemy.orm.WriteOnlyCollection.delete), [insert()](#sqlalchemy.orm.WriteOnlyCollection.insert),
     [remove()](#sqlalchemy.orm.WriteOnlyCollection.remove), [select()](#sqlalchemy.orm.WriteOnlyCollection.select),
     [update()](#sqlalchemy.orm.WriteOnlyCollection.update)'
+  id: totrans-413
   prefs: []
   type: TYPE_NORMAL
 - en: '**Class signature**'
+  id: totrans-414
   prefs: []
   type: TYPE_NORMAL
 - en: class [`sqlalchemy.orm.WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection") (`sqlalchemy.orm.writeonly.AbstractCollectionWriter`)
+  id: totrans-415
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE88]'
+  id: totrans-416
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE88]'
 - en: Add an item to this [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-417
   prefs: []
   type: TYPE_NORMAL
 - en: The given item will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-418
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE89]'
+  id: totrans-419
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE89]'
 - en: Add an iterable of items to this [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-420
   prefs: []
   type: TYPE_NORMAL
 - en: The given items will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-421
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE90]'
+  id: totrans-422
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE90]'
 - en: Produce a [`Delete`](../core/dml.html#sqlalchemy.sql.expression.Delete "sqlalchemy.sql.expression.Delete")
     which will refer to rows in terms of this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-423
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE91]'
+  id: totrans-424
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE91]'
 - en: For one-to-many collections, produce a [`Insert`](../core/dml.html#sqlalchemy.sql.expression.Insert
     "sqlalchemy.sql.expression.Insert") which will insert new rows in terms of this
     this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-425
   prefs: []
   type: TYPE_NORMAL
 - en: This construct is only supported for a [`Relationship`](internals.html#sqlalchemy.orm.Relationship
@@ -1970,40 +2954,54 @@
     "sqlalchemy.orm.relationship") parameter. For relationships that refer to a many-to-many
     table, use ordinary bulk insert techniques to produce new objects, then use `AbstractCollectionWriter.add_all()`
     to associate them with the collection.
+  id: totrans-426
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE92]'
+  id: totrans-427
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE92]'
 - en: Remove an item from this [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-428
   prefs: []
   type: TYPE_NORMAL
 - en: The given item will be removed from the parent instance’s collection on the
     next flush.
+  id: totrans-429
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE93]'
+  id: totrans-430
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE93]'
 - en: Produce a [`Select`](../core/selectable.html#sqlalchemy.sql.expression.Select
     "sqlalchemy.sql.expression.Select") construct that represents the rows within
     this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-431
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE94]'
+  id: totrans-432
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE94]'
 - en: Produce a [`Update`](../core/dml.html#sqlalchemy.sql.expression.Update "sqlalchemy.sql.expression.Update")
     which will refer to rows in terms of this instance-local [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection").
+  id: totrans-433
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE95]'
+  id: totrans-434
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE95]'
 - en: Represent the ORM mapped attribute type for a “write only” relationship.
+  id: totrans-435
   prefs: []
   type: TYPE_NORMAL
 - en: The [`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
@@ -2011,46 +3009,60 @@
     mapping to indicate that the `lazy="write_only"` loader strategy should be used
     for a particular [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship").
+  id: totrans-436
   prefs: []
   type: TYPE_NORMAL
 - en: 'E.g.:'
+  id: totrans-437
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE96]'
+  id: totrans-438
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE96]'
 - en: See the section [Write Only Relationships](#write-only-relationship) for background.
+  id: totrans-439
   prefs: []
   type: TYPE_NORMAL
 - en: New in version 2.0.
+  id: totrans-440
   prefs: []
   type: TYPE_NORMAL
 - en: See also
+  id: totrans-441
   prefs: []
   type: TYPE_NORMAL
 - en: '[Write Only Relationships](#write-only-relationship) - complete background'
+  id: totrans-442
   prefs: []
   type: TYPE_NORMAL
 - en: '[`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
     - includes legacy [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query")
     support'
+  id: totrans-443
   prefs: []
   type: TYPE_NORMAL
 - en: '**Class signature**'
+  id: totrans-444
   prefs: []
   type: TYPE_NORMAL
 - en: class [`sqlalchemy.orm.WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
     (`sqlalchemy.orm.base._MappedAnnotationBase`)
+  id: totrans-445
   prefs: []
   type: TYPE_NORMAL
 - en: '## Dynamic Relationship Loaders'
+  id: totrans-446
   prefs: []
   type: TYPE_NORMAL
 - en: Legacy Feature
+  id: totrans-447
   prefs: []
   type: TYPE_NORMAL
 - en: The “dynamic” lazy loader strategy is the legacy form of what is now the “write_only”
     strategy described in the section [Write Only Relationships](#write-only-relationship).
+  id: totrans-448
   prefs: []
   type: TYPE_NORMAL
 - en: The “dynamic” strategy produces a legacy [`Query`](queryguide/query.html#sqlalchemy.orm.Query
@@ -2060,6 +3072,7 @@
     with careful programming and testing on a case-by-case basis. Therefore, for truly
     large collection management, the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection") should be preferred.
+  id: totrans-449
   prefs: []
   type: TYPE_NORMAL
 - en: The dynamic loader is also not compatible with the [Asynchronous I/O (asyncio)](extensions/asyncio.html)
@@ -2067,6 +3080,7 @@
     guidelines](extensions/asyncio.html#dynamic-asyncio), but again the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection
     "sqlalchemy.orm.WriteOnlyCollection"), which is fully compatible with asyncio,
     should be preferred.
+  id: totrans-450
   prefs: []
   type: TYPE_NORMAL
 - en: The dynamic relationship strategy allows configuration of a [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
@@ -2081,163 +3095,215 @@
     along with rudimentary collection mutation methods such as [`AppenderQuery.append()`](#sqlalchemy.orm.AppenderQuery.append
     "sqlalchemy.orm.AppenderQuery.append") and [`AppenderQuery.remove()`](#sqlalchemy.orm.AppenderQuery.remove
     "sqlalchemy.orm.AppenderQuery.remove").
+  id: totrans-451
   prefs: []
   type: TYPE_NORMAL
 - en: 'The “dynamic” loader strategy may be configured with type-annotated Declarative
     form using the [`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
     annotation class:'
+  id: totrans-452
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE97]'
+  id: totrans-453
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE97]'
 - en: 'Above, the `User.posts` collection on an individual `User` object will return
     the [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
     object, which is a subclass of [`Query`](queryguide/query.html#sqlalchemy.orm.Query
     "sqlalchemy.orm.Query") that also supports basic collection mutation operations:'
+  id: totrans-454
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE98]'
+  id: totrans-455
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE98]'
 - en: 'The dynamic relationship supports limited write operations, via the [`AppenderQuery.append()`](#sqlalchemy.orm.AppenderQuery.append
     "sqlalchemy.orm.AppenderQuery.append") and [`AppenderQuery.remove()`](#sqlalchemy.orm.AppenderQuery.remove
     "sqlalchemy.orm.AppenderQuery.remove") methods:'
+  id: totrans-456
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE99]'
+  id: totrans-457
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE99]'
 - en: Since the read side of the dynamic relationship always queries the database,
     changes to the underlying collection will not be visible until the data has been
     flushed. However, as long as “autoflush” is enabled on the [`Session`](session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") in use, this will occur automatically each time the
     collection is about to emit a query.
+  id: totrans-458
   prefs: []
   type: TYPE_NORMAL
 - en: Dynamic Relationship Loaders - API
+  id: totrans-459
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: '| Object Name | Description |'
+  id: totrans-460
   prefs: []
   type: TYPE_TB
 - en: '| --- | --- |'
+  id: totrans-461
   prefs: []
   type: TYPE_TB
 - en: '| [AppenderQuery](#sqlalchemy.orm.AppenderQuery) | A dynamic query that supports
     basic collection storage operations. |'
+  id: totrans-462
   prefs: []
   type: TYPE_TB
 - en: '| [DynamicMapped](#sqlalchemy.orm.DynamicMapped) | Represent the ORM mapped
     attribute type for a “dynamic” relationship. |'
+  id: totrans-463
   prefs: []
   type: TYPE_TB
 - en: '[PRE100]'
+  id: totrans-464
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE100]'
 - en: A dynamic query that supports basic collection storage operations.
+  id: totrans-465
   prefs: []
   type: TYPE_NORMAL
 - en: Methods on [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
     include all methods of [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query"),
     plus additional methods used for collection persistence.
+  id: totrans-466
   prefs: []
   type: TYPE_NORMAL
 - en: '**Members**'
+  id: totrans-467
   prefs: []
   type: TYPE_NORMAL
 - en: '[add()](#sqlalchemy.orm.AppenderQuery.add), [add_all()](#sqlalchemy.orm.AppenderQuery.add_all),
     [append()](#sqlalchemy.orm.AppenderQuery.append), [count()](#sqlalchemy.orm.AppenderQuery.count),
     [extend()](#sqlalchemy.orm.AppenderQuery.extend), [remove()](#sqlalchemy.orm.AppenderQuery.remove)'
+  id: totrans-468
   prefs: []
   type: TYPE_NORMAL
 - en: '**Class signature**'
+  id: totrans-469
   prefs: []
   type: TYPE_NORMAL
 - en: class [`sqlalchemy.orm.AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
     (`sqlalchemy.orm.dynamic.AppenderMixin`, [`sqlalchemy.orm.Query`](queryguide/query.html#sqlalchemy.orm.Query
     "sqlalchemy.orm.Query"))
+  id: totrans-470
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE101]'
+  id: totrans-471
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE101]'
 - en: '*inherited from the* `AppenderMixin.add()` *method of* `AppenderMixin`'
+  id: totrans-472
   prefs: []
   type: TYPE_NORMAL
 - en: Add an item to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery").
+  id: totrans-473
   prefs: []
   type: TYPE_NORMAL
 - en: The given item will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-474
   prefs: []
   type: TYPE_NORMAL
 - en: This method is provided to assist in delivering forwards-compatibility with
     the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     collection class.
+  id: totrans-475
   prefs: []
   type: TYPE_NORMAL
 - en: New in version 2.0.
+  id: totrans-476
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE102]'
+  id: totrans-477
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE102]'
 - en: '*inherited from the* `AppenderMixin.add_all()` *method of* `AppenderMixin`'
+  id: totrans-478
   prefs: []
   type: TYPE_NORMAL
 - en: Add an iterable of items to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery
     "sqlalchemy.orm.AppenderQuery").
+  id: totrans-479
   prefs: []
   type: TYPE_NORMAL
 - en: The given items will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-480
   prefs: []
   type: TYPE_NORMAL
 - en: This method is provided to assist in delivering forwards-compatibility with
     the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     collection class.
+  id: totrans-481
   prefs: []
   type: TYPE_NORMAL
 - en: New in version 2.0.
+  id: totrans-482
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE103]'
+  id: totrans-483
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE103]'
 - en: '*inherited from the* `AppenderMixin.append()` *method of* `AppenderMixin`'
+  id: totrans-484
   prefs: []
   type: TYPE_NORMAL
 - en: Append an item to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery").
+  id: totrans-485
   prefs: []
   type: TYPE_NORMAL
 - en: The given item will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-486
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE104]'
+  id: totrans-487
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE104]'
 - en: '*inherited from the* `AppenderMixin.count()` *method of* `AppenderMixin`'
+  id: totrans-488
   prefs: []
   type: TYPE_NORMAL
 - en: Return a count of rows this the SQL formed by this [`Query`](queryguide/query.html#sqlalchemy.orm.Query
     "sqlalchemy.orm.Query") would return.
+  id: totrans-489
   prefs: []
   type: TYPE_NORMAL
 - en: 'This generates the SQL for this Query as follows:'
+  id: totrans-490
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE105]'
+  id: totrans-491
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE105]'
 - en: The above SQL returns a single row, which is the aggregate value of the count
     function; the [`Query.count()`](queryguide/query.html#sqlalchemy.orm.Query.count
     "sqlalchemy.orm.Query.count") method then returns that single integer value.
+  id: totrans-492
   prefs: []
   type: TYPE_NORMAL
 - en: Warning
+  id: totrans-493
   prefs: []
   type: TYPE_NORMAL
 - en: It is important to note that the value returned by count() is **not the same
@@ -2247,13 +3313,16 @@
     entries based on primary key**, meaning if the same primary key value would appear
     in the results more than once, only one object of that primary key would be present.
     This does not apply to a query that is against individual columns.
+  id: totrans-494
   prefs: []
   type: TYPE_NORMAL
 - en: See also
+  id: totrans-495
   prefs: []
   type: TYPE_NORMAL
 - en: '[My Query does not return the same number of objects as query.count() tells
     me - why?](../faq/sessions.html#faq-query-deduplicating)'
+  id: totrans-496
   prefs: []
   type: TYPE_NORMAL
 - en: 'For fine grained control over specific columns to count, to skip the usage
@@ -2261,48 +3330,66 @@
     functions, use [`expression.func`](../core/sqlelement.html#sqlalchemy.sql.expression.func
     "sqlalchemy.sql.expression.func") expressions in conjunction with [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
     "sqlalchemy.orm.Session.query"), i.e.:'
+  id: totrans-497
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE106]'
+  id: totrans-498
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE106]'
 - en: See also
+  id: totrans-499
   prefs: []
   type: TYPE_NORMAL
 - en: '[2.0 Migration - ORM Usage](../changelog/migration_20.html#migration-20-query-usage)'
+  id: totrans-500
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE107]'
+  id: totrans-501
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE107]'
 - en: '*inherited from the* `AppenderMixin.extend()` *method of* `AppenderMixin`'
+  id: totrans-502
   prefs: []
   type: TYPE_NORMAL
 - en: Add an iterable of items to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery
     "sqlalchemy.orm.AppenderQuery").
+  id: totrans-503
   prefs: []
   type: TYPE_NORMAL
 - en: The given items will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-504
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE108]'
+  id: totrans-505
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE108]'
 - en: '*inherited from the* `AppenderMixin.remove()` *method of* `AppenderMixin`'
+  id: totrans-506
   prefs: []
   type: TYPE_NORMAL
 - en: Remove an item from this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery").
+  id: totrans-507
   prefs: []
   type: TYPE_NORMAL
 - en: The given item will be removed from the parent instance’s collection on the
     next flush.
+  id: totrans-508
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE109]'
+  id: totrans-509
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE109]'
 - en: Represent the ORM mapped attribute type for a “dynamic” relationship.
+  id: totrans-510
   prefs: []
   type: TYPE_NORMAL
 - en: The [`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
@@ -2310,167 +3397,221 @@
     mapping to indicate that the `lazy="dynamic"` loader strategy should be used for
     a particular [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship").
+  id: totrans-511
   prefs: []
   type: TYPE_NORMAL
 - en: Legacy Feature
+  id: totrans-512
   prefs: []
   type: TYPE_NORMAL
 - en: The “dynamic” lazy loader strategy is the legacy form of what is now the “write_only”
     strategy described in the section [Write Only Relationships](#write-only-relationship).
+  id: totrans-513
   prefs: []
   type: TYPE_NORMAL
 - en: 'E.g.:'
+  id: totrans-514
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE110]'
+  id: totrans-515
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE110]'
 - en: See the section [Dynamic Relationship Loaders](#dynamic-relationship) for background.
+  id: totrans-516
   prefs: []
   type: TYPE_NORMAL
 - en: New in version 2.0.
+  id: totrans-517
   prefs: []
   type: TYPE_NORMAL
 - en: See also
+  id: totrans-518
   prefs: []
   type: TYPE_NORMAL
 - en: '[Dynamic Relationship Loaders](#dynamic-relationship) - complete background'
+  id: totrans-519
   prefs: []
   type: TYPE_NORMAL
 - en: '[`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
     - fully 2.0 style version'
+  id: totrans-520
   prefs: []
   type: TYPE_NORMAL
 - en: '**Class signature**'
+  id: totrans-521
   prefs: []
   type: TYPE_NORMAL
 - en: class [`sqlalchemy.orm.DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
     (`sqlalchemy.orm.base._MappedAnnotationBase`)
+  id: totrans-522
   prefs: []
   type: TYPE_NORMAL
 - en: Dynamic Relationship Loaders - API
+  id: totrans-523
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: '| Object Name | Description |'
+  id: totrans-524
   prefs: []
   type: TYPE_TB
 - en: '| --- | --- |'
+  id: totrans-525
   prefs: []
   type: TYPE_TB
 - en: '| [AppenderQuery](#sqlalchemy.orm.AppenderQuery) | A dynamic query that supports
     basic collection storage operations. |'
+  id: totrans-526
   prefs: []
   type: TYPE_TB
 - en: '| [DynamicMapped](#sqlalchemy.orm.DynamicMapped) | Represent the ORM mapped
     attribute type for a “dynamic” relationship. |'
+  id: totrans-527
   prefs: []
   type: TYPE_TB
 - en: '[PRE111]'
+  id: totrans-528
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE111]'
 - en: A dynamic query that supports basic collection storage operations.
+  id: totrans-529
   prefs: []
   type: TYPE_NORMAL
 - en: Methods on [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
     include all methods of [`Query`](queryguide/query.html#sqlalchemy.orm.Query "sqlalchemy.orm.Query"),
     plus additional methods used for collection persistence.
+  id: totrans-530
   prefs: []
   type: TYPE_NORMAL
 - en: '**Members**'
+  id: totrans-531
   prefs: []
   type: TYPE_NORMAL
 - en: '[add()](#sqlalchemy.orm.AppenderQuery.add), [add_all()](#sqlalchemy.orm.AppenderQuery.add_all),
     [append()](#sqlalchemy.orm.AppenderQuery.append), [count()](#sqlalchemy.orm.AppenderQuery.count),
     [extend()](#sqlalchemy.orm.AppenderQuery.extend), [remove()](#sqlalchemy.orm.AppenderQuery.remove)'
+  id: totrans-532
   prefs: []
   type: TYPE_NORMAL
 - en: '**Class signature**'
+  id: totrans-533
   prefs: []
   type: TYPE_NORMAL
 - en: class [`sqlalchemy.orm.AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery")
     (`sqlalchemy.orm.dynamic.AppenderMixin`, [`sqlalchemy.orm.Query`](queryguide/query.html#sqlalchemy.orm.Query
     "sqlalchemy.orm.Query"))
+  id: totrans-534
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE112]'
+  id: totrans-535
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE112]'
 - en: '*inherited from the* `AppenderMixin.add()` *method of* `AppenderMixin`'
+  id: totrans-536
   prefs: []
   type: TYPE_NORMAL
 - en: Add an item to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery").
+  id: totrans-537
   prefs: []
   type: TYPE_NORMAL
 - en: The given item will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-538
   prefs: []
   type: TYPE_NORMAL
 - en: This method is provided to assist in delivering forwards-compatibility with
     the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     collection class.
+  id: totrans-539
   prefs: []
   type: TYPE_NORMAL
 - en: New in version 2.0.
+  id: totrans-540
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE113]'
+  id: totrans-541
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE113]'
 - en: '*inherited from the* `AppenderMixin.add_all()` *method of* `AppenderMixin`'
+  id: totrans-542
   prefs: []
   type: TYPE_NORMAL
 - en: Add an iterable of items to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery
     "sqlalchemy.orm.AppenderQuery").
+  id: totrans-543
   prefs: []
   type: TYPE_NORMAL
 - en: The given items will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-544
   prefs: []
   type: TYPE_NORMAL
 - en: This method is provided to assist in delivering forwards-compatibility with
     the [`WriteOnlyCollection`](#sqlalchemy.orm.WriteOnlyCollection "sqlalchemy.orm.WriteOnlyCollection")
     collection class.
+  id: totrans-545
   prefs: []
   type: TYPE_NORMAL
 - en: New in version 2.0.
+  id: totrans-546
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE114]'
+  id: totrans-547
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE114]'
 - en: '*inherited from the* `AppenderMixin.append()` *method of* `AppenderMixin`'
+  id: totrans-548
   prefs: []
   type: TYPE_NORMAL
 - en: Append an item to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery").
+  id: totrans-549
   prefs: []
   type: TYPE_NORMAL
 - en: The given item will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-550
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE115]'
+  id: totrans-551
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE115]'
 - en: '*inherited from the* `AppenderMixin.count()` *method of* `AppenderMixin`'
+  id: totrans-552
   prefs: []
   type: TYPE_NORMAL
 - en: Return a count of rows this the SQL formed by this [`Query`](queryguide/query.html#sqlalchemy.orm.Query
     "sqlalchemy.orm.Query") would return.
+  id: totrans-553
   prefs: []
   type: TYPE_NORMAL
 - en: 'This generates the SQL for this Query as follows:'
+  id: totrans-554
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE116]'
+  id: totrans-555
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE116]'
 - en: The above SQL returns a single row, which is the aggregate value of the count
     function; the [`Query.count()`](queryguide/query.html#sqlalchemy.orm.Query.count
     "sqlalchemy.orm.Query.count") method then returns that single integer value.
+  id: totrans-556
   prefs: []
   type: TYPE_NORMAL
 - en: Warning
+  id: totrans-557
   prefs: []
   type: TYPE_NORMAL
 - en: It is important to note that the value returned by count() is **not the same
@@ -2480,13 +3621,16 @@
     entries based on primary key**, meaning if the same primary key value would appear
     in the results more than once, only one object of that primary key would be present.
     This does not apply to a query that is against individual columns.
+  id: totrans-558
   prefs: []
   type: TYPE_NORMAL
 - en: See also
+  id: totrans-559
   prefs: []
   type: TYPE_NORMAL
 - en: '[My Query does not return the same number of objects as query.count() tells
     me - why?](../faq/sessions.html#faq-query-deduplicating)'
+  id: totrans-560
   prefs: []
   type: TYPE_NORMAL
 - en: 'For fine grained control over specific columns to count, to skip the usage
@@ -2494,48 +3638,66 @@
     functions, use [`expression.func`](../core/sqlelement.html#sqlalchemy.sql.expression.func
     "sqlalchemy.sql.expression.func") expressions in conjunction with [`Session.query()`](session_api.html#sqlalchemy.orm.Session.query
     "sqlalchemy.orm.Session.query"), i.e.:'
+  id: totrans-561
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE117]'
+  id: totrans-562
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE117]'
 - en: See also
+  id: totrans-563
   prefs: []
   type: TYPE_NORMAL
 - en: '[2.0 Migration - ORM Usage](../changelog/migration_20.html#migration-20-query-usage)'
+  id: totrans-564
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE118]'
+  id: totrans-565
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE118]'
 - en: '*inherited from the* `AppenderMixin.extend()` *method of* `AppenderMixin`'
+  id: totrans-566
   prefs: []
   type: TYPE_NORMAL
 - en: Add an iterable of items to this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery
     "sqlalchemy.orm.AppenderQuery").
+  id: totrans-567
   prefs: []
   type: TYPE_NORMAL
 - en: The given items will be persisted to the database in terms of the parent instance’s
     collection on the next flush.
+  id: totrans-568
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE119]'
+  id: totrans-569
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE119]'
 - en: '*inherited from the* `AppenderMixin.remove()` *method of* `AppenderMixin`'
+  id: totrans-570
   prefs: []
   type: TYPE_NORMAL
 - en: Remove an item from this [`AppenderQuery`](#sqlalchemy.orm.AppenderQuery "sqlalchemy.orm.AppenderQuery").
+  id: totrans-571
   prefs: []
   type: TYPE_NORMAL
 - en: The given item will be removed from the parent instance’s collection on the
     next flush.
+  id: totrans-572
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE120]'
+  id: totrans-573
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE120]'
 - en: Represent the ORM mapped attribute type for a “dynamic” relationship.
+  id: totrans-574
   prefs: []
   type: TYPE_NORMAL
 - en: The [`DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
@@ -2543,55 +3705,72 @@
     mapping to indicate that the `lazy="dynamic"` loader strategy should be used for
     a particular [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship").
+  id: totrans-575
   prefs: []
   type: TYPE_NORMAL
 - en: Legacy Feature
+  id: totrans-576
   prefs: []
   type: TYPE_NORMAL
 - en: The “dynamic” lazy loader strategy is the legacy form of what is now the “write_only”
     strategy described in the section [Write Only Relationships](#write-only-relationship).
+  id: totrans-577
   prefs: []
   type: TYPE_NORMAL
 - en: 'E.g.:'
+  id: totrans-578
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE121]'
+  id: totrans-579
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE121]'
 - en: See the section [Dynamic Relationship Loaders](#dynamic-relationship) for background.
+  id: totrans-580
   prefs: []
   type: TYPE_NORMAL
 - en: New in version 2.0.
+  id: totrans-581
   prefs: []
   type: TYPE_NORMAL
 - en: See also
+  id: totrans-582
   prefs: []
   type: TYPE_NORMAL
 - en: '[Dynamic Relationship Loaders](#dynamic-relationship) - complete background'
+  id: totrans-583
   prefs: []
   type: TYPE_NORMAL
 - en: '[`WriteOnlyMapped`](#sqlalchemy.orm.WriteOnlyMapped "sqlalchemy.orm.WriteOnlyMapped")
     - fully 2.0 style version'
+  id: totrans-584
   prefs: []
   type: TYPE_NORMAL
 - en: '**Class signature**'
+  id: totrans-585
   prefs: []
   type: TYPE_NORMAL
 - en: class [`sqlalchemy.orm.DynamicMapped`](#sqlalchemy.orm.DynamicMapped "sqlalchemy.orm.DynamicMapped")
     (`sqlalchemy.orm.base._MappedAnnotationBase`)
+  id: totrans-586
   prefs: []
   type: TYPE_NORMAL
 - en: '## Setting RaiseLoad'
+  id: totrans-587
   prefs: []
   type: TYPE_NORMAL
 - en: 'A “raise”-loaded relationship will raise an [`InvalidRequestError`](../core/exceptions.html#sqlalchemy.exc.InvalidRequestError
     "sqlalchemy.exc.InvalidRequestError") where the attribute would normally emit
     a lazy load:'
+  id: totrans-588
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE122]'
+  id: totrans-589
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE122]'
 - en: Above, attribute access on the `children` collection will raise an exception
     if it was not previously populated. This includes read access but for collections
     will also affect write access, as collections can’t be mutated without first loading
@@ -2601,15 +3780,19 @@
     the “raise” strategy will cause unloaded attributes to raise immediately if accessed.
     The raise strategy is also available on a query option basis using the [`raiseload()`](queryguide/relationships.html#sqlalchemy.orm.raiseload
     "sqlalchemy.orm.raiseload") loader option.
+  id: totrans-590
   prefs: []
   type: TYPE_NORMAL
 - en: See also
+  id: totrans-591
   prefs: []
   type: TYPE_NORMAL
 - en: '[Preventing unwanted lazy loads using raiseload](queryguide/relationships.html#prevent-lazy-with-raiseload)'
+  id: totrans-592
   prefs: []
   type: TYPE_NORMAL
 - en: Using Passive Deletes
+  id: totrans-593
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -2619,6 +3802,7 @@
     the parent, which for a one-to-many collection would mean that foreign key columns
     are set to NULL, or based on [cascade](cascades.html#unitofwork-cascades) settings,
     may instead want to emit a DELETE for these rows.
+  id: totrans-594
   prefs: []
   type: TYPE_NORMAL
 - en: The [unit of work](../glossary.html#term-unit-of-work) process only considers
@@ -2632,9 +3816,11 @@
     "sqlalchemy.orm.relationship") on the [`relationship()`](relationship_api.html#sqlalchemy.orm.relationship
     "sqlalchemy.orm.relationship") construct; the foreign key constraints in use must
     also be correctly configured.
+  id: totrans-595
   prefs: []
   type: TYPE_NORMAL
 - en: For further detail on a complete “passive delete” configuration, see the section
     [Using foreign key ON DELETE cascade with ORM relationships](cascades.html#passive-deletes).
+  id: totrans-596
   prefs: []
   type: TYPE_NORMAL

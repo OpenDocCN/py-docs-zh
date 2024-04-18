@@ -3,15 +3,18 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 非传统映射
 - en: 原文：[https://docs.sqlalchemy.org/en/20/orm/nonstandard_mappings.html](https://docs.sqlalchemy.org/en/20/orm/nonstandard_mappings.html)
   id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/orm/nonstandard_mappings.html](https://docs.sqlalchemy.org/en/20/orm/nonstandard_mappings.html)
 - en: '## Mapping a Class against Multiple Tables'
   id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 将类映射到多个表'
 - en: 'Mappers can be constructed against arbitrary relational units (called *selectables*)
     in addition to plain tables. For example, the [`join()`](../core/selectable.html#sqlalchemy.sql.expression.join
     "sqlalchemy.sql.expression.join") function creates a selectable unit comprised
@@ -21,6 +24,9 @@
   id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 映射器可以构造与任意关系单元（称为 *selectables*）相对应的类，除了普通表之外。例如，[`join()`](../core/selectable.html#sqlalchemy.sql.expression.join
+    "sqlalchemy.sql.expression.join") 函数创建了一个包含多个表的可选择单元，具有自己的复合主键，可以与 [`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table") 相同的方式映射：
 - en: '[PRE0]'
   id: totrans-4
   prefs: []
@@ -36,6 +42,10 @@
   id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，连接表示了 `user` 表和 `address` 表的列。`user.id` 和 `address.user_id` 列通过外键相等，因此在映射中它们被定义为一个属性，即
+    `AddressUser.id`，使用 [`column_property()`](mapping_api.html#sqlalchemy.orm.column_property
+    "sqlalchemy.orm.column_property") 来指示一个特殊的列映射。基于这部分配置，当发生 flush 时，映射将把新的主键值从 `user.id`
+    复制到 `address.user_id` 列。
 - en: Additionally, the `address.id` column is mapped explicitly to an attribute named
     `address_id`. This is to **disambiguate** the mapping of the `address.id` column
     from the same-named `AddressUser.id` attribute, which here has been assigned to
@@ -43,6 +53,8 @@
   id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 另外，`address.id` 列被显式映射到一个名为 `address_id` 的属性。这是为了**消除歧义**，将 `address.id` 列的映射与同名的
+    `AddressUser.id` 属性区分开来，这里已经被分配为引用 `user` 表与 `address.user_id` 外键结合的表。
 - en: The natural primary key of the above mapping is the composite of `(user.id,
     address.id)`, as these are the primary key columns of the `user` and `address`
     table combined together. The identity of an `AddressUser` object will be in terms
@@ -51,6 +63,8 @@
   id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面映射的自然主键是 `(user.id, address.id)` 的组合，因为这些是 `user` 和 `address` 表的联合主键列。`AddressUser`
+    对象的标识将根据这两个值，并且从 `AddressUser` 对象表示为 `(AddressUser.id, AddressUser.address_id)`。
 - en: 'When referring to the `AddressUser.id` column, most SQL expressions will make
     use of only the first column in the list of columns mapped, as the two columns
     are synonymous. However, for the special use case such as a GROUP BY expression
@@ -60,6 +74,9 @@
   id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 当涉及到 `AddressUser.id` 列时，大多数 SQL 表达式将仅使用映射列列表中的第一列，因为这两列是同义的。然而，对于特殊用例，比如 GROUP
+    BY 表达式，在这种情况下需要同时引用两列，并且在使用正确的上下文时，即考虑到别名和类似情况时，可以使用访问器 [`Comparator.expressions`](internals.html#sqlalchemy.orm.ColumnProperty.Comparator.expressions
+    "sqlalchemy.orm.ColumnProperty.Comparator.expressions")：
 - en: '[PRE1]'
   id: totrans-9
   prefs: []
@@ -70,10 +87,13 @@
   id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 新功能在版本 1.3.17 中添加：增加了 [`Comparator.expressions`](internals.html#sqlalchemy.orm.ColumnProperty.Comparator.expressions
+    "sqlalchemy.orm.ColumnProperty.Comparator.expressions") 访问器。
 - en: Note
   id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: A mapping against multiple tables as illustrated above supports persistence,
     that is, INSERT, UPDATE and DELETE of rows within the targeted tables. However,
     it does not support an operation that would UPDATE one table and perform INSERT
@@ -88,11 +108,14 @@
   id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 如上所示的针对多个表的映射支持持久化，即对目标表中的行进行INSERT、UPDATE和DELETE。然而，它不支持一次为一个记录在一个表上执行UPDATE并在其他表上同时执行INSERT或DELETE的操作。也就是说，如果一个记录PtoQ被映射到“p”和“q”表，其中它基于“p”和“q”的LEFT
+    OUTER JOIN有一行，如果进行一个UPDATE来修改现有记录中“q”表中的数据，那么“q”中的行必须存在；如果主键标识已经存在，它不会发出INSERT。如果行不存在，对于大多数支持报告UPDATE受影响行数的DBAPI驱动程序，ORM将无法检测到更新的行并引发错误；否则，数据将被静默忽略。
 - en: 'A recipe to allow for an on-the-fly “insert” of the related row might make
     use of the .MapperEvents.before_update event and look like:'
   id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个允许在相关行上“即时”插入的方法可能会使用.MapperEvents.before_update事件，并且看起来像：
 - en: '[PRE2]'
   id: totrans-14
   prefs: []
@@ -108,6 +131,10 @@
   id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的例子中，通过使用[`Table.insert()`](../core/metadata.html#sqlalchemy.schema.Table.insert
+    "sqlalchemy.schema.Table.insert")创建一个INSERT构造，然后使用给定的[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")执行它，将一行INSERT到`q_table`表中，这个Connection与用于发出flush过程中的其他SQL的Connection相同。用户提供的逻辑必须检测到从“p”到“q”的LEFT
+    OUTER JOIN没有“q”侧的条目。## 对任意子查询映射类
 - en: 'Similar to mapping against a join, a plain [`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
     "sqlalchemy.sql.expression.select") object can be used with a mapper as well.
     The example fragment below illustrates mapping a class called `Customer` to a
@@ -116,6 +143,9 @@
   id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 类似于针对连接的映射，也可以将一个普通的[`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select")对象与映射器一起使用。下面的示例片段说明了将一个名为`Customer`的类映射到一个包含与子查询连接的[`select()`](../core/selectable.html#sqlalchemy.sql.expression.select
+    "sqlalchemy.sql.expression.select")中：
 - en: '[PRE3]'
   id: totrans-17
   prefs: []
@@ -128,6 +158,7 @@
   id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面，由`customer_select`表示的完整行将是`customers`表的所有列，以及`subq`子查询暴露的那些列，即`order_count`、`highest_order`和`customer_id`。将`Customer`类映射到这个可选择的内容，然后创建一个包含这些属性的类。
 - en: When the ORM persists new instances of `Customer`, only the `customers` table
     will actually receive an INSERT. This is because the primary key of the `orders`
     table is not represented in the mapping; the ORM will only emit an INSERT into
@@ -135,10 +166,12 @@
   id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 当ORM持久化`Customer`的新实例时，实际上只有`customers`表会收到INSERT。这是因为`orders`表的主键没有在映射中表示；ORM只会对已经映射了主键的表发出INSERT。
 - en: Note
   id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: The practice of mapping to arbitrary SELECT statements, especially complex ones
     as above, is almost never needed; it necessarily tends to produce complex queries
     which are often less efficient than that which would be produced by direct query
@@ -151,11 +184,15 @@
   id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 映射到任意SELECT语句的做法，特别是像上面这样复杂的语句，几乎从不需要；它必然倾向于生成复杂的查询，这些查询通常比直接构造查询要低效。这种做法在某种程度上基于SQLAlchemy的非常早期历史，其中[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")构造被认为是主要的查询接口；在现代用法中，[`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query")对象可以用于构造几乎任何SELECT语句，包括复杂的复合语句，并且应优先于“映射到可选”的方法。
 - en: Multiple Mappers for One Class
   id: totrans-22
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 为一个类映射多个映射器
 - en: 'In modern SQLAlchemy, a particular class is mapped by only one so-called **primary**
     mapper at a time. This mapper is involved in three main areas of functionality:
     querying, persistence, and instrumentation of the mapped class. The rationale
@@ -169,6 +206,9 @@
   id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 在现代的SQLAlchemy中，一个特定的类一次只能由一个所谓的**主要**映射器（mapper）映射。这个映射器涉及三个主要功能领域：查询、持久性和对映射类的仪器化。主要映射器的理论基础与以下事实相关：[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")修改了类本身，不仅将其持久化到特定的[`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table")中，还对类上的属性进行了[仪器化](../glossary.html#term-instrumenting)，这些属性根据表元数据特别结构化。不能有多个映射器与一个类同等相关，因为只有一个映射器可以实际仪器化该类。
 - en: The concept of a “non-primary” mapper had existed for many versions of SQLAlchemy
     however as of version 1.3 this feature is deprecated. The one case where such
     a non-primary mapper is useful is when constructing a relationship to a class
@@ -177,6 +217,8 @@
   id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: “非主要”映射器的概念已经存在多个SQLAlchemy版本，但从1.3版本开始，此功能已被弃用。其中一个非主要映射器有用的情况是构建与备用可选择类之间的关系时。现在可以使用`aliased`构造来满足此用例，并在[Relationship
+    to Aliased Class](join_conditions.html#relationship-aliased-class)中进行了描述。
 - en: As far as the use case of a class that can actually be fully persisted to different
     tables under different scenarios, very early versions of SQLAlchemy offered a
     feature for this adapted from Hibernate, known as the “entity name” feature. However,
@@ -189,10 +231,13 @@
   id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 就一个类可以在不同情境下被完全持久化到不同表中的用例而言，早期版本的SQLAlchemy提供了一个来自Hibernate的功能，称为“实体名称”功能。然而，在SQLAlchemy中，一旦映射类本身成为SQL表达式构造的来源，即类的属性直接链接到映射表列，这个用例就变得不可行了。该功能被移除，并被一个简单的面向配方的方法取代，以完成此任务而不产生任何仪器化的歧义——创建新的子类，每个类都被单独映射。该模式现在作为一种配方在[Entity
+    Name](https://www.sqlalchemy.org/trac/wiki/UsageRecipes/EntityName)中提供。
 - en: '## Mapping a Class against Multiple Tables'
   id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 将一个类映射到多个表'
 - en: 'Mappers can be constructed against arbitrary relational units (called *selectables*)
     in addition to plain tables. For example, the [`join()`](../core/selectable.html#sqlalchemy.sql.expression.join
     "sqlalchemy.sql.expression.join") function creates a selectable unit comprised
@@ -202,6 +247,9 @@
   id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: Mappers可以针对任意关系单元（称为*selectables*）进行构建，而不仅仅是普通的表。例如，[`join()`](../core/selectable.html#sqlalchemy.sql.expression.join)
+    函数创建了一个包含多个表的可选单元，其中包括其自己的复合主键，可以与[`Table`](../core/metadata.html#sqlalchemy.schema.Table)
+    以相同的方式映射：
 - en: '[PRE4]'
   id: totrans-28
   prefs: []
@@ -217,6 +265,7 @@
   id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，连接表示了`user`和`address`表的列。 `user.id`和`address.user_id`列由外键等于，因此在映射中它们被定义为一个属性`AddressUser.id`，使用[`column_property()`](mapping_api.html#sqlalchemy.orm.column_property)指示专门的列映射。根据配置的这一部分，当发生刷新时，映射将新的主键值从`user.id`复制到`address.user_id`列。
 - en: Additionally, the `address.id` column is mapped explicitly to an attribute named
     `address_id`. This is to **disambiguate** the mapping of the `address.id` column
     from the same-named `AddressUser.id` attribute, which here has been assigned to
@@ -224,6 +273,7 @@
   id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 另外，`address.id`列显式映射到名为`address_id`的属性。这是为了**消除歧义**，将`address.id`列的映射与同名的`AddressUser.id`属性分开，这里已经被分配为引用`user`表与`address.user_id`外键的属性。
 - en: The natural primary key of the above mapping is the composite of `(user.id,
     address.id)`, as these are the primary key columns of the `user` and `address`
     table combined together. The identity of an `AddressUser` object will be in terms
@@ -232,6 +282,8 @@
   id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述映射的自然主键是`(user.id, address.id)`的组合，因为这些是`user`和`address`表的主键列合并在一起。 `AddressUser`对象的标识将根据这两个值，并且从`AddressUser`对象表示为`(AddressUser.id,
+    AddressUser.address_id)`。
 - en: 'When referring to the `AddressUser.id` column, most SQL expressions will make
     use of only the first column in the list of columns mapped, as the two columns
     are synonymous. However, for the special use case such as a GROUP BY expression
@@ -241,6 +293,8 @@
   id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 在引用`AddressUser.id`列时，大多数SQL表达式将仅使用映射列列表中的第一列，因为这两列是同义的。但是，对于特殊用例，例如必须同时引用两列的GROUP
+    BY表达式，同时考虑到适当的上下文，即适应别名等，可以使用访问器[`Comparator.expressions`](internals.html#sqlalchemy.orm.ColumnProperty.Comparator.expressions)：
 - en: '[PRE5]'
   id: totrans-33
   prefs: []
@@ -251,10 +305,13 @@
   id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 1.3.17版本中的新内容：添加了[`Comparator.expressions`](internals.html#sqlalchemy.orm.ColumnProperty.Comparator.expressions)
+    访问器。
 - en: Note
   id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: A mapping against multiple tables as illustrated above supports persistence,
     that is, INSERT, UPDATE and DELETE of rows within the targeted tables. However,
     it does not support an operation that would UPDATE one table and perform INSERT
@@ -349,11 +406,15 @@
   id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 对任意SELECT语句进行映射的实践，特别是上面那种复杂的情况，几乎从不需要；这必然会产生复杂的查询，通常比直接构造的查询效率低。这种做法在某种程度上基于SQLAlchemy的早期历史，其中[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")构造旨在代表主要的查询接口；在现代用法中，[`Query`](queryguide/query.html#sqlalchemy.orm.Query
+    "sqlalchemy.orm.Query")对象可用于构造几乎任何SELECT语句，包括复杂的复合语句，并且应优先使用“映射到可选择”方法。
 - en: Multiple Mappers for One Class
   id: totrans-47
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 一个类对应多个映射器
 - en: 'In modern SQLAlchemy, a particular class is mapped by only one so-called **primary**
     mapper at a time. This mapper is involved in three main areas of functionality:
     querying, persistence, and instrumentation of the mapped class. The rationale
@@ -367,6 +428,9 @@
   id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 在现代的SQLAlchemy中，一个特定的类在任何时候只被一个所谓的**主要**映射器所映射。这个映射器涉及三个主要功能领域：查询、持久化和对映射类的仪器化。主要映射器的理念与以下事实相关：[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
+    "sqlalchemy.orm.Mapper")不仅修改类本身，而且将其持久化到特定的[`Table`](../core/metadata.html#sqlalchemy.schema.Table
+    "sqlalchemy.schema.Table")，还会根据表元数据结构化地[仪器化](../glossary.html#term-instrumenting)类上的属性。不可能有多个映射器与一个类一样平等地关联，因为只有一个映射器实际上可以仪器化这个类。
 - en: The concept of a “non-primary” mapper had existed for many versions of SQLAlchemy
     however as of version 1.3 this feature is deprecated. The one case where such
     a non-primary mapper is useful is when constructing a relationship to a class
@@ -375,6 +439,7 @@
   id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: “非主要”映射器的概念在许多版本的SQLAlchemy中一直存在，但自版本1.3起，此功能已不建议使用。唯一需要非主要映射器的情况是在构造与另一个可选择的类的关系时。现在，可以使用`aliased`构造来满足这个用例，并在[关系到别名类](join_conditions.html#relationship-aliased-class)中进行描述。
 - en: As far as the use case of a class that can actually be fully persisted to different
     tables under different scenarios, very early versions of SQLAlchemy offered a
     feature for this adapted from Hibernate, known as the “entity name” feature. However,
@@ -387,3 +452,5 @@
   id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 就一个类在不同情境下可以完全持久化到不同表的用例而言，SQLAlchemy的早期版本提供了一个从Hibernate改编而来的功能，称为“实体名称”功能。然而，在SQLAlchemy中，一旦映射的类本身成为SQL表达式构造的源，即类的属性直接链接到映射表的列，这个用例就变得不可行了。该功能被移除，并用一个简单的基于配方的方法来完成这个任务，而不会有任何仪器化的歧义
+    - 即创建新的子类，每个类都单独映射。这种模式现在作为[实体名称](https://www.sqlalchemy.org/trac/wiki/UsageRecipes/EntityName)的配方可用。

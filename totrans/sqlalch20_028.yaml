@@ -1,22 +1,30 @@
 - en: Configuring a Version Counter
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 配置版本计数器
 - en: 原文：[https://docs.sqlalchemy.org/en/20/orm/versioning.html](https://docs.sqlalchemy.org/en/20/orm/versioning.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/orm/versioning.html](https://docs.sqlalchemy.org/en/20/orm/versioning.html)
 - en: The [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
     supports management of a [version id column](../glossary.html#term-version-id-column),
     which is a single table column that increments or otherwise updates its value
     each time an `UPDATE` to the mapped table occurs. This value is checked each time
     the ORM emits an `UPDATE` or `DELETE` against the row to ensure that the value
     held in memory matches the database value.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")支持管理[版本ID列](../glossary.html#term-version-id-column)，它是单个表列，每当对映射表进行`UPDATE`时，该列会递增或以其他方式更新其值。每次ORM发出`UPDATE`或`DELETE`对行进行操作时，都会检查该值，以确保内存中持有的值与数据库值匹配。'
 - en: Warning
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告
 - en: Because the versioning feature relies upon comparison of the **in memory** record
     of an object, the feature only applies to the [`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
     "sqlalchemy.orm.Session.flush") process, where the ORM flushes individual in-memory
@@ -26,44 +34,66 @@
     "sqlalchemy.orm.Query.delete") methods, as these methods only emit an UPDATE or
     DELETE statement but otherwise do not have direct access to the contents of those
     rows being affected.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为版本控制功能依赖于对象的**内存**记录的比较，所以该功能仅适用于[`Session.flush()`](session_api.html#sqlalchemy.orm.Session.flush
+    "sqlalchemy.orm.Session.flush")过程，在此过程中ORM将单个内存中的行刷新到数据库。当执行多行UPDATE或DELETE时，该功能不会生效，使用[`Query.update()`](queryguide/query.html#sqlalchemy.orm.Query.update
+    "sqlalchemy.orm.Query.update")或[`Query.delete()`](queryguide/query.html#sqlalchemy.orm.Query.delete
+    "sqlalchemy.orm.Query.delete")方法，因为这些方法仅发出UPDATE或DELETE语句，但否则无法直接访问受影响行的内容。
 - en: The purpose of this feature is to detect when two concurrent transactions are
     modifying the same row at roughly the same time, or alternatively to provide a
     guard against the usage of a “stale” row in a system that might be re-using data
     from a previous transaction without refreshing (e.g. if one sets `expire_on_commit=False`
     with a [`Session`](session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session"),
     it is possible to re-use the data from a previous transaction).
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 此功能的目的是检测两个并发事务在大致相同的时间修改同一行，或者在可能重用上一个事务的数据而不进行刷新的系统中提供对“过时”行的防护（例如，如果使用[`Session`](session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")的`expire_on_commit=False`设置，可能会重用上一个事务的数据）。
 - en: Simple Version Counting
+  id: totrans-6
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 简单版本计数
 - en: 'The most straightforward way to track versions is to add an integer column
     to the mapped table, then establish it as the `version_id_col` within the mapper
     options:'
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 跟踪版本的最直接方法是向映射表添加一个整数列，然后在映射器选项中将其设为`version_id_col`：
 - en: '[PRE0]'
+  id: totrans-8
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Note
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: It is **strongly recommended** that the `version_id` column be made NOT NULL.
     The versioning feature **does not support** a NULL value in the versioning column.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: '**强烈建议**将`version_id`列设为NOT NULL。版本控制功能**不支持**版本列中的NULL值。'
 - en: 'Above, the `User` mapping tracks integer versions using the column `version_id`.
     When an object of type `User` is first flushed, the `version_id` column will be
     given a value of “1”. Then, an UPDATE of the table later on will always be emitted
     in a manner similar to the following:'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的例子中，`User`映射使用`version_id`列跟踪整数版本。当首次刷新`User`类型的对象时，`version_id`列的值将为“1”。然后，稍后对表的UPDATE将始终以类似以下的方式发出：
 - en: '[PRE1]'
+  id: totrans-12
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: The above UPDATE statement is updating the row that not only matches `user.id
     = 1`, it also is requiring that `user.version_id = 1`, where “1” is the last version
     identifier we’ve been known to use on this object. If a transaction elsewhere
@@ -72,41 +102,59 @@
     SQLAlchemy tests, that exactly one row matched our UPDATE (or DELETE) statement.
     If zero rows match, that indicates our version of the data is stale, and a [`StaleDataError`](exceptions.html#sqlalchemy.orm.exc.StaleDataError
     "sqlalchemy.orm.exc.StaleDataError") is raised.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述 UPDATE 语句正在更新不仅与`user.id = 1`匹配的行，而且还要求`user.version_id = 1`，其中“1”是我们已知在此对象上使用的最后版本标识符。如果在其他地方的事务独立修改了该行，则此版本
+    id 将不再匹配，并且 UPDATE 语句将报告没有匹配的行；这是 SQLAlchemy 测试的条件，确保我们的 UPDATE（或 DELETE）语句匹配了恰好一行。如果没有匹配的行，这表明我们的数据版本已过时，并且会引发[`StaleDataError`](exceptions.html#sqlalchemy.orm.exc.StaleDataError
+    "sqlalchemy.orm.exc.StaleDataError")异常。
 - en: '## Custom Version Counters / Types'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 自定义版本计数器/类型'
 - en: Other kinds of values or counters can be used for versioning. Common types include
     dates and GUIDs. When using an alternate type or counter scheme, SQLAlchemy provides
     a hook for this scheme using the `version_id_generator` argument, which accepts
     a version generation callable. This callable is passed the value of the current
     known version, and is expected to return the subsequent version.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以使用其他类型或计数器来进行版本控制。常见类型包括日期和 GUID。当使用备用类型或计数器方案时，SQLAlchemy 提供了使用`version_id_generator`参数的钩子，该参数接受一个版本生成可调用对象。此可调用对象会传递当前已知版本的值，并且预期返回后续版本。
 - en: 'For example, if we wanted to track the versioning of our `User` class using
     a randomly generated GUID, we could do this (note that some backends support a
     native GUID type, but we illustrate here using a simple string):'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，如果我们想使用随机生成的 GUID 跟踪`User`类的版本控制，我们可以这样做（请注意，某些后端支持原生 GUID 类型，但我们在这里使用简单的字符串进行说明）：
 - en: '[PRE2]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: The persistence engine will call upon `uuid.uuid4()` each time a `User` object
     is subject to an INSERT or an UPDATE. In this case, our version generation function
     can disregard the incoming value of `version`, as the `uuid4()` function generates
     identifiers without any prerequisite value. If we were using a sequential versioning
     scheme such as numeric or a special character system, we could make use of the
     given `version` in order to help determine the subsequent value.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 每次`User`对象需要进行 INSERT 或 UPDATE 操作时，持久化引擎将调用`uuid.uuid4()`。在这种情况下，我们的版本生成函数可以忽略`version`的传入值，因为`uuid4()`函数生成的标识符不需要任何先决条件值。如果我们使用的是顺序版本控制方案，例如数字或特殊字符系统，我们可以利用给定的`version`来帮助确定后续值。
 - en: See also
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Backend-agnostic GUID Type](../core/custom_types.html#custom-guid-type)  ##
     Server Side Version Counters'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: '[跨后端通用 GUID 类型](../core/custom_types.html#custom-guid-type)  ## 服务器端版本计数器'
 - en: 'The `version_id_generator` can also be configured to rely upon a value that
     is generated by the database. In this case, the database would need some means
     of generating new identifiers when a row is subject to an INSERT as well as with
@@ -115,15 +163,23 @@
     database in particular supports a system column called [xmin](https://www.postgresql.org/docs/current/static/ddl-system-columns.html)
     which provides UPDATE versioning. We can make use of the PostgreSQL `xmin` column
     to version our `User` class as follows:'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: '`version_id_generator`也可以配置为依赖于数据库生成的值。在这种情况下，数据库需要某种方式在行进行 INSERT 时生成新的标识符，以及在
+    UPDATE 时生成。对于 UPDATE 情况，通常需要一个更新触发器，除非所涉及的数据库支持其他一些本地版本标识符。特别是 PostgreSQL 数据库支持一个称为[xmin](https://www.postgresql.org/docs/current/static/ddl-system-columns.html)的系统列，它提供了
+    UPDATE 版本控制。我们可以如下使用 PostgreSQL 的`xmin`列为我们的`User`类版本控制：'
 - en: '[PRE3]'
+  id: totrans-22
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: With the above mapping, the ORM will rely upon the `xmin` column for automatically
     providing the new value of the version id counter.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用上述映射，ORM 将依赖于`xmin`列自动提供版本 id 计数器的新值。
 - en: The ORM typically does not actively fetch the values of database-generated values
     when it emits an INSERT or UPDATE, instead leaving these columns as “expired”
     and to be fetched when they are next accessed, unless the `eager_defaults` [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
@@ -134,80 +190,118 @@
     UPDATE statement using [RETURNING](../glossary.html#term-RETURNING), otherwise
     if emitting a SELECT statement afterwards, there is still a potential race condition
     where the version counter may change before it can be fetched.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 当ORM发出INSERT或UPDATE时，通常不会主动获取数据库生成的值，而是将这些列保留为“过期”，在下次访问它们时获取，除非设置了`eager_defaults`
+    [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")标志。但是，当使用服务器端版本列时，ORM需要主动获取新生成的值。这样做是为了在任何并发事务可能再次更新之前设置版本计数器*之前*。最好同时在INSERT或UPDATE语句中使用[RETURNING](../glossary.html#term-RETURNING)进行获取，否则，如果之后发出SELECT语句，则仍然存在潜在的竞争条件，版本计数器可能在获取之前更改。
 - en: 'When the target database supports RETURNING, an INSERT statement for our `User`
     class will look like this:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 当目标数据库支持RETURNING时，我们的`User`类的INSERT语句如下所示：
 - en: '[PRE4]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'Where above, the ORM can acquire any newly generated primary key values along
     with server-generated version identifiers in one statement. When the backend does
     not support RETURNING, an additional SELECT must be emitted for **every** INSERT
     and UPDATE, which is much less efficient, and also introduces the possibility
     of missed version counters:'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上述情况下，ORM可以在一条语句中获取任何新生成的主键值以及服务器生成的版本标识符。当后端不支持RETURNING时，必须对**每个**INSERT和UPDATE发出额外的SELECT，这非常低效，还会引入可能丢失版本计数器的可能性：
 - en: '[PRE5]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: It is *strongly recommended* that server side version counters only be used
     when absolutely necessary and only on backends that support [RETURNING](../glossary.html#term-RETURNING),
     currently PostgreSQL, Oracle, MariaDB 10.5, SQLite 3.35, and SQL Server.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: '*强烈建议*仅在绝对必要时且仅在支持[RETURNING](../glossary.html#term-RETURNING)的后端上使用服务器端版本计数器，目前支持的后端有PostgreSQL、Oracle、MariaDB
+    10.5、SQLite 3.35和SQL Server。'
 - en: Programmatic or Conditional Version Counters
+  id: totrans-30
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 编程或条件版本计数器
 - en: 'When `version_id_generator` is set to False, we can also programmatically (and
     conditionally) set the version identifier on our object in the same way we assign
     any other mapped attribute. Such as if we used our UUID example, but set `version_id_generator`
     to `False`, we can set the version identifier at our choosing:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 当`version_id_generator`设置为False时，我们还可以以与分配任何其他映射属性相同的方式，在对象上编程（和有条件地）设置版本标识符。例如，如果我们使用了UUID示例，但将`version_id_generator`设置为`False`，我们可以随意设置版本标识符：
 - en: '[PRE6]'
+  id: totrans-32
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'We can update our `User` object without incrementing the version counter as
     well; the value of the counter will remain unchanged, and the UPDATE statement
     will still check against the previous value. This may be useful for schemes where
     only certain classes of UPDATE are sensitive to concurrency issues:'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们也可以在不增加版本计数器的情况下更新我们的`User`对象；计数器的值将保持不变，并且UPDATE语句仍将针对先前的值进行检查。对于仅某些类别的UPDATE对并发问题敏感的方案，这可能很有用：
 - en: '[PRE7]'
+  id: totrans-34
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: Simple Version Counting
+  id: totrans-35
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 简单版本计数
 - en: 'The most straightforward way to track versions is to add an integer column
     to the mapped table, then establish it as the `version_id_col` within the mapper
     options:'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 跟踪版本的最直接方法是向映射表添加一个整数列，然后将其设置为映射选项中的`version_id_col`：
 - en: '[PRE8]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: Note
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: It is **strongly recommended** that the `version_id` column be made NOT NULL.
     The versioning feature **does not support** a NULL value in the versioning column.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: '**强烈建议**将`version_id`列设置为NOT NULL。版本控制功能**不支持**版本控制列中的NULL值。'
 - en: 'Above, the `User` mapping tracks integer versions using the column `version_id`.
     When an object of type `User` is first flushed, the `version_id` column will be
     given a value of “1”. Then, an UPDATE of the table later on will always be emitted
     in a manner similar to the following:'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，`User`映射使用列`version_id`跟踪整数版本。当首次刷新`User`类型的对象时，`version_id`列的值将为“1”。然后，稍后对表的UPDATE将始终以类似以下方式发出：
 - en: '[PRE9]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: The above UPDATE statement is updating the row that not only matches `user.id
     = 1`, it also is requiring that `user.version_id = 1`, where “1” is the last version
     identifier we’ve been known to use on this object. If a transaction elsewhere
@@ -216,43 +310,66 @@
     SQLAlchemy tests, that exactly one row matched our UPDATE (or DELETE) statement.
     If zero rows match, that indicates our version of the data is stale, and a [`StaleDataError`](exceptions.html#sqlalchemy.orm.exc.StaleDataError
     "sqlalchemy.orm.exc.StaleDataError") is raised.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述 UPDATE 语句正在更新不仅与 `user.id = 1` 匹配的行，而且还要求 `user.version_id = 1`，其中“1”是我们已知的此对象上一次使用的最后版本标识符。如果其他地方的事务独立修改了行，则此版本
+    ID 将不再匹配，UPDATE 语句将报告没有匹配的行；这是 SQLAlchemy 测试的条件，确保我们的 UPDATE（或 DELETE）语句仅匹配了一行。如果没有匹配的行，则表示我们的数据版本已过期，并且会引发
+    [`StaleDataError`](exceptions.html#sqlalchemy.orm.exc.StaleDataError "sqlalchemy.orm.exc.StaleDataError")。
 - en: '## Custom Version Counters / Types'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 自定义版本计数器 / 类型'
 - en: Other kinds of values or counters can be used for versioning. Common types include
     dates and GUIDs. When using an alternate type or counter scheme, SQLAlchemy provides
     a hook for this scheme using the `version_id_generator` argument, which accepts
     a version generation callable. This callable is passed the value of the current
     known version, and is expected to return the subsequent version.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 其他类型的值或计数器可以用于版本控制。常见的类型包括日期和GUID。当使用替代类型或计数器方案时，SQLAlchemy 提供了一个钩子来使用 `version_id_generator`
+    参数，该参数接受版本生成可调用对象。此可调用对象将传递当前已知版本的值，并且预计返回后续版本。
 - en: 'For example, if we wanted to track the versioning of our `User` class using
     a randomly generated GUID, we could do this (note that some backends support a
     native GUID type, but we illustrate here using a simple string):'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，如果我们想要使用随机生成的 GUID 跟踪我们的 `User` 类的版本控制，我们可以这样做（请注意，一些后端支持原生的 GUID 类型，但我们在这里使用简单的字符串进行演示）：
 - en: '[PRE10]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: The persistence engine will call upon `uuid.uuid4()` each time a `User` object
     is subject to an INSERT or an UPDATE. In this case, our version generation function
     can disregard the incoming value of `version`, as the `uuid4()` function generates
     identifiers without any prerequisite value. If we were using a sequential versioning
     scheme such as numeric or a special character system, we could make use of the
     given `version` in order to help determine the subsequent value.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 持久性引擎每次将 `User` 对象受到 INSERT 或 UPDATE 影响时都会调用 `uuid.uuid4()`。在这种情况下，我们的版本生成函数可以忽略
+    `version` 的传入值，因为 `uuid4()` 函数生成的标识符没有任何先决条件值。如果我们使用的是顺序版本控制方案，例如数字或特殊字符系统，则可以利用给定的
+    `version` 来帮助确定后续值。
 - en: See also
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Backend-agnostic GUID Type](../core/custom_types.html#custom-guid-type)'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: '[不特定后端的 GUID 类型](../core/custom_types.html#custom-guid-type)'
 - en: '## Server Side Version Counters'
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 服务器端版本计数器'
 - en: 'The `version_id_generator` can also be configured to rely upon a value that
     is generated by the database. In this case, the database would need some means
     of generating new identifiers when a row is subject to an INSERT as well as with
@@ -261,15 +378,24 @@
     database in particular supports a system column called [xmin](https://www.postgresql.org/docs/current/static/ddl-system-columns.html)
     which provides UPDATE versioning. We can make use of the PostgreSQL `xmin` column
     to version our `User` class as follows:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: '`version_id_generator` 也可以配置为依赖于数据库生成的值。在这种情况下，数据库需要在将行受到 INSERT 时以及 UPDATE
+    时生成新标识符的某种手段。对于 UPDATE 情况，通常需要一个更新触发器，除非所涉及的数据库支持其他本地版本标识符。特别是，PostgreSQL 数据库支持一个名为
+    [xmin](https://www.postgresql.org/docs/current/static/ddl-system-columns.html)
+    的系统列，提供 UPDATE 版本控制。我们可以利用 PostgreSQL 的 `xmin` 列来为我们的 `User` 类进行版本控制，如下所示：'
 - en: '[PRE11]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: With the above mapping, the ORM will rely upon the `xmin` column for automatically
     providing the new value of the version id counter.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用上述映射，ORM 将依赖于 `xmin` 列来自动提供版本 ID 计数器的新值。
 - en: The ORM typically does not actively fetch the values of database-generated values
     when it emits an INSERT or UPDATE, instead leaving these columns as “expired”
     and to be fetched when they are next accessed, unless the `eager_defaults` [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper
@@ -280,49 +406,79 @@
     UPDATE statement using [RETURNING](../glossary.html#term-RETURNING), otherwise
     if emitting a SELECT statement afterwards, there is still a potential race condition
     where the version counter may change before it can be fetched.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 当 ORM 发出 INSERT 或 UPDATE 时，通常不会主动获取数据库生成的值的值，而是将这些列保留为“过期”，并在下次访问它们时获取，除非设置了
+    `eager_defaults` [`Mapper`](mapping_api.html#sqlalchemy.orm.Mapper "sqlalchemy.orm.Mapper")
+    标志。然而，当使用服务器端版本列时，ORM 需要主动获取新生成的值。这是为了在任何并发事务可能再次更新它之前设置版本计数器。最好在 INSERT 或 UPDATE
+    语句中同时进行这个获取，使用 [RETURNING](../glossary.html#term-RETURNING)，否则，如果之后发出一个 SELECT
+    语句，那么版本计数器在它被获取之前可能会发生竞争条件。
 - en: 'When the target database supports RETURNING, an INSERT statement for our `User`
     class will look like this:'
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 当目标数据库支持 RETURNING 时，我们的 `User` 类的 INSERT 语句将如下所示：
 - en: '[PRE12]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'Where above, the ORM can acquire any newly generated primary key values along
     with server-generated version identifiers in one statement. When the backend does
     not support RETURNING, an additional SELECT must be emitted for **every** INSERT
     and UPDATE, which is much less efficient, and also introduces the possibility
     of missed version counters:'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上述情况下，ORM 可以在一个语句中获取任何新生成的主键值以及服务器生成的版本标识符。当后端不支持 RETURNING 时，必须为**每个** INSERT
+    和 UPDATE 发出额外的 SELECT，这非常低效，还会引入遗漏版本计数器的可能性：
 - en: '[PRE13]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: It is *strongly recommended* that server side version counters only be used
     when absolutely necessary and only on backends that support [RETURNING](../glossary.html#term-RETURNING),
     currently PostgreSQL, Oracle, MariaDB 10.5, SQLite 3.35, and SQL Server.
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 仅在绝对必要时，并且仅在支持[返回](../glossary.html#term-RETURNING)的后端上，强烈建议仅使用服务器端版本计数器，目前支持的后端有
+    PostgreSQL、Oracle、MariaDB 10.5、SQLite 3.35 和 SQL Server。
 - en: Programmatic or Conditional Version Counters
+  id: totrans-60
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 编程或有条件的版本计数器
 - en: 'When `version_id_generator` is set to False, we can also programmatically (and
     conditionally) set the version identifier on our object in the same way we assign
     any other mapped attribute. Such as if we used our UUID example, but set `version_id_generator`
     to `False`, we can set the version identifier at our choosing:'
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 当 `version_id_generator` 设置为 False 时，我们也可以以编程方式（并有条件地）像分配任何其他映射属性一样，在对象上设置版本标识符。例如，如果我们使用了
+    UUID 示例，但将 `version_id_generator` 设置为 `False`，我们可以根据自己的需要设置版本标识符：
 - en: '[PRE14]'
+  id: totrans-62
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'We can update our `User` object without incrementing the version counter as
     well; the value of the counter will remain unchanged, and the UPDATE statement
     will still check against the previous value. This may be useful for schemes where
     only certain classes of UPDATE are sensitive to concurrency issues:'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还可以在不递增版本计数器的情况下更新我们的 `User` 对象；计数器的值将保持不变，并且 UPDATE 语句仍将根据先前的值进行检查。这在仅特定类的
+    UPDATE 对并发问题敏感的方案中可能很有用：
 - en: '[PRE15]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
