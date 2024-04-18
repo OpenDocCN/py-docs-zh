@@ -1,11 +1,15 @@
 - en: Working with Transactions and the DBAPI
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 处理事务和 DBAPI
 - en: 原文：[https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html)
 - en: With the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
     object ready to go, we may now proceed to dive into the basic operation of an
     [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
@@ -14,11 +18,20 @@
     "sqlalchemy.engine.Result"). We will additionally introduce the ORM’s [facade](../glossary.html#term-facade)
     for these objects, known as the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session").
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 准备好的[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    对象后，我们现在可以继续深入探讨 [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") 的基本操作及其主要交互端点，即 [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") 和 [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")。我们还将介绍 ORM 对这些对象的[门面](../glossary.html#term-facade)，称为
+    [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")。
 - en: '**Note to ORM readers**'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: '**ORM 读者注意**'
 - en: When using the ORM, the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
     "sqlalchemy.engine.Engine") is managed by another object called the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session"). The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
@@ -29,19 +42,34 @@
     for all ORM learners. The execution pattern used by the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") will be contrasted with that of the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") at the end of this section.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用 ORM 时，[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
+    由另一个称为 [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    的对象管理。现代 SQLAlchemy 中的 [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 强调的是一种事务性和 SQL 执行模式，它与下面讨论的 [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") 的模式基本相同，因此，虽然本小节是以核心为中心的，但这里的所有概念基本上都与 ORM 使用相关，并且建议所有
+    ORM 学习者阅读。[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") 使用的执行模式将在本节末尾与 [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 的模式进行对比。
 - en: As we have yet to introduce the SQLAlchemy Expression Language that is the primary
     feature of SQLAlchemy, we will make use of one simple construct within this package
     called the [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text "sqlalchemy.sql.expression.text")
     construct, which allows us to write SQL statements as **textual SQL**. Rest assured
     that textual SQL in day-to-day SQLAlchemy use is by far the exception rather than
     the rule for most tasks, even though it always remains fully available.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们尚未介绍 SQLAlchemy 表达语言，这是 SQLAlchemy 的主要特性，我们将利用该软件包中的一个简单构造，称为[`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text") 构造，它允许我们以**文本 SQL**的形式编写 SQL 语句。请放心，在日常使用 SQLAlchemy
+    时，文本 SQL 绝大多数情况下都是例外而不是规则，即使如此，它仍然始终完全可用。
 - en: '## Getting a Connection'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 获取连接'
 - en: 'The sole purpose of the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
     "sqlalchemy.engine.Engine") object from a user-facing perspective is to provide
     a unit of connectivity to the database called the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
@@ -55,11 +83,20 @@
     Below we illustrate “Hello World”, using a textual SQL statement. Textual SQL
     is emitted using a construct called [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
     "sqlalchemy.sql.expression.text") that will be discussed in more detail later:'
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")对象从用户角度看唯一的目的是提供称为[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")的数据库连接单元。当直接使用核心时，与数据库的所有交互都是通过[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")对象完成的。由于[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")代表着针对数据库的一个开放资源，我们希望始终将对此对象的使用范围限制在特定的上下文中，而使用Python上下文管理器形式，也称为[with语句](https://docs.python.org/3/reference/compound_stmts.html#with)是这样做的最佳方式。下面我们使用文本SQL语句说明“Hello
+    World”。文本SQL使用一个叫做[`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text")的构造发出，稍后将更详细地讨论：'
 - en: '[PRE0]'
+  id: totrans-8
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: In the above example, the context manager provided for a database connection
     and also framed the operation inside of a transaction. The default behavior of
     the Python DBAPI includes that a transaction is always in progress; when the scope
@@ -67,34 +104,51 @@
     emitted to end the transaction. The transaction is **not committed automatically**;
     when we want to commit data we normally need to call [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
     "sqlalchemy.engine.Connection.commit") as we’ll see in the next section.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，为数据库连接提供了上下文管理器，并将操作放在事务内。Python DBAPI的默认行为包括事务始终处于进行中；当连接的范围被[释放](../glossary.html#term-released)时，会发出ROLLBACK以结束事务。事务**不会自动提交**；当我们想要提交数据时，通常需要调用[`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit")，我们将在下一节中看到。
 - en: Tip
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: “autocommit” mode is available for special cases. The section [Setting Transaction
     Isolation Levels including DBAPI Autocommit](../core/connections.html#dbapi-autocommit)
     discusses this.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: “自动提交”模式适用于特殊情况。章节[设置事务隔离级别，包括DBAPI自动提交](../core/connections.html#dbapi-autocommit)讨论了这一点。
 - en: 'The result of our SELECT was also returned in an object called [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result") that will be discussed later, however for the moment
     we’ll add that it’s best to ensure this object is consumed within the “connect”
     block, and is not passed along outside of the scope of our connection.  ## Committing
     Changes'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的SELECT的结果也以一个叫做[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")的对象返回，稍后将讨论，但是暂时我们将添加这样一句，最好确保在“connect”块内消耗此对象，并且不要在连接范围之外传递。##
+    提交更改
 - en: 'We just learned that the DBAPI connection is non-autocommitting. What if we
     want to commit some data? We can alter our above example to create a table and
     insert some data, and the transaction is then committed using the [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
     "sqlalchemy.engine.Connection.commit") method, invoked **inside** the block where
     we acquired the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") object:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们刚刚学到DBAPI连接是非自动提交的。如果我们想提交一些数据怎么办？我们可以修改我们上面的示例来创建一个表并插入一些数据，然后使用[`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit")方法在我们获取[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")对象的块内调用进行事务提交：
 - en: '[PRE1]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: Above, we emitted two SQL statements that are generally transactional, a “CREATE
     TABLE” statement [[1]](#id2) and an “INSERT” statement that’s parameterized (the
     parameterization syntax above is discussed a few sections below in [Sending Multiple
@@ -105,8 +159,12 @@
     and if we choose we may call [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
     "sqlalchemy.engine.Connection.commit") again for subsequent statements. SQLAlchemy
     refers to this style as **commit as you go**.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面，我们发出了两个通常是事务性的SQL语句，“CREATE TABLE”语句[[1]](#id2)和一个参数化的“INSERT”语句（上面的参数化语法在[发送多个参数](#tutorial-multiple-parameters)中讨论）。由于我们希望我们所做的工作在我们的块内被提交，我们调用[`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit")方法来提交事务。在块内调用此方法后，我们可以继续运行更多的SQL语句，如果选择的话，我们可以再次调用[`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit")来进行后续语句的提交。SQLAlchemy将这种风格称为**边提交边进行**。
 - en: 'There is also another style of committing data, which is that we can declare
     our “connect” block to be a transaction block up front. For this mode of operation,
     we use the [`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
@@ -117,17 +175,27 @@
     and also enclose everything inside of a transaction with COMMIT at the end, assuming
     a successful block, or ROLLBACK in case of exception raise. This style is known
     as **begin once**:'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 还有另一种提交数据的风格，即我们可以事先将我们的“connect”块声明为事务块。在这种操作模式下，我们使用[`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
+    "sqlalchemy.engine.Engine.begin")方法来获取连接，而不是使用[`Engine.connect()`](../core/connections.html#sqlalchemy.engine.Engine.connect
+    "sqlalchemy.engine.Engine.connect")方法。这种方法既管理了[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")的范围，也在事务结束时包含了COMMIT，假设块成功，或者在出现异常时回滚。这种风格被称为**一次性开始**：
 - en: '[PRE2]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '“Begin once” style is often preferred as it is more succinct and indicates
     the intention of the entire block up front. However, within this tutorial we will
     normally use “commit as you go” style as it is more flexible for demonstration
     purposes.  ## Basics of Statement Execution'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: “一次性开始”风格通常更受青睐，因为它更简洁，并且事先指示整个块的意图。然而，在本教程中，我们通常会使用“边提交边进行”风格，因为这样更灵活，适合演示目的。##
+    语句执行的基础知识
 - en: We have seen a few examples that run SQL statements against a database, making
     use of a method called [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute"), in conjunction with an object called
@@ -135,8 +203,13 @@
     and returning an object called [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result"). In this section we’ll illustrate more closely the
     mechanics and interactions of these components.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经看到了一些例子，针对数据库运行SQL语句，利用了一个叫做[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")的方法，结合一个叫做[`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text")的对象，并返回一个叫做[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")的对象。在本节中，我们将更详细地说明这些组件的机制和交互。
 - en: Most of the content in this section applies equally well to modern ORM use when
     using the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method, which works very similarly to that of
@@ -144,24 +217,39 @@
     "sqlalchemy.engine.Connection.execute"), including that ORM result rows are delivered
     using the same [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
     interface used by Core.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用 [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") 方法时，本节大部分内容同样适用于现代 ORM 的使用，其工作原理与 [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") 非常相似，包括 ORM 结果行使用的是与 Core 相同的 [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") 接口来传递。
 - en: '### Fetching Rows'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 获取行'
 - en: 'We’ll first illustrate the [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result") object more closely by making use of the rows we’ve
     inserted previously, running a textual SELECT statement on the table we’ve created:'
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们首先通过利用之前插入的行来更仔细地说明 [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") 对象，运行一个对我们创建的表进行文本选择的 SELECT 语句：
 - en: '[PRE3]'
+  id: totrans-23
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: Above, the “SELECT” string we executed selected all rows from our table. The
     object returned is called [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result") and represents an iterable object of result rows.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，我们执行的“SELECT”字符串选择了我们表中的所有行。返回的对象称为 [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")，表示结果行的可迭代对象。
 - en: '[`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
     has lots of methods for fetching and transforming rows, such as the [`Result.all()`](../core/connections.html#sqlalchemy.engine.Result.all
     "sqlalchemy.engine.Result.all") method illustrated previously, which returns a
@@ -169,43 +257,65 @@
     objects. It also implements the Python iterator interface so that we can iterate
     over the collection of [`Row`](../core/connections.html#sqlalchemy.engine.Row
     "sqlalchemy.engine.Row") objects directly.'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    有许多用于获取和转换行的方法，例如之前介绍的 [`Result.all()`](../core/connections.html#sqlalchemy.engine.Result.all
+    "sqlalchemy.engine.Result.all") 方法，它返回所有 [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") 对象的列表。它还实现了 Python 迭代器接口，以便我们可以直接对 [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") 对象的集合进行迭代。'
 - en: The [`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
     objects themselves are intended to act like Python [named tuples](https://docs.python.org/3/library/collections.html#collections.namedtuple).
     Below we illustrate a variety of ways to access rows.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    对象本身旨在像 Python 的[命名元组](https://docs.python.org/3/library/collections.html#collections.namedtuple)一样运作。下面我们展示了访问行的各种方式。'
 - en: '**Tuple Assignment** - This is the most Python-idiomatic style, which is to
     assign variables to each row positionally as they are received:'
+  id: totrans-27
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**元组赋值** - 这是最具 Python 风格的方式，即按位置分配变量，就像它们被接收到的那样：'
 - en: '[PRE4]'
+  id: totrans-28
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: '**Integer Index** - Tuples are Python sequences, so regular integer access
     is available too:'
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**整数索引** - 元组是 Python 序列，因此也可以使用常规整数访问：'
 - en: '[PRE5]'
+  id: totrans-30
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: '**Attribute Name** - As these are Python named tuples, the tuples have dynamic
     attribute names matching the names of each column. These names are normally the
     names that the SQL statement assigns to the columns in each row. While they are
     usually fairly predictable and can also be controlled by labels, in less defined
     cases they may be subject to database-specific behaviors:'
+  id: totrans-31
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**属性名称** - 由于这些是 Python 命名元组，元组具有与每个列的名称匹配的动态属性名称。这些名称通常是 SQL 语句分配给每行中的列的名称。虽然它们通常是相当可预测的，并且也可以由标签控制，在
+    less 定义的情况下，它们可能受到特定于数据库的行为的影响：'
 - en: '[PRE6]'
+  id: totrans-32
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: '**Mapping Access** - To receive rows as Python **mapping** objects, which is
     essentially a read-only version of Python’s interface to the common `dict` object,
     the [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
@@ -215,13 +325,22 @@
     dictionary-like [`RowMapping`](../core/connections.html#sqlalchemy.engine.RowMapping
     "sqlalchemy.engine.RowMapping") objects rather than [`Row`](../core/connections.html#sqlalchemy.engine.Row
     "sqlalchemy.engine.Row") objects:'
+  id: totrans-33
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**映射访问** - 为了将行作为 Python **映射**对象接收，这本质上是 Python 对普通`dict`对象的只读版本的接口，[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")可以通过[`Result.mappings()`](../core/connections.html#sqlalchemy.engine.Result.mappings
+    "sqlalchemy.engine.Result.mappings")修改器转换为[`MappingResult`](../core/connections.html#sqlalchemy.engine.MappingResult
+    "sqlalchemy.engine.MappingResult")对象；这是一个生成类似于字典的[`RowMapping`](../core/connections.html#sqlalchemy.engine.RowMapping
+    "sqlalchemy.engine.RowMapping")对象而不是[`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row")对象的结果对象：'
 - en: '[PRE7]  ### Sending Parameters'
+  id: totrans-34
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[PRE7]  ### 发送参数'
 - en: SQL statements are usually accompanied by data that is to be passed with the
     statement itself, as we saw in the INSERT example previously. The [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") method therefore also accepts parameters,
@@ -229,27 +348,40 @@
     A rudimentary example might be if we wanted to limit our SELECT statement only
     to rows that meet a certain criteria, such as rows where the “y” value were greater
     than a certain value that is passed in to a function.
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: SQL 语句通常会伴随着要与语句本身一起传递的数据，就像我们之前在 INSERT 示例中看到的那样。因此，[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")方法也接受参数，这些参数被称为[绑定参数](../glossary.html#term-bound-parameters)。一个基本的例子可能是，如果我们想要将
+    SELECT 语句限制为只选择满足某些条件的行，比如“y”值大于通过函数传递的某个值的行。
 - en: 'In order to achieve this such that the SQL statement can remain fixed and that
     the driver can properly sanitize the value, we add a WHERE criteria to our statement
     that names a new parameter called “y”; the [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
     "sqlalchemy.sql.expression.text") construct accepts these using a colon format
     “`:y`”. The actual value for “`:y`” is then passed as the second argument to [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") in the form of a dictionary:'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了达到这样的效果，使得 SQL 语句保持固定，同时驱动程序可以正确地清理值，我们在语句中添加了一个名为“y”的 WHERE 条件；[`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text")构造函数使用冒号格式“`:y`”接受这些参数。然后，“`:y`”的实际值作为字典形式的第二个参数传递给[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")：
 - en: '[PRE8]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'In the logged SQL output, we can see that the bound parameter `:y` was converted
     into a question mark when it was sent to the SQLite database. This is because
     the SQLite database driver uses a format called “qmark parameter style”, which
     is one of six different formats allowed by the DBAPI specification. SQLAlchemy
     abstracts these formats into just one, which is the “named” format using a colon.  ###
     Sending Multiple Parameters'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: '在记录的 SQL 输出中，我们可以看到绑定参数`:y`在发送到 SQLite 数据库时被转换成了一个问号。这是因为 SQLite 数据库驱动程序使用了一种称为“问号参数风格”的格式，这是
+    DBAPI 规范允许的六种不同格式之一。SQLAlchemy将这些格式抽象为一种，即使用冒号的“命名”格式。  ### 发送多个参数'
 - en: 'In the example at [Committing Changes](#tutorial-committing-data), we executed
     an INSERT statement where it appeared that we were able to INSERT multiple rows
     into the database at once. For [DML](../glossary.html#term-DML) statements such
@@ -259,16 +391,23 @@
     instead of a single dictionary, which indicates that the single SQL statement
     should be invoked multiple times, once for each parameter set. This style of execution
     is known as [executemany](../glossary.html#term-executemany):'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 在[提交更改](#tutorial-committing-data)的示例中，我们执行了一个INSERT语句，似乎我们能够一次将多行插入到数据库中。对于[DML](../glossary.html#term-DML)语句，如“INSERT”，“UPDATE”和“DELETE”，我们可以通过传递一个字典列表而不是单个字典给[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")方法，从而发送**多个参数集**，这表明单个SQL语句应该被多次调用，每次为一个参数集。这种执行方式称为[executemany](../glossary.html#term-executemany)：
 - en: '[PRE9]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: The above operation is equivalent to running the given INSERT statement once
     for each parameter set, except that the operation will be optimized for better
     performance across many rows.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 以上操作等同于针对每个参数集一次运行给定的INSERT语句，但该操作将被优化以在许多行上获得更好的性能。
 - en: A key behavioral difference between “execute” and “executemany” is that the
     latter doesn’t support returning of result rows, even if the statement includes
     the RETURNING clause. The one exception to this is when using a Core [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
@@ -278,29 +417,43 @@
     "sqlalchemy.sql.expression.Insert.returning") method. In that case, SQLAlchemy
     makes use of special logic to reorganize the INSERT statement so that it can be
     invoked for many rows while still supporting RETURNING.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: “execute”和“executemany”之间的一个关键行为差异是，后者不支持返回结果行，即使语句包含RETURNING子句也是如此。唯一的例外是使用Core
+    [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert "sqlalchemy.sql.expression.insert")构造时，稍后在本教程的[使用INSERT语句](data_insert.html#tutorial-core-insert)中介绍，该构造还使用[`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning")方法指示RETURNING。在这种情况下，SQLAlchemy利用特殊逻辑重新组织INSERT语句，以便在支持RETURNING的同时可以为多行调用它。
 - en: See also
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[executemany](../glossary.html#term-executemany) - in the [Glossary](../glossary.html),
     describes the DBAPI-level [cursor.executemany()](https://peps.python.org/pep-0249/#executemany)
     method that’s used for most “executemany” executions.'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: '[executemany](../glossary.html#term-executemany) - 在[Glossary](../glossary.html#term-executemany)中，描述了DBAPI级别的[cursor.executemany()](https://peps.python.org/pep-0249/#executemany)方法，用于大多数“executemany”执行。'
 - en: '[“Insert Many Values” Behavior for INSERT statements](../core/connections.html#engine-insertmanyvalues)
     - in [Working with Engines and Connections](../core/connections.html), describes
     the specialized logic used by [`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
     "sqlalchemy.sql.expression.Insert.returning") to deliver result sets with “executemany”
     executions.  ## Executing with an ORM Session'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: '[INSERT语句的“插入多个值”行为](../core/connections.html#engine-insertmanyvalues) - 在[引擎和连接](../core/connections.html#engine-insertmanyvalues)中，描述了[`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning")使用的专门逻辑，以便通过“executemany”执行传递结果集。##
+    使用ORM会话执行'
 - en: As mentioned previously, most of the patterns and examples above apply to use
     with the ORM as well, so here we will introduce this usage so that as the tutorial
     proceeds, we will be able to illustrate each pattern in terms of Core and ORM
     use together.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如前面提到的，上面的大多数模式和示例也适用于与ORM一起使用，因此我们在这里介绍这种用法，以便在教程进行时，我们能够将每个模式以Core和ORM一起使用的方式进行说明。
 - en: The fundamental transactional / database interactive object when using the ORM
     is called the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
     In modern SQLAlchemy, this object is used in a manner very similar to that of
@@ -308,75 +461,118 @@
     and in fact as the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") is used, it refers to a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") internally which it uses to emit SQL.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用ORM时，与数据库交互的基本事务对象称为[`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")。在现代SQLAlchemy中，此对象的使用方式与[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")非常相似，实际上，当使用[`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")时，它会内部引用一个[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")，然后使用它来发出SQL。
 - en: When the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     is used with non-ORM constructs, it passes through the SQL statements we give
     it and does not generally do things much differently from how the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") does directly, so we can illustrate it here in
     terms of the simple textual SQL operations we’ve already learned.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 当与非ORM构造一起使用[`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")时，它会通过我们给它的SQL语句并且通常不会与[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")做什么不同的事情，因此我们可以在这里以我们已经学到的简单文本SQL操作来说明它。
 - en: 'The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     has a few different creational patterns, but here we will illustrate the most
     basic one that tracks exactly with how the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") is used which is to construct it within a context
     manager:'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")具有几种不同的创建模式，但在这里我们将展示最基本的一种，它与[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")的使用方式完全一致，即在上下文管理器中构造它：'
 - en: '[PRE10]'
+  id: totrans-50
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: The example above can be compared to the example in the preceding section in
     [Sending Parameters](#tutorial-sending-parameters) - we directly replace the call
     to `with engine.connect() as conn` with `with Session(engine) as session`, and
     then make use of the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method just like we do with the [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") method.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面的示例可以与[发送参数](#tutorial-sending-parameters)中的示例进行比较 - 我们直接将对`with engine.connect()
+    as conn`的调用替换为`with Session(engine) as session`，然后像使用[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")方法一样使用[`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute")方法。
 - en: 'Also, like the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection"), the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") features “commit as you go” behavior using the [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
     "sqlalchemy.orm.Session.commit") method, illustrated below using a textual UPDATE
     statement to alter some of our data:'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 与[`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")类似，[`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")通过使用[`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit")方法具有“边提交边执行”的行为，如下所示，使用文本UPDATE语句来修改部分数据：
 - en: '[PRE11]'
+  id: totrans-53
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Above, we invoked an UPDATE statement using the bound-parameter, “executemany”
     style of execution introduced at [Sending Multiple Parameters](#tutorial-multiple-parameters),
     ending the block with a “commit as you go” commit.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，我们使用绑定参数，“executemany”样式的执行来调用UPDATE语句，在[发送多个参数](#tutorial-multiple-parameters)中介绍了这种方式，并以“边提交边执行”的方式结束了该块。
 - en: Tip
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     doesn’t actually hold onto the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") object after it ends the transaction. It gets
     a new [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
     from the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
     the next time it needs to execute SQL against the database.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")在事务结束后实际上不会保留[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")对象。它会在下一次执行数据库SQL时从[`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine")中获取一个新的[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")。'
 - en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     obviously has a lot more tricks up its sleeve than that, however understanding
     that it has a [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method that’s used the same way as [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") will get us started with the examples
     that follow later.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")显然有比那更多的技巧，但是了解它有一个[`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute")方法，与[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")的使用方式相同，将使我们能够开始后面的示例。'
 - en: See also
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 参见
 - en: '[Basics of Using a Session](../orm/session_basics.html#id1) - presents basic
     creational and usage patterns with the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") object.  ## Getting a Connection'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用会话的基础知识](../orm/session_basics.html#id1) - 提供了与[`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")对象的基本创建和使用模式。## 获取连接'
 - en: 'The sole purpose of the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
     "sqlalchemy.engine.Engine") object from a user-facing perspective is to provide
     a unit of connectivity to the database called the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
@@ -390,11 +586,20 @@
     Below we illustrate “Hello World”, using a textual SQL statement. Textual SQL
     is emitted using a construct called [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
     "sqlalchemy.sql.expression.text") that will be discussed in more detail later:'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 从用户的角度来看，[`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")对象的唯一目的是提供与数据库的连接单元[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")。当直接使用核心时，与数据库的所有交互都是通过[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")对象完成的。由于[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")表示对数据库的打开资源，我们希望始终将此对象的使用范围限制在特定的上下文中，而最好的方法是使用Python上下文管理器形式，也称为[with语句](https://docs.python.org/3/reference/compound_stmts.html#with)。下面我们以一个使用文本SQL语句的“Hello
+    World”为例进行说明。文本SQL是使用称为[`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text")的构造发出的，稍后将对其进行更详细的讨论。
 - en: '[PRE12]'
+  id: totrans-61
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: In the above example, the context manager provided for a database connection
     and also framed the operation inside of a transaction. The default behavior of
     the Python DBAPI includes that a transaction is always in progress; when the scope
@@ -402,36 +607,55 @@
     emitted to end the transaction. The transaction is **not committed automatically**;
     when we want to commit data we normally need to call [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
     "sqlalchemy.engine.Connection.commit") as we’ll see in the next section.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的示例中，为数据库连接提供了上下文管理器，并将操作框定在事务内。Python DBAPI 的默认行为包括事务始终在进行中；当连接的范围被[释放](../glossary.html#term-released)时，会发出
+    ROLLBACK 来结束事务。事务**不会自动提交**；当我们想要提交数据时，通常需要调用[`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit")，正如我们将在下一节中看到的。
 - en: Tip
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: “autocommit” mode is available for special cases. The section [Setting Transaction
     Isolation Levels including DBAPI Autocommit](../core/connections.html#dbapi-autocommit)
     discusses this.
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: “自动提交”模式适用于特殊情况。本节[设置事务隔离级别，包括 DBAPI 自动提交](../core/connections.html#dbapi-autocommit)对此进行了讨论。
 - en: The result of our SELECT was also returned in an object called [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result") that will be discussed later, however for the moment
     we’ll add that it’s best to ensure this object is consumed within the “connect”
     block, and is not passed along outside of the scope of our connection.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的 SELECT 的结果也以一个叫做[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")的对象返回，稍后将对其进行讨论，但目前我们将补充说明最好确保在“connect”块内消耗此对象，并且不要在连接范围之外传递。
 - en: '## Committing Changes'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 提交更改'
 - en: 'We just learned that the DBAPI connection is non-autocommitting. What if we
     want to commit some data? We can alter our above example to create a table and
     insert some data, and the transaction is then committed using the [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
     "sqlalchemy.engine.Connection.commit") method, invoked **inside** the block where
     we acquired the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") object:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们刚刚学到 DBAPI 连接是非自动提交的。如果我们想提交一些数据怎么办？我们可以修改上面的示例来创建一个表并插入一些数据，然后使用[`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit")方法来提交事务，在我们获取[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")对象的块内调用：
 - en: '[PRE13]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: Above, we emitted two SQL statements that are generally transactional, a “CREATE
     TABLE” statement [[1]](#id2) and an “INSERT” statement that’s parameterized (the
     parameterization syntax above is discussed a few sections below in [Sending Multiple
@@ -442,8 +666,12 @@
     and if we choose we may call [`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
     "sqlalchemy.engine.Connection.commit") again for subsequent statements. SQLAlchemy
     refers to this style as **commit as you go**.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面，我们发出了两个通常是事务性的 SQL 语句，一个是“CREATE TABLE”语句[[1]](#id2)，另一个是参数化的“INSERT”语句（上面的参数化语法在[发送多个参数](#tutorial-multiple-parameters)一节中讨论）。由于我们希望我们所做的工作在我们的块内被提交，我们调用[`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit")方法来提交事务。在我们在块内调用这个方法之后，我们可以继续运行更多的 SQL 语句，如果选择的话，我们可以再次调用[`Connection.commit()`](../core/connections.html#sqlalchemy.engine.Connection.commit
+    "sqlalchemy.engine.Connection.commit")来提交后续的语句。SQLAlchemy 将这种风格称为**边做边提交**。
 - en: 'There is also another style of committing data, which is that we can declare
     our “connect” block to be a transaction block up front. For this mode of operation,
     we use the [`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
@@ -454,20 +682,31 @@
     and also enclose everything inside of a transaction with COMMIT at the end, assuming
     a successful block, or ROLLBACK in case of exception raise. This style is known
     as **begin once**:'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 还有另一种提交数据的风格，即我们可以事先声明我们的“connect”块是一个事务块。对于这种操作模式，我们使用[`Engine.begin()`](../core/connections.html#sqlalchemy.engine.Engine.begin
+    "sqlalchemy.engine.Engine.begin")方法来获取连接，而不是[`Engine.connect()`](../core/connections.html#sqlalchemy.engine.Engine.connect
+    "sqlalchemy.engine.Engine.connect")方法。该方法将管理[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")的范围，并在成功块的情况下封闭事务内的所有内容，或者在出现异常时回滚。这种风格称为**一次性开始**：
 - en: '[PRE14]'
+  id: totrans-71
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: “Begin once” style is often preferred as it is more succinct and indicates the
     intention of the entire block up front. However, within this tutorial we will
     normally use “commit as you go” style as it is more flexible for demonstration
     purposes.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: “一次性开始”风格通常更受欢迎，因为它更简洁，并且在前面指示了整个块的意图。然而，在本教程中，我们通常会使用“随时提交”风格，因为它对于演示目的更灵活。
 - en: '## Basics of Statement Execution'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 语句执行基础'
 - en: We have seen a few examples that run SQL statements against a database, making
     use of a method called [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute"), in conjunction with an object called
@@ -475,8 +714,13 @@
     and returning an object called [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result"). In this section we’ll illustrate more closely the
     mechanics and interactions of these components.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经看到了一些示例，通过一种称为[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")的方法来执行SQL语句，结合一个称为[`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text")的对象，并返回一个称为[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")的对象。在本节中，我们将更详细地说明这些组件的机制和交互。
 - en: Most of the content in this section applies equally well to modern ORM use when
     using the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method, which works very similarly to that of
@@ -484,24 +728,39 @@
     "sqlalchemy.engine.Connection.execute"), including that ORM result rows are delivered
     using the same [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
     interface used by Core.
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节中的大部分内容同样适用于在使用[`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute")方法时的现代ORM使用，该方法与[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")非常相似，包括ORM结果行都使用与Core相同的[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")接口传递。
 - en: '### Fetching Rows'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 获取行'
 - en: 'We’ll first illustrate the [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result") object more closely by making use of the rows we’ve
     inserted previously, running a textual SELECT statement on the table we’ve created:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将首先通过使用先前插入的行来更详细地说明[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")对象，对我们创建的表运行一个文本SELECT语句：
 - en: '[PRE15]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Above, the “SELECT” string we executed selected all rows from our table. The
     object returned is called [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result") and represents an iterable object of result rows.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面，我们执行的“SELECT”字符串选择了我们表中的所有行。返回的对象称为[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")，表示一个结果行的可迭代对象。
 - en: '[`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
     has lots of methods for fetching and transforming rows, such as the [`Result.all()`](../core/connections.html#sqlalchemy.engine.Result.all
     "sqlalchemy.engine.Result.all") method illustrated previously, which returns a
@@ -509,43 +768,65 @@
     objects. It also implements the Python iterator interface so that we can iterate
     over the collection of [`Row`](../core/connections.html#sqlalchemy.engine.Row
     "sqlalchemy.engine.Row") objects directly.'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
+    有很多用于获取和转换行的方法，例如之前示例中说明的 [`Result.all()`](../core/connections.html#sqlalchemy.engine.Result.all
+    "sqlalchemy.engine.Result.all") 方法，它返回所有 [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") 对象的列表。它还实现了 Python 迭代器接口，以便我们可以直接迭代 [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") 对象的集合。'
 - en: The [`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
     objects themselves are intended to act like Python [named tuples](https://docs.python.org/3/library/collections.html#collections.namedtuple).
     Below we illustrate a variety of ways to access rows.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
+    对象本身旨在像 Python [named tuples](https://docs.python.org/3/library/collections.html#collections.namedtuple)
+    一样行事。下面我们展示了访问行的各种方法。'
 - en: '**Tuple Assignment** - This is the most Python-idiomatic style, which is to
     assign variables to each row positionally as they are received:'
+  id: totrans-82
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Tuple Assignment** - 这是最 Python 特有的风格，即按位置分配变量，就像它们被接收到的那样：'
 - en: '[PRE16]'
+  id: totrans-83
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '**Integer Index** - Tuples are Python sequences, so regular integer access
     is available too:'
+  id: totrans-84
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**整数索引** - 元组是 Python 序列，因此也可以进行常规整数访问：'
 - en: '[PRE17]'
+  id: totrans-85
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: '**Attribute Name** - As these are Python named tuples, the tuples have dynamic
     attribute names matching the names of each column. These names are normally the
     names that the SQL statement assigns to the columns in each row. While they are
     usually fairly predictable and can also be controlled by labels, in less defined
     cases they may be subject to database-specific behaviors:'
+  id: totrans-86
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**属性名称** - 由于这些是 Python 的命名元组，元组具有与每列名称匹配的动态属性名称。这些名称通常是 SQL 语句为每行的列分配的名称。虽然它们通常是相当可预测的，也可以通过标签进行控制，在定义较少的情况下，它们可能受到特定于数据库的行为的影响：'
 - en: '[PRE18]'
+  id: totrans-87
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '**Mapping Access** - To receive rows as Python **mapping** objects, which is
     essentially a read-only version of Python’s interface to the common `dict` object,
     the [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
@@ -555,13 +836,23 @@
     dictionary-like [`RowMapping`](../core/connections.html#sqlalchemy.engine.RowMapping
     "sqlalchemy.engine.RowMapping") objects rather than [`Row`](../core/connections.html#sqlalchemy.engine.Row
     "sqlalchemy.engine.Row") objects:'
+  id: totrans-88
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**映射访问** - 要将行作为 Python **mapping** 对象接收，这本质上是 Python 对通用 `dict` 对象的只读版本的接口，可以使用
+    [`Result.mappings()`](../core/connections.html#sqlalchemy.engine.Result.mappings
+    "sqlalchemy.engine.Result.mappings") 修改器将 [`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result") 转换为 [`MappingResult`](../core/connections.html#sqlalchemy.engine.MappingResult
+    "sqlalchemy.engine.MappingResult") 对象；这是一个产生类似于字典的 [`RowMapping`](../core/connections.html#sqlalchemy.engine.RowMapping
+    "sqlalchemy.engine.RowMapping") 对象而不是 [`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row") 对象的结果对象：'
 - en: '[PRE19]  ### Sending Parameters'
+  id: totrans-89
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '[PRE19]  ### 发送参数'
 - en: SQL statements are usually accompanied by data that is to be passed with the
     statement itself, as we saw in the INSERT example previously. The [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") method therefore also accepts parameters,
@@ -569,27 +860,40 @@
     A rudimentary example might be if we wanted to limit our SELECT statement only
     to rows that meet a certain criteria, such as rows where the “y” value were greater
     than a certain value that is passed in to a function.
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: SQL 语句通常伴随着要与语句本身一起传递的数据，就像我们之前在 INSERT 示例中看到的那样。因此，[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") 方法还接受参数，这些参数称为 [bound parameters](../glossary.html#term-bound-parameters)。一个简单的示例可能是，如果我们想要将
+    SELECT 语句限制为仅符合某个条件的行，例如“y”值大于通过函数传入的某个特定值的行。
 - en: 'In order to achieve this such that the SQL statement can remain fixed and that
     the driver can properly sanitize the value, we add a WHERE criteria to our statement
     that names a new parameter called “y”; the [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
     "sqlalchemy.sql.expression.text") construct accepts these using a colon format
     “`:y`”. The actual value for “`:y`” is then passed as the second argument to [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") in the form of a dictionary:'
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了实现这一点，使得 SQL 语句保持不变并且驱动程序可以正确地清理值，我们在语句中添加了一个名为“y”的 WHERE 条件；[`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text")构造使用冒号格式“`:y`”接受这些参数。然后，“`:y`”的实际值以字典的形式作为第二个参数传递给[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")：
 - en: '[PRE20]'
+  id: totrans-92
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'In the logged SQL output, we can see that the bound parameter `:y` was converted
     into a question mark when it was sent to the SQLite database. This is because
     the SQLite database driver uses a format called “qmark parameter style”, which
     is one of six different formats allowed by the DBAPI specification. SQLAlchemy
     abstracts these formats into just one, which is the “named” format using a colon.  ###
     Sending Multiple Parameters'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 在记录的 SQL 输出中，我们可以看到当绑定参数`:y`发送到 SQLite 数据库时，它被转换为问号。这是因为 SQLite 数据库驱动程序使用一种称为“qmark
+    参数样式”的格式，这是 DBAPI 规范允许的六种不同格式之一。SQLAlchemy 将这些格式抽象成了一个，即使用冒号的“named”格式。### 发送多个参数
 - en: 'In the example at [Committing Changes](#tutorial-committing-data), we executed
     an INSERT statement where it appeared that we were able to INSERT multiple rows
     into the database at once. For [DML](../glossary.html#term-DML) statements such
@@ -599,16 +903,23 @@
     instead of a single dictionary, which indicates that the single SQL statement
     should be invoked multiple times, once for each parameter set. This style of execution
     is known as [executemany](../glossary.html#term-executemany):'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 [提交更改](#tutorial-committing-data) 的示例中，我们执行了一个 INSERT 语句，其中看起来我们能够一次将多行插入到数据库中。对于“INSERT”、“UPDATE”和“DELETE”等[DML](../glossary.html#term-DML)语句，我们可以通过传递一个字典列表而不是单个字典给[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")方法来发送**多个参数集**，这表明应该针对每个参数集调用单个 SQL 语句多次。这种执行方式称为[executemany](../glossary.html#term-executemany)：
 - en: '[PRE21]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: The above operation is equivalent to running the given INSERT statement once
     for each parameter set, except that the operation will be optimized for better
     performance across many rows.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述操作相当于针对每个参数集合运行给定的 INSERT 语句一次，但该操作将被优化以在多行上获得更好的性能。
 - en: A key behavioral difference between “execute” and “executemany” is that the
     latter doesn’t support returning of result rows, even if the statement includes
     the RETURNING clause. The one exception to this is when using a Core [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
@@ -618,36 +929,60 @@
     "sqlalchemy.sql.expression.Insert.returning") method. In that case, SQLAlchemy
     makes use of special logic to reorganize the INSERT statement so that it can be
     invoked for many rows while still supporting RETURNING.
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: “execute”和“executemany”之间的一个关键行为差异是，后者不支持返回结果行，即使语句包含 RETURNING 子句也是如此。唯一的例外是当使用
+    Core 的[`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert "sqlalchemy.sql.expression.insert")构造时，稍后在本教程的[使用
+    INSERT 语句](data_insert.html#tutorial-core-insert)中介绍，该构造还使用[`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning")方法指示 RETURNING。在这种情况下，SQLAlchemy
+    使用特殊逻辑重新组织 INSERT 语句，以便在支持 RETURNING 的同时可以为多行调用它。
 - en: See also
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[executemany](../glossary.html#term-executemany) - in the [Glossary](../glossary.html),
     describes the DBAPI-level [cursor.executemany()](https://peps.python.org/pep-0249/#executemany)
     method that’s used for most “executemany” executions.'
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: '[executemany](../glossary.html#term-executemany) - 在[Glossary](../glossary.html)中描述了
+    DBAPI 级别的[cursor.executemany()](https://peps.python.org/pep-0249/#executemany)
+    方法，该方法用于大多数“executemany”执行。'
 - en: '[“Insert Many Values” Behavior for INSERT statements](../core/connections.html#engine-insertmanyvalues)
     - in [Working with Engines and Connections](../core/connections.html), describes
     the specialized logic used by [`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
     "sqlalchemy.sql.expression.Insert.returning") to deliver result sets with “executemany”
     executions.  ### Fetching Rows'
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: '[INSERT语句的“插入多个值”行为](../core/connections.html#engine-insertmanyvalues) - 在[与引擎和连接一起工作](../core/connections.html)中，描述了[`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning")用于提供带有“executemany”执行的结果集的专用逻辑。###
+    获取行'
 - en: 'We’ll first illustrate the [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result") object more closely by making use of the rows we’ve
     inserted previously, running a textual SELECT statement on the table we’ve created:'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们将通过利用之前插入的行，对我们创建的表运行文本SELECT语句，更详细地说明[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")对象：
 - en: '[PRE22]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: Above, the “SELECT” string we executed selected all rows from our table. The
     object returned is called [`Result`](../core/connections.html#sqlalchemy.engine.Result
     "sqlalchemy.engine.Result") and represents an iterable object of result rows.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面，我们执行的“SELECT”字符串选择了我们表中的所有行。返回的对象称为[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")，表示结果行的可迭代对象。
 - en: '[`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
     has lots of methods for fetching and transforming rows, such as the [`Result.all()`](../core/connections.html#sqlalchemy.engine.Result.all
     "sqlalchemy.engine.Result.all") method illustrated previously, which returns a
@@ -655,43 +990,62 @@
     objects. It also implements the Python iterator interface so that we can iterate
     over the collection of [`Row`](../core/connections.html#sqlalchemy.engine.Row
     "sqlalchemy.engine.Row") objects directly.'
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")有很多用于获取和转换行的方法，例如之前演示的[`Result.all()`](../core/connections.html#sqlalchemy.engine.Result.all
+    "sqlalchemy.engine.Result.all")方法，它返回所有[`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row")对象的列表。它还实现了Python迭代器接口，以便我们可以直接迭代[`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row")对象的集合。'
 - en: The [`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")
     objects themselves are intended to act like Python [named tuples](https://docs.python.org/3/library/collections.html#collections.namedtuple).
     Below we illustrate a variety of ways to access rows.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Row`](../core/connections.html#sqlalchemy.engine.Row "sqlalchemy.engine.Row")对象本身旨在像Python的[命名元组](https://docs.python.org/3/library/collections.html#collections.namedtuple)一样操作。下面我们演示了多种访问行的方式。'
 - en: '**Tuple Assignment** - This is the most Python-idiomatic style, which is to
     assign variables to each row positionally as they are received:'
+  id: totrans-106
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**元组赋值** - 这是最符合Python习惯的样式，即按位置将变量分配给每行接收到的值：'
 - en: '[PRE23]'
+  id: totrans-107
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: '**Integer Index** - Tuples are Python sequences, so regular integer access
     is available too:'
+  id: totrans-108
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**整数索引** - 元组是Python序列，因此也可以使用常规整数访问：'
 - en: '[PRE24]'
+  id: totrans-109
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: '**Attribute Name** - As these are Python named tuples, the tuples have dynamic
     attribute names matching the names of each column. These names are normally the
     names that the SQL statement assigns to the columns in each row. While they are
     usually fairly predictable and can also be controlled by labels, in less defined
     cases they may be subject to database-specific behaviors:'
+  id: totrans-110
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**属性名称** - 由于这些是Python命名元组，元组具有与每列名称匹配的动态属性名称。这些名称通常是SQL语句为每行分配的列名称。虽然它们通常相当可预测，并且也可以由标签控制，在定义不太明确的情况下，它们可能受到数据库特定的行为的影响：'
 - en: '[PRE25]'
+  id: totrans-111
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: '**Mapping Access** - To receive rows as Python **mapping** objects, which is
     essentially a read-only version of Python’s interface to the common `dict` object,
     the [`Result`](../core/connections.html#sqlalchemy.engine.Result "sqlalchemy.engine.Result")
@@ -701,16 +1055,27 @@
     dictionary-like [`RowMapping`](../core/connections.html#sqlalchemy.engine.RowMapping
     "sqlalchemy.engine.RowMapping") objects rather than [`Row`](../core/connections.html#sqlalchemy.engine.Row
     "sqlalchemy.engine.Row") objects:'
+  id: totrans-112
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**映射访问** - 要将行作为Python **映射** 对象接收，这实质上是Python对普通`dict`对象的只读接口，可以使用[`Result`](../core/connections.html#sqlalchemy.engine.Result
+    "sqlalchemy.engine.Result")通过[`Result.mappings()`](../core/connections.html#sqlalchemy.engine.Result.mappings
+    "sqlalchemy.engine.Result.mappings")修饰符将其**转换**为[`MappingResult`](../core/connections.html#sqlalchemy.engine.MappingResult
+    "sqlalchemy.engine.MappingResult")对象；这是一个产生类似于字典的[`RowMapping`](../core/connections.html#sqlalchemy.engine.RowMapping
+    "sqlalchemy.engine.RowMapping")对象而不是[`Row`](../core/connections.html#sqlalchemy.engine.Row
+    "sqlalchemy.engine.Row")对象的结果对象：'
 - en: '[PRE26]'
+  id: totrans-113
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: '### Sending Parameters'
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 发送参数'
 - en: SQL statements are usually accompanied by data that is to be passed with the
     statement itself, as we saw in the INSERT example previously. The [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") method therefore also accepts parameters,
@@ -718,29 +1083,42 @@
     A rudimentary example might be if we wanted to limit our SELECT statement only
     to rows that meet a certain criteria, such as rows where the “y” value were greater
     than a certain value that is passed in to a function.
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: SQL语句通常伴随着要与语句一起传递的数据，就像我们之前在INSERT示例中看到的那样。因此，[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")方法也接受参数，这些参数被称为[绑定参数](../glossary.html#term-bound-parameters)。一个简单的例子可能是，如果我们想要将SELECT语句限制仅适用于满足某些条件的行，例如行中的“y”值大于传入函数的某个值。
 - en: 'In order to achieve this such that the SQL statement can remain fixed and that
     the driver can properly sanitize the value, we add a WHERE criteria to our statement
     that names a new parameter called “y”; the [`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
     "sqlalchemy.sql.expression.text") construct accepts these using a colon format
     “`:y`”. The actual value for “`:y`” is then passed as the second argument to [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") in the form of a dictionary:'
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了使SQL语句保持不变，以便驱动程序可以正确地对值进行处理，我们在语句中添加了一个名为“y”的WHERE条件；[`text()`](../core/sqlelement.html#sqlalchemy.sql.expression.text
+    "sqlalchemy.sql.expression.text")构造函数接受这些参数，使用冒号格式“`:y`”。然后，“`:y`”的实际值作为字典的第二个参数传递给[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")：
 - en: '[PRE27]'
+  id: totrans-117
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: In the logged SQL output, we can see that the bound parameter `:y` was converted
     into a question mark when it was sent to the SQLite database. This is because
     the SQLite database driver uses a format called “qmark parameter style”, which
     is one of six different formats allowed by the DBAPI specification. SQLAlchemy
     abstracts these formats into just one, which is the “named” format using a colon.
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 在记录的SQL输出中，我们可以看到绑定参数`:y`在发送到SQLite数据库时被转换为问号。这是因为SQLite数据库驱动程序使用一种称为“问号参数样式”的格式，这是DBAPI规范允许的六种不同格式之一。SQLAlchemy将这些格式抽象成了一种格式，即使用冒号的“命名”格式。
 - en: '### Sending Multiple Parameters'
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: '### 发送多个参数'
 - en: 'In the example at [Committing Changes](#tutorial-committing-data), we executed
     an INSERT statement where it appeared that we were able to INSERT multiple rows
     into the database at once. For [DML](../glossary.html#term-DML) statements such
@@ -750,16 +1128,23 @@
     instead of a single dictionary, which indicates that the single SQL statement
     should be invoked multiple times, once for each parameter set. This style of execution
     is known as [executemany](../glossary.html#term-executemany):'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 在[提交更改](#tutorial-committing-data)的示例中，我们执行了一个INSERT语句，看起来我们能够一次性向数据库中插入多行数据。对于[DML](../glossary.html#term-DML)语句，如“INSERT”、“UPDATE”和“DELETE”，我们可以通过传递一个字典列表而不是单个字典给[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")方法，从而发送**多个参数集**，这表明单个SQL语句应该被多次调用，每次为一个参数集。这种执行方式被称为[executemany](../glossary.html#term-executemany)：
 - en: '[PRE28]'
+  id: totrans-121
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: The above operation is equivalent to running the given INSERT statement once
     for each parameter set, except that the operation will be optimized for better
     performance across many rows.
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述操作等同于为每个参数集运行给定的INSERT语句一次，只是该操作将被优化以在许多行上获得更好的性能。
 - en: A key behavioral difference between “execute” and “executemany” is that the
     latter doesn’t support returning of result rows, even if the statement includes
     the RETURNING clause. The one exception to this is when using a Core [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert
@@ -769,32 +1154,48 @@
     "sqlalchemy.sql.expression.Insert.returning") method. In that case, SQLAlchemy
     makes use of special logic to reorganize the INSERT statement so that it can be
     invoked for many rows while still supporting RETURNING.
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: “execute”和“executemany”之间的一个关键行为差异是，后者不支持返回结果行，即使语句包含RETURNING子句也是如此。唯一的例外是在使用Core
+    [`insert()`](../core/dml.html#sqlalchemy.sql.expression.insert "sqlalchemy.sql.expression.insert")构造时，稍后在本教程的[使用INSERT语句](data_insert.html#tutorial-core-insert)部分介绍，该构造还使用[`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning")方法指示RETURNING。在这种情况下，SQLAlchemy利用特殊逻辑重新组织INSERT语句，以便可以为多行调用它，同时仍支持RETURNING。
 - en: See also
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[executemany](../glossary.html#term-executemany) - in the [Glossary](../glossary.html),
     describes the DBAPI-level [cursor.executemany()](https://peps.python.org/pep-0249/#executemany)
     method that’s used for most “executemany” executions.'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: '[executemany](../glossary.html#term-executemany) - 在[Glossary](../glossary.html)中描述了用于大多数“executemany”执行的DBAPI级别[cursor.executemany()](https://peps.python.org/pep-0249/#executemany)方法。'
 - en: '[“Insert Many Values” Behavior for INSERT statements](../core/connections.html#engine-insertmanyvalues)
     - in [Working with Engines and Connections](../core/connections.html), describes
     the specialized logic used by [`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
     "sqlalchemy.sql.expression.Insert.returning") to deliver result sets with “executemany”
     executions.'
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: '[“INSERT语句的Insert Many Values”行为](../core/connections.html#engine-insertmanyvalues)
+    - 在[使用引擎和连接](../core/connections.html)中，描述了[`Insert.returning()`](../core/dml.html#sqlalchemy.sql.expression.Insert.returning
+    "sqlalchemy.sql.expression.Insert.returning")使用的专门逻辑，以便通过“executemany”执行交付结果集。'
 - en: '## Executing with an ORM Session'
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: '## 使用ORM会话执行'
 - en: As mentioned previously, most of the patterns and examples above apply to use
     with the ORM as well, so here we will introduce this usage so that as the tutorial
     proceeds, we will be able to illustrate each pattern in terms of Core and ORM
     use together.
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如之前提到的，上面的大多数模式和示例也适用于与ORM一起使用，因此在这里我们将介绍这种用法，以便随着教程的进行，我们将能够以Core和ORM一起的方式来说明每个模式。
 - en: The fundamental transactional / database interactive object when using the ORM
     is called the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session").
     In modern SQLAlchemy, this object is used in a manner very similar to that of
@@ -802,72 +1203,117 @@
     and in fact as the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") is used, it refers to a [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") internally which it uses to emit SQL.
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用ORM时，基本的事务/数据库交互对象称为[`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")。在现代SQLAlchemy中，这个对象的使用方式与[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")非常相似，实际上，当使用[`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")时，它在内部引用一个[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")，用于发出SQL。
 - en: When the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     is used with non-ORM constructs, it passes through the SQL statements we give
     it and does not generally do things much differently from how the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") does directly, so we can illustrate it here in
     terms of the simple textual SQL operations we’ve already learned.
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 当[`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")与非ORM构造一起使用时，它会通过我们提供的SQL语句，并且通常不会与[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")直接执行有太大不同，因此我们可以根据我们已经学过的简单文本SQL操作来说明它。
 - en: 'The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     has a few different creational patterns, but here we will illustrate the most
     basic one that tracks exactly with how the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") is used which is to construct it within a context
     manager:'
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")有几种不同的创建模式，但在这里我们将说明最基本的一种，它与使用[`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")的方式完全一致，即在上下文管理器中构造它：'
 - en: '[PRE29]'
+  id: totrans-132
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: The example above can be compared to the example in the preceding section in
     [Sending Parameters](#tutorial-sending-parameters) - we directly replace the call
     to `with engine.connect() as conn` with `with Session(engine) as session`, and
     then make use of the [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method just like we do with the [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") method.
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面的示例可以与前一节中[发送参数](#tutorial-sending-parameters)中的示例进行比较 - 我们直接将`with engine.connect()
+    as conn`的调用替换为`with Session(engine) as session`，然后像使用[`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute")方法一样使用[`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute")方法。
 - en: 'Also, like the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection"), the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") features “commit as you go” behavior using the [`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
     "sqlalchemy.orm.Session.commit") method, illustrated below using a textual UPDATE
     statement to alter some of our data:'
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 同样，像[`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")一样，[`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session")也具有“边提交边执行”的行为，使用[`Session.commit()`](../orm/session_api.html#sqlalchemy.orm.Session.commit
+    "sqlalchemy.orm.Session.commit")方法，下面通过一个文本UPDATE语句来修改一些数据进行说明：
 - en: '[PRE30]'
+  id: totrans-135
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: Above, we invoked an UPDATE statement using the bound-parameter, “executemany”
     style of execution introduced at [Sending Multiple Parameters](#tutorial-multiple-parameters),
     ending the block with a “commit as you go” commit.
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面，我们使用绑定参数“executemany”风格的执行方式调用了一个UPDATE语句，该语句介绍在[发送多个参数](#tutorial-multiple-parameters)中，以“边提交边执行”方式结束了该块。
 - en: Tip
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     doesn’t actually hold onto the [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
     "sqlalchemy.engine.Connection") object after it ends the transaction. It gets
     a new [`Connection`](../core/connections.html#sqlalchemy.engine.Connection "sqlalchemy.engine.Connection")
     from the [`Engine`](../core/connections.html#sqlalchemy.engine.Engine "sqlalchemy.engine.Engine")
     the next time it needs to execute SQL against the database.
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    实际上在结束事务后并不保留 [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection") 对象。下次需要对数据库执行 SQL 时，它会从 [`Engine`](../core/connections.html#sqlalchemy.engine.Engine
+    "sqlalchemy.engine.Engine") 获取一个新的 [`Connection`](../core/connections.html#sqlalchemy.engine.Connection
+    "sqlalchemy.engine.Connection")。'
 - en: The [`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
     obviously has a lot more tricks up its sleeve than that, however understanding
     that it has a [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
     "sqlalchemy.orm.Session.execute") method that’s used the same way as [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
     "sqlalchemy.engine.Connection.execute") will get us started with the examples
     that follow later.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: '[`Session`](../orm/session_api.html#sqlalchemy.orm.Session "sqlalchemy.orm.Session")
+    很显然比那个拥有更多的技巧，然而理解它有一个 [`Session.execute()`](../orm/session_api.html#sqlalchemy.orm.Session.execute
+    "sqlalchemy.orm.Session.execute") 方法，该方法的使用方式与 [`Connection.execute()`](../core/connections.html#sqlalchemy.engine.Connection.execute
+    "sqlalchemy.engine.Connection.execute") 相同，将使我们能够开始后面的示例。'
 - en: See also
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 另请参阅
 - en: '[Basics of Using a Session](../orm/session_basics.html#id1) - presents basic
     creational and usage patterns with the [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
     "sqlalchemy.orm.Session") object.'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: '[使用会话的基础知识](../orm/session_basics.html#id1) - 展示了与 [`Session`](../orm/session_api.html#sqlalchemy.orm.Session
+    "sqlalchemy.orm.Session") 对象的基本创建和使用模式。'
