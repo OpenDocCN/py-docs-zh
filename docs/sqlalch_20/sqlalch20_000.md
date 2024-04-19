@@ -1,3 +1,3 @@
-# SqlAlchemy 文档 2.0
+# SqlAlchemy 2.0 中文文档
 
-来源：[`docs.sqlalchemy.org/en/20/contents.html`](https://docs.sqlalchemy.org/en/20/contents.html)
+> 原文：[`docs.sqlalchemy.org/en/20/contents.html`](https://docs.sqlalchemy.org/en/20/contents.html)

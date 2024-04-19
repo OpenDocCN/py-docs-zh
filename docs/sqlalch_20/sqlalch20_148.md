@@ -88,7 +88,7 @@ SQLAlchemy 早期使用了`MapperExtension`类，该类提供了对映射器持�
 
 向具有显式 onclause 的目标发出`query.join()`的默认方法现在是：
 
-```py
+```
 query.join(SomeClass, SomeClass.id == ParentClass.some_id)
 ```
 
@@ -98,7 +98,7 @@ query.join(SomeClass, SomeClass.id == ParentClass.some_id)
 
 请注意，所有其他形式的`query.join()`保持不变：
 
-```py
+```
 query.join(MyClass.somerelation)
 query.join("somerelation")
 query.join(MyTarget)
@@ -143,7 +143,7 @@ query.join(MyTarget)
 
 Index() 构造可以与 Table 定义一起内联创建，使用字符串作为列名，作为在 Table 外部创建索引的替代方法。即：
 
-```py
+```
 Table(
     "mytable",
     metadata,
@@ -155,7 +155,7 @@ Table(
 
 这里的主要理由是为了声明性 `__table_args__` 的利益，特别是与混入类一起使用时：
 
-```py
+```
 class HasNameMixin(object):
     name = Column("name", String(50), nullable=False)
 
@@ -180,7 +180,7 @@ class User(HasNameMixin, Base):
 
 SQLAlchemy 提供了一个简单的构造，通常通过现有函数子句调用，使用 `over()` 方法，该方法接受 `order_by` 和 `partition_by` 关键字参数。下面我们复制了 PG 教程中的第一个示例：
 
-```py
+```
 from sqlalchemy.sql import table, column, select, func
 
 empsalary = table("empsalary", column("depname"), column("empno"), column("salary"))
@@ -199,7 +199,7 @@ print(s)
 
 SQL:
 
-```py
+```
 SELECT  empsalary.depname,  empsalary.empno,  empsalary.salary,
 avg(empsalary.salary)  OVER  (PARTITION  BY  empsalary.depname)  AS  avg
 FROM  empsalary
@@ -253,7 +253,7 @@ FROM  empsalary
 
 `Query.count()`中非常古老的猜测现在已经现代化，使用`.from_self()`。也就是说，`query.count()`现在等效于：
 
-```py
+```
 query.from_self(func.count(literal_column("1"))).scalar()
 ```
 
@@ -261,7 +261,7 @@ query.from_self(func.count(literal_column("1"))).scalar()
 
 `query.count()`现在始终生成以下形式的 SQL：
 
-```py
+```
 SELECT  count(1)  AS  count_1  FROM  (
   SELECT  user.id  AS  user_id,  user.name  AS  user_name  from  user
 )  AS  anon_1
@@ -275,7 +275,7 @@ SELECT  count(1)  AS  count_1  FROM  (
 
 MySQL 用户已经报告说 MyISAM 引擎不出所料地完全崩溃了。请注意，对于优化不能处理简单子查询的数据库的简单`count()`，应该使用`func.count()`：
 
-```py
+```
 from sqlalchemy import func
 
 session.query(func.count(MyClass.id)).scalar()
@@ -283,7 +283,7 @@ session.query(func.count(MyClass.id)).scalar()
 
 或者对于`count(*)`：
 
-```py
+```
 from sqlalchemy import func, literal_column
 
 session.query(func.count(literal_column("*"))).select_from(MyClass).scalar()
@@ -309,15 +309,15 @@ Vinay Sajip 提供了一个补丁，使我们的日志系统中不再需要嵌�
 
 ### 在多个路径（即“all()”）上进行 contains_eager() 链
 
-``contains_eager()```py modifier now will chain itself for a longer path without the need to emit individual ```contains_eager()`` 调用。而不是：
+`contains_eager()` 修改器现在会把自己链接到一个更长的路径上，而不需要释放独立的`contains_eager()`调用。而不是：
 
-```py
+```
 session.query(A).options(contains_eager(A.b), contains_eager(A.b, B.c))
 ```
 
 你可以说：
 
-```py
+```
 session.query(A).options(contains_eager(A.b, B.c))
 ```
 
@@ -349,7 +349,7 @@ session.query(A).options(contains_eager(A.b, B.c))
 
 一个根本不针对任何 `Table` 的构造，比如一个函数，可以被映射。
 
-```py
+```
 from sqlalchemy import select, func
 from sqlalchemy.orm import mapper
 
@@ -398,7 +398,7 @@ mapper(Subset, selectable, primary_key=[selectable.c.x])
 
 此更改涉及 ORM 在映射具有 `PickleType` 或 `postgresql.ARRAY` 数据类型的列时的默认行为。`mutable` 标志现在默认设置为 `False`。如果现有应用程序使用这些类型并依赖于就地变异的检测，则必须使用 `mutable=True` 构造类型对象以恢复 0.6 版本的行为：
 
-```py
+```
 Table(
     "mytable",
     metadata,
@@ -451,7 +451,7 @@ Table(
 
 给定两个映射类`Foo`和`Bar`，每个类都有一个名为`spam`的列：
 
-```py
+```
 qa = session.query(Foo.spam)
 qb = session.query(Bar.spam)
 
@@ -468,7 +468,7 @@ qu = qa.union(qb)
 
 使用声明式的情况是这样的：
 
-```py
+```
 class Parent(Base):
     __tablename__ = "parent"
     id = Column(Integer, primary_key=True)
@@ -486,7 +486,7 @@ class Child(Parent):
 
 这种方法的一个主要优势是现在更容易构造引用本地列的`primaryjoin`表达式：
 
-```py
+```
 class Child(Parent):
     __tablename__ = "child"
     id = Column(Integer, ForeignKey("parent.id"), primary_key=True)
@@ -504,13 +504,13 @@ class SomeRelated(Base):
 
 这也意味着像这样的查询的行为发生了变化：
 
-```py
+```
 session.query(Parent).filter(Child.id > 7)
 ```
 
 在 0.6 版本中，这将呈现为：
 
-```py
+```
 SELECT  parent.id  AS  parent_id
 FROM  parent
 WHERE  parent.id  >  :id_1
@@ -518,7 +518,7 @@ WHERE  parent.id  >  :id_1
 
 在 0.7 版本中，您会得到：
 
-```py
+```
 SELECT  parent.id  AS  parent_id
 FROM  parent,  child
 WHERE  child.id  >  :id_1
@@ -526,13 +526,13 @@ WHERE  child.id  >  :id_1
 
 你会注意到这是一个笛卡尔积 - 这种行为现在等同于`Child`中的任何其他局部属性。`with_polymorphic()` 方法或类似的显式连接基础 `Table` 对象的策略，用于对所有带有`Child`条件的 `Parent` 对象进行查询，方式与 0.5 和 0.6 相同：
 
-```py
+```
 print(s.query(Parent).with_polymorphic([Child]).filter(Child.id > 7))
 ```
 
 在 0.6 和 0.7 版本都是这样呈现的：
 
-```py
+```
 SELECT  parent.id  AS  parent_id,  child.id  AS  child_id
 FROM  parent  LEFT  OUTER  JOIN  child  ON  parent.id  =  child.id
 WHERE  child.id  >  :id_1
@@ -548,14 +548,14 @@ WHERE  child.id  >  :id_1
 
 给定两个表 `foo` 和 `bar`，每个表都有一个主键列 `id`，现在会产生一个错误：
 
-```py
+```
 foobar = foo.join(bar, foo.c.id == bar.c.foo_id)
 mapper(FooBar, foobar)
 ```
 
 这是因为 `mapper()` 拒绝猜测 `FooBar.id` 的主要表示列是 `foo.c.id` 还是 `bar.c.id`？属性必须是明确的：
 
-```py
+```
 foobar = foo.join(bar, foo.c.id == bar.c.foo_id)
 mapper(FooBar, foobar, properties={"id": [foo.c.id, bar.c.id]})
 ```
@@ -566,7 +566,7 @@ mapper(FooBar, foobar, properties={"id": [foo.c.id, bar.c.id]})
 
 在 0.6 中是一个警告，现在在 0.7 中是一个错误。给定用于 `polymorphic_on` 的列必须在映射的可选择项中。这是为了防止一些偶发的用户错误，例如：
 
-```py
+```
 mapper(SomeClass, sometable, polymorphic_on=some_lookup_table.c.id)
 ```
 
@@ -602,7 +602,7 @@ mapper(SomeClass, sometable, polymorphic_on=some_lookup_table.c.id)
 
 几年来，我们一直将字符串 `sqlalchemy.exceptions` 添加到 `sys.modules` 中，以便像“`import sqlalchemy.exceptions`”这样的语句能够正常工作。核心异常模块的名称现在已经是 `exc` 很长时间了，因此建议导入此模块的方式是：
 
-```py
+```
 from sqlalchemy import exc
 ```
 
@@ -638,13 +638,13 @@ from sqlalchemy import exc
 
 这个晦涩的特性允许在 MySQL 后端中使用这种模式：
 
-```py
+```
 select([mytable], distinct="ALL", prefixes=["HIGH_PRIORITY"])
 ```
 
 对于非标准或不寻常的前缀，应该使用 `prefixes` 关键字或 `prefix_with()` 方法：
 
-```py
+```
 select([mytable]).prefix_with("HIGH_PRIORITY", "ALL")
 ```
 
@@ -702,7 +702,7 @@ Table 上的 `useexisting` 标志已被新的一对标志 `keep_existing` 和 `e
 
 从 0.5 开始，将属性或属性名称列表传递给 `Query.join`, `eagerload()` 等已被弃用：
 
-```py
+```
 # old way, deprecated since 0.5
 session.query(Houses).join([Houses.rooms, Room.closets])
 session.query(Houses).options(eagerload_all([Houses.rooms, Room.closets]))
@@ -710,7 +710,7 @@ session.query(Houses).options(eagerload_all([Houses.rooms, Room.closets]))
 
 这些方法在 0.5 系列中都接受 *args：
 
-```py
+```
 # current way, in place since 0.5
 session.query(Houses).join(Houses.rooms, Room.closets)
 session.query(Houses).options(eagerload_all(Houses.rooms, Room.closets))
@@ -800,7 +800,7 @@ Mutation Tracking
 
 向具有显式 onclause 的目标发出`query.join()`的默认方法现在是：
 
-```py
+```
 query.join(SomeClass, SomeClass.id == ParentClass.some_id)
 ```
 
@@ -810,7 +810,7 @@ query.join(SomeClass, SomeClass.id == ParentClass.some_id)
 
 请注意，所有其他形式的`query.join()`保持不变：
 
-```py
+```
 query.join(MyClass.somerelation)
 query.join("somerelation")
 query.join(MyTarget)
@@ -855,7 +855,7 @@ Mutation Tracking
 
 Index() 构造可以与 Table 定义内联创建，使用字符串作为列名，作为在 Table 外创建索引的替代方法。即：
 
-```py
+```
 Table(
     "mytable",
     metadata,
@@ -867,7 +867,7 @@ Table(
 
 这里的主要原因是为了声明式`__table_args__`的好处，特别是在与 mixins 一起使用时：
 
-```py
+```
 class HasNameMixin(object):
     name = Column("name", String(50), nullable=False)
 
@@ -892,7 +892,7 @@ class User(HasNameMixin, Base):
 
 SQLAlchemy 提供了一个简单的构造，通常通过现有的函数子句调用，使用`over()`方法，接受`order_by`和`partition_by`关键字参数。下面我们复制了 PG 教程中的第一个示例：
 
-```py
+```
 from sqlalchemy.sql import table, column, select, func
 
 empsalary = table("empsalary", column("depname"), column("empno"), column("salary"))
@@ -911,7 +911,7 @@ print(s)
 
 SQL:
 
-```py
+```
 SELECT  empsalary.depname,  empsalary.empno,  empsalary.salary,
 avg(empsalary.salary)  OVER  (PARTITION  BY  empsalary.depname)  AS  avg
 FROM  empsalary
@@ -1023,7 +1023,7 @@ SQLAlchemy 早期开始使用`MapperExtension`类，该类提供了对映射器�
 
 向具有显式 onclause 的目标发出`query.join()`的默认方法现在是：
 
-```py
+```
 query.join(SomeClass, SomeClass.id == ParentClass.some_id)
 ```
 
@@ -1033,7 +1033,7 @@ query.join(SomeClass, SomeClass.id == ParentClass.some_id)
 
 请注意，所有其他形式的`query.join()`保持不变：
 
-```py
+```
 query.join(MyClass.somerelation)
 query.join("somerelation")
 query.join(MyTarget)
@@ -1078,7 +1078,7 @@ query.join(MyTarget)
 
 Index()构造可以与 Table 定义内联创建，使用字符串作为列名，作为在 Table 之外创建索引的替代方法。即：
 
-```py
+```
 Table(
     "mytable",
     metadata,
@@ -1090,7 +1090,7 @@ Table(
 
 这里的主要原因是为了声明性`__table_args__`的好处，特别是在与混合使用时：
 
-```py
+```
 class HasNameMixin(object):
     name = Column("name", String(50), nullable=False)
 
@@ -1115,7 +1115,7 @@ class User(HasNameMixin, Base):
 
 SQLAlchemy 提供了一个简单的构造，通常通过现有的函数子句调用，使用`over()`方法，接受`order_by`和`partition_by`关键字参数。下面我们复制了 PG 教程中的第一个示例：
 
-```py
+```
 from sqlalchemy.sql import table, column, select, func
 
 empsalary = table("empsalary", column("depname"), column("empno"), column("salary"))
@@ -1134,7 +1134,7 @@ print(s)
 
 SQL：
 
-```py
+```
 SELECT  empsalary.depname,  empsalary.empno,  empsalary.salary,
 avg(empsalary.salary)  OVER  (PARTITION  BY  empsalary.depname)  AS  avg
 FROM  empsalary
@@ -1188,7 +1188,7 @@ FROM  empsalary
 
 `Query.count()`内部的非常古老的猜测现在已经被现代化，使用`.from_self()`。也就是说，`query.count()`现在等效于：
 
-```py
+```
 query.from_self(func.count(literal_column("1"))).scalar()
 ```
 
@@ -1196,7 +1196,7 @@ query.from_self(func.count(literal_column("1"))).scalar()
 
 `query.count()`生成的 SQL 现在总是形式为：
 
-```py
+```
 SELECT  count(1)  AS  count_1  FROM  (
   SELECT  user.id  AS  user_id,  user.name  AS  user_name  from  user
 )  AS  anon_1
@@ -1210,7 +1210,7 @@ SELECT  count(1)  AS  count_1  FROM  (
 
 MySQL 用户已经报告说，MyISAM 引擎在这个简单的更改中完全崩溃，这并不奇怪。请注意，对于优化不能处理简单子查询的数据库的简单`count()`，应该使用`func.count()`：
 
-```py
+```
 from sqlalchemy import func
 
 session.query(func.count(MyClass.id)).scalar()
@@ -1218,7 +1218,7 @@ session.query(func.count(MyClass.id)).scalar()
 
 或者对于`count(*)`：
 
-```py
+```
 from sqlalchemy import func, literal_column
 
 session.query(func.count(literal_column("*"))).select_from(MyClass).scalar()
@@ -1244,15 +1244,15 @@ Vinay Sajip 提供了一个补丁，使我们的日志系统中不再需要在�
 
 ### 跨多个路径（即“all()”）的 contains_eager()链
 
-``contains_eager()```py modifier now will chain itself for a longer path without the need to emit individual ```contains_eager()``调用。而不是：
+`contains_eager()`修改器现在会把自己链接到一个更长的路径上，而不需要释放独立的`contains_eager()`调用。而不是：
 
-```py
+```
 session.query(A).options(contains_eager(A.b), contains_eager(A.b, B.c))
 ```
 
 你可以说：
 
-```py
+```
 session.query(A).options(contains_eager(A.b, B.c))
 ```
 
@@ -1284,7 +1284,7 @@ session.query(A).options(contains_eager(A.b, B.c))
 
 一个根本不针对任何`Table`的构造，比如一个函数，可以被映射。
 
-```py
+```
 from sqlalchemy import select, func
 from sqlalchemy.orm import mapper
 
@@ -1333,7 +1333,7 @@ mapper(Subset, selectable, primary_key=[selectable.c.x])
 
 `Query.count()`内部的非常古老的猜测现已现代化为使用`.from_self()`。也就是说，`query.count()`现在等效于：
 
-```py
+```
 query.from_self(func.count(literal_column("1"))).scalar()
 ```
 
@@ -1341,7 +1341,7 @@ query.from_self(func.count(literal_column("1"))).scalar()
 
 `query.count()`发出的 SQL 现在始终是以下形式：
 
-```py
+```
 SELECT  count(1)  AS  count_1  FROM  (
   SELECT  user.id  AS  user_id,  user.name  AS  user_name  from  user
 )  AS  anon_1
@@ -1355,7 +1355,7 @@ SELECT  count(1)  AS  count_1  FROM  (
 
 MySQL 用户已经报告说，MyISAM 引擎不出所料地完全崩溃了这个简单的更改。请注意，对于优化无法处理简单子查询的数据库的简单`count()`，应使用`func.count()`：
 
-```py
+```
 from sqlalchemy import func
 
 session.query(func.count(MyClass.id)).scalar()
@@ -1363,7 +1363,7 @@ session.query(func.count(MyClass.id)).scalar()
 
 或对于`count(*)`：
 
-```py
+```
 from sqlalchemy import func, literal_column
 
 session.query(func.count(literal_column("*"))).select_from(MyClass).scalar()
@@ -1373,7 +1373,7 @@ session.query(func.count(literal_column("*"))).select_from(MyClass).scalar()
 
 MySQL 用户已经报告说，MyISAM 引擎不出所料地完全崩溃了这个简单的更改。请注意，对于优化无法处理简单子查询的数据库的简单`count()`，应使用`func.count()`：
 
-```py
+```
 from sqlalchemy import func
 
 session.query(func.count(MyClass.id)).scalar()
@@ -1381,7 +1381,7 @@ session.query(func.count(MyClass.id)).scalar()
 
 或对于`count(*)`：
 
-```py
+```
 from sqlalchemy import func, literal_column
 
 session.query(func.count(literal_column("*"))).select_from(MyClass).scalar()
@@ -1407,15 +1407,15 @@ Vinay Sajip 提供了一个补丁，使我们的日志系统中不再需要“�
 
 ### 包含跨多个路径（即“all()”）的 contains_eager()链
 
-``contains_eager()```py modifier now will chain itself for a longer path without the need to emit individual ```contains_eager()``调用。而不是：
+`contains_eager()`修改器现在会把自己链接到一个更长的路径上，而不需要释放独立的`contains_eager()`调用。而不是：
 
-```py
+```
 session.query(A).options(contains_eager(A.b), contains_eager(A.b, B.c))
 ```
 
 你可以说：
 
-```py
+```
 session.query(A).options(contains_eager(A.b, B.c))
 ```
 
@@ -1447,7 +1447,7 @@ session.query(A).options(contains_eager(A.b, B.c))
 
 一个根本不针对任何`Table`的构造，比如一个函数，可以被映射。
 
-```py
+```
 from sqlalchemy import select, func
 from sqlalchemy.orm import mapper
 
@@ -1496,7 +1496,7 @@ mapper(Subset, selectable, primary_key=[selectable.c.x])
 
 这个改变涉及 ORM 映射具有`PickleType`或`postgresql.ARRAY`数据类型的列时的默认行为。`mutable`标志现在默认设置为`False`。如果现有应用程序使用这些类型并依赖于检测就地变异，那么类型对象必须使用`mutable=True`构造以恢复 0.6 版本的行为：
 
-```py
+```
 Table(
     "mytable",
     metadata,
@@ -1549,7 +1549,7 @@ Session.merge()将检查传入状态的版本 id 与数据库的版本 id 是否
 
 给定两个映射类`Foo`和`Bar`，每个类都有一个列`spam`：
 
-```py
+```
 qa = session.query(Foo.spam)
 qb = session.query(Bar.spam)
 
@@ -1566,7 +1566,7 @@ qu = qa.union(qb)
 
 使用声明性，情景是这样的：
 
-```py
+```
 class Parent(Base):
     __tablename__ = "parent"
     id = Column(Integer, primary_key=True)
@@ -1584,7 +1584,7 @@ class Child(Parent):
 
 这种方法的一个主要优势是现在更容易构造引用本地列的`primaryjoin`表达式：
 
-```py
+```
 class Child(Parent):
     __tablename__ = "child"
     id = Column(Integer, ForeignKey("parent.id"), primary_key=True)
@@ -1602,13 +1602,13 @@ class SomeRelated(Base):
 
 这也意味着这样一个查询的行为发生了变化：
 
-```py
+```
 session.query(Parent).filter(Child.id > 7)
 ```
 
 在 0.6 中，这将产生：
 
-```py
+```
 SELECT  parent.id  AS  parent_id
 FROM  parent
 WHERE  parent.id  >  :id_1
@@ -1616,7 +1616,7 @@ WHERE  parent.id  >  :id_1
 
 在 0.7 版中，你会得到：
 
-```py
+```
 SELECT  parent.id  AS  parent_id
 FROM  parent,  child
 WHERE  child.id  >  :id_1
@@ -1624,13 +1624,13 @@ WHERE  child.id  >  :id_1
 
 你会注意到这是一个笛卡尔积 - 这种行为现在等同于任何其他本地于`Child`的属性。`with_polymorphic()`方法，或者类似的显式连接底层`Table`对象的策略，用于以与 0.5 和 0.6 相同的方式渲染针对所有`Parent`对象的查询，并针对`Child`进行条件限制：
 
-```py
+```
 print(s.query(Parent).with_polymorphic([Child]).filter(Child.id > 7))
 ```
 
 在 0.6 和 0.7 上都会产生：
 
-```py
+```
 SELECT  parent.id  AS  parent_id,  child.id  AS  child_id
 FROM  parent  LEFT  OUTER  JOIN  child  ON  parent.id  =  child.id
 WHERE  child.id  >  :id_1
@@ -1646,14 +1646,14 @@ WHERE  child.id  >  :id_1
 
 给定两个表`foo`和`bar`，每个表都有一个主键列`id`，现在以下内容会产生错误：
 
-```py
+```
 foobar = foo.join(bar, foo.c.id == bar.c.foo_id)
 mapper(FooBar, foobar)
 ```
 
 这是因为`mapper()`拒绝猜测哪一列是`FooBar.id`的主要表示 - 是`foo.c.id`还是`bar.c.id`？属性必须是明确的：
 
-```py
+```
 foobar = foo.join(bar, foo.c.id == bar.c.foo_id)
 mapper(FooBar, foobar, properties={"id": [foo.c.id, bar.c.id]})
 ```
@@ -1664,7 +1664,7 @@ mapper(FooBar, foobar, properties={"id": [foo.c.id, bar.c.id]})
 
 这是 0.6 版的警告，现在在 0.7 版中已经成为错误。给定`polymorphic_on`的列必须在映射的可选择项中。这是为了防止一些偶发的用户错误，例如：
 
-```py
+```
 mapper(SomeClass, sometable, polymorphic_on=some_lookup_table.c.id)
 ```
 
@@ -1700,7 +1700,7 @@ mapper(SomeClass, sometable, polymorphic_on=some_lookup_table.c.id)
 
 几年来，我们已经将字符串`sqlalchemy.exceptions`添加到`sys.modules`中，以便像“`import sqlalchemy.exceptions`”这样的语句可以工作。核心异常模块的名称现在已经是`exc`很长时间了，因此该模块的推荐导入方式是：
 
-```py
+```
 from sqlalchemy import exc
 ```
 
@@ -1714,7 +1714,7 @@ from sqlalchemy import exc
 
 此更改涉及 ORM 在映射具有`PickleType`或`postgresql.ARRAY`数据类型的列时的默认行为。`mutable`标志现在默认设置为`False`。如果现有应用程序使用这些类型并依赖于原地变异的检测，则必须使用`mutable=True`构造类型对象以恢复 0.6 行为：
 
-```py
+```
 Table(
     "mytable",
     metadata,
@@ -1767,7 +1767,7 @@ Table(
 
 给定两个映射类`Foo`和`Bar`，每个类都有一个名为`spam`的列：
 
-```py
+```
 qa = session.query(Foo.spam)
 qb = session.query(Bar.spam)
 
@@ -1784,7 +1784,7 @@ qu = qa.union(qb)
 
 使用声明性，情景如下：
 
-```py
+```
 class Parent(Base):
     __tablename__ = "parent"
     id = Column(Integer, primary_key=True)
@@ -1802,7 +1802,7 @@ class Child(Parent):
 
 这种方法的一个主要优势是现在更容易构建引用本地列的`primaryjoin`表达式：
 
-```py
+```
 class Child(Parent):
     __tablename__ = "child"
     id = Column(Integer, ForeignKey("parent.id"), primary_key=True)
@@ -1820,13 +1820,13 @@ class SomeRelated(Base):
 
 这也意味着这样一个查询的行为发生了变化：
 
-```py
+```
 session.query(Parent).filter(Child.id > 7)
 ```
 
 在 0.6 版本中，会呈现如下：
 
-```py
+```
 SELECT  parent.id  AS  parent_id
 FROM  parent
 WHERE  parent.id  >  :id_1
@@ -1834,7 +1834,7 @@ WHERE  parent.id  >  :id_1
 
 在 0.7 中，你会得到：
 
-```py
+```
 SELECT  parent.id  AS  parent_id
 FROM  parent,  child
 WHERE  child.id  >  :id_1
@@ -1842,13 +1842,13 @@ WHERE  child.id  >  :id_1
 
 你会注意到这是一个笛卡尔积 - 这种行为现在等同于任何本地于`Child`的其他属性。`with_polymorphic()`方法，或者类似的显式连接基础`Table`对象的策略，用于对所有具有针对`Child`的条件的`Parent`对象进行查询，方式与 0.5 和 0.6 相同：
 
-```py
+```
 print(s.query(Parent).with_polymorphic([Child]).filter(Child.id > 7))
 ```
 
 在 0.6 和 0.7 版本中都会呈现：
 
-```py
+```
 SELECT  parent.id  AS  parent_id,  child.id  AS  child_id
 FROM  parent  LEFT  OUTER  JOIN  child  ON  parent.id  =  child.id
 WHERE  child.id  >  :id_1
@@ -1864,14 +1864,14 @@ WHERE  child.id  >  :id_1
 
 给定两个表`foo`和`bar`，每个表都有一个主键列`id`，现在执行以下操作会产生错误：
 
-```py
+```
 foobar = foo.join(bar, foo.c.id == bar.c.foo_id)
 mapper(FooBar, foobar)
 ```
 
 这是因为`mapper()`拒绝猜测哪一列是`FooBar.id`的主要表示 - 是`foo.c.id`还是`bar.c.id`？属性必须明确：
 
-```py
+```
 foobar = foo.join(bar, foo.c.id == bar.c.foo_id)
 mapper(FooBar, foobar, properties={"id": [foo.c.id, bar.c.id]})
 ```
@@ -1882,7 +1882,7 @@ mapper(FooBar, foobar, properties={"id": [foo.c.id, bar.c.id]})
 
 这在 0.6 中是一个警告，现在在 0.7 中是一个错误。为`polymorphic_on`指定的列必须在映射的可选择项中。这是为了防止一些偶尔发生的用户错误，例如：
 
-```py
+```
 mapper(SomeClass, sometable, polymorphic_on=some_lookup_table.c.id)
 ```
 
@@ -1918,7 +1918,7 @@ mapper(SomeClass, sometable, polymorphic_on=some_lookup_table.c.id)
 
 几年来，我们已经将字符串 `sqlalchemy.exceptions` 添加到 `sys.modules` 中，以便像 “`import sqlalchemy.exceptions`” 这样的语句可以工作。 核心异常模块的名称已经很久以来是 `exc`，因此建议导入此模块的方式是：
 
-```py
+```
 from sqlalchemy import exc
 ```
 
@@ -1954,13 +1954,13 @@ from sqlalchemy import exc
 
 这个晦涩的功能允许使用 MySQL 后端的这种模式：
 
-```py
+```
 select([mytable], distinct="ALL", prefixes=["HIGH_PRIORITY"])
 ```
 
 对于非标准或不寻常的前缀，应使用`prefixes`关键字或`prefix_with()`方法：
 
-```py
+```
 select([mytable]).prefix_with("HIGH_PRIORITY", "ALL")
 ```
 
@@ -1992,13 +1992,13 @@ select([mytable]).prefix_with("HIGH_PRIORITY", "ALL")
 
 这个隐晦的特性允许在 MySQL 后端中使用这种模式：
 
-```py
+```
 select([mytable], distinct="ALL", prefixes=["HIGH_PRIORITY"])
 ```
 
 应该使用 `prefixes` 关键字或 `prefix_with()` 方法来处理非标准或不寻常的前缀：
 
-```py
+```
 select([mytable]).prefix_with("HIGH_PRIORITY", "ALL")
 ```
 
@@ -2098,7 +2098,7 @@ Table 上的 `useexisting` 标志已被一对新标志 `keep_existing` 和 `exte
 
 自 0.5 版本以来，将属性或属性名称列表传递给 `Query.join`、`eagerload()` 和类似方法已被弃用：
 
-```py
+```
 # old way, deprecated since 0.5
 session.query(Houses).join([Houses.rooms, Room.closets])
 session.query(Houses).options(eagerload_all([Houses.rooms, Room.closets]))
@@ -2106,7 +2106,7 @@ session.query(Houses).options(eagerload_all([Houses.rooms, Room.closets]))
 
 这些方法自 0.5 系列以来都接受 *args：
 
-```py
+```
 # current way, in place since 0.5
 session.query(Houses).join(Houses.rooms, Room.closets)
 session.query(Houses).options(eagerload_all(Houses.rooms, Room.closets))
@@ -2120,7 +2120,7 @@ session.query(Houses).options(eagerload_all(Houses.rooms, Room.closets))
 
 自 0.5 版本以来，向`Query.join`、`eagerload()`等传递属性列表或属性名称已被弃用。
 
-```py
+```
 # old way, deprecated since 0.5
 session.query(Houses).join([Houses.rooms, Room.closets])
 session.query(Houses).options(eagerload_all([Houses.rooms, Room.closets]))
@@ -2128,7 +2128,7 @@ session.query(Houses).options(eagerload_all([Houses.rooms, Room.closets]))
 
 0.5 系列以来，这些方法都接受`*args`。
 
-```py
+```
 # current way, in place since 0.5
 session.query(Houses).join(Houses.rooms, Room.closets)
 session.query(Houses).options(eagerload_all(Houses.rooms, Room.closets))

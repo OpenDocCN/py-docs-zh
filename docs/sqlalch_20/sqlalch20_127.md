@@ -8602,7 +8602,7 @@ Released: March 6, 2022
 
 +   **[sqlite] [usecase]**
 
-    增加了对反映 SQLite 内联唯一约束的支持，其中列名的格式为 SQLite 的“转义引号”`[]`或```，这些引号在生成列名时被数据库丢弃。
+    增加了对反映 SQLite 内联唯一约束的支持，其中列名的格式为 SQLite 的“转义引号”`[]`或`` ` ``，这些引号在生成列名时被数据库丢弃。
 
     参考：[#7736](https://www.sqlalchemy.org/trac/ticket/7736)
 
