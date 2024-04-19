@@ -26,13 +26,13 @@
 
 `create_engine()` 使用的 URL 格式已经增强，以处理特定后端的任意数量的 DBAPI，使用的方案受到 JDBC 的启发。以前的格式仍然有效，并且将选择“默认”DBAPI 实现，例如下面的 PostgreSQL URL 将使用 psycopg2：
 
-```
+```py
 create_engine("postgresql://scott:tiger@localhost/test")
 ```
 
 但是，要指定特定的 DBAPI 后端，比如 pg8000，请将其添加到 URL 的“protocol”部分，使用加号“+”：
 
-```
+```py
 create_engine("postgresql+pg8000://scott:tiger@localhost/test")
 ```
 
@@ -62,7 +62,7 @@ create_engine("postgresql+pg8000://scott:tiger@localhost/test")
 
 方言的导入结构已经改变。每个方言现在通过`sqlalchemy.dialects.<name>`导出其基本的“dialect”类以及该方言支持的完整一组 SQL 类型。例如，要导入一组 PG 类型：
 
-```
+```py
 from sqlalchemy.dialects.postgresql import (
     INTEGER,
     BIGINT,
@@ -84,7 +84,7 @@ from sqlalchemy.dialects.postgresql import (
 
 正如我们所知，将`ClauseElement`与任何其他对象进行比较会返回另一个`ClauseElement`：
 
-```
+```py
 >>> from sqlalchemy.sql import column
 >>> column("foo") == 5
 <sqlalchemy.sql.expression._BinaryExpression object at 0x1252490>
@@ -92,21 +92,21 @@ from sqlalchemy.dialects.postgresql import (
 
 这样 Python 表达式在转换为字符串时会产生 SQL 表达式：
 
-```
+```py
 >>> str(column("foo") == 5)
 'foo = :foo_1'
 ```
 
 但是如果我们这样说会发生什么？
 
-```
+```py
 >>> if column("foo") == 5:
 ...     print("yes")
 ```
 
 在之前的 SQLAlchemy 版本中，返回的`_BinaryExpression`是一个普通的 Python 对象，其求值为`True`。现在它的求值取决于实际的`ClauseElement`是否应该具有与被比较的相同哈希值。意思是：
 
-```
+```py
 >>> bool(column("foo") == 5)
 False
 >>> bool(column("foo") == column("foo"))
@@ -119,14 +119,14 @@ True
 
 这意味着如下代码：
 
-```
+```py
 if expression:
     print("the expression is:", expression)
 ```
 
 如果 `expression` 是二进制子句，则不会被评估。由于上述模式永远不应该被使用，因此基本的 `ClauseElement` 现在在布尔上下文中调用时会引发异常：
 
-```
+```py
 >>> bool(c)
 Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
@@ -137,7 +137,7 @@ TypeError: Boolean value of this clause is not defined
 
 希望检查 `ClauseElement` 表达式是否存在的代码应该这样说：
 
-```
+```py
 if expression is not None:
     print("the expression is:", expression)
 ```
@@ -154,13 +154,13 @@ if expression is not None:
 
 SQLAlchemy 中的“executemany”对应于调用 `execute()`，传递一系列绑定参数集：
 
-```
+```py
 connection.execute(table.insert(), {"data": "row1"}, {"data": "row2"}, {"data": "row3"})
 ```
 
 当 `Connection` 对象发送给定的 `insert()` 构造进行编译时，它传递给编译器传递的第一组绑定中存在的键名，以确定语句的 VALUES 子句的构造。熟悉这种构造的用户会知道，剩余字典中存在的额外键没有任何影响。现在的不同之处在于，所有后续字典都需要至少包含第一个字典中存在的*每个*键。这意味着像这样的调用不再起作用：
 
-```
+```py
 connection.execute(
     table.insert(),
     {"timestamp": today, "data": "row1"},
@@ -185,7 +185,7 @@ connection.execute(
 
 与扩展无关，0.6 版本的性能比 0.5 版本有所提高。使用 SQLite 连接和提取 50000 行的快速概述，主要使用直接的 SQLite 访问、`ResultProxy`和简单的映射 ORM 对象：
 
-```
+```py
 sqlite select/native: 0.260s
 
 0.6 / C extension
@@ -210,7 +210,7 @@ sqlalchemy.orm fetch: 4.030s
 
 `sqlalchemy.schema`包得到了一些长期需要的关注。最显著的变化是新扩展的 DDL 系统。在 SQLAlchemy 中，自版本 0.5 以来，可以创建自定义的 DDL 字符串并将其与表或元数据对象关联：
 
-```
+```py
 from sqlalchemy.schema import DDL
 
 DDL("CREATE TRIGGER users_trigger ...").execute_at("after-create", metadata)
@@ -218,7 +218,7 @@ DDL("CREATE TRIGGER users_trigger ...").execute_at("after-create", metadata)
 
 现在，完整的 DDL 构造都在同一系统下可用，包括用于 CREATE TABLE、ADD CONSTRAINT 等的构造：
 
-```
+```py
 from sqlalchemy.schema import Constraint, AddConstraint
 
 AddContraint(CheckConstraint("value > 5")).execute_at("after-create", mytable)
@@ -226,7 +226,7 @@ AddContraint(CheckConstraint("value > 5")).execute_at("after-create", mytable)
 
 此外，所有 DDL 对象现在都是常规的`ClauseElement`对象，就像任何其他 SQLAlchemy 表达式对象一样：
 
-```
+```py
 from sqlalchemy.schema import CreateTable
 
 create = CreateTable(mytable)
@@ -240,7 +240,7 @@ engine.execute(create)
 
 并且使用`sqlalchemy.ext.compiler`扩展，你可以自己制作：
 
-```
+```py
 from sqlalchemy.schema import DDLElement
 from sqlalchemy.ext.compiler import compiles
 
@@ -318,7 +318,7 @@ engine.execute(AlterColumn(table.c.mycolumn, "SET DEFAULT 'test'"))
 
 要使用检查器：
 
-```
+```py
 from sqlalchemy.engine.reflection import Inspector
 
 insp = Inspector.from_engine(my_engine)
@@ -328,7 +328,7 @@ print(insp.get_schema_names())
 
 在某些情况下，from_engine()方法将提供一个特定于后端的检查器，具有额外的功能，例如 PostgreSQL 提供了一个 get_table_oid()方法：
 
-```
+```py
 my_engine = create_engine("postgresql://...")
 pg_insp = Inspector.from_engine(my_engine)
 
@@ -341,7 +341,7 @@ insert()、update()和 delete()构造现在支持一个 returning()方法，对�
 
 给定一个与 select()构造相同方式的列表达式列表，这些列的值将作为常规结果集返回：
 
-```
+```py
 result = connection.execute(
     table.insert().values(data="some data").returning(table.c.id, table.c.timestamp)
 )
@@ -395,7 +395,7 @@ print("ID:", row["id"], "Timestamp:", row["timestamp"])
 
 一个更通用的解决方案是针对明确不想要 Unicode 对象的字符串列使用`TypeDecorator`，将 Unicode 转换回 utf-8，或者其他所需的格式：
 
-```
+```py
 class UTF8Encoded(TypeDecorator):
   """Unicode type which coerces to utf-8."""
 
@@ -419,7 +419,7 @@ class UTF8Encoded(TypeDecorator):
 
 一些处理表元数据的应用程序可能希望比较反映的表和/或非反射的表上的类型。`TypeEngine` 上有一个半私有访问器叫做 `_type_affinity`，以及一个相关的比较助手 `_compare_type_affinity`。此访问器返回类型对应的“通用” `types` 类：
 
-```
+```py
 >>> String(50)._compare_type_affinity(postgresql.VARCHAR(50))
 True
 >>> Integer()._compare_type_affinity(mysql.REAL)
@@ -484,7 +484,7 @@ False
 
 在映射器级别：
 
-```
+```py
 mapper(Child, child)
 mapper(
     Parent,
@@ -495,7 +495,7 @@ mapper(
 
 在查询时间级别：
 
-```
+```py
 session.query(Parent).options(joinedload(Parent.child, innerjoin=True)).all()
 ```
 
@@ -515,13 +515,13 @@ session.query(Parent).options(joinedload(Parent.child, innerjoin=True)).all()
 
     例如，在 0.5 中，这个查询：
 
-    ```
+    ```py
     session.query(Address).options(eagerload(Address.user)).limit(10)
     ```
 
     会生成类似于以下的 SQL：
 
-    ```
+    ```py
     SELECT  *  FROM
       (SELECT  *  FROM  addresses  LIMIT  10)  AS  anon_1
       LEFT  OUTER  JOIN  users  AS  users_1  ON  users_1.id  =  anon_1.addresses_user_id
@@ -531,7 +531,7 @@ session.query(Parent).options(joinedload(Parent.child, innerjoin=True)).all()
 
     在 0.6 中，该逻辑更加敏感，可以检测到所有预加载是否都表示多对一关系，如果是这种情况，预加载连接不会影响行数：
 
-    ```
+    ```py
     SELECT  *  FROM  addresses  LEFT  OUTER  JOIN  users  AS  users_1  ON  users_1.id  =  addresses.user_id  LIMIT  10
     ```
 
@@ -631,13 +631,13 @@ SQLSoup 已现代化并更新以反映常见的 0.5/0.6 功能，包括明确定
 
 `create_engine()`使用的 URL 格式已经改进，以处理特定后端的任意数量的 DBAPI，使用了受 JDBC 启发的方案。以前的格式仍然有效，并且将选择一个“默认”的 DBAPI 实现，例如下面将使用 psycopg2 的 PostgreSQL URL：
 
-```
+```py
 create_engine("postgresql://scott:tiger@localhost/test")
 ```
 
 但是，要指定特定的 DBAPI 后端，例如 pg8000，请在 URL 的“protocol”部分使用加号“+”：
 
-```
+```py
 create_engine("postgresql+pg8000://scott:tiger@localhost/test")
 ```
 
@@ -667,7 +667,7 @@ create_engine("postgresql+pg8000://scott:tiger@localhost/test")
 
 方言的导入结构已经改变。每个方言现在通过 `sqlalchemy.dialects.<name>` 导出其基本的“dialect”类以及该方言支持的完整一组 SQL 类型。例如，要导入一组 PG 类型：
 
-```
+```py
 from sqlalchemy.dialects.postgresql import (
     INTEGER,
     BIGINT,
@@ -685,7 +685,7 @@ from sqlalchemy.dialects.postgresql import (
 
 方言的导入结构已经改变。每个方言现在通过 `sqlalchemy.dialects.<name>` 导出其基本的“dialect”类以及该方言支持的完整一组 SQL 类型。例如，要导入一组 PG 类型：
 
-```
+```py
 from sqlalchemy.dialects.postgresql import (
     INTEGER,
     BIGINT,
@@ -707,7 +707,7 @@ from sqlalchemy.dialects.postgresql import (
 
 正如我们所知，将 `ClauseElement` 与任何其他对象进行比较会返回另一个 `ClauseElement`：
 
-```
+```py
 >>> from sqlalchemy.sql import column
 >>> column("foo") == 5
 <sqlalchemy.sql.expression._BinaryExpression object at 0x1252490>
@@ -715,21 +715,21 @@ from sqlalchemy.dialects.postgresql import (
 
 这样当 Python 表达式转换为字符串时会产生 SQL 表达式：
 
-```
+```py
 >>> str(column("foo") == 5)
 'foo = :foo_1'
 ```
 
 但如果我们这样说会发生什么？
 
-```
+```py
 >>> if column("foo") == 5:
 ...     print("yes")
 ```
 
 在之前的 SQLAlchemy 版本中，返回的 `_BinaryExpression` 是一个普通的 Python 对象，其求值为 `True`。现在它的求值取决于实际的 `ClauseElement` 是否应该具有与被比较的哈希值相同的值。意思是：
 
-```
+```py
 >>> bool(column("foo") == 5)
 False
 >>> bool(column("foo") == column("foo"))
@@ -742,14 +742,14 @@ True
 
 这意味着像下面这样的代码：
 
-```
+```py
 if expression:
     print("the expression is:", expression)
 ```
 
 如果 `expression` 是一个二进制子句，则不会求值。由于上述模式永远不应该被使用，基本的 `ClauseElement` 现在在布尔上下文中调用时会引发异常：
 
-```
+```py
 >>> bool(c)
 Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
@@ -760,7 +760,7 @@ TypeError: Boolean value of this clause is not defined
 
 想要检查是否存在 `ClauseElement` 表达式的代码应该改为：
 
-```
+```py
 if expression is not None:
     print("the expression is:", expression)
 ```
@@ -777,13 +777,13 @@ if expression is not None:
 
 在 SQLAlchemy 中，“executemany” 对应于调用 `execute()`，传递一系列绑定参数集：
 
-```
+```py
 connection.execute(table.insert(), {"data": "row1"}, {"data": "row2"}, {"data": "row3"})
 ```
 
 当 `Connection` 对象将给定的 `insert()` 构造发送到编译时，它会传递给编译器在第一组传递的绑定中存在的键名，以确定语句的 VALUES 子句的构造。熟悉这种构造的用户会知道剩余字典中存在的额外键没有任何影响。现在不同的是，所有后续字典都需要至少包含第一个字典中存在的*每个*键。这意味着像这样的调用不再起作用：
 
-```
+```py
 connection.execute(
     table.insert(),
     {"timestamp": today, "data": "row1"},
@@ -806,7 +806,7 @@ connection.execute(
 
 我们知道，将`ClauseElement`与任何其他对象进行比较会返回另一个`ClauseElement`：
 
-```
+```py
 >>> from sqlalchemy.sql import column
 >>> column("foo") == 5
 <sqlalchemy.sql.expression._BinaryExpression object at 0x1252490>
@@ -814,21 +814,21 @@ connection.execute(
 
 这样 Python 表达式在转换为字符串时会产生 SQL 表达式：
 
-```
+```py
 >>> str(column("foo") == 5)
 'foo = :foo_1'
 ```
 
 但如果我们这样说会发生什么呢？
 
-```
+```py
 >>> if column("foo") == 5:
 ...     print("yes")
 ```
 
 在以前的 SQLAlchemy 版本中，返回的`_BinaryExpression`是一个普通的 Python 对象，其求值为`True`。现在它的求值取决于实际的`ClauseElement`是否应该具有与被比较的相同哈希值。意思是：
 
-```
+```py
 >>> bool(column("foo") == 5)
 False
 >>> bool(column("foo") == column("foo"))
@@ -841,14 +841,14 @@ True
 
 这意味着像下面这样的代码：
 
-```
+```py
 if expression:
     print("the expression is:", expression)
 ```
 
 如果`expression`是一个二元子句，将不会评估。由于上述模式不应该被使用，基本的`ClauseElement`现在在布尔上下文中调用时会引发异常：
 
-```
+```py
 >>> bool(c)
 Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
@@ -859,7 +859,7 @@ TypeError: Boolean value of this clause is not defined
 
 想要检查`ClauseElement`表达式是否存在的代码应该改为：
 
-```
+```py
 if expression is not None:
     print("the expression is:", expression)
 ```
@@ -876,13 +876,13 @@ if expression is not None:
 
 在 SQLAlchemy 中，“executemany”对应于调用`execute()`，传递一系列绑定参数集合：
 
-```
+```py
 connection.execute(table.insert(), {"data": "row1"}, {"data": "row2"}, {"data": "row3"})
 ```
 
 当`Connection`对象发送给定的`insert()`构造进行编译时，它会传递给编译器在第一组传递的绑定中存在的键名，以确定语句的 VALUES 子句的构造。熟悉这种构造的用户将知道，剩余字典中存在的额外键不会产生任何影响。现在不同的是，所有后续字典都需要至少包含第一个字典中存在的*每个*键。这意味着像这样的调用不再起作用：
 
-```
+```py
 connection.execute(
     table.insert(),
     {"timestamp": today, "data": "row1"},
@@ -907,7 +907,7 @@ SQLAlchemy 0.6 因此通过禁止任何后续参数集留空字段来确立可�
 
 与扩展无关，0.6 版本的性能比 0.5 版本有所提高。使用 SQLite 连接和获取 50,000 行的快速概述，主要使用直接 SQLite 访问、`ResultProxy`和简单映射的 ORM 对象：
 
-```
+```py
 sqlite select/native: 0.260s
 
 0.6 / C extension
@@ -932,7 +932,7 @@ sqlalchemy.orm fetch: 4.030s
 
 `sqlalchemy.schema`包得到了一些长期需要的关注。最显著的变化是新扩展的 DDL 系统。在 SQLAlchemy 中，自 0.5 版本以来，可以创建自定义 DDL 字符串并将其与表或元数据对象关联：
 
-```
+```py
 from sqlalchemy.schema import DDL
 
 DDL("CREATE TRIGGER users_trigger ...").execute_at("after-create", metadata)
@@ -940,7 +940,7 @@ DDL("CREATE TRIGGER users_trigger ...").execute_at("after-create", metadata)
 
 现在完整的 DDL 构造都在同一系统下可用，包括用于 CREATE TABLE、ADD CONSTRAINT 等的构造：
 
-```
+```py
 from sqlalchemy.schema import Constraint, AddConstraint
 
 AddContraint(CheckConstraint("value > 5")).execute_at("after-create", mytable)
@@ -948,7 +948,7 @@ AddContraint(CheckConstraint("value > 5")).execute_at("after-create", mytable)
 
 此外，所有 DDL 对象现在都是常规的`ClauseElement`对象，就像任何其他 SQLAlchemy 表达式对象一样：
 
-```
+```py
 from sqlalchemy.schema import CreateTable
 
 create = CreateTable(mytable)
@@ -962,7 +962,7 @@ engine.execute(create)
 
 并且使用`sqlalchemy.ext.compiler`扩展，您可以制作自己的：
 
-```
+```py
 from sqlalchemy.schema import DDLElement
 from sqlalchemy.ext.compiler import compiles
 
@@ -1088,7 +1088,7 @@ schema 包也得到了极大简化。许多在 0.5 版本中被废弃的选项�
 
 使用检查器：
 
-```
+```py
 from sqlalchemy.engine.reflection import Inspector
 
 insp = Inspector.from_engine(my_engine)
@@ -1098,7 +1098,7 @@ print(insp.get_schema_names())
 
 `from_engine()` 方法在某些情况下将提供一个具有额外功能的特定于后端的检查器，例如 PostgreSQL 提供一个 `get_table_oid()` 方法：
 
-```
+```py
 my_engine = create_engine("postgresql://...")
 pg_insp = Inspector.from_engine(my_engine)
 
@@ -1111,7 +1111,7 @@ print(pg_insp.get_table_oid("my_table"))
 
 给定一个与 `select()` 构造方式相同的列表达式列表，这些列的值将作为常规结果集返回：
 
-```
+```py
 result = connection.execute(
     table.insert().values(data="some data").returning(table.c.id, table.c.timestamp)
 )
@@ -1165,7 +1165,7 @@ print("ID:", row["id"], "Timestamp:", row["timestamp"])
 
 对于明确不希望使用 unicode 对象的字符串列，更一般的解决方案是使用`TypeDecorator`将 unicode 转换回 utf-8，或者任何所需的格式：
 
-```
+```py
 class UTF8Encoded(TypeDecorator):
   """Unicode type which coerces to utf-8."""
 
@@ -1189,7 +1189,7 @@ class UTF8Encoded(TypeDecorator):
 
 一些处理表元数据的应用程序可能希望在反射表和/或非反射表之间比较类型。`TypeEngine` 上有一个半私有访问器叫做 `_type_affinity`，以及一个相关的比较辅助函数 `_compare_type_affinity`。该访问器返回与类型对应的“通用” `types` 类：
 
-```
+```py
 >>> String(50)._compare_type_affinity(postgresql.VARCHAR(50))
 True
 >>> Integer()._compare_type_affinity(mysql.REAL)
@@ -1250,7 +1250,7 @@ False
 
 对于明确不希望使用 Unicode 对象的字符串列的更一般解决方案是使用一个 `TypeDecorator`，将 Unicode 转换回 utf-8，或者其他所需的格式：
 
-```
+```py
 class UTF8Encoded(TypeDecorator):
   """Unicode type which coerces to utf-8."""
 
@@ -1274,7 +1274,7 @@ class UTF8Encoded(TypeDecorator):
 
 一些处理表元数据的应用程序可能希望比较反射表和/或非反射表上的类型。`TypeEngine` 上有一个半私有访问器叫做 `_type_affinity`，以及一个相关的比较助手 `_compare_type_affinity`。此访问器返回类型对应的“通用” `types` 类：
 
-```
+```py
 >>> String(50)._compare_type_affinity(postgresql.VARCHAR(50))
 True
 >>> Integer()._compare_type_affinity(mysql.REAL)
@@ -1339,7 +1339,7 @@ False
 
 在映射器级别：
 
-```
+```py
 mapper(Child, child)
 mapper(
     Parent,
@@ -1350,7 +1350,7 @@ mapper(
 
 在查询时级别：
 
-```
+```py
 session.query(Parent).options(joinedload(Parent.child, innerjoin=True)).all()
 ```
 
@@ -1370,13 +1370,13 @@ session.query(Parent).options(joinedload(Parent.child, innerjoin=True)).all()
 
     例如，在 0.5 版本中这个查询：
 
-    ```
+    ```py
     session.query(Address).options(eagerload(Address.user)).limit(10)
     ```
 
     将生成如下 SQL 语句：
 
-    ```
+    ```py
     SELECT  *  FROM
       (SELECT  *  FROM  addresses  LIMIT  10)  AS  anon_1
       LEFT  OUTER  JOIN  users  AS  users_1  ON  users_1.id  =  anon_1.addresses_user_id
@@ -1386,7 +1386,7 @@ session.query(Parent).options(joinedload(Parent.child, innerjoin=True)).all()
 
     在 0.6 版本中，该逻辑更加敏感，并且可以检测到所有急切加载是否表示一对多关系，在这种情况下，急切连接不会影响行数：
 
-    ```
+    ```py
     SELECT  *  FROM  addresses  LEFT  OUTER  JOIN  users  AS  users_1  ON  users_1.id  =  addresses.user_id  LIMIT  10
     ```
 
@@ -1496,7 +1496,7 @@ Beaker 集成的一个有前途的新示例在 `examples/beaker_caching` 中。�
 
 在映射器级别：
 
-```
+```py
 mapper(Child, child)
 mapper(
     Parent,
@@ -1507,7 +1507,7 @@ mapper(
 
 在查询时间级别：
 
-```
+```py
 session.query(Parent).options(joinedload(Parent.child, innerjoin=True)).all()
 ```
 
@@ -1527,13 +1527,13 @@ session.query(Parent).options(joinedload(Parent.child, innerjoin=True)).all()
 
     例如，在 0.5 版本中，这个查询：
 
-    ```
+    ```py
     session.query(Address).options(eagerload(Address.user)).limit(10)
     ```
 
     会生成类似于以下的 SQL：
 
-    ```
+    ```py
     SELECT  *  FROM
       (SELECT  *  FROM  addresses  LIMIT  10)  AS  anon_1
       LEFT  OUTER  JOIN  users  AS  users_1  ON  users_1.id  =  anon_1.addresses_user_id
@@ -1543,7 +1543,7 @@ session.query(Parent).options(joinedload(Parent.child, innerjoin=True)).all()
 
     在 0.6 版本中，该逻辑更加敏感，可以检测到所有急切加载器是否代表多对一关系，如果是这种情况，则急切连接不会影响行数：
 
-    ```
+    ```py
     SELECT  *  FROM  addresses  LEFT  OUTER  JOIN  users  AS  users_1  ON  users_1.id  =  addresses.user_id  LIMIT  10
     ```
 
