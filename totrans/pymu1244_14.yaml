@@ -1,0 +1,344 @@
+- en: Drawing and Graphics
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://pymupdf.readthedocs.io/en/latest/recipes-drawing-and-graphics.html](https://pymupdf.readthedocs.io/en/latest/recipes-drawing-and-graphics.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the terms “Drawings” or “Graphics” are mentioned here we are referring
+    to “Vector Graphics” or “Line Art”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore please consider these terms as being synonymous!
+  prefs: []
+  type: TYPE_NORMAL
+- en: PDF files support elementary drawing operations as part of their syntax. These
+    are **vector graphics** and include basic geometrical objects like lines, curves,
+    circles, rectangles including specifying colors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The syntax for such operations is defined in “A Operator Summary” on page 643
+    of the [Adobe PDF References](app3.html#adobemanual). Specifying these operators
+    for a PDF page happens in its [`contents`](glossary.html#contents "contents")
+    objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PyMuPDF implements a large part of the available features via its [Shape](shape.html#shape)
+    class, which is comparable to notions like “canvas” in other packages (e.g. [reportlab](https://pypi.org/project/reportlab/)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A shape is always created as a **child of a page**, usually with an instruction
+    like `shape = page.new_shape()`. The class defines numerous methods that perform
+    drawing operations on the page’s area. For example, `last_point = shape.draw_rect(rect)`
+    draws a rectangle along the borders of a suitably defined `rect = pymupdf.Rect(...)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The returned *last_point* **always** is the [Point](point.html#point) where
+    drawing operation ended (“last point”). Every such elementary drawing requires
+    a subsequent [`Shape.finish()`](shape.html#Shape.finish "Shape.finish") to “close”
+    it, but there may be multiple drawings which have one common `finish()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In fact, [`Shape.finish()`](shape.html#Shape.finish "Shape.finish") *defines*
+    a group of preceding draw operations to form one – potentially rather complex
+    – graphics object. PyMuPDF provides several predefined graphics in [shapes_and_symbols.py](https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/shapes/shapes_and_symbols.py)
+    which demonstrate how this works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you import this script, you can also directly use its graphics as in the
+    following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is the script’s outcome:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[![_images/img-symbols.jpg](../Images/d6d25fbc0e5d20a58d4d23413ca4c56d.png)](_images/img-symbols.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '* * *'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## How to Extract Drawings'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in v1.18.0
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Drawing commands (**vector graphics**) issued by a page can be extracted as
+    a list of dictionaries. Interestingly, this is possible for [all supported document
+    types](how-to-open-a-file.html#supported-file-types) – not just PDF: so you can
+    use it for XPS, EPUB and others as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Page method, [`Page.get_drawings()`](page.html#Page.get_drawings "Page.get_drawings")
+    accesses draw commands and converts them into a list of Python dictionaries. Each
+    dictionary – called a “path” – represents a separate drawing – it may be simple
+    like a single line, or a complex combination of lines and curves representing
+    one of the shapes of the previous section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The *path* dictionary has been designed such that it can easily be used by
+    the [Shape](shape.html#shape) class and its methods. Here is an example for a
+    page with one path, that draws a red-bordered yellow circle inside rectangle `Rect(100,
+    100, 200, 200)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: You need (at least) 4 Bézier curves (of 3rd order) to draw a circle with acceptable
+    precision. See this [Wikipedia article](https://en.wikipedia.org/wiki/B%C3%A9zier_curve)
+    for some background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is a code snippet which extracts the drawings of a page and re-draws
+    them on a new page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As can be seen, there is a high congruence level with the [Shape](shape.html#shape)
+    class. With one exception: For technical reasons `lineCap` is a tuple of 3 numbers
+    here, whereas it is an integer in [Shape](shape.html#shape) (and in PDF). So we
+    simply take the maximum value of that tuple.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is a comparison between input and output of an example page, created by
+    the previous script:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[![_images/img-getdrawings.png](../Images/2e67a8eeaf4e8e76e263caae0ef60fdc.png)](_images/img-getdrawings.png)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The reconstruction of graphics, like shown here, is not perfect. The following
+    aspects will not be reproduced as of this version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Page definitions can be complex and include instructions for not showing / hiding
+    certain areas to keep them invisible. Things like this are ignored by [`Page.get_drawings()`](page.html#Page.get_drawings
+    "Page.get_drawings") - it will always return all paths.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can use the path list to make your own lists of e.g. all lines or all rectangles
+    on the page and subselect them by criteria, like color or position on the page
+    etc.  ## How to Delete Drawings'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To delete drawings/vector graphics we must use a [Redaction Annotation](the-basics.html#the-basics-redacting)
+    with the bounding box of the drawing and then **add and apply** a redaction to
+    it to delete it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code shows an example of deleting the first drawing found on
+    the page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`Page.apply_redactions()`](page.html#Page.apply_redactions "Page.apply_redactions")
+    for the parameter options which can be sent - you are able to apply deletion options
+    to image, drawing and text objects which are bound by the annotation area.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to Draw Graphics
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Drawing graphics is as simple as calling the type of [`Drawing Method`](page.html#Page.draw_line
+    "Page.draw_line") you may want. You can draw graphics directly on pages or within
+    shape objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, to draw a circle:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [Shape](shape.html#shape) object can be used to combine multiple drawings
+    that should receive common properties as specified by [`Shape.finish()`](shape.html#Shape.finish
+    "Shape.finish").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Do you have any feedback on this page?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '* * *'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This software is provided AS-IS with no warranty, either express or implied.
+    This software is distributed under license and may not be copied, modified or
+    distributed except as expressly authorized under the terms of that license. Refer
+    to licensing information at [artifex.com](https://www.artifex.com?utm_source=rtd-pymupdf&utm_medium=rtd&utm_content=footer-link)
+    or contact Artifex Software Inc., 39 Mesa Street, Suite 108A, San Francisco CA
+    94129, United States for further information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This documentation covers all versions up to 1.24.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[![Discord logo](../Images/66cbb5081103a580193aa66c87b90d9a.png)](https://discord.gg/TSpYGBW4eq)
+    ## How to Extract Drawings'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New in v1.18.0
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Drawing commands (**vector graphics**) issued by a page can be extracted as
+    a list of dictionaries. Interestingly, this is possible for [all supported document
+    types](how-to-open-a-file.html#supported-file-types) – not just PDF: so you can
+    use it for XPS, EPUB and others as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Page method, [`Page.get_drawings()`](page.html#Page.get_drawings "Page.get_drawings")
+    accesses draw commands and converts them into a list of Python dictionaries. Each
+    dictionary – called a “path” – represents a separate drawing – it may be simple
+    like a single line, or a complex combination of lines and curves representing
+    one of the shapes of the previous section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The *path* dictionary has been designed such that it can easily be used by
+    the [Shape](shape.html#shape) class and its methods. Here is an example for a
+    page with one path, that draws a red-bordered yellow circle inside rectangle `Rect(100,
+    100, 200, 200)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: You need (at least) 4 Bézier curves (of 3rd order) to draw a circle with acceptable
+    precision. See this [Wikipedia article](https://en.wikipedia.org/wiki/B%C3%A9zier_curve)
+    for some background.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is a code snippet which extracts the drawings of a page and re-draws
+    them on a new page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As can be seen, there is a high congruence level with the [Shape](shape.html#shape)
+    class. With one exception: For technical reasons `lineCap` is a tuple of 3 numbers
+    here, whereas it is an integer in [Shape](shape.html#shape) (and in PDF). So we
+    simply take the maximum value of that tuple.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is a comparison between input and output of an example page, created by
+    the previous script:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[![_images/img-getdrawings.png](../Images/2e67a8eeaf4e8e76e263caae0ef60fdc.png)](_images/img-getdrawings.png)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The reconstruction of graphics, like shown here, is not perfect. The following
+    aspects will not be reproduced as of this version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Page definitions can be complex and include instructions for not showing / hiding
+    certain areas to keep them invisible. Things like this are ignored by [`Page.get_drawings()`](page.html#Page.get_drawings
+    "Page.get_drawings") - it will always return all paths.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can use the path list to make your own lists of e.g. all lines or all rectangles
+    on the page and subselect them by criteria, like color or position on the page
+    etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## How to Delete Drawings'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To delete drawings/vector graphics we must use a [Redaction Annotation](the-basics.html#the-basics-redacting)
+    with the bounding box of the drawing and then **add and apply** a redaction to
+    it to delete it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code shows an example of deleting the first drawing found on
+    the page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [`Page.apply_redactions()`](page.html#Page.apply_redactions "Page.apply_redactions")
+    for the parameter options which can be sent - you are able to apply deletion options
+    to image, drawing and text objects which are bound by the annotation area.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to Draw Graphics
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Drawing graphics is as simple as calling the type of [`Drawing Method`](page.html#Page.draw_line
+    "Page.draw_line") you may want. You can draw graphics directly on pages or within
+    shape objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, to draw a circle:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The [Shape](shape.html#shape) object can be used to combine multiple drawings
+    that should receive common properties as specified by [`Shape.finish()`](shape.html#Shape.finish
+    "Shape.finish").
+  prefs: []
+  type: TYPE_NORMAL
+- en: Do you have any feedback on this page?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '* * *'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This software is provided AS-IS with no warranty, either express or implied.
+    This software is distributed under license and may not be copied, modified or
+    distributed except as expressly authorized under the terms of that license. Refer
+    to licensing information at [artifex.com](https://www.artifex.com?utm_source=rtd-pymupdf&utm_medium=rtd&utm_content=footer-link)
+    or contact Artifex Software Inc., 39 Mesa Street, Suite 108A, San Francisco CA
+    94129, United States for further information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This documentation covers all versions up to 1.24.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[![Discord logo](../Images/66cbb5081103a580193aa66c87b90d9a.png)](https://discord.gg/TSpYGBW4eq)'
+  prefs: []
+  type: TYPE_NORMAL

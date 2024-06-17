@@ -1,0 +1,1004 @@
+- en: 'Appendix 1: Details on Text Extraction'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[https://pymupdf.readthedocs.io/en/latest/app1.html](https://pymupdf.readthedocs.io/en/latest/app1.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This chapter provides background on the text extraction methods of PyMuPDF.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Information of interest are
+  prefs: []
+  type: TYPE_NORMAL
+- en: what do they provide?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: what do they imply (processing time / data sizes)?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: General structure of a TextPage
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[TextPage](textpage.html#textpage) is one of (Py-) MuPDF’s classes. It is normally
+    created (and destroyed again) behind the curtain, when [Page](page.html#page)
+    text extraction methods are used, but it is also available directly and can be
+    used as a persistent object. Other than its name suggests, images may optionally
+    also be part of a text page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: A **text page** consists of blocks (= roughly paragraphs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A **block** consists of either lines and their characters, or an image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A **line** consists of spans.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A **span** consists of adjacent characters with identical font properties:
+    name, size, flags and color.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plain Text
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Function [`TextPage.extractText()`](textpage.html#TextPage.extractText "TextPage.extractText")
+    (or *Page.get_text(“text”)*) extracts a page’s plain **text in original order**
+    as specified by the creator of the document.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The output may not equal an accustomed “natural” reading order. However, you
+    can request a reordering following the scheme “top-left to bottom-right” by executing
+    `page.get_text("text", sort=True)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: BLOCKS
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Function [`TextPage.extractBLOCKS()`](textpage.html#TextPage.extractBLOCKS
+    "TextPage.extractBLOCKS") (or *Page.get_text(“blocks”)*) extracts a page’s text
+    blocks as a list of items like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where the first 4 items are the float coordinates of the block’s bbox. The lines
+    within each block are concatenated by a new-line character.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is a high-speed method, which by default also extracts image meta information:
+    Each image appears as a block with one text line, which contains meta information.
+    The image itself is not shown.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As with simple text output above, the `sort` argument can be used as well to
+    obtain a reading order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: WORDS
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Function [`TextPage.extractWORDS()`](textpage.html#TextPage.extractWORDS "TextPage.extractWORDS")
+    (or *Page.get_text(“words”)*) extracts a page’s text **words** as a list of items
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where the first 4 items are the float coordinates of the words’s bbox. The last
+    three integers provide some more information on the word’s whereabouts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a high-speed method. As with the previous methods, argument `sort=True`
+    will reorder the words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: HTML
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`TextPage.extractHTML()`](textpage.html#TextPage.extractHTML "TextPage.extractHTML")
+    (or *Page.get_text(“html”)* output fully reflects the structure of the page’s
+    *TextPage* – much like DICT / JSON below. This includes images, font information
+    and text positions. If wrapped in HTML header and trailer code, it can readily
+    be displayed by an internet browser. Our above example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Controlling Quality of HTML Output'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While HTML output has improved a lot in MuPDF v1.12.0, it is not yet bug-free:
+    we have found problems in the areas **font support** and **image positioning**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: HTML text contains references to the fonts used of the original document. If
+    these are not known to the browser (a fat chance!), it will replace them with
+    others; the results will probably look awkward. This issue varies greatly by browser
+    – on my Windows machine, MS Edge worked just fine, whereas Firefox looked horrible.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For PDFs with a complex structure, images may not be positioned and / or sized
+    correctly. This seems to be the case for rotated pages and pages, where the various
+    possible page bbox variants do not coincide (e.g. *MediaBox != CropBox*). We do
+    not know yet, how to address this – we filed a bug at MuPDF’s site.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To address the font issue, you can use a simple utility script to scan through
+    the HTML file and replace font references. Here is a little example that replaces
+    all fonts with one of the [PDF Base 14 Fonts](app3.html#base-14-fonts): serifed
+    fonts will become “Times”, non-serifed “Helvetica” and monospaced will become
+    “Courier”. Their respective variations for “bold”, “italic”, etc. are hopefully
+    done correctly by your browser:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: DICT (or JSON)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`TextPage.extractDICT()`](textpage.html#TextPage.extractDICT "TextPage.extractDICT")
+    (or *Page.get_text(“dict”, sort=False)*) output fully reflects the structure of
+    a *TextPage* and provides image content and position detail (*bbox* – boundary
+    boxes in pixel units) for every block, line and span. Images are stored as *bytes*
+    for DICT output and base64 encoded strings for JSON output.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a visualization of the dictionary structure have a look at [Structure of
+    Dictionary Outputs](textpage.html#textpagedict).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is how this looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: RAWDICT (or RAWJSON)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`TextPage.extractRAWDICT()`](textpage.html#TextPage.extractRAWDICT "TextPage.extractRAWDICT")
+    (or *Page.get_text(“rawdict”, sort=False)*) is an **information superset of DICT**
+    and takes the detail level one step deeper. It looks exactly like the above, except
+    that the *“text”* items (*string*) in the spans are replaced by the list *“chars”*.
+    Each *“chars”* entry is a character *dict*. For example, here is what you would
+    see in place of item *“text”: “Text in black color.”* above:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: XML
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`TextPage.extractXML()`](textpage.html#TextPage.extractXML "TextPage.extractXML")
+    (or *Page.get_text(“xml”)*) version extracts text (no images) with the detail
+    level of RAWDICT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have successfully tested [lxml](https://pypi.org/project/lxml/) to interpret
+    this output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: XHTML
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`TextPage.extractXHTML()`](textpage.html#TextPage.extractXHTML "TextPage.extractXHTML")
+    (or *Page.get_text(“xhtml”)*) is a variation of TEXT but in HTML format, containing
+    the bare text and images (“semantic” output):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Text Extraction Flags Defaults'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.16.2: Method [`Page.get_text()`](page.html#Page.get_text "Page.get_text")
+    supports a keyword parameter *flags* *(int)* to control the amount and the quality
+    of extracted data. The following table shows the defaults settings (flags parameter
+    omitted or None) for each extraction variant. If you specify flags with a value
+    other than *None*, be aware that you must set **all desired** options. A description
+    of the respective bit settings can be found in [Text Extraction Flags](vars.html#textpreserve).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'New in v1.19.6: The default combinations in the following table are now available
+    as Python constants: [`TEXTFLAGS_TEXT`](vars.html#TEXTFLAGS_TEXT "TEXTFLAGS_TEXT"),
+    [`TEXTFLAGS_WORDS`](vars.html#TEXTFLAGS_WORDS "TEXTFLAGS_WORDS"), [`TEXTFLAGS_BLOCKS`](vars.html#TEXTFLAGS_BLOCKS
+    "TEXTFLAGS_BLOCKS"), [`TEXTFLAGS_DICT`](vars.html#TEXTFLAGS_DICT "TEXTFLAGS_DICT"),
+    [`TEXTFLAGS_RAWDICT`](vars.html#TEXTFLAGS_RAWDICT "TEXTFLAGS_RAWDICT"), [`TEXTFLAGS_HTML`](vars.html#TEXTFLAGS_HTML
+    "TEXTFLAGS_HTML"), [`TEXTFLAGS_XHTML`](vars.html#TEXTFLAGS_XHTML "TEXTFLAGS_XHTML"),
+    [`TEXTFLAGS_XML`](vars.html#TEXTFLAGS_XML "TEXTFLAGS_XML"), and [`TEXTFLAGS_SEARCH`](vars.html#TEXTFLAGS_SEARCH
+    "TEXTFLAGS_SEARCH"). You can now easily modify a default flag, e.g.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**include** images in a “blocks” output:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`flags = TEXTFLAGS_BLOCKS | TEXT_PRESERVE_IMAGES`'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '**exclude** images from a “dict” output:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`flags = TEXTFLAGS_DICT & ~TEXT_PRESERVE_IMAGES`'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'set **dehyphenation off** in text searches:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`flags = TEXTFLAGS_SEARCH & ~TEXT_DEHYPHENATE`'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '| Indicator | text | html | xhtml | xml | dict | rawdict | words | blocks |
+    search |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| preserve ligatures | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| preserve whitespace | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| preserve images | n/a | 1 | 1 | n/a | 1 | 1 | n/a | 0 | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| inhibit spaces | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| dehyphenate | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| clip to mediabox | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| use CID instead of U+FFFD | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '**search** refers to the text search function.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**“json”** is handled exactly like **“dict”** and is hence left out.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**“rawjson”** is handled exactly like **“rawdict”** and is hence left out.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An “n/a” specification means a value of 0 and setting this bit never has any
+    effect on the output (but an adverse effect on performance).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'If you are not interested in images when using an output variant which includes
+    them by default, then by all means set the respective bit off: You will experience
+    a better performance and much lower space requirements.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To show the effect of [`TEXT_INHIBIT_SPACES`](vars.html#TEXT_INHIBIT_SPACES
+    "TEXT_INHIBIT_SPACES") have a look at this example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Performance
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The text extraction methods differ significantly both: in terms of information
+    they supply, and in terms of resource requirements and runtimes. Generally, more
+    information of course means, that more processing is required and a higher data
+    volume is generated.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Especially images have a **very significant** impact. Make sure to exclude them
+    (via the *flags* parameter) whenever you do not need them. To process the below
+    mentioned 2’700 total pages with default flags settings required 160 seconds across
+    all extraction methods. When all images where excluded, less than 50% of that
+    time (77 seconds) were needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To begin with, all methods are **very fast** in relation to other products out
+    there in the market. In terms of processing speed, we are not aware of a faster
+    (free) tool. Even the most detailed method, RAWDICT, processes all 1’310 pages
+    of the [Adobe PDF References](app3.html#adobemanual) in less than 5 seconds (simple
+    text needs less than 2 seconds here).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following table shows average relative speeds (“RSpeed”, baseline 1.00 is
+    TEXT), taken across ca. 1400 text-heavy and 1300 image-heavy pages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Method | RSpeed | Comments | no images |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| TEXT | 1.00 | no images, **plain** text, line breaks | 1.00 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| BLOCKS | 1.00 | image bboxes (only), **block** level text with bboxes, line
+    breaks | 1.00 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| WORDS | 1.02 | no images, **word** level text with bboxes | 1.02 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| XML | 2.72 | no images, **char** level text, layout and font details | 2.72
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| XHTML | 3.32 | **base64** images, **span** level text, no layout info | 1.00
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| HTML | 3.54 | **base64** images, **span** level text, layout and font details
+    | 1.01 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| DICT | 3.93 | **binary** images, **span** level text, layout and font details
+    | 1.04 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| RAWDICT | 4.50 | **binary** images, **char** level text, layout and font
+    details | 1.68 |'
+  prefs: []
+  type: TYPE_TB
+- en: 'As mentioned: when excluding image extraction (last column), the relative speeds
+    are changing drastically: except RAWDICT and XML, the other methods are almost
+    equally fast, and RAWDICT requires 40% less execution time than the **now slowest
+    XML**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Look at chapter **Appendix 1** for more performance information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Do you have any feedback on this page?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '* * *'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This software is provided AS-IS with no warranty, either express or implied.
+    This software is distributed under license and may not be copied, modified or
+    distributed except as expressly authorized under the terms of that license. Refer
+    to licensing information at [artifex.com](https://www.artifex.com?utm_source=rtd-pymupdf&utm_medium=rtd&utm_content=footer-link)
+    or contact Artifex Software Inc., 39 Mesa Street, Suite 108A, San Francisco CA
+    94129, United States for further information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This documentation covers all versions up to 1.24.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[![Discord logo](../Images/66cbb5081103a580193aa66c87b90d9a.png)](https://discord.gg/TSpYGBW4eq)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: General structure of a TextPage
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[TextPage](textpage.html#textpage) is one of (Py-) MuPDF’s classes. It is normally
+    created (and destroyed again) behind the curtain, when [Page](page.html#page)
+    text extraction methods are used, but it is also available directly and can be
+    used as a persistent object. Other than its name suggests, images may optionally
+    also be part of a text page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: A **text page** consists of blocks (= roughly paragraphs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A **block** consists of either lines and their characters, or an image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A **line** consists of spans.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A **span** consists of adjacent characters with identical font properties:
+    name, size, flags and color.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plain Text
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Function [`TextPage.extractText()`](textpage.html#TextPage.extractText "TextPage.extractText")
+    (or *Page.get_text(“text”)*) extracts a page’s plain **text in original order**
+    as specified by the creator of the document.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The output may not equal an accustomed “natural” reading order. However, you
+    can request a reordering following the scheme “top-left to bottom-right” by executing
+    `page.get_text("text", sort=True)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: BLOCKS
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Function [`TextPage.extractBLOCKS()`](textpage.html#TextPage.extractBLOCKS
+    "TextPage.extractBLOCKS") (or *Page.get_text(“blocks”)*) extracts a page’s text
+    blocks as a list of items like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where the first 4 items are the float coordinates of the block’s bbox. The lines
+    within each block are concatenated by a new-line character.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is a high-speed method, which by default also extracts image meta information:
+    Each image appears as a block with one text line, which contains meta information.
+    The image itself is not shown.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As with simple text output above, the `sort` argument can be used as well to
+    obtain a reading order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: WORDS
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Function [`TextPage.extractWORDS()`](textpage.html#TextPage.extractWORDS "TextPage.extractWORDS")
+    (or *Page.get_text(“words”)*) extracts a page’s text **words** as a list of items
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Where the first 4 items are the float coordinates of the words’s bbox. The last
+    three integers provide some more information on the word’s whereabouts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a high-speed method. As with the previous methods, argument `sort=True`
+    will reorder the words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: HTML
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`TextPage.extractHTML()`](textpage.html#TextPage.extractHTML "TextPage.extractHTML")
+    (or *Page.get_text(“html”)* output fully reflects the structure of the page’s
+    *TextPage* – much like DICT / JSON below. This includes images, font information
+    and text positions. If wrapped in HTML header and trailer code, it can readily
+    be displayed by an internet browser. Our above example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Controlling Quality of HTML Output'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While HTML output has improved a lot in MuPDF v1.12.0, it is not yet bug-free:
+    we have found problems in the areas **font support** and **image positioning**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: HTML text contains references to the fonts used of the original document. If
+    these are not known to the browser (a fat chance!), it will replace them with
+    others; the results will probably look awkward. This issue varies greatly by browser
+    – on my Windows machine, MS Edge worked just fine, whereas Firefox looked horrible.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For PDFs with a complex structure, images may not be positioned and / or sized
+    correctly. This seems to be the case for rotated pages and pages, where the various
+    possible page bbox variants do not coincide (e.g. *MediaBox != CropBox*). We do
+    not know yet, how to address this – we filed a bug at MuPDF’s site.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To address the font issue, you can use a simple utility script to scan through
+    the HTML file and replace font references. Here is a little example that replaces
+    all fonts with one of the [PDF Base 14 Fonts](app3.html#base-14-fonts): serifed
+    fonts will become “Times”, non-serifed “Helvetica” and monospaced will become
+    “Courier”. Their respective variations for “bold”, “italic”, etc. are hopefully
+    done correctly by your browser:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: DICT (or JSON)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`TextPage.extractDICT()`](textpage.html#TextPage.extractDICT "TextPage.extractDICT")
+    (or *Page.get_text(“dict”, sort=False)*) output fully reflects the structure of
+    a *TextPage* and provides image content and position detail (*bbox* – boundary
+    boxes in pixel units) for every block, line and span. Images are stored as *bytes*
+    for DICT output and base64 encoded strings for JSON output.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a visualization of the dictionary structure have a look at [Structure of
+    Dictionary Outputs](textpage.html#textpagedict).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is how this looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: RAWDICT (or RAWJSON)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`TextPage.extractRAWDICT()`](textpage.html#TextPage.extractRAWDICT "TextPage.extractRAWDICT")
+    (or *Page.get_text(“rawdict”, sort=False)*) is an **information superset of DICT**
+    and takes the detail level one step deeper. It looks exactly like the above, except
+    that the *“text”* items (*string*) in the spans are replaced by the list *“chars”*.
+    Each *“chars”* entry is a character *dict*. For example, here is what you would
+    see in place of item *“text”: “Text in black color.”* above:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: XML
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The [`TextPage.extractXML()`](textpage.html#TextPage.extractXML "TextPage.extractXML")
+    (or *Page.get_text(“xml”)*) version extracts text (no images) with the detail
+    level of RAWDICT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have successfully tested [lxml](https://pypi.org/project/lxml/) to interpret
+    this output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: XHTML
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[`TextPage.extractXHTML()`](textpage.html#TextPage.extractXHTML "TextPage.extractXHTML")
+    (or *Page.get_text(“xhtml”)*) is a variation of TEXT but in HTML format, containing
+    the bare text and images (“semantic” output):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '## Text Extraction Flags Defaults'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'New in version 1.16.2: Method [`Page.get_text()`](page.html#Page.get_text "Page.get_text")
+    supports a keyword parameter *flags* *(int)* to control the amount and the quality
+    of extracted data. The following table shows the defaults settings (flags parameter
+    omitted or None) for each extraction variant. If you specify flags with a value
+    other than *None*, be aware that you must set **all desired** options. A description
+    of the respective bit settings can be found in [Text Extraction Flags](vars.html#textpreserve).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'New in v1.19.6: The default combinations in the following table are now available
+    as Python constants: [`TEXTFLAGS_TEXT`](vars.html#TEXTFLAGS_TEXT "TEXTFLAGS_TEXT"),
+    [`TEXTFLAGS_WORDS`](vars.html#TEXTFLAGS_WORDS "TEXTFLAGS_WORDS"), [`TEXTFLAGS_BLOCKS`](vars.html#TEXTFLAGS_BLOCKS
+    "TEXTFLAGS_BLOCKS"), [`TEXTFLAGS_DICT`](vars.html#TEXTFLAGS_DICT "TEXTFLAGS_DICT"),
+    [`TEXTFLAGS_RAWDICT`](vars.html#TEXTFLAGS_RAWDICT "TEXTFLAGS_RAWDICT"), [`TEXTFLAGS_HTML`](vars.html#TEXTFLAGS_HTML
+    "TEXTFLAGS_HTML"), [`TEXTFLAGS_XHTML`](vars.html#TEXTFLAGS_XHTML "TEXTFLAGS_XHTML"),
+    [`TEXTFLAGS_XML`](vars.html#TEXTFLAGS_XML "TEXTFLAGS_XML"), and [`TEXTFLAGS_SEARCH`](vars.html#TEXTFLAGS_SEARCH
+    "TEXTFLAGS_SEARCH"). You can now easily modify a default flag, e.g.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**include** images in a “blocks” output:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`flags = TEXTFLAGS_BLOCKS | TEXT_PRESERVE_IMAGES`'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '**exclude** images from a “dict” output:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`flags = TEXTFLAGS_DICT & ~TEXT_PRESERVE_IMAGES`'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'set **dehyphenation off** in text searches:'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`flags = TEXTFLAGS_SEARCH & ~TEXT_DEHYPHENATE`'
+  prefs:
+  - PREF_IND
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '| Indicator | text | html | xhtml | xml | dict | rawdict | words | blocks |
+    search |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| preserve ligatures | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| preserve whitespace | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| preserve images | n/a | 1 | 1 | n/a | 1 | 1 | n/a | 0 | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| inhibit spaces | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| dehyphenate | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| clip to mediabox | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| use CID instead of U+FFFD | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '**search** refers to the text search function.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**“json”** is handled exactly like **“dict”** and is hence left out.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**“rawjson”** is handled exactly like **“rawdict”** and is hence left out.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An “n/a” specification means a value of 0 and setting this bit never has any
+    effect on the output (but an adverse effect on performance).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'If you are not interested in images when using an output variant which includes
+    them by default, then by all means set the respective bit off: You will experience
+    a better performance and much lower space requirements.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To show the effect of [`TEXT_INHIBIT_SPACES`](vars.html#TEXT_INHIBIT_SPACES
+    "TEXT_INHIBIT_SPACES") have a look at this example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Performance
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The text extraction methods differ significantly both: in terms of information
+    they supply, and in terms of resource requirements and runtimes. Generally, more
+    information of course means, that more processing is required and a higher data
+    volume is generated.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Especially images have a **very significant** impact. Make sure to exclude them
+    (via the *flags* parameter) whenever you do not need them. To process the below
+    mentioned 2’700 total pages with default flags settings required 160 seconds across
+    all extraction methods. When all images where excluded, less than 50% of that
+    time (77 seconds) were needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To begin with, all methods are **very fast** in relation to other products out
+    there in the market. In terms of processing speed, we are not aware of a faster
+    (free) tool. Even the most detailed method, RAWDICT, processes all 1’310 pages
+    of the [Adobe PDF References](app3.html#adobemanual) in less than 5 seconds (simple
+    text needs less than 2 seconds here).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following table shows average relative speeds (“RSpeed”, baseline 1.00 is
+    TEXT), taken across ca. 1400 text-heavy and 1300 image-heavy pages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Method | RSpeed | Comments | no images |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| TEXT | 1.00 | no images, **plain** text, line breaks | 1.00 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| BLOCKS | 1.00 | image bboxes (only), **block** level text with bboxes, line
+    breaks | 1.00 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| WORDS | 1.02 | no images, **word** level text with bboxes | 1.02 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| XML | 2.72 | no images, **char** level text, layout and font details | 2.72
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| XHTML | 3.32 | **base64** images, **span** level text, no layout info | 1.00
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| HTML | 3.54 | **base64** images, **span** level text, layout and font details
+    | 1.01 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| DICT | 3.93 | **binary** images, **span** level text, layout and font details
+    | 1.04 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| RAWDICT | 4.50 | **binary** images, **char** level text, layout and font
+    details | 1.68 |'
+  prefs: []
+  type: TYPE_TB
+- en: 'As mentioned: when excluding image extraction (last column), the relative speeds
+    are changing drastically: except RAWDICT and XML, the other methods are almost
+    equally fast, and RAWDICT requires 40% less execution time than the **now slowest
+    XML**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Look at chapter **Appendix 1** for more performance information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Do you have any feedback on this page?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '* * *'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This software is provided AS-IS with no warranty, either express or implied.
+    This software is distributed under license and may not be copied, modified or
+    distributed except as expressly authorized under the terms of that license. Refer
+    to licensing information at [artifex.com](https://www.artifex.com?utm_source=rtd-pymupdf&utm_medium=rtd&utm_content=footer-link)
+    or contact Artifex Software Inc., 39 Mesa Street, Suite 108A, San Francisco CA
+    94129, United States for further information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This documentation covers all versions up to 1.24.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[![Discord logo](../Images/66cbb5081103a580193aa66c87b90d9a.png)](https://discord.gg/TSpYGBW4eq)'
+  prefs: []
+  type: TYPE_NORMAL
