@@ -1,0 +1,891 @@
+- en: TextWriter
+  id: totrans-0
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+  zh: 文本写入器
+- en: 原文：[https://pymupdf.readthedocs.io/en/latest/textwriter.html](https://pymupdf.readthedocs.io/en/latest/textwriter.html)
+  id: totrans-1
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+  zh: 原文：[https://pymupdf.readthedocs.io/en/latest/textwriter.html](https://pymupdf.readthedocs.io/en/latest/textwriter.html)
+- en: '**This class is for PDF only.**'
+  id: totrans-2
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '**此类仅适用于PDF。**'
+- en: New in v1.16.18
+  id: totrans-3
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: v1.16.18中的新功能
+- en: This class represents a MuPDF *text* object. The basic idea is to **decouple
+    (1) text preparation, and (2) text output** to PDF pages.
+  id: totrans-4
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 此类表示MuPDF的*文本*对象。其基本思想是**将文本准备（1）和输出到PDF页面（2）分离**。
+- en: During **preparation**, a text writer stores any number of text pieces (“spans”)
+    together with their positions and individual font information. The **output**
+    of the writer’s prepared content may happen multiple times to any PDF page with
+    a compatible page size.
+  id: totrans-5
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 在**准备阶段**，文本写入器将任意数量的文本片段（“跨度”）及其位置和各自的字体信息存储起来。文本写入器准备的内容可以多次输出到任何具有兼容页面尺寸的PDF页面上。
+- en: 'A text writer is an elegant alternative to methods [`Page.insert_text()`](page.html#Page.insert_text
+    "Page.insert_text") and friends:'
+  id: totrans-6
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 文本写入器是[`Page.insert_text()`](page.html#Page.insert_text "Page.insert_text")等方法的一个优雅替代品：
+- en: '**Improved text positioning:** Choose any point where insertion of text should
+    start. Storing text returns the “cursor position” after the *last character* of
+    the span.'
+  id: totrans-7
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**改进的文本定位：** 选择任何插入文本应该开始的点。存储文本后返回“光标位置”，即跨度的最后一个字符之后。'
+- en: '**Free font choice:** Each text span has its own font and [`fontsize`](glossary.html#fontsize
+    "fontsize"). This lets you easily switch when composing a larger text.'
+  id: totrans-8
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**自由字体选择：** 每个文本跨度都有自己的字体和[`fontsize`](glossary.html#fontsize "fontsize")。这使得在组成更大文本时可以轻松切换字体。'
+- en: '**Automatic fallback fonts:** If a character is not supported by the chosen
+    font, alternative fonts are automatically searched. This significantly reduces
+    the risk of seeing unprintable symbols in the output (“TOFUs” – looking like a
+    small rectangle). PyMuPDF now also comes with the **universal font “Droid Sans
+    Fallback Regular”**, which supports **all Latin** characters (including Cyrillic
+    and Greek), and **all CJK** characters (Chinese, Japanese, Korean).'
+  id: totrans-9
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**自动回退字体：** 如果所选字体不支持某个字符，系统会自动搜索替代字体。这大大减少了输出中看到无法打印符号（看起来像小矩形的“TOFUs”）的风险。PyMuPDF现在还提供**通用字体“Droid
+    Sans Fallback Regular”**，支持**所有拉丁字母**（包括西里尔字母和希腊字母）以及**所有CJK字符**（中文、日文、韩文）。'
+- en: '**Cyrillic and Greek Support:** The [PDF Base 14 Fonts](app3.html#base-14-fonts)
+    have integrated support of Cyrillic and Greek characters **without specifying
+    encoding.** Your text may be a mixture of Latin, Greek and Cyrillic.'
+  id: totrans-10
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**西里尔字母和希腊字母支持：** [PDF基本14字体](app3.html#base-14-fonts)集成了对西里尔字母和希腊字母的支持，**无需指定编码**。你的文本可以混合使用拉丁字母、希腊字母和西里尔字母。'
+- en: '**Transparency support:** Parameter *opacity* is supported. This offers a handy
+    way to create watermark-style text.'
+  id: totrans-11
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**透明度支持：** 支持*opacity*参数。这提供了一种便捷的方式来创建水印式文本。'
+- en: '**Justified text:** Supported for any font – not just simple fonts as in [`Page.insert_textbox()`](page.html#Page.insert_textbox
+    "Page.insert_textbox").'
+  id: totrans-12
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**文本对齐：** 支持任何字体 - 不仅仅是像[`Page.insert_textbox()`](page.html#Page.insert_textbox
+    "Page.insert_textbox")中的简单字体。'
+- en: '**Reusability:** A TextWriter object exists independent from PDF pages. It
+    can be written multiple times, either to the same or to other pages, in the same
+    or in different PDFs, choosing different colors or transparency.'
+  id: totrans-13
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**可重用性：** TextWriter对象存在独立于PDF页面之外。它可以多次写入，无论是同一页面还是其他页面，同一PDF或不同PDF，还可以选择不同的颜色或透明度。'
+- en: 'Using this object entails three steps:'
+  id: totrans-14
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 使用此对象包括三个步骤：
+- en: When **created**, a TextWriter requires a fixed **page rectangle** in relation
+    to which it calculates text positions. A text writer can write to pages of this
+    size only.
+  id: totrans-15
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+  zh: '**创建时**，TextWriter需要一个固定的**页面矩形**，以此为基础计算文本位置。文本写入器只能写入这种大小的页面。'
+- en: Store text in the TextWriter using methods [`TextWriter.append()`](#TextWriter.append
+    "TextWriter.append"), [`TextWriter.appendv()`](#TextWriter.appendv "TextWriter.appendv")
+    and [`TextWriter.fill_textbox()`](#TextWriter.fill_textbox "TextWriter.fill_textbox")
+    as often as is desired.
+  id: totrans-16
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+  zh: 使用[`TextWriter.append()`](#TextWriter.append "TextWriter.append")、[`TextWriter.appendv()`](#TextWriter.appendv
+    "TextWriter.appendv")和[`TextWriter.fill_textbox()`](#TextWriter.fill_textbox "TextWriter.fill_textbox")方法将文本存储在TextWriter中，可以根据需要频繁调用。
+- en: Output the TextWriter object on some PDF page(s).
+  id: totrans-17
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+  zh: 在一些PDF页面上输出TextWriter对象。
+- en: Note
+  id: totrans-18
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 注意
+- en: Starting with version 1.17.0, TextWriters **do support** text rotation via the
+    *morph* parameter of [`TextWriter.write_text()`](#TextWriter.write_text "TextWriter.write_text").
+  id: totrans-19
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: 从版本1.17.0开始，通过[`TextWriter.write_text()`](#TextWriter.write_text "TextWriter.write_text")的*morph*参数，TextWriter现在**支持**文本旋转。
+- en: There also exists [`Page.write_text()`](page.html#Page.write_text "Page.write_text")
+    which combines one or more TextWriters and jointly writes them to a given rectangle
+    and with a given rotation angle – much like [`Page.show_pdf_page()`](page.html#Page.show_pdf_page
+    "Page.show_pdf_page").
+  id: totrans-20
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: 还存在[`Page.write_text()`](page.html#Page.write_text "Page.write_text")，它将一个或多个TextWriter组合在一起，并将它们联合写入到给定的矩形和给定的旋转角度中，就像[`Page.show_pdf_page()`](page.html#Page.show_pdf_page
+    "Page.show_pdf_page")一样。
+- en: '| **Method / Attribute** | **Short Description** |'
+  id: totrans-21
+  prefs: []
+  type: TYPE_TB
+  zh: '| **方法 / 属性** | **简短描述** |'
+- en: '| --- | --- |'
+  id: totrans-22
+  prefs: []
+  type: TYPE_TB
+  zh: '| --- | --- |'
+- en: '| [`append()`](#TextWriter.append "TextWriter.append") | Add text in horizontal
+    write mode |'
+  id: totrans-23
+  prefs: []
+  type: TYPE_TB
+  zh: '| [`append()`](#TextWriter.append "水平写入模式添加文本") | 水平写入模式添加文本 |'
+- en: '| [`appendv()`](#TextWriter.appendv "TextWriter.appendv") | Add text in vertical
+    write mode |'
+  id: totrans-24
+  prefs: []
+  type: TYPE_TB
+  zh: '| [`appendv()`](#TextWriter.appendv "垂直写入模式添加文本") | 垂直写入模式添加文本 |'
+- en: '| [`fill_textbox()`](#TextWriter.fill_textbox "TextWriter.fill_textbox") |
+    Fill rectangle (horizontal write mode) |'
+  id: totrans-25
+  prefs: []
+  type: TYPE_TB
+  zh: '| [`fill_textbox()`](#TextWriter.fill_textbox "填充文本框") | 填充矩形（水平写入模式） |'
+- en: '| [`write_text()`](#TextWriter.write_text "TextWriter.write_text") | Output
+    TextWriter to a PDF page |'
+  id: totrans-26
+  prefs: []
+  type: TYPE_TB
+  zh: '| [`write_text()`](#TextWriter.write_text "写入文本") | 将TextWriter输出到PDF页面 |'
+- en: '| [`color`](#TextWriter.color "TextWriter.color") | Text color (can be changed)
+    |'
+  id: totrans-27
+  prefs: []
+  type: TYPE_TB
+  zh: '| [`color`](#TextWriter.color "文本颜色") | 文本颜色（可更改） |'
+- en: '| [`last_point`](#TextWriter.last_point "TextWriter.last_point") | Last written
+    character ends here |'
+  id: totrans-28
+  prefs: []
+  type: TYPE_TB
+  zh: '| [`last_point`](#TextWriter.last_point "文本写入器最后点") | 最后一个写入的字符在此结束 |'
+- en: '| [`opacity`](#TextWriter.opacity "TextWriter.opacity") | Text opacity (can
+    be changed) |'
+  id: totrans-29
+  prefs: []
+  type: TYPE_TB
+  zh: '| [`opacity`](#TextWriter.opacity "文本不透明度") | 文本不透明度（可更改） |'
+- en: '| [`rect`](#TextWriter.rect "TextWriter.rect") | Page rectangle used by this
+    TextWriter |'
+  id: totrans-30
+  prefs: []
+  type: TYPE_TB
+  zh: '| [`rect`](#TextWriter.rect "文本写入器矩形") | 此TextWriter使用的页面矩形 |'
+- en: '| [`text_rect`](#TextWriter.text_rect "TextWriter.text_rect") | Area occupied
+    so far |'
+  id: totrans-31
+  prefs: []
+  type: TYPE_TB
+  zh: '| [`text_rect`](#TextWriter.text_rect "文本区域") | 到目前为止所占据的区域 |'
+- en: '**Class API**'
+  id: totrans-32
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '**类 API**'
+- en: '[PRE0]'
+  id: totrans-33
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE0]'
+- en: '[PRE1]'
+  id: totrans-34
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE1]'
+- en: 'Parameters:'
+  id: totrans-35
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 参数：
+- en: '**rect** (*rect-like*) – rectangle internally used for text positioning computations.'
+  id: totrans-36
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**rect** (*rect-like*) – 用于文本定位计算的矩形。'
+- en: '**opacity** (*float*) – sets the transparency for the text to store here. Values
+    outside the interval `[0, 1)` will be ignored. A value of e.g. 0.5 means 50% transparency.'
+  id: totrans-37
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**opacity** (*float*) – 设置文本存储的透明度。超出区间`[0, 1)`的值将被忽略。例如0.5的值表示50%的透明度。'
+- en: '**color** (*float**,**sequ*) – the color of the text. All colors are specified
+    as floats *0 <= color <= 1*. A single float represents some gray level, a sequence
+    implies the colorspace via its length.'
+  id: totrans-38
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**color** (*float**,**sequ*) – 文本的颜色。所有颜色都以浮点数表示，*0 <= color <= 1*。一个浮点数表示一些灰度级别，一个序列意味着颜色空间通过其长度。'
+- en: '[PRE2]'
+  id: totrans-39
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE2]'
+- en: '*Changed in v1.18.9*'
+  id: totrans-40
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '*v1.18.9中更改*'
+- en: '*Changed in v1.18.15*'
+  id: totrans-41
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '*v1.18.15中更改*'
+- en: Add some new text in horizontal writing.
+  id: totrans-42
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 添加一些新的水平书写文本。
+- en: 'Parameters:'
+  id: totrans-43
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 参数：
+- en: '**pos** (*point_like*) – start position of the text, the bottom left point
+    of the first character.'
+  id: totrans-44
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**pos** (*point_like*) – 文本的起始位置，第一个字符的左下角点。'
+- en: '**text** (*str*) – a string of arbitrary length. It will be written starting
+    at position “pos”.'
+  id: totrans-45
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**text** (*str*) – 任意长度的字符串。将从“pos”位置开始写入。'
+- en: '**font** – a [Font](font.html#font). If omitted, `pymupdf.Font("helv")` will
+    be used.'
+  id: totrans-46
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**font** – 一个[字体](font.html#font)。如果省略，则将使用`pymupdf.Font("helv")`。'
+- en: '**fontsize** (*float*) – the [`fontsize`](glossary.html#fontsize "fontsize"),
+    a positive number, default 11.'
+  id: totrans-47
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**fontsize** (*float*) – 字体大小，一个正数，默认为11。'
+- en: '**language** (*str*) – the language to use, e.g. “en” for English. Meaningful
+    values should be compliant with the ISO 639 standards 1, 2, 3 or 5\. Reserved
+    for future use: currently has no effect as far as we know.'
+  id: totrans-48
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**language** (*str*) – 要使用的语言，例如英语的“en”。有意义的值应符合ISO 639标准1、2、3或5。保留供将来使用：目前据我们所知没有任何影响。'
+- en: '**right_to_left** (*bool*) – *(New in v1.18.9)* whether the text should be
+    written from right to left. Applicable for languages like Arabian or Hebrew. Default
+    is *False*. If *True*, any Latin parts within the text will automatically converted.
+    There are no other consequences, i.e. [`TextWriter.last_point`](#TextWriter.last_point
+    "TextWriter.last_point") will still be the rightmost character, and there neither
+    is any alignment taking place. Hence you may want to use [`TextWriter.fill_textbox()`](#TextWriter.fill_textbox
+    "TextWriter.fill_textbox") instead.'
+  id: totrans-49
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**right_to_left** (*bool*) – *(v1.18.9中新增)* 是否应该从右向左写入文本。适用于阿拉伯语或希伯来语等语言。默认为*False*。如果为*True*，则文本中的任何拉丁部分将自动转换。没有其他后果，即[`TextWriter.last_point`](#TextWriter.last_point
+    "文本写入器最后点")仍将是最右边的字符，也不会进行任何对齐。因此，您可能希望改用[`TextWriter.fill_textbox()`](#TextWriter.fill_textbox
+    "填充文本框")。'
+- en: '**small_caps** (*bool*) –'
+  id: totrans-50
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**small_caps** (*bool*) –'
+- en: '*(New in v1.18.15)* look for the character’s Small Capital version in the font.
+    If present, take that value instead. Otherwise the original character (this font
+    or the fallback font) will be taken. The fallback font will never return small
+    caps. For example, this snippet:'
+  id: totrans-51
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+  zh: '*(v1.18.15 新增)* 寻找字体中字符的小型大写版本。如果存在，则取该值。否则将采用原始字符（当前字体或备用字体）。备用字体不会返回小型大写字母。例如，以下代码片段：'
+- en: '[PRE3]'
+  id: totrans-52
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+  zh: '[PRE3]'
+- en: 'will produce this PDF text:'
+  id: totrans-53
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+  zh: 将生成此PDF文本：
+- en: '![_images/img-smallcaps.jpg](../Images/7774f3a05833e624673b6a130b5ebccd.png)'
+  id: totrans-54
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+  zh: '![_images/img-smallcaps.jpg](../Images/7774f3a05833e624673b6a130b5ebccd.png)'
+- en: 'Returns:'
+  id: totrans-55
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 返回：
+- en: '[`text_rect`](#TextWriter.text_rect "TextWriter.text_rect") and [`last_point`](#TextWriter.last_point
+    "TextWriter.last_point"). *(Changed in v1.18.0:)* Raises an exception for an unsupported
+    font – checked via [`Font.is_writable`](font.html#Font.is_writable "Font.is_writable").'
+  id: totrans-56
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '[`text_rect`](#TextWriter.text_rect "TextWriter.text_rect") 和 [`last_point`](#TextWriter.last_point
+    "TextWriter.last_point")。*(v1.18.0 更改：)* 对不支持的字体引发异常 – 通过[`Font.is_writable`](font.html#Font.is_writable
+    "Font.is_writable")检查。'
+- en: '[PRE4]'
+  id: totrans-57
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE4]'
+- en: '*Changed in v1.18.15*'
+  id: totrans-58
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '*v1.18.15 更改*'
+- en: Add some new text in vertical, top-to-bottom writing.
+  id: totrans-59
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 在垂直方向上添加一些新文本，从顶部到底部的书写方式。
+- en: 'Parameters:'
+  id: totrans-60
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 参数：
+- en: '**pos** (*point_like*) – start position of the text, the bottom left point
+    of the first character.'
+  id: totrans-61
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**位置** (*point_like*) – 文本的起始位置，即第一个字符的左下角点。'
+- en: '**text** (*str*) – a string. It will be written starting at position “pos”.'
+  id: totrans-62
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**文本** (*str*) – 字符串。将从“pos”位置开始写入。'
+- en: '**font** – a [Font](font.html#font). If omitted, `pymupdf.Font("helv")` will
+    be used.'
+  id: totrans-63
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**字体** – [字体](font.html#font)。如果省略，则使用 `pymupdf.Font("helv")`。'
+- en: '**fontsize** (*float*) – the [`fontsize`](glossary.html#fontsize "fontsize"),
+    a positive float, default 11.'
+  id: totrans-64
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**字体大小** (*float*) – [字体大小](glossary.html#fontsize "fontsize")，正浮点数，默认为 11。'
+- en: '**language** (*str*) – the language to use, e.g. “en” for English. Meaningful
+    values should be compliant with the ISO 639 standards 1, 2, 3 or 5\. Reserved
+    for future use: currently has no effect as far as we know.'
+  id: totrans-65
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**语言** (*str*) – 要使用的语言，例如英语的“en”。有意义的值应符合 ISO 639 标准的 1、2、3 或 5。保留供将来使用：目前据我们所知没有任何影响。'
+- en: '**small_caps** (*bool*) – *(New in v1.18.15)* see [`append()`](#TextWriter.append
+    "TextWriter.append").'
+  id: totrans-66
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**small_caps** (*bool*) – *(v1.18.15 新增)* 参见 [`append()`](#TextWriter.append
+    "TextWriter.append")。'
+- en: 'Returns:'
+  id: totrans-67
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 返回：
+- en: '[`text_rect`](#TextWriter.text_rect "TextWriter.text_rect") and [`last_point`](#TextWriter.last_point
+    "TextWriter.last_point"). *(Changed in v1.18.0:)* Raises an exception for an unsupported
+    font – checked via [`Font.is_writable`](font.html#Font.is_writable "Font.is_writable").'
+  id: totrans-68
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '[`text_rect`](#TextWriter.text_rect "TextWriter.text_rect") 和 [`last_point`](#TextWriter.last_point
+    "TextWriter.last_point")。*(v1.18.0 更改：)* 对不支持的字体引发异常 – 通过[`Font.is_writable`](font.html#Font.is_writable
+    "Font.is_writable")检查。'
+- en: '[PRE5]'
+  id: totrans-69
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE5]'
+- en: 'Changed in 1.17.3: New parameter `pos` to specify where to start writing within
+    rectangle.'
+  id: totrans-70
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: 1.17.3 版本更改：新增参数 `pos`，指定在矩形内开始书写的位置。
+- en: 'Changed in v1.18.9: Return list of lines which do not fit in rectangle. Support
+    writing right-to-left (e.g. Arabian, Hebrew).'
+  id: totrans-71
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: v1.18.9 更改：返回不适合矩形的行的列表。支持从右到左书写（例如阿拉伯文、希伯来文）。
+- en: 'Changed in v1.18.15: Prefer small caps if supported by the font.'
+  id: totrans-72
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: v1.18.15 更改：如支持字体，则优先使用小型大写字母。
+- en: Fill a given rectangle with text in horizontal writing mode. This is a convenience
+    method to use as an alternative for [`append()`](#TextWriter.append "TextWriter.append").
+  id: totrans-73
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 用水平书写方式在给定的矩形中填充文本。这是一个方便的替代方法，可以用来替代[`append()`](#TextWriter.append "TextWriter.append")。
+- en: 'Parameters:'
+  id: totrans-74
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 参数：
+- en: '**rect** (*rect_like*) – the area to fill. No part of the text will appear
+    outside of this.'
+  id: totrans-75
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**矩形** (*rect_like*) – 要填充的区域。文本的任何部分不会出现在此区域之外。'
+- en: '**text** (*str**,**sequ*) – the text. Can be specified as a (UTF-8) string
+    or a list / tuple of strings. A string will first be converted to a list using
+    *splitlines()*. Every list item will begin on a new line (forced line breaks).'
+  id: totrans-76
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**文本** (*str**,**sequ*) – 文本。可以指定为（UTF-8）字符串或字符串列表/元组。字符串将首先使用 *splitlines()*
+    转换为列表。每个列表项将从新行开始（强制换行）。'
+- en: '**pos** (*point_like*) – *(new in v1.17.3)* start storing at this point. Default
+    is a point near rectangle top-left.'
+  id: totrans-77
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**位置** (*point_like*) – *(v1.17.3 新增)* 开始存储的位置。默认是接近矩形左上角的点。'
+- en: '**font** – the [Font](font.html#font), default `pymupdf.Font("helv")`.'
+  id: totrans-78
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**字体** – [字体](font.html#font)，默认为 `pymupdf.Font("helv")`。'
+- en: '**fontsize** (*float*) – the [`fontsize`](glossary.html#fontsize "fontsize").'
+  id: totrans-79
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**字体大小** (*float*) – [字体大小](glossary.html#fontsize "fontsize")。'
+- en: '**align** (*int*) – text alignment. Use one of TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER,
+    TEXT_ALIGN_RIGHT or TEXT_ALIGN_JUSTIFY.'
+  id: totrans-80
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**对齐方式** (*int*) – 文本对齐方式。使用 TEXT_ALIGN_LEFT、TEXT_ALIGN_CENTER、TEXT_ALIGN_RIGHT
+    或 TEXT_ALIGN_JUSTIFY 中的一个。'
+- en: '**right_to_left** (*bool*) – *(New in v1.18.9)* whether the text should be
+    written from right to left. Applicable for languages like Arabian or Hebrew. Default
+    is *False*. If *True*, any Latin parts are automatically reverted. You must still
+    set the alignment (if you want right alignment), it does not happen automatically
+    – the other alignment options remain available as well.'
+  id: totrans-81
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**right_to_left** (*bool*) – *(v1.18.9 新增)* 决定文本是否从右向左书写。适用于阿拉伯语或希伯来语等语言。默认为
+    *False*。如果为 *True*，则任何拉丁部分会自动翻转。仍需设置对齐方式（如果需要右对齐），不会自动发生 – 其他对齐选项仍然可用。'
+- en: '**warn** (*bool*) –'
+  id: totrans-82
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**warn** (*bool*) –'
+- en: on text overflow do nothing, warn, or raise an exception. Overflow text will
+    never be written. **Changed in v1.18.9:**
+  id: totrans-83
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+  zh: 当文本溢出时，不执行任何操作、警告或引发异常。溢出文本永远不会被写入。**v1.18.9 中已更改：**
+- en: Default is *None*.
+  id: totrans-84
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: 默认为 *None*。
+- en: The list of overflow lines will be returned.
+  id: totrans-85
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: 返回溢出行的列表。
+- en: '**small_caps** (*bool*) – *(New in v1.18.15)* see [`append()`](#TextWriter.append
+    "TextWriter.append").'
+  id: totrans-86
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**small_caps** (*bool*) – *(v1.18.15 新增)* 参见 [`append()`](#TextWriter.append
+    "TextWriter.append")。'
+- en: 'Return type:'
+  id: totrans-87
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 返回类型：
+- en: list
+  id: totrans-88
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 列表
+- en: 'Returns:'
+  id: totrans-89
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 返回：
+- en: '*New in v1.18.9* – List of lines that did not fit in the rectangle. Each item
+    is a tuple `(text, length)` containing a string and its length (on the page).'
+  id: totrans-90
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '*v1.18.9 新增* – 未适合矩形的行的列表。每个项目都是包含字符串及其在页面上长度的元组 `(text, length)`。'
+- en: Note
+  id: totrans-91
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 注意
+- en: Use these methods as often as is required – there is no technical limit (except
+    memory constraints of your system). You can also mix [`append()`](#TextWriter.append
+    "TextWriter.append") and text boxes and have multiple of both. Text positioning
+    is exclusively controlled by the insertion point. Therefore there is no need to
+    adhere to any order. *(Changed in v1.18.0:)* Raise an exception for an unsupported
+    font – checked via [`Font.is_writable`](font.html#Font.is_writable "Font.is_writable").
+  id: totrans-92
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 可根据需要多次使用这些方法 – 没有技术上的限制（除了系统的内存限制）。还可以混合 [`append()`](#TextWriter.append "TextWriter.append")
+    和文本框，并且可以拥有多个文本框。文本定位完全由插入点控制。因此，无需遵循任何顺序。*(v1.18.0 中已更改：)* 不支持的字体引发异常 – 通过 [`Font.is_writable`](font.html#Font.is_writable
+    "Font.is_writable") 进行检查。
+- en: '[PRE6]'
+  id: totrans-93
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE6]'
+- en: Write the TextWriter text to a page, which is the only mandatory parameter.
+    The other parameters can be used to temporarily override the values used when
+    the TextWriter was created.
+  id: totrans-94
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 将 TextWriter 文本写入页面，这是唯一必需的参数。其他参数可以用于临时覆盖创建 TextWriter 时使用的值。
+- en: 'Parameters:'
+  id: totrans-95
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 参数：
+- en: '**page** – write to this [Page](page.html#page).'
+  id: totrans-96
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**page** – 写入到此 [Page](page.html#page)。'
+- en: '**opacity** (*float*) – override the value of the TextWriter for this output.'
+  id: totrans-97
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**opacity** (*float*) – 覆盖此输出的 TextWriter 的值。'
+- en: '**color** (*sequ*) – override the value of the TextWriter for this output.'
+  id: totrans-98
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**color** (*sequ*) – 覆盖此输出的 TextWriter 的值。'
+- en: '**morph** (*sequ*) – modify the text appearance by applying a matrix to it.
+    If provided, this must be a sequence *(fixpoint, matrix)* with a point-like *fixpoint*
+    and a matrix-like *matrix*. A typical example is rotating the text around *fixpoint*.'
+  id: totrans-99
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**morph** (*sequ*) – 通过应用矩阵修改文本外观。如果提供，必须是一个包含像点一样的 *fixpoint* 和矩阵一样的 *matrix*
+    的序列。典型示例是围绕 *fixpoint* 旋转文本。'
+- en: '**overlay** (*bool*) – put in foreground (default) or background.'
+  id: totrans-100
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**overlay** (*bool*) – 放置在前景（默认）或背景。'
+- en: '**oc** (*int*) – *(new in v1.18.4)* the [`xref`](glossary.html#xref "xref")
+    of an [`OCG`](glossary.html#OCG "OCG") or [`OCMD`](glossary.html#OCMD "OCMD").'
+  id: totrans-101
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**oc** (*int*) – *(v1.18.4 新增)* [xref](glossary.html#xref "xref") 的一个 [`OCG`](glossary.html#OCG
+    "OCG") 或 [`OCMD`](glossary.html#OCMD "OCMD")。'
+- en: '**render_mode** (*int*) –'
+  id: totrans-102
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+  zh: '**render_mode** (*int*) –'
+- en: 'The PDF `Tr` operator value. Values: 0 (default), 1, 2, 3 (invisible).'
+  id: totrans-103
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+  zh: PDF `Tr` 运算符的值。取值：0（默认）、1、2、3（不可见）。
+- en: '![_images/img-rendermode.jpg](../Images/68afc67e63136e95b67c5e79fab5037b.png)'
+  id: totrans-104
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+  zh: '![_images/img-rendermode.jpg](../Images/68afc67e63136e95b67c5e79fab5037b.png)'
+- en: '[PRE7]'
+  id: totrans-105
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE7]'
+- en: The area currently occupied.
+  id: totrans-106
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 当前占用的区域。
+- en: 'Return type:'
+  id: totrans-107
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 返回类型：
+- en: '[Rect](rect.html#rect)'
+  id: totrans-108
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '[Rect](rect.html#rect)'
+- en: '[PRE8]'
+  id: totrans-109
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE8]'
+- en: The “cursor position” – a [Point](point.html#point) – after the last written
+    character (its bottom-right).
+  id: totrans-110
+  prefs: []
+  type: TYPE_NORMAL
+  zh: “光标位置” – [Point](point.html#point) – 最后一个字符的底部右下角。
+- en: 'Return type:'
+  id: totrans-111
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 返回类型：
+- en: '[Point](point.html#point)'
+  id: totrans-112
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '[Point](point.html#point)'
+- en: '[PRE9]'
+  id: totrans-113
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE9]'
+- en: The text opacity (modifiable).
+  id: totrans-114
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 文本不透明度（可修改）。
+- en: 'Return type:'
+  id: totrans-115
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 返回类型：
+- en: float
+  id: totrans-116
+  prefs: []
+  type: TYPE_NORMAL
+  zh: float
+- en: '[PRE10]'
+  id: totrans-117
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE10]'
+- en: The text color (modifiable).
+  id: totrans-118
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 文本颜色（可修改）。
+- en: 'Return type:'
+  id: totrans-119
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 返回类型：
+- en: float,tuple
+  id: totrans-120
+  prefs: []
+  type: TYPE_NORMAL
+  zh: float, tuple
+- en: '[PRE11]'
+  id: totrans-121
+  prefs: []
+  type: TYPE_PRE
+  zh: '[PRE11]'
+- en: The page rectangle for which this TextWriter was created. Must not be modified.
+  id: totrans-122
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 创建此 TextWriter 的页面矩形。必须不被修改。
+- en: 'Return type:'
+  id: totrans-123
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 返回类型：
+- en: '[Rect](rect.html#rect)'
+  id: totrans-124
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '[Rect](rect.html#rect)'
+- en: Note
+  id: totrans-125
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 注意
+- en: To see some demo scripts dealing with TextWriter, have a look at [this](https://github.com/pymupdf/PyMuPDF-Utilities/tree/master/textwriter)
+    repository.
+  id: totrans-126
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 若要查看处理 TextWriter 的一些演示脚本，请访问 [此](https://github.com/pymupdf/PyMuPDF-Utilities/tree/master/textwriter)
+    仓库。
+- en: Opacity and color apply to **all the text** in this object.
+  id: totrans-127
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+  zh: 不透明度和颜色适用于此对象中的**所有文本**。
+- en: If you need different colors / transparency, you must create a separate TextWriter.
+    Whenever you determine the color should change, simply append the text to the
+    respective TextWriter using the previously returned `last_point` as position for
+    the new text span.
+  id: totrans-128
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+  zh: 如果需要不同的颜色/透明度，必须创建单独的TextWriter。每当确定颜色应该更改时，只需将文本附加到相应的TextWriter，使用先前返回的`last_point`作为新文本范围的位置。
+- en: 'Appending items or text boxes can occur in arbitrary order: only the position
+    parameter controls where text appears.'
+  id: totrans-129
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+  zh: 附加项或文本框可以以任意顺序出现：只有位置参数控制文本显示的位置。
+- en: 'Font and [`fontsize`](glossary.html#fontsize "fontsize") can freely vary within
+    the same TextWriter. This can be used to let text with different properties appear
+    on the same displayed line: just specify *pos* accordingly, and e.g. set it to
+    `last_point` of the previously added item.'
+  id: totrans-130
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+  zh: 字体和[`fontsize`](glossary.html#fontsize "fontsize")可以在同一个TextWriter内自由变化。这可以用来让具有不同属性的文本显示在同一行上：只需相应地指定*pos*，例如设置为上一个添加项的`last_point`。
+- en: You can use the *pos* argument of [`TextWriter.fill_textbox()`](#TextWriter.fill_textbox
+    "TextWriter.fill_textbox") to set the position of the first text character. This
+    allows filling the same textbox with contents from different [TextWriter](#textwriter)
+    objects, thus allowing for multiple colors, opacities, etc.
+  id: totrans-131
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+  zh: 您可以使用[`TextWriter.fill_textbox()`](#TextWriter.fill_textbox "TextWriter.fill_textbox")的*pos*参数设置第一个文本字符的位置。这允许使用不同[TextWriter](#textwriter)对象的内容填充相同的文本框，从而实现多种颜色、不透明度等效果。
+- en: MuPDF does not support all fonts with this feature, e.g. no Type3 fonts. Starting
+    with v1.18.0 this can be checked via the font attribute [`Font.is_writable`](font.html#Font.is_writable
+    "Font.is_writable"). This attribute is also checked when using [TextWriter](#textwriter)
+    methods.
+  id: totrans-132
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+  zh: MuPDF不支持所有具有此功能的字体，例如没有Type3字体。从v1.18.0开始，可以通过字体属性[`Font.is_writable`](font.html#Font.is_writable
+    "Font.is_writable")检查此功能。在使用[TextWriter](#textwriter)方法时也会检查此属性。
+- en: Do you have any feedback on this page?
+  id: totrans-133
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 对本页面有任何反馈吗？
+- en: '* * *'
+  id: totrans-134
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '* * *'
+- en: This software is provided AS-IS with no warranty, either express or implied.
+    This software is distributed under license and may not be copied, modified or
+    distributed except as expressly authorized under the terms of that license. Refer
+    to licensing information at [artifex.com](https://www.artifex.com?utm_source=rtd-pymupdf&utm_medium=rtd&utm_content=footer-link)
+    or contact Artifex Software Inc., 39 Mesa Street, Suite 108A, San Francisco CA
+    94129, United States for further information.
+  id: totrans-135
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 此软件按原样提供，不附带任何明示或暗示的保证。此软件根据许可证分发，未经许可明确授权，不得复制、修改或分发。请参阅[artifex.com](https://www.artifex.com?utm_source=rtd-pymupdf&utm_medium=rtd&utm_content=footer-link)的许可信息或联系美国旧金山CA
+    94129 Mesa Street 39号108A套房的Artifex Software Inc.以获取更多信息。
+- en: This documentation covers all versions up to 1.24.4.
+  id: totrans-136
+  prefs: []
+  type: TYPE_NORMAL
+  zh: 此文档涵盖所有版本直至1.24.4。
+- en: '[![Discord logo](../Images/66cbb5081103a580193aa66c87b90d9a.png)](https://discord.gg/TSpYGBW4eq)'
+  id: totrans-137
+  prefs: []
+  type: TYPE_NORMAL
+  zh: '[![Discord logo](../Images/66cbb5081103a580193aa66c87b90d9a.png)](https://discord.gg/TSpYGBW4eq)'
