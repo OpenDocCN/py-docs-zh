@@ -1,86 +1,125 @@
 - en: Custom JVP/VJP rules for JAX-transformable functions
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 为 JAX-可变换函数定义自定义 JVP/VJP 规则
 - en: 原文：[`jax.readthedocs.io/en/latest/jep/2026-custom-derivatives.html`](https://jax.readthedocs.io/en/latest/jep/2026-custom-derivatives.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/jep/2026-custom-derivatives.html`](https://jax.readthedocs.io/en/latest/jep/2026-custom-derivatives.html)
 - en: This is a design document, explaining some of the thinking behind the design
     and implementation of `jax.custom_jvp` and `jax.custom_vjp`. For user-oriented
     documentation, see [the tutorial notebook](https://jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html).
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个设计文档，解释了关于设计和实现`jax.custom_jvp`和`jax.custom_vjp`背后的一些思路。有关面向用户的文档，请参阅[教程笔记本](https://jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html)。
 - en: 'There are two ways to define differentiation rules in JAX:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 JAX 中有两种定义微分规则的方法：
 - en: using `jax.custom_jvp` and `jax.custom_vjp` to define custom differentiation
     rules for Python functions that are already JAX-transformable; and
+  id: totrans-4
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用`jax.custom_jvp`和`jax.custom_vjp`为已经可以 JAX-变换的 Python 函数定义自定义微分规则；和
 - en: defining new `core.Primitive` instances along with all their transformation
     rules, for example to call into functions from other systems like solvers, simulators,
     or general numerical computing systems.
+  id: totrans-5
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 定义新的`core.Primitive`实例及其所有转换规则，例如调用来自其他系统（如求解器、仿真器或通用数值计算系统）的函数。
 - en: 'This document is about #1 only.'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: '本文只涉及 #1。'
 - en: Contents
+  id: totrans-7
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 内容
 - en: Goals
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 目标
 - en: Non-goals
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 非目标
 - en: Main problem descriptions
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 主要问题描述
 - en: The vmap-removes-custom-jvp semantics problem
+  id: totrans-11
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: vmap-removes-custom-jvp 语义问题
 - en: The Python flexibility problem
+  id: totrans-12
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Python 灵活性问题
 - en: Solution idea
+  id: totrans-13
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 解决方案思路
 - en: Implementation notes
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实现注意事项
 - en: Goals
+  id: totrans-15
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 目标
 - en: We want **users** to customize the forward- and/or reverse-mode differentiation
     behavior of their code. This customization
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们希望**用户**可以定制其代码的正向和/或反向模式微分行为。这种定制
 - en: should have a *clear and consistent semantics* in how it works and how it composes
     with other JAX transformations; and
+  id: totrans-17
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 应该具有*清晰一致的语义*，以及其工作方式与其他 JAX 变换如何组合；和
 - en: should be *flexible* in supporting use cases and workflows like in [Autograd](https://github.com/hips/autograd)
     and [PyTorch](https://pytorch.org), including cases involving differentiation
     of Python control flow and workflows for NaN debugging.
+  id: totrans-18
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 应该*灵活*地支持像[Autograd](https://github.com/hips/autograd)和[PyTorch](https://pytorch.org)中的使用案例和工作流，包括涉及
+    Python 控制流的微分和 NaN 调试工作流。
 - en: As **JAX developers** we want to write library functions, like [`logit`](https://github.com/google/jax/blob/01039299304b148b405ef9b9fa5e82bbb527471d/jax/scipy/special.py#L83)
     and [`expit`](https://github.com/google/jax/blob/01039299304b148b405ef9b9fa5e82bbb527471d/jax/scipy/special.py#L91),
     that are defined in terms of other primitives, but for the purposes of differentiation
@@ -88,31 +127,43 @@
     rules for them, which may be more numerically stable or performant. In particular,
     we don’t want to have to specify `vmap` or `jit` rules for functions like `logit`
     and `expit`.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为**JAX 开发者**，我们希望编写库函数，如[`logit`](https://github.com/google/jax/blob/01039299304b148b405ef9b9fa5e82bbb527471d/jax/scipy/special.py#L83)和[`expit`](https://github.com/google/jax/blob/01039299304b148b405ef9b9fa5e82bbb527471d/jax/scipy/special.py#L91)，这些函数在其他原语的基础上定义，但在微分的目的上具有类似原语的行为，因此我们希望为它们定义自定义微分规则，这些规则可能更稳定或更高效。特别是，我们不想为`logit`和`expit`等函数指定`vmap`或`jit`规则。
 - en: As a stretch goal, we’d like to make JAX a great environment for power users
     looking to add custom differentiation rules for higher-order functions like `fixed_point`,
     `odeint`, etc.; this design doc won’t solve that problem, but we want to be confident
     we’re not going to preclude good solutions to that problem.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为一个延伸目标，我们希望将 JAX 打造成一个非常适合希望为高阶函数如 `fixed_point`、`odeint` 等添加自定义微分规则的高级用户的环境；这个设计文档不会解决这个问题，但我们希望能够确保我们不会排除解决这个问题的好方法。
 - en: That is, our primary goals are
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 也就是说，我们的主要目标是
 - en: solve the vmap-removes-custom-jvp semantics problem ([#1249](https://github.com/google/jax/issues/1249)),
     and
+  id: totrans-22
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 解决 vmap-removes-custom-jvp 语义问题（[#1249](https://github.com/google/jax/issues/1249)），以及
 - en: allow Python in custom VJPs, e.g. to debug NaNs ([#1275](https://github.com/google/jax/issues/1275)).
+  id: totrans-23
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 允许 Python 在自定义 VJP 中，例如用于调试 NaNs（[#1275](https://github.com/google/jax/issues/1275)）。
 - en: Secondary goals are 3\. clean up and simplify user experience (symbolic zeros,
     kwargs, etc) 4\. make progress towards a world where users can easily add `fixed_point`,
     `odeint`, `root`, etc.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 次要目标是3. 清理和简化用户体验（符号零、kwargs 等）4. 朝着用户能够轻松添加 `fixed_point`、`odeint`、`root` 等的世界迈进。
 - en: Overall, we want to close [#116](https://github.com/google/jax/issues/116),
     [#1097](https://github.com/google/jax/issues/1097), [#1249](https://github.com/google/jax/issues/1249),
     [#1275](https://github.com/google/jax/issues/1275), [#1366](https://github.com/google/jax/issues/1366),
@@ -120,15 +171,26 @@
     [#1875](https://github.com/google/jax/issues/1875), [#1938](https://github.com/google/jax/issues/1938),
     and replace the custom_transforms machinery (from [#636](https://github.com/google/jax/issues/636),
     [#818](https://github.com/google/jax/issues/818), and others).
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 总体而言，我们希望关闭 [#116](https://github.com/google/jax/issues/116), [#1097](https://github.com/google/jax/issues/1097),
+    [#1249](https://github.com/google/jax/issues/1249), [#1275](https://github.com/google/jax/issues/1275),
+    [#1366](https://github.com/google/jax/issues/1366), [#1723](https://github.com/google/jax/issues/1723),
+    [#1670](https://github.com/google/jax/issues/1670), [#1875](https://github.com/google/jax/issues/1875),
+    [#1938](https://github.com/google/jax/issues/1938)，并替换自 [#636](https://github.com/google/jax/issues/636),
+    [#818](https://github.com/google/jax/issues/818) 和其他问题中的 custom_transforms 机制。
 - en: Non-goals
+  id: totrans-26
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 非目标
 - en: 'Here are objectives we’re **not** aiming to achieve:'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面是我们**不**打算实现的目标：
 - en: The `custom_transforms` machinery aimed to provide a transformation-generic
     mechanism for customizing behavior, in principle (though never really used in
     practice) allowing users to customize rules for any transformation while somehow
@@ -137,17 +199,23 @@
     Differentiation is the only case actually requested, and by specializing to differentiation
     we can reduce complexity and improve flexibility. To control all rules one can
     just write a primitive.
+  id: totrans-28
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '`custom_transforms` 机制旨在提供一个转换通用机制，用于定制行为，原则上（尽管在实践中从未真正使用）允许用户定制任何转换的规则，同时以某种方式继承其他转换的“透明”行为。**相反，我们仅打算解决微分的定制化问题（分别为
+    JVP 和 VJP）。** 实际上只有微分是被请求的用例，通过专门用于微分，我们可以减少复杂性并提高灵活性。要控制所有规则，用户可以直接编写一个原始函数。'
 - en: '**We’re not going to prioritize mathematical aesthetics** over flexibility
     and clarity on the user side, and simplicity on the implementation side. In particular,
     while the custom VJP signature `a -> (b, CT b --o CT a)` is mathematically pleasing,
     if it’s hard to implement in a Python mechanism because of the closure in the
     return type, we’re fine doing something that handles residuals more explicitly.'
+  id: totrans-29
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**我们不打算将数学美学**放在用户便利性、实现简单性及清晰性之上。特别是，虽然自定义 VJP 签名 `a -> (b, CT b --o CT a)`
+    在数学上是美观的，但如果由于返回类型中的闭包而在 Python 机制中实现困难，我们愿意采取一些更显式处理残差的方法。'
 - en: '**Serialization support**, of the form where the staged-out serialized program
     representation can be loaded and further JAX-transformed as opposed to just evaluated,
     is currently out of scope for these custom JVP/VJP transformation rules. Serialization
@@ -156,98 +224,147 @@
     like having jaxpr transformations implemented outside Python, or having jaxprs
     as an MLIR dialect. By defining this as a non-goal for the purpose of this design,
     we have fewer constraints on where we can stash Python callables.'
+  id: totrans-30
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**序列化支持**，即以分阶段序列化的程序表示形式加载并进行更多 JAX 转换，而不仅仅是评估，目前不在这些自定义 JVP/VJP 转换规则的范围内。序列化不仅对希望保存计算表示形式（并在加载后转换它）的研究人员有用，还可能考虑将
+    jaxpr 转换实现在 Python 之外，或者将 jaxprs 作为 MLIR 语言的一部分。通过将其定义为这一设计的非目标，我们在可存放 Python
+    可调用对象的位置上拥有更少的约束。'
 - en: Main problem descriptions
+  id: totrans-31
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 主要问题描述
 - en: The vmap-removes-custom-jvp semantics problem
+  id: totrans-32
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: vmap 移除自定义 JVP 语义问题
 - en: 'The vmap-removes-custom-jvp semantics problem is that vmap does not compose
     properly with differentiation of functions with `custom_transforms` rules:'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: vmap 移除自定义 JVP 语义问题是 vmap 与具有 `custom_transforms` 规则的函数微分不正确组合的问题：
 - en: '[PRE0]'
+  id: totrans-34
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: The last grad-of-vmap line has an unexpected result! In general, applying `vmap`,
     or really any non-differentiation transformation, has the effect of removing the
     custom differentiation rule. (Applying `jvp` causes a failure when a custom VJP
     rule is defined.)
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后一行 grad-of-vmap 有一个意外的结果！通常情况下，应用 `vmap` 或任何非微分转换都会导致自定义微分规则被移除。（当定义了自定义 VJP
+    规则时，应用 `jvp` 会导致失败。）
 - en: The problem exists because transformations are like rewrites, and the `vmap`
     transformation effectively rewrites the function to no longer call the newly-introduced
     primitive for which there is a custom rule (and hence `grad` then doesn’t produce
     the custom rule’s result). In more detail, the `custom_transforms` machinery sets
     things up so that evaluating `f(x)` applies the function
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 问题存在于转换就像重写一样，而 `vmap` 转换有效地将函数重写为不再调用新引入的具有自定义规则的原语（因此 `grad` 不再生成自定义规则的结果）。更详细地说，`custom_transforms`
+    机制设置了这样的环境，使得评估 `f(x)` 应用函数
 - en: '[PRE1]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: where `f_primitive` is a new primitive (introduced for every `custom_transforms`
     function and in fact for every call of the function) to which the custom VJP rule
     is associated. When we evaluate `grad(f)(x)`, the differentiation machinery encounters
     `f_primitive` and processes it with the custom rule.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中 `f_primitive` 是一个新的原语（为每个 `custom_transforms` 函数引入，并实际上为每次函数调用引入），与自定义 VJP
+    规则相关联。当我们计算 `grad(f)(x)` 时，微分机制遇到 `f_primitive` 并用自定义规则处理它。
 - en: However, because `f_primitive` is *transparent* to `vmap`, in the sense that
     `vmap` operates on (effectively by inlining) the definition of `f_primitive`,
     the function `vmap(f)` is effectively
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，因为 `f_primitive` 对于 `vmap` 来说是 *透明* 的，即 `vmap` 在（有效地内联）定义 `f_primitive` 的基础上操作，所以函数
+    `vmap(f)` 有效地是
 - en: '[PRE2]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: In words, `vmap` rewrites the function in terms of its underlying primitives
     and their transformation rules, removing `f_primitive` entirely.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 简而言之，`vmap` 重写函数以其基础原语及其转换规则表示，完全移除 `f_primitive`。
 - en: More generally, **because `vmap(f)` has semantics defined in terms of calls
     to f, it is semantically inconsistent to remove the custom derivative rule**.
     That is, since we define
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 更一般地说，**因为 `vmap(f)` 的语义定义为调用 f，因此删除自定义导数规则在语义上是不一致的**。也就是说，由于我们定义
 - en: '[PRE3]'
+  id: totrans-43
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: we must have
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们必须有
 - en: '[PRE4]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: yet this property is not observed when `f` has a custom derivative rule defined,
     as the custom derivative rule is used in the right-hand version but not the left-hand
     one.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，当 `f` 具有自定义导数规则时，就不再具备这一特性，因为自定义导数规则只在右手版本中使用，而不在左手版本中使用。
 - en: This issue isn’t specific to `vmap`; it applies to all transformations for which
     the semantics of transforming a function `f` are defined in terms of calls to
     the function `f`, rather than rewriting it into another function. The `mask` transformation
     also falls into this class. Differentiation transforms and the hypothetical all-unary-functions-become-cosine
     transform are not in this class.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个问题并不局限于 `vmap`；它适用于所有将函数 `f` 转换语义定义为调用函数 `f` 而不是重写其为另一个函数的转换。`mask` 转换也属于这一类。不同的微分变换和假设的所有一元函数变为余弦变换不属于这一类。
 - en: (The interaction between additional custom rules, like custom `vmap` rules,
     is likely to get even more complex, suggesting the problem framing of `custom_transforms`
     is too broad.)
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: （类似自定义 `vmap` 规则的额外自定义规则之间的交互可能会变得更加复杂，这表明 `custom_transforms` 的问题框架过于广泛。）
 - en: The Python flexibility problem
+  id: totrans-49
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Python 的灵活性问题
 - en: In JAX, as in [Autograd](https://github.com/hips/autograd) and [PyTorch](https://pytorch.org)
     but not TF1, differentiation of a Python function is performed while the function
     is being executed and traced. This behavior delights users for a few reasons.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 JAX 中，与 [Autograd](https://github.com/hips/autograd) 和 [PyTorch](https://pytorch.org)
+    一样但不适用于 TF1，Python 函数的微分是在执行和追踪函数时执行的。这种行为有几个原因让用户喜爱。
 - en: '**First and most importantly, it enables pdb-based workflows, e.g. for inspecting
     numerics or catching NaNs.** That is, users can employ the standard Python debugger
     and other Python-native tools to debug their code, even being able to inspect
@@ -258,29 +375,45 @@
     in Python. One especially handy trick, which I’ve used in both JAX and Autograd
     many times, is the ability to insert a debugger breakpoint in a custom VJP rule
     to enter a debugger at a specific point in the backward pass.'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: '**首先，而且最重要的是，它支持基于 pdb 的工作流程，例如用于检查数值或捕获 NaNs。** 也就是说，用户可以使用标准的 Python 调试器和其他
+    Python 原生工具来调试他们的代码，甚至可以检查运行时值以理解示例中的数值行为，并捕获诸如 NaN 等基本的运行时错误。事实上，就在为这一设计相应的 PR
+    工作时，特别是在 `odeint` 原语上，我多次使用运行时值检查来调试问题，增强了我对这一在 Python 中的关键用户工作流程的信心。一个特别方便的技巧是，在自定义
+    VJP 规则中插入调试器断点，以在向后传递中的特定点进入调试器。'
 - en: '**Second, it allows differentiation of Python native control flow.** We’re
     not sure how often this is used in practice in finalized software artifacts, but
     when users first poke around JAX or Autograd they’re often impressed by this freedom.
     There’s a reason we include it at the top of our JAX and Autograd READMEs, slide
     decks, and demos. Ceding this capability would be a step backward from Autograd.
     We want JAX to have the best automatic differentiation.'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: '**其次，它允许对 Python 原生控制流进行微分。** 我们不确定在最终的软件成品中实际使用这种功能的频率，但当用户首次尝试 JAX 或 Autograd
+    时，他们通常会对这种自由感到印象深刻。我们在 JAX 和 Autograd 的 README、幻灯片演示和演示中包含它是有原因的。放弃这种能力将是从 Autograd
+    后退的一步。我们希望 JAX 拥有最好的自动微分能力。'
 - en: 'However, the `custom_transforms` machinery does not provide this Python-support
     flexibility. That is, because it’s implemented in terms of up-front jaxpr formation
     from the Python code for both the user function and custom differentiation rules,
     code like this leads to an abstract value tracing error:'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，`custom_transforms` 机制并没有提供这种 Python 支持的灵活性。也就是说，因为它是根据来自用户函数和自定义微分规则的 Python
+    代码的 jaxpr 形成而实现的，这样的代码会导致抽象值追踪错误：
 - en: '[PRE5]'
+  id: totrans-54
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Solution idea
+  id: totrans-55
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 解决方案思路
 - en: The main idea is that **[dougalm@](https://github.com/dougalm) already solved
     these problems with `core.call`**. That is, we can frame the task of specifying
     a custom JVP rule for a user function in terms of a new Python-level call primitive
@@ -288,71 +421,102 @@
     a user Python function associated with it just like `core.call`, but additionally
     has a second Python callable representing the JVP rule. Let’s refer to this new
     call primitive as `custom_jvp_call`.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: '**[dougalm@](https://github.com/dougalm) 已经通过 `core.call` 解决了这些问题**的主要思想。也就是说，我们可以将为用户函数指定自定义
+    JVP 规则的任务框定为一个新的 Python 级别调用原语（不会添加到 jaxpr 语言中；详见下文）。这个新的调用原语与 `core.call` 类似，有一个关联的用户
+    Python 函数，但额外还有一个表示 JVP 规则的第二个 Python 可调用对象。让我们称这个新的调用原语为 `custom_jvp_call`。'
 - en: 'Transformations like `vmap` interact with `custom_jvp_call` as with `core.call`:
     they effectively pass right through it and are applied to the underlying Python
     callables. Schematically, writing in terms of curried versions of the primitives
     for convenience, analogously to how `vmap` interacts with `core.call` by applying
     to the function to be called:'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 类似于 `vmap` 如何通过应用于要调用的函数来与 `core.call` 交互一样，变通地写成原语的柯里化版本，`vmap` 与 `custom_jvp_call`
+    交互，它们有效地穿过它并应用于底层的 Python 可调用对象。这种行为意味着我们已经解决了 vmap 移除自定义 JVP 语义的问题。
 - en: '[PRE6]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'for the new primitive `custom_jvp_call` we simply apply `vmap` to the two functions
     it entails:'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于新的原语 `custom_jvp_call`，我们简单地对它涉及的两个函数应用 `vmap`：
 - en: '[PRE7]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: This behavior means we’ve solved the vmap-removes-custom-jvp semantics problem.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种行为意味着我们已经解决了 vmap-移除-custom-jvp 语义问题。
 - en: 'The `jvp` transformation interacts as one might expect: it just calls `f_jvp`,'
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jvp` 变换的交互方式如人所预期的那样：它只是调用 `f_jvp`，'
 - en: '[PRE8]'
+  id: totrans-63
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'Because `custom_jvp_call` acts like `core.call` (and not like `xla.xla_call`)
     in that it doesn’t raise the abstraction level of its inputs (because it’s not
     delaying anything or staging anything out), it means we’ve solved the Python flexibility
     problem: there are no constraints on the user Python function (above the usual
     functional programming constraints required by `jvp` or `vjp`).'
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为`custom_jvp_call`类似于`core.call`（而不是像`xla.xla_call`那样），它不会提升其输入的抽象级别（因为它不延迟任何内容或将任何内容转出），这意味着我们解决了Python灵活性问题：用户Python函数没有约束（除了`jvp`或`vjp`所需的常规函数编程约束）。
 - en: 'What about evaluation and compilation? These are two ways to “exit” the JAX
     system, in the sense that no additional transformations can be applied after these
     steps. As a result, their rules are trivial:'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 评估和编译怎么办？这两种方式是“退出”JAX系统的两种方式，因为在这些步骤之后不能再应用额外的转换。因此，它们的规则是微不足道的：
 - en: '[PRE9]'
+  id: totrans-66
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: In words, if a JVP rule hasn’t already rewritten `custom_jvp_call(f, f_jvp)`
     into `f_jvp`, when we get to the point of evaluation with `eval` or staging out
     to XLA with `jit`, differentiation is never going to be applied, so we just ignore
     `f_jvp` and behave just like `core.call`. However, due to the wrinkle discussed
     next, the partial eval rule for `custom_jvp_call` must be a bit more complex,
     since partial evaluation isn’t just used to stage out to XLA with `jit`.
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 换言之，如果一个JVP规则在将`custom_jvp_call(f, f_jvp)`重写为`f_jvp`之前没有重写，那么当我们到达评估点`eval`或用`jit`转出至XLA时，微分永远不会被应用，因此我们只需忽略`f_jvp`并且像`core.call`一样行事。然而，由于下面讨论的问题，`custom_jvp_call`的部分评估规则必须更加复杂，因为部分评估不仅仅用于用`jit`转出至XLA。
 - en: The only remaining wrinkle has to do with “initial-style” jaxpr-forming primitives,
     like `lax.scan`, and their transformation rules. These represent a different kind
     of “staging out to a jaxpr” than that for compilation because we can perform additional
     transformations on the staged-out jaxpr. That is, when `lax.scan` forms a jaxpr,
     it does not exit the transformation system, since when we apply a jvp or vmap
     to a `lax.scan` we need to apply it to the function represented by the jaxpr.
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: “初始样式”jaxpr形成原语的唯一剩余问题与`lax.scan`等有关，并且它们的转换规则也有所不同。这些原语代表了一种不同类型的“转出至jaxpr”，与编译不同，因为我们可以在转出的jaxpr上执行额外的转换。也就是说，当`lax.scan`形成一个jaxpr时，它并没有退出转换系统，因为当我们对`lax.scan`应用jvp或vmap时，需要对jaxpr所代表的函数应用它。
 - en: Another way to state the wrinkle is that initial-style primitives like `lax.scan`
     rely on the ability to round-trip to a jaxpr and back to a Python callable while
     preserving semantics. That must mean preserving custom differentiation rule semantics
     too.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一种表述剩余问题的方式是，像`lax.scan`这样的初始样式原语依赖于能够往返到一个jaxpr并返回到Python可调用对象的能力，同时保留语义。这必须意味着也要保留自定义微分规则的语义。
 - en: 'The solution is to use a bit of dynamic scoping: when we’re staging out to
     a jaxpr for an initial-style primitive, like those in lax_control_flow.py, we
     set a bit on the global trace state. When that bit is set, instead of using the
@@ -360,71 +524,101 @@
     primitive, and trace the functions `f` and `f_jvp` to jaxprs up-front to make
     initial-style processing easier. The `custom_jvp_call_jaxpr` primitive is otherwise
     similar to the final-style version.'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 解决方案是使用一点动态作用域：当我们将一个初始样式原语转出至jaxpr时，例如在lax_control_flow.py中的原语，我们在全局跟踪状态上设置一个位。当该位被设置时，我们使用一个初始样式`custom_jvp_call_jaxpr`原语，而不是使用最终样式的`custom_jvp_call`原语，并且提前跟踪函数`f`和`f_jvp`到jaxpr，以使初始样式处理更容易。`custom_jvp_call_jaxpr`原语在其他方面与最终样式版本类似。
 - en: '(Footnote: while morally we form jaxprs for both `f` and `f_jvp` before binding
     `custom_jvp_call_jaxpr`, we need to delay the formation of the jaxpr of `f_jvp`
     because it may call the custom-JVP function and thus eager processing would lead
     to an infinite recursion. We delay that jaxpr formation in a thunk.)'
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: （脚注：道德上，我们在绑定`custom_jvp_call_jaxpr`之前为`f`和`f_jvp`都形成jaxpr，但是我们需要延迟`f_jvp`的jaxpr形成，因为它可能调用自定义JVP函数，因此急速处理将导致无限递归。我们在一个thunk中延迟该jaxpr形成。）
 - en: If we gave up on the Python flexibility problem, we could get away with only
     having `custom_jvp_call_jaxpr` and not having the separate Python-level primitive
     `custom_jvp_call`.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们放弃Python的灵活性问题，我们可以仅仅使用`custom_jvp_call_jaxpr`，而不需要单独的Python级原语`custom_jvp_call`。
 - en: API
+  id: totrans-73
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: API
 - en: 'The custom JVP for an `a -> b` function is specified with an `(a, Ta) -> (b,
     T b)` function:'
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: '`a -> b`函数的自定义JVP由`(a, Ta) -> (b, T b)`函数指定：'
 - en: '[PRE10]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '(Interesting autodiff aside: for the rule to apply to higher-order differentiation,
     one must call `f` in the body of `f_jvp`; that precludes some kinds of work sharing
     between the internals of `f` and the tangent calculation.)'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: （有趣的自动微分说明：为了使规则适用于高阶微分，必须在 `f_jvp` 的主体中调用 `f`；这排除了 `f` 内部和切线计算之间某些工作共享的类型。）
 - en: 'The custom VJP for an `a -> b` function is specified with an `a -> (b, c)`
     forward pass function paired with a `(c, CT b) -> CT` a backward pass function:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个 `a -> b` 函数的自定义 VJP 是通过一个 `a -> (b, c)` 前向传递函数与一个 `(c, CT b) -> CT a` 反向传递函数指定的：
 - en: '[PRE11]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: The signature `a -> (b, CT b --o CT a)` is more aesthetically pleasing, but
     supporting it would make the implementation more complex and might require compromising
     expressibility desiderata. The basic reason that Python callables are opaque (unless
     we trace them to a jaxpr eagerly, which places expressiveness constraints), and
     in this case we may be returning a callable with `vmap` tracers inside its closure
     that we need to know about during the forward pass.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 签名 `a -> (b, CT b --o CT a)` 更具美感，但支持它将使实现变得更复杂，可能需要妥协表达性的愿望。 Python 可调用对象之所以是不透明的（除非我们追踪它们到
+    jaxpr 并且迫切地执行，这会放置表达约束），在这种情况下，我们可能会返回一个具有 `vmap` 追踪器的可调用对象，我们需要在正向传递期间了解它们。
 - en: We could add convenience wrappers, for example to define the JVP rule for a
     single argument at a time (like we do internally for primitives). But because
     this proposal is complicated enough as it is, I decided against convenience layers;
     let’s keep things minimal for now.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以添加方便的包装器，例如一次为单个参数定义 JVP 规则（就像我们在原语内部做的那样）。 但因为这个提案本身已经足够复杂，我决定不使用方便的层；现在让我们保持最小的东西。
 - en: 'There are some other bells and whistles to the API:'
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: API 还有一些其他的花哨功能：
 - en: Inputs and output types `a`, `b`, and `c` can be arbitrary pytrees of jaxtypes.
+  id: totrans-82
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 输入和输出类型 `a`、`b` 和 `c` 可以是 jaxtypes 的任意 pytrees。
 - en: Passing arguments by name (keyword arguments) is supported when they can be
     resolved to positions using the `inspect` module. This is a bit of an experiment
     with Python 3’s improved ability to programmatically inspect argument signatures.
     I believe it is sound but not complete, which is a fine place to be. (See also
     [#2069](https://github.com/google/jax/issues/2069).)
+  id: totrans-83
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 当可以使用 `inspect` 模块将参数按名称（关键字参数）解析为位置时，支持这种方式。 这是对 Python 3 改进的实验性质能力以编程方式检查参数签名的一部分。
+    我认为这是正确的，但不完整，这是一个很好的状态。（另见 [#2069](https://github.com/google/jax/issues/2069)。）
 - en: Arguments can be marked non-differentiable using `nondiff_argnums`, and as with
     `jit`’s `static_argnums` these arguments don’t have to be JAX types. We need to
     set a convention for how these arguments are passed to the rules. For a primal
@@ -434,78 +628,111 @@
     arguments are passed in order after `primals` and `tangents` for a custom JVP
     rule, and passed in order preceding the residuals in a custom VJP rule’s reverse
     function.
+  id: totrans-84
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 可以使用 `nondiff_argnums` 标记参数为非可区分的，并且与 `jit` 的 `static_argnums` 一样，这些参数不必是 JAX
+    类型。 我们需要设置一种约定来传递这些参数给规则。 对于具有类型签名 `(d, a) -> b` 的原始函数，其中 `d` 表示不可区分的类型，JVP 规则的签名是
+    `(a, T a, d) -> T b`，VJP 规则的反向组件签名是 `(d, c, CT b) -> CT a`。 也就是说，在自定义 JVP 规则中，非可区分的参数在
+    `primals` 和 `tangents` 之后按顺序传递，并且在自定义 VJP 规则的反向函数中的残差之前按顺序传递。
 - en: Implementation notes
+  id: totrans-85
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 实现注意事项
 - en: Updated `jax.experimental.odeint`
+  id: totrans-86
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 更新了 `jax.experimental.odeint`
 - en: Since `odeint` is a pretty complex user of a custom VJP rule, in addition to
     just updating it to work at all, I wanted to revise it to be a canonical user
     of the new custom VJP API as a way to test that the API was a good one.
+  id: totrans-87
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 由于 `odeint` 是一个相当复杂的自定义 VJP 规则的用户，除了只更新它以使其能够正常工作外，我还希望将其修改为新的自定义 VJP API 的规范用户，以此来测试该
+    API 是否良好。
 - en: 'Along the way I made other improvements to the `odeint` implementation:'
+  id: totrans-88
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在此过程中，我对 `odeint` 实现进行了其他改进：
 - en: remove raveling/unraveling boilerplate
+  id: totrans-89
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 删除了解开/重新解开的样板代码
 - en: make use of `lax.scan` to remove the index-update logic
+  id: totrans-90
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 利用 `lax.scan` 来消除索引更新逻辑
 - en: speed up by 20+% on the simple pendulum benchmark
+  id: totrans-91
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在简单的单摆基准测试中加速了 20+%。
 - en: 'Added a custom bind method on each transform for the custom derivative call
     primitives, `custom_jvp_call` and `custom_vjp_call`. It’s like `core.call_bind`,
     except we don’t process env traces: those are just errors.'
+  id: totrans-92
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对每个变换添加了自定义绑定方法，用于自定义导数调用原语 `custom_jvp_call` 和 `custom_vjp_call`。 这类似于 `core.call_bind`，但我们不处理
+    env traces：这些只是错误。
 - en: Added `custom_lin` primitive, which gets staged out into linear jaxprs to be
     transposed when using a custom VJP rule.
+  id: totrans-93
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 添加了`custom_lin`原语，它在使用自定义VJP规则时被分阶段转化为线性jaxprs以进行转置。
 - en: 'Because our reverse-mode autodiff is decomposed into linearization, partial
     evaluation, and transposition, our custom VJP rules are processed in two separate
     steps: one during linearization and one during transposition.'
+  id: totrans-94
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 由于我们的反向模式自动微分分解为线性化、部分求值和转置，我们的自定义VJP规则在两个独立步骤中处理：一个在线性化期间，另一个在转置期间。
 - en: The linearization step, i.e. the JVP rule for `custom_vjp_call`, applies `custom_lin`
     to the tangent values; `custom_lin` carries with it the user’s custom backward-pass
     function, and as a primitive it only has a transpose rule.
+  id: totrans-95
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 线性化步骤，即`custom_vjp_call`的JVP规则，将`custom_lin`应用于切线值；`custom_lin`携带用户的自定义反向传播函数，并且作为一个原语，它只有一个转置规则。
 - en: This mechanism is described more in [#636](https://github.com/google/jax/issues/636).
+  id: totrans-96
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这一机制在[#636](https://github.com/google/jax/issues/636)中有更详细的描述。
 - en: To prevent
+  id: totrans-97
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为了防止

@@ -1,36 +1,52 @@
 - en: 'Autodidax: JAX core from scratch'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Autodidax：从头开始学习 JAX 核心
 - en: 原文：[`jax.readthedocs.io/en/latest/autodidax.html`](https://jax.readthedocs.io/en/latest/autodidax.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/autodidax.html`](https://jax.readthedocs.io/en/latest/autodidax.html)
 - en: Ever want to learn how JAX works, but the implementation seemed impenetrable?
     Well, you’re in luck! By reading this tutorial, you’ll learn every big idea in
     JAX’s core system. You’ll even get clued into our weird jargon!
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 你是否想过学习 JAX 是如何工作的，但实现看起来深奥无比？那么，你很幸运！通过阅读本教程，你将了解 JAX 核心系统中的每一个重要思想。你甚至将了解我们奇怪的行话！
 - en: '**This is a work-in-progress draft.** There are some important ingredients
     missing, still to come in parts 5 and 6 (and more?). There are also some simplifications
     here that we haven’t yet applied to the main system, but we will.'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: '**这是一个正在进行中的草稿。** 这里还缺少一些重要的部分，将在第5部分和第6部分（以及更多？）中添加。此外，这里还有一些尚未应用于主系统的简化，但我们会应用的。'
 - en: 'Part 1: Transformations as interpreters: standard evaluation, `jvp`, and `vmap`'
+  id: totrans-4
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 第一部分：转换作为解释器：标准评估、`jvp`和`vmap`
 - en: 'We want to transform functions that look like this:'
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们希望转换看起来像这样的函数：
 - en: '[PRE0]'
+  id: totrans-6
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Think of functions like `sin` and the arithmetic operations underlying the infix
     operators (`mul`, `add`, and `neg`) as primitive operations, meaning atomic units
     of processing rather than compositions.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 将函数如`sin`和作为中缀操作符底层的算术运算（`mul`、`add`和`neg`）视为原语操作，意味着它们是处理的原子单位而不是组合。
 - en: “Transform” means “interpret differently.” Instead of standard interpretation
     where we apply primitive operations to numerical inputs to produce numerical outputs,
     we want to override primitive application and let different values flow through
@@ -38,29 +54,42 @@
     with an application of [its JVP rule](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html),
     and let primal-tangent pairs flow through our program. Moreover, we want to be
     able to compose multiple transformations, leading to stacks of interpreters.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: “Transform”意味着“以不同方式解释”。我们不再采用标准解释，其中我们将原语操作应用于数值输入以生成数值输出，而是想要重写原语应用，并让不同的值流过我们的程序。例如，我们可能希望用[其
+    JVP 规则的应用](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html)替换每个原语的应用，并让原始-切线对流经我们的程序。此外，我们希望能够组合多个转换，形成解释器的堆栈。
 - en: JAX core machinery
+  id: totrans-9
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: JAX 核心机制
 - en: 'We can implement stacks of interpreters and even have them all discharge on
     the fly as we execute the Python function to be transformed. To start, let’s define
     these primitives so that we can intercept their application:'
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以实现解释器的堆栈，甚至可以在执行要转换的 Python 函数时实时执行它们。首先，让我们定义这些原语，以便我们可以拦截它们的应用：
 - en: '[PRE1]'
+  id: totrans-11
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: We’ll set up array data types and infix operator methods in a moment.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们稍后将设置数组数据类型和中缀操作方法。
 - en: 'A `Primitive` is just an object with a name, to which we attach our interpretation
     rules (one for each transformation). The `bind` function is our interception point:
     it’ll figure out which transformation rule to apply, based on how the arguments
     are boxed in tracers and what interpreters are active.'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个`Primitive`只是一个带有名称的对象，我们附加了我们的解释规则（每个转换对应一个规则）。`bind`函数是我们的拦截点：它将根据参数在跟踪器中的封装方式以及活动的解释器来确定应用哪个转换规则。
 - en: 'The functions that user code calls, like `add` and `sin`, are just wrappers
     around calls to `bind`. These wrappers let us control how arguments are passed
     to `bind`, and in particular we follow a handy internal convention: when we call
@@ -69,18 +98,24 @@
     simplifies some core logic (since e.g. instances of the `Tracer` class to be defined
     below can only occur in positional arguments to `bind`). The wrappers can also
     provide docstrings!'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 用户代码调用的函数，如`add`和`sin`，只是对`bind`调用的包装器。这些包装器允许我们控制参数如何传递给`bind`，特别是我们遵循一个方便的内部约定：当我们调用`bind`时，我们将表示数组数据的值作为位置参数传递，并通过关键字将元数据（如`axis`参数传递给`sum_p`）。这种调用约定简化了一些核心逻辑（因为例如下文将要定义的`Tracer`类的实例只能出现在`bind`的位置参数中）。这些包装器还可以提供文档字符串！
 - en: We represent active interpreters as a stack. The stack is just a simple `list`,
     and each element is a container with an integer level (corresponding to the element’s
     height in the stack), an interpreter type (which we’ll call a `trace_type`), and
     an optional field for any global data the interpreter needs. We call each element
     a `MainTrace`, though maybe “Interpreter” would be more descriptive.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将活动解释器表示为堆栈。堆栈只是一个简单的`list`，每个元素是一个容器，具有整数级别（对应于元素在堆栈中的高度）、解释器类型（我们称之为`trace_type`）以及解释器需要的任何全局数据的可选字段。我们称每个元素为`MainTrace`，尽管“Interpreter”可能更加描述性。
 - en: '[PRE2]'
+  id: totrans-16
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: When we’re about to apply a transformation, we’ll push another interpreter onto
     the stack using `new_main`. Then, as we apply primitives in the function, we can
     think of the `bind` first being interpreted by the trace at the top of the stack
@@ -88,69 +123,97 @@
     in its interpretation rule for the primitive, like how the JVP rule of `sin_p`
     might bind `cos_p` and `mul_p`, then those `bind` calls will be handled by the
     interpreter at the next level down.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们准备应用变换时，我们将使用`new_main`将另一个解释器推送到堆栈上。然后，在函数中应用原语时，我们可以认为`bind`首先由堆栈顶部的追踪器解释（即具有最高级别的追踪器）。如果第一个解释器本身在其对于原语的解释规则中绑定其他原语，例如`sin_p`的JVP规则可能绑定`cos_p`和`mul_p`，那么这些`bind`调用将由下一个级别的解释器处理。
 - en: What goes at the bottom of the interpreter stack? At the bottom, we know all
     the transformation interpreters are finished, and we just want to do standard
     evaluation. So at the bottom we’ll put an evaluation interpreter.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 解释器堆栈的底部放什么？在底部，我们知道所有变换解释器都已完成，我们只想进行标准评估。因此，在底部我们将放置一个评估解释器。
 - en: Let’s sketch out the interface for interpreters, which is based on the `Trace`
     and `Tracer` base classes. A `Tracer` represents a boxed-up value, perhaps carrying
     some extra context data used by the interpreter. A `Trace` handles boxing up values
     into `Tracers` and also handles primitive application.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们概述一下解释器的接口，它基于`Trace`和`Tracer`基类。`Tracer`表示一个封装的值，可能携带一些由解释器使用的额外上下文数据。`Trace`处理将值封装到`Tracer`中，并且还处理原语应用。
 - en: '[PRE3]'
+  id: totrans-20
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: The first two methods are about boxing up values in `Tracer`s, which are the
     objects that flow through the Python programs we transform. The last method is
     the callback we’ll use to interpret primitive application.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 前两种方法是关于在`Tracer`中封装值，`Tracer`是我们转换的Python程序中流动的对象。最后一种方法是我们将用于解释原始应用的回调。
 - en: The `Trace` itself doesn’t contain any data, other than a reference to its corresponding
     `MainTrace` instance. In fact, multiple instances of a `Trace` might be created
     and discarded during an application of a transformation, whereas only a single
     `MainTrace` instance is created per application of a transformation.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: '`Trace`本身除了引用其对应的`MainTrace`实例之外并不包含任何数据。事实上，在应用变换过程中可能会创建和丢弃多个`Trace`实例，而每个应用变换只会创建一个`MainTrace`实例。'
 - en: As for `Tracer`s themselves, each one carries an abstract value (and forwards
     infix operators to it), and the rest is up to the transformation. (The relationship
     between `Tracer`s and `AbstractValue`s is that there’s one `Tracer` per transformation,
     and at least one `AbstractValue` per base type, like arrays.)
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 至于`Tracer`们本身，每个`Tracer`都携带一个抽象值（并将中缀运算符转发给它），其余由变换决定。（`Tracer`与`AbstractValue`之间的关系是每个变换对应一个`Tracer`，并且每个基本类型（如数组）至少有一个`AbstractValue`。）
 - en: '[PRE4]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: '[PRE5]'
+  id: totrans-25
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Notice that we actually have two `AbstractValue`s for arrays, representing different
     levels of abstraction. A `ShapedArray` represents the set of all possible arrays
     with a given shape and dtype. A `ConcreteArray` represents a singleton set consisting
     of a single array value.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，实际上我们为数组有两个`AbstractValue`，代表不同的抽象级别。`ShapedArray`代表具有给定形状和dtype的所有可能数组的集合。`ConcreteArray`代表一个由单个数组值组成的单例集。
 - en: 'Now that we’ve set up the interpreter stack, the Trace/Tracer API for interpreters,
     and abstract values, we can come back to implement `bind`:'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经设置了解释器堆栈、解释器的Trace/Tracer API和抽象值，我们可以回来实现`bind`了：
 - en: '[PRE6]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: The main action is that we call `find_top_trace` to figure out which interpreter
     should handle this primitive application. We then call that top trace’s `process_primitive`
     so that the trace can apply its interpretation rule. The calls to `full_raise`
     just ensure that the inputs are boxed in the top trace’s `Tracer` instances, and
     the call to `full_lower` is an optional optimization so that we unbox values out
     of `Tracer`s as much as possible.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 主要的操作是我们调用`find_top_trace`来找出哪个解释器应该处理这个基元应用。然后我们调用该顶层跟踪的`process_primitive`，以便跟踪可以应用其解释规则。`full_raise`的调用只是确保输入封装在顶层跟踪的`Tracer`实例中，而对`full_lower`的调用是一个可选的优化，以便我们尽可能多地从`Tracer`中解封值。
 - en: '[PRE7]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: In words, ignoring the `dynamic_trace` step until Part 3, `find_top_trace` returns
     the highest-level interpreter associated with the `Tracer`s on its inputs, and
     otherwise returns the interpreter at the bottom of the stack (which is always
@@ -162,116 +225,180 @@
     us skip irrelevant transformations, but bakes in an assumption that transformations
     mostly follow data dependence (except for the special bottom-of-the-stack interpreter,
     which interprets everything).
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，忽略`dynamic_trace`步骤直到第三部分，`find_top_trace`返回与其输入上的`Tracer`相关联的最高级解释器，并且否则返回堆栈底部的解释器（至少目前总是一个求值跟踪）。这与上面的描述有所偏离，我们总是从运行堆栈顶部的解释器开始，然后逐级向下工作，应用堆栈中的每个解释器。相反，我们只有在将输入参数传递给基元绑定的`Tracer`中时才应用解释器对应的解释器时才应用解释器。这种优化让我们可以跳过不相关的转换，但内置了一个假设，即转换大部分时候都遵循数据依赖性（除了特殊的堆栈底部解释器，它解释一切）。
 - en: An alternative would be to have every interpreter in the stack interpret every
     operation. That’s worth exploring! JAX is designed around data dependence in large
     part because that’s so natural for automatic differentiation, and JAX’s roots
     are in autodiff. But it may be over-fit.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一种方法是使堆栈中的每个解释器都解释每个操作。值得探索！JAX大部分是围绕数据依赖性而设计的，大部分原因是因为这对于自动微分来说非常自然，而JAX的根源在于自动微分。但也许会过拟合。
 - en: '[PRE8]'
+  id: totrans-33
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'The logic in `full_raise` serves to box values into `Tracer`s for a particular
     `Trace`, calling different methods on the `Trace` based on context: `Trace.pure`
     is called on non-`Tracer` constants, and `Trace.lift` is called for values that
     are already `Tracer`s from a lower-level interpreter. These two methods could
     share the same implementation, but by distinguishing them in the core logic we
     can provide more information to the `Trace` subclass.'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: '`full_raise`中的逻辑用于将值封装在特定`Trace`的`Tracer`中，根据上下文对`Trace`调用不同的方法：对非`Tracer`常数调用`Trace.pure`，对已经来自低级解释器的`Tracer`调用`Trace.lift`。这两种方法可以共享相同的实现，但通过在核心逻辑中加以区分，我们可以向`Trace`子类提供更多信息。'
 - en: That’s it for the JAX core! Now we can start adding interpreters.
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX核心就是这样！现在我们可以开始添加解释器了。
 - en: Evaluation interpreter
+  id: totrans-36
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 评估解释器
 - en: 'We’ll start with the simplest interpreter: the evaluation interpreter that
     will sit at the bottom of the interpreter stack.'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将从最简单的解释器开始：位于解释器堆栈底部的评估解释器。
 - en: '[PRE9]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'With this interpreter, we can evaluate user functions:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 有了这个解释器，我们可以评估用户函数：
 - en: '[PRE10]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '[PRE11]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Woo! Like going around in a big circle. But the point of this indirection is
     that now we can add some real transformations.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 哇！就像在一个大圈子里转圈。但这种间接性的关键在于现在我们可以添加一些真正的转换。
 - en: Forward-mode autodiff with `jvp`
+  id: totrans-43
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 带有`jvp`的前向模式自动微分
 - en: 'First, a few helper functions:'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，一些辅助函数：
 - en: '[PRE12]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: The `Tracer` for forward-mode autodiff carries a primal-tangent pair. The `Trace`
     applies JVP rules.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 前向模式自动微分的`Tracer`携带原始-切线对。`Trace`应用JVP规则。
 - en: '[PRE13]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: Notice both `pure` and `lift` package a value into a `JVPTracer` with the minimal
     amount of context, which is a zero tangent value.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意`pure`和`lift`都将一个值打包成一个带有最小上下文的`JVPTracer`，这是一个零切线值。
 - en: 'Let’s add some JVP rules for primitives:'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们添加一些用于原始函数的JVP规则：
 - en: '[PRE14]'
+  id: totrans-50
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'Finally, we add a transformation API to kick off the trace:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们添加一个转换API来启动跟踪：
 - en: '[PRE15]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: And with that, we can differentiate!
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 而有着，我们可以进行区分！
 - en: '[PRE16]'
+  id: totrans-54
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '[PRE17]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: '[PRE18]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '[PRE19]'
+  id: totrans-57
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: '[PRE20]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: '[PRE21]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: '[PRE22]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: '[PRE23]'
+  id: totrans-61
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: Pytrees and flattening user functions’ inputs and outputs
+  id: totrans-62
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: Pytrees和展平用户函数的输入和输出
 - en: A limitation with `jvp_v1` is that it assumes the user function accepts arrays
     as positional arguments and produces a single array as output. What if it produced
     a list as output? Or accepted nested containers as inputs? It would be a pain
@@ -279,123 +406,191 @@
     of the stack. Instead, we can wrap the user function so that the wrapped version
     accepts arrays as inputs and returns a flat list of arrays as output. The wrapper
     just needs to unflatten its input, call the user function, and flatten the output.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jvp_v1` 的一个限制是它假设用户函数接受数组作为位置参数并生成单个数组作为输出。如果它生成一个列表作为输出怎么办？或者接受嵌套容器作为输入？在每一层处理堆栈时处理所有可能的容器将会很麻烦。相反，我们可以包装用户函数，使得包装版本接受数组作为输入并返回一个扁平的数组列表作为输出。包装器只需展开其输入，调用用户函数，并展平输出。'
 - en: 'Here’s how we’d like to write `jvp`, assuming the user always gives us functions
     that take arrays as inputs and produces a flat list of arrays as outputs:'
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面是我们希望编写 `jvp` 的方式，假设用户总是给我们采用数组作为输入并生成扁平数组列表作为输出的函数：
 - en: '[PRE24]'
+  id: totrans-65
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: 'To support user functions that have arbitrary containers in the inputs and
     outputs, here’s how we’d write the user-facing `jvp` wrapper:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了支持具有任意容器输入和输出的用户函数，下面是我们如何编写用户界面的 `jvp` 包装器：
 - en: '[PRE25]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: Notice that we had to plumb the tree structure of the user function output back
     to the caller of `flatten_fun`. That information isn’t available until we actually
     run the user function, so `flatten_fun` just returns a reference to a mutable
     cell, represented as a thunk. These side-effects are safe because we always run
     the user function exactly once. (This safe regime is the reason for the “linear”
     name in `linear_util.py`, in the sense of [linear types](https://en.wikipedia.org/wiki/Substructural_type_system).)
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，我们必须将用户函数输出的树结构信息传递回 `flatten_fun` 的调用者。这些信息在我们实际运行用户函数之前是不可用的，因此 `flatten_fun`
+    只返回一个可变单元的引用，表示为一个惰性求值体。这些副作用是安全的，因为我们总是精确地运行用户函数一次。（这种安全的制度是 `linear_util.py`
+    中“linear”名称的原因，以 [线性类型](https://en.wikipedia.org/wiki/Substructural_type_system)
+    的意义上）
 - en: All that remains is to write `tree_flatten`, `tree_unflatten`, and `flatten_fun`.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 唯一剩下的是编写 `tree_flatten`、`tree_unflatten` 和 `flatten_fun`。
 - en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
     code cell source Hide code cell source</summary>
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: <details class="hide above-input"><summary aria-label="Toggle hidden content">显示代码单元源代码
+    隐藏代码单元源代码</summary>
 - en: '[PRE26]</details> <details class="hide above-input"><summary aria-label="Toggle
     hidden content">Show code cell source Hide code cell source</summary>'
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE26]</details> <details class="hide above-input"><summary aria-label="Toggle
+    hidden content">显示代码单元源代码 隐藏代码单元源代码</summary>'
 - en: '[PRE27]</details>'
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE27]</details>'
 - en: With this pytree-handling `jvp` implementation, we can now handle arbitrary
     input and output containers. That’ll come in handy with future transformations
     too!
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过这个处理 `jvp` 的 pytree 实现，我们现在可以处理任意输入和输出容器。这将在将来的转换中非常有用！
 - en: '[PRE28]'
+  id: totrans-74
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: '[PRE29]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: Vectorized batching with `vmap`
+  id: totrans-76
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 使用 `vmap` 进行向量化批处理
 - en: 'First, a couple helper functions, one for producing mapped abstract values
     from unmapped ones (by removing an axis), and one for moving batch dimensions
     around:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先是一对辅助函数，一个用于从未映射的抽象值生成映射的抽象值（通过移除一个轴），另一个用于在批处理维度之间移动：
 - en: '[PRE30]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: The `Tracer` for vectorized batching carries a batched value and an optional
     integer indicating which axis (if any) is the batch axis.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 用于向量化批处理的 `Tracer` 携带一个批处理值和一个可选整数，指示批处理轴（如果有的话）。
 - en: '[PRE31]'
+  id: totrans-80
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: Here we’ve implemented the optional `Tracer.full_lower` method, which lets us
     peel off a batching tracer if it’s not needed because it doesn’t represent a batched
     value.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们实现了可选的 `Tracer.full_lower` 方法，这让我们能够在不需要的情况下去除批处理跟踪器，因为它不代表批处理值。
 - en: For `BatchTrace`, analogous to `JVPTrace`, the methods `pure` and `lift` just
     box a value in a `BatchTracer` with the minimal amount of context, which in this
     case is a `batch_dim` taking the sentinel value `not_mapped`. Notice we use the
     `MainTrace`’s interpreter-global data field to store the batch axis size.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于 `BatchTrace`，类似于 `JVPTrace`，`pure` 和 `lift` 方法只是将一个值装箱在 `BatchTracer` 中，并且只提供最少的上下文，这种情况下是一个采用
+    `not_mapped` 作为标志值的 `batch_dim`。请注意，我们使用 `MainTrace` 的解释器全局数据字段来存储批处理轴的大小。
 - en: 'Next we can define batching interpreter rules for each primitive:'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们可以为每个原语定义批处理解释器规则：
 - en: '[PRE32]'
+  id: totrans-84
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: 'Finally, we add a transformation API to kick off the trace:'
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们添加了一个转换 API 来启动跟踪：
 - en: '[PRE33]'
+  id: totrans-86
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: '[PRE34]'
+  id: totrans-87
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: '[PRE35]'
+  id: totrans-88
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: '[PRE36]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: '[PRE37]'
+  id: totrans-90
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: That’s it for `jvp` and `vmap`!
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 这就是关于 `jvp` 和 `vmap` 的全部内容！
 - en: 'Part 2: Jaxprs'
+  id: totrans-92
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 第二部分：Jaxprs
 - en: 'The next transformations on the horizon are `jit` for just-in-time compilation
     and `vjp` for reverse-mode autodiff. (`grad` is just a small wrapper around `vjp`.)
     Whereas `jvp` and `vmap` only needed each `Tracer` to carry a little bit of extra
     context, for both `jit` and `vjp` we need much richer context: we need to represent
     *programs*. That is, we need jaxprs!'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一个即将到来的转换是`jit`用于即时编译，以及`vjp`用于反向模式自动微分。(`grad`仅仅是`vjp`的一个小包装器。) 而`jvp`和`vmap`只需要每个`Tracer`携带一点额外的上下文，对于`jit`和`vjp`，我们需要更丰富的上下文：我们需要代表*程序*。也就是说，我们需要jaxprs！
 - en: Jaxprs are JAX’s internal intermediate representation of programs. They are
     explicitly typed, functional, first-order, and in ANF form. We need a program
     representation for `jit` because the purpose of `jit` is to stage computation
@@ -403,82 +598,124 @@
     represent it as data, and build it up as we trace a Python function. Similarly,
     `vjp` needs a way to represent the computation for the backward pass of reverse-mode
     autodiff. We use the same jaxpr program representation for both needs.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: Jaxprs是JAX的内部程序的中间表示。它们是显式类型化的、功能性的、一阶的，并且处于ANF形式。因为`jit`的目的是将计算分阶段出Python，所以我们需要一个程序表示。对于任何我们想要分阶段的计算，我们需要能够将其表示为数据，并且在追踪Python函数时逐步构建它。类似地，`vjp`需要一种方法来表示反向模式自动微分的后向传播计算。我们为这两个需求使用相同的jaxpr程序表示。
 - en: (Building a program representation is the most [free](https://en.wikipedia.org/wiki/Free_object)
     kind of trace-transformation, and so except for issues around handling native
     Python control flow, any transformation could be implemented by first tracing
     to a jaxpr and then interpreting the jaxpr.)
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: （构建程序表示是最[free](https://en.wikipedia.org/wiki/Free_object)种类的追踪转换，因此除了处理本地Python控制流问题外，任何转换都可以通过首先追踪到jaxpr，然后解释jaxpr来实现。）
 - en: Jaxpr data structures
+  id: totrans-96
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Jaxpr数据结构
 - en: 'The jaxpr term syntax is roughly:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: jaxpr术语的语法大致为：
 - en: '[PRE38]'
+  id: totrans-98
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: 'The syntax of types is:'
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 类型的语法如下：
 - en: '[PRE39]'
+  id: totrans-100
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: 'How do we represent these as Python data structures? We reuse ShapedArrays
     to represent types, and we can represent the term syntax with a few Python structs:'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们如何将这些表示为Python数据结构？我们重复使用ShapedArrays来表示类型，并且可以用几个Python结构来表示术语语法：
 - en: '[PRE40]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: Type-checking a jaxpr involves checking that there are no unbound variables,
     that variables are only bound once, and that for each equation the type of the
     primitive application matches the type of the output binders.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 对jaxpr进行类型检查涉及检查是否存在未绑定的变量，变量是否仅绑定一次，以及每个方程的原始应用类型是否与输出绑定器的类型匹配。
 - en: '[PRE41]'
+  id: totrans-104
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: We can apply the function represented by a jaxpr to arguments with a simple
     interpreter.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以使用一个简单的解释器将jaxpr表示的函数应用于参数。
 - en: '[PRE42]'
+  id: totrans-106
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: By using `bind` in the interpreter, this interpreter itself is traceable.
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过在解释器中使用`bind`，这个解释器本身是可追踪的。
 - en: Building jaxprs with tracing
+  id: totrans-108
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 使用追踪构建jaxprs
 - en: Now that we have jaxprs as a data structure, we need ways to produce these from
     tracing Python code. In general there are two variants of how we trace to a jaxpr;
     `jit` uses one and `vjp` uses the other. We’ll start with the one used by `jit`,
     which is also used by control flow primitives like `lax.cond`, `lax.while_loop`,
     and `lax.scan`.
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们有了jaxprs作为一个数据结构，我们需要从追踪Python代码产生它们的方法。一般来说，我们追踪到jaxpr有两种变体；`jit`使用其中一种，而`vjp`使用另一种。我们将从`jit`使用的变体开始，这也被控制流原语如`lax.cond`、`lax.while_loop`和`lax.scan`所使用。
 - en: '[PRE43]'
+  id: totrans-110
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: '[PRE44]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: Notice that we keep as interpreter-global data a builder object, which keeps
     track of variables, constants, and eqns as we build up the jaxpr.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，我们在解释器全局数据中保持一个构建器对象，该对象跟踪变量、常量和等式，随着我们构建jaxpr而逐步积累。
 - en: '[PRE45]'
+  id: totrans-113
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: '[PRE46]'
+  id: totrans-114
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: 'The rules we need for `JaxprTrace.process_primitive` are essentially typing
     rules for primitive applications: given the primitive, its parameters, and types
     for the inputs, the rule must produce a type for the output, which is then packaged
@@ -488,55 +725,84 @@
     on the set of possible outputs, they can produce ConcreteArray outputs as well).
     We’ll reuse these abstract evaluation rules for the other jaxpr-producing trace
     machinery, where the potential extra generality is useful.'
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要`JaxprTrace.process_primitive`的规则基本上是原始应用的类型规则：给定原始应用、其参数和输入的类型，规则必须生成一个输出类型，然后与输出的`JaxprTracer`一起打包。我们可以使用抽象评估规则来实现相同的目的，尽管它们可能更加通用（因为抽象评估规则必须接受ConcreteArray输入，并且因为它们只需返回可能输出集的上限，它们也可以生成ConcreteArray输出）。我们将重用这些抽象评估规则用于其他生成jaxpr的跟踪机制，其中额外的通用性是有用的。
 - en: '[PRE47]'
+  id: totrans-116
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: 'To check our implementation of jaxprs, we can add a `make_jaxpr` transformation
     and a pretty-printer:'
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 要验证我们的jaxprs实现，我们可以添加一个`make_jaxpr`转换和一个漂亮的打印机：
 - en: '[PRE48]'
+  id: totrans-118
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
     code cell source Hide code cell source</summary>
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: <details class="hide above-input"><summary aria-label="Toggle hidden content">显示代码单元格源代码
+    隐藏代码单元格源代码</summary>
 - en: '[PRE49]</details>'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE49]</details>'
 - en: '[PRE50]'
+  id: totrans-121
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: '[PRE51]'
+  id: totrans-122
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: 'But there’s a limitation here: because of how `find_top_trace` operates by
     data dependence, `make_jaxpr_v1` can’t stage out all the primitive operations
     performed by the Python callable it’s given. For example:'
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是这里有一个限制：由于`find_top_trace`是通过数据依赖操作的，`make_jaxpr_v1`无法将其给定的Python可调用对象执行的所有原始操作分阶段处理出来。例如：
 - en: '[PRE52]'
+  id: totrans-124
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: '[PRE53]'
+  id: totrans-125
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: 'This is precisely the issue that [omnistaging](https://github.com/google/jax/pull/3370)
     fixed. We want to ensure that the `JaxprTrace` started by `make_jaxpr` is always
     applied, regardless of whether any inputs to `bind` are boxed in corresponding
     `JaxprTracer` instances. We can achieve this by employing the `dynamic_trace`
     global defined in Part 1:'
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 这正是[omnistaging](https://github.com/google/jax/pull/3370)修复的问题。我们希望确保`make_jaxpr`启动的`JaxprTrace`始终被应用，而不管`bind`的任何输入是否被装箱在相应的`JaxprTracer`实例中。我们可以通过使用第1部分定义的`dynamic_trace`全局变量来实现这一点：
 - en: '[PRE54]'
+  id: totrans-127
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: '[PRE55]'
+  id: totrans-128
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: Using `dynamic_trace` this way is conceptually the same as stashing the current
     interpreter stack and starting a new one with the `JaxprTrace` at the bottom.
     That is, no interpreters lower in the stack than the `dynamic_trace` are applied
@@ -545,29 +811,41 @@
     pushed onto the interpreter stack above the `JaxprTrace`. But temporarily stashing
     the interpreter stack would break up the system state. The `dynamic_trace` tag
     achieves the same goals while keeping the system state simpler.
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 以这种方式使用`dynamic_trace`在概念上与将当前解释器堆栈存储并使用`JaxprTrace`作为底部开始新的解释器堆栈是相同的。也就是说，比`JaxprTrace.process_primitive`低的堆栈解释器不会被应用（因为它不调用`bind`），尽管如果被跟踪到jaxpr的Python可调用对象本身使用转换，那么这些转换可以被推送到位于`JaxprTrace`上面的解释器堆栈中。但是临时存储解释器堆栈会破坏系统状态。`dynamic_trace`标记通过保持系统状态更简单来实现相同的目标。
 - en: That’s it for jaxprs! With jaxprs in hand, we can implement the remaining major
     JAX features.
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 这就是jaxprs的全部内容！有了jaxprs，我们可以实现其余的主要JAX特性。
 - en: 'Part 3: `jit`, simplified'
+  id: totrans-131
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 第3部分：`jit`，简化
 - en: While `jit` has a transformation-like API in that it accepts a Python callable
     as an argument, under the hood it’s really a higher-order primitive rather than
     a transformation. A primitive is *higher-order* when it’s parameterized by a function.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然`jit`具有类似于转换的API，因为它接受Python可调用对象作为参数，但在幕后它实际上是一个高阶原语，而不是转换。当参数化为函数时，一个原语是*高阶*的。
 - en: On-the-fly (“final style”) and staged (“initial style”) processing
+  id: totrans-133
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 即时（“final style”）和分阶段（“initial style”）处理
 - en: 'There are two options for how to handle higher-order primitives. Each requires
     a different approach to tracing and engenders different tradeoffs:'
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 处理高阶原语有两个选择。每种选择都需要不同的跟踪方法，并产生不同的权衡：
 - en: '**On-the-fly processing, where `bind` takes a Python callable as an argument.**
     We defer forming a jaxpr until as late as possible, namely until we’re running
     the final interpreter at the bottom of the interpreter stack. That way we can
@@ -579,9 +857,11 @@
     and thus allows data-dependent Python control flow. We refer to this approach
     as using a “final-style higher-order primitive” employing the discharge-at-tracing-time
     “final-style transformations” we’ve used so far.'
+  id: totrans-135
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**即时处理，在`bind`将Python可调用对象作为参数。** 我们推迟形成jaxpr，直到可能的最后一刻，即在解释器栈底部运行最终解释器时。这样我们可以在解释器栈底部换上一个`JaxprTrace`，从而分阶段而不是执行所有原始操作。采用这种方法，堆栈中的转换会在我们像往常一样执行Python可调用对象时应用。这种方法实现起来可能非常棘手，但尽可能通用，因为它允许高阶原语不提升其参数的抽象级别，从而允许数据相关的Python控制流。我们称之为使用“最终风格高阶原语”，采用了迄今为止使用的“追踪时排除”最终风格变换。'
 - en: '**Staged processing, where `bind` takes a jaxpr as an argument.** Before we
     call `bind`, in the primitive wrapper we can just use `make_jaxpr` to form a jaxpr
     up-front and be done with the Python callable entirely. In this case, `make_jaxpr`
@@ -596,16 +876,21 @@
     this kind of higher-order primitive as an “initial-style higher-order primitive”,
     and say that its jaxpr-processing transformation rules are “initial-style transformation
     rules.”'
+  id: totrans-136
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**分阶段处理，在`bind`将jaxpr作为参数。** 在我们调用`bind`之前，在原始包装器中我们可以直接使用`make_jaxpr`来预先形成jaxpr并完全结束Python可调用对象。在这种情况下，`make_jaxpr`将其`JaxprTrace`放在解释器栈的顶部，并且没有低于堆栈的变换会通过闭合的Tracer输入到我们追踪的Python可调用对象中。
+    （在Python可调用对象内部应用的转换会像往常一样应用，被添加到JaxprTrace之上的堆栈中。）相反，堆栈中较低的转换稍后将应用于调用原始操作，并且调用原始操作的规则必须然后转换jaxpr本身。由于我们预先追踪到一个jaxpr，这种方法不能支持数据相关的Python控制流，但它实现起来更为直接。我们将这种类型的高阶原语称为“初始风格高阶原语”，并说其jaxpr处理转换规则是“初始风格变换规则”。'
 - en: The latter approach fits for `jit` because we don’t need to support data-dependent
     Python control flow in the user-provided Python callable, as the whole purpose
     of `jit` is to stage computation out of Python to be executed by XLA. (In contrast,
     `custom_jvp` is a higher-order primitive in which we want to support data-dependent
     Python control flow.)
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 后一种方法适用于`jit`，因为我们不需要支持用户提供的Python可调用对象中的数据相关Python控制流，因为`jit`的整个目的是将计算从Python阶段出来以供XLA执行。（相反，`custom_jvp`是一个高阶原语，我们希望在其中支持数据相关的Python控制流。）
 - en: Historically, we started using the “initial-style” and “final-style” terminology
     after reading the [typed tagless final interpreters](http://okmij.org/ftp/tagless-final/index.html)
     paper, and jokingly referring to JAX as an implementation of “untyped tagful final
@@ -613,14 +898,20 @@
     these terms; we loosely use “initial style” to mean “build an AST and then transform
     it”, and we use “final style” to mean “transform as we trace.” But it’s just imprecise
     yet sticky jargon.
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 在阅读了[类型标签最终解释器](http://okmij.org/ftp/tagless-final/index.html)论文后，我们从历史上开始使用“初始风格”和“最终风格”术语，并开玩笑称JAX是“未类型化的标签满足最终解释器”的实现。我们并不声称传承（或理解）这些术语背后的任何深层含义；我们宽泛地使用“初始风格”来表示“构建AST然后转换它”，并且我们使用“最终风格”来表示“追踪时转换”。但这只是不精确但易记的行话。
 - en: 'With the initial-style approach, here’s the user-facing `jit` wrapper:'
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用初始风格方法，这里是用户界面的`jit`包装器：
 - en: '[PRE56]'
+  id: totrans-140
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: With any new primitive, we need to give it transformation rules, starting with
     its evaluation rule. When we evaluate an application of the `xla_call` primitive,
     we want to stage out the computation to XLA. That involves translating the jaxpr
@@ -628,67 +919,106 @@
     the XLA program, and transferring back the results. We’ll cache the XLA HLO compilation
     so that for each `jit`ted function it only needs to be performed once per argument
     shape and dtype signature.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于任何新的原语，我们都需要为其提供转换规则，从其评估规则开始。当我们评估`xla_call`原语的应用时，我们希望将计算分阶段到XLA。这涉及将jaxpr转换为XLA
+    HLO程序，将参数值传输到XLA设备，执行XLA程序，并将结果传输回来。我们将缓存XLA HLO编译，以便于每个`jit`函数只需在参数形状和dtype签名上执行一次。
 - en: First, some utilities.
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，一些实用工具。
 - en: '[PRE57]'
+  id: totrans-143
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: 'Next, we’ll define the evaluation rule for `xla_call`:'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将为`xla_call`定义评估规则：
 - en: '[PRE58]'
+  id: totrans-145
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: 'The main action is in `xla_callable`, which compiles a jaxpr into an XLA HLO
     program using `jaxpr_subcomp`, then returns a callable which executes the compiled
     program:'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 主要操作在`xla_callable`中进行，它使用`jaxpr_subcomp`将jaxpr编译成XLA HLO程序，然后返回一个可调用对象来执行编译后的程序：
 - en: '[PRE59]'
+  id: totrans-147
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: 'Notice that `jaxpr_subcomp` has the structure of a simple interpreter. That’s
     a common pattern: the way we process jaxprs is usually with an interpreter. And
     as with any interpreter, we need an interpretation rule for each primitive:'
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，`jaxpr_subcomp`具有简单解释器的结构。这是一个常见模式：我们处理jaxprs的方式通常是使用解释器。与任何解释器一样，我们需要为每个原语定义一个解释规则：
 - en: '[PRE60]'
+  id: totrans-149
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: With that, we can now use `jit` to stage out, compile, and execute programs
     with XLA!
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 有了这个，我们现在可以使用`jit`来分阶段、编译和执行XLA程序了！
 - en: '[PRE61]'
+  id: totrans-151
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE61]'
 - en: '[PRE62]'
+  id: totrans-152
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE62]'
 - en: '[PRE63]'
+  id: totrans-153
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE63]'
 - en: '[PRE64]'
+  id: totrans-154
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE64]'
 - en: '[PRE65]'
+  id: totrans-155
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE65]'
 - en: '[PRE66]'
+  id: totrans-156
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE66]'
 - en: '[PRE67]'
+  id: totrans-157
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE67]'
 - en: '[PRE68]'
+  id: totrans-158
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE68]'
 - en: '[PRE69]'
+  id: totrans-159
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE69]'
 - en: Instead of implementing `jit` to first trace to a jaxpr and then to lower the
     jaxpr to XLA HLO, it might appear that we could have skipped the jaxpr step and
     just lowered to HLO while tracing. That is, perhaps we could have instead implemented
@@ -696,101 +1026,157 @@
     on each primitive bind. That’s correct for now, but won’t be possible when we
     introduce compiled SPMD computations because there we must know the number of
     replicas needed before compiling the program.
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: 而不是实现`jit`以首先对jaxpr进行跟踪，然后将jaxpr降低到XLA HLO，我们可能看起来可以跳过jaxpr步骤，而在跟踪时直接降低到HLO。也就是说，也许我们可以用一个`Trace`和`Tracer`实现`jit`，在每个原语绑定时逐步追加到XLA
+    HLO图中。目前这样做是正确的，但当我们引入编译的SPMD计算时，就不可能了，因为在编译程序之前我们必须知道所需的副本数量。
 - en: We haven’t yet defined any transformation rules for `xla_call_p` other than
     its evaluation rule. That is, we can’t yet do `vmap`-of-`jit` or `jvp`-of-`jit`
     or even `jit`-of`-jit`. Instead `jit` has to be at the “top level.” Let’s fix
     that!
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们尚未为`xla_call_p`定义任何转换规则，除了其评估规则。也就是说，我们尚不能做`vmap`-of-`jit`或`jvp`-of-`jit`甚至`jit`-of`-jit`。相反，`jit`必须处于“顶层”。让我们来修复这个问题！
 - en: '[PRE70]'
+  id: totrans-162
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE70]'
 - en: '[PRE71]'
+  id: totrans-163
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE71]'
 - en: '[PRE72]'
+  id: totrans-164
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE72]'
 - en: '[PRE73]'
+  id: totrans-165
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE73]'
 - en: '[PRE74]'
+  id: totrans-166
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE74]'
 - en: '[PRE75]'
+  id: totrans-167
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE75]'
 - en: '[PRE76]'
+  id: totrans-168
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE76]'
 - en: '[PRE77]'
+  id: totrans-169
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE77]'
 - en: 'One piece missing is device memory persistence for arrays. That is, we’ve defined
     `handle_result` to transfer results back to CPU memory as NumPy arrays, but it’s
     often preferable to avoid transferring results just to transfer them back for
     the next operation. We can do that by introducing an `Array` class, which can
     wrap XLA buffers and otherwise duck-type `numpy.ndarray`s:'
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个遗漏的部分是数组的设备内存持久性。也就是说，我们已经定义了`handle_result`以将结果作为NumPy数组传输回CPU内存，但通常最好避免仅为了下一步操作而传输结果。我们可以通过引入`Array`类来实现这一点，它可以包装XLA缓冲区，同时鸭子类型`numpy.ndarray`：
 - en: '[PRE78]'
+  id: totrans-171
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE78]'
 - en: '[PRE79]'
+  id: totrans-172
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE79]'
 - en: '[PRE80]'
+  id: totrans-173
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE80]'
 - en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
     code cell source Hide code cell source</summary>
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: <details class="hide above-input"><summary aria-label="Toggle hidden content">显示代码单元格源码
+    隐藏代码单元格源码</summary>
 - en: '[PRE81]</details>'
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE81]</details>'
 - en: 'Part 4: `linearize` and `vjp` (and `grad`!)'
+  id: totrans-176
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 第四部分：`linearize`和`vjp`（以及`grad`！）
 - en: The `linearize` and `vjp` autodiff functions are built on `jvp`, but involve
     jaxprs as well. That’s because both involve staging out, or delaying, computation.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: '`linearize`和`vjp`的自动微分函数都建立在`jvp`之上，但也涉及jaxprs。这是因为两者都涉及分阶段或延迟计算。'
 - en: '`linearize`'
+  id: totrans-178
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`linearize`'
 - en: 'In the case of `linearize`, we want to stage out the linear part of a `jvp`
     computation. That is, in terms of [Haskell-like type signatures](https://wiki.haskell.org/Type_signature),
     if we have `jvp : (a -> b) -> (a, T a) -> (b, T b)`, then we write `linearize
     : (a -> b) -> a -> (b, T a -o T b)`, using `T a` to mean “the tangent type of
     `a`” and using the “lollipop” `-o` rather than the arrow `->` to indicate a *linear*
     function. We define the semantics of `linearize` in terms of `jvp` too:'
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: '对于`linearize`的情况，我们想要分离出`jvp`计算的线性部分。也就是说，用[Haskell类型签名](https://wiki.haskell.org/Type_signature)来说，如果我们有`jvp
+    : (a -> b) -> (a, T a) -> (b, T b)`，那么我们会写成`linearize : (a -> b) -> a -> (b, T
+    a -o T b)`，使用`T a`表示“`a`的切线类型”，并使用“棒棒糖”`-o`而不是箭头`->`来指示一个*线性*函数。我们也是以`jvp`的语义来定义`linearize`：'
 - en: '[PRE82]'
+  id: totrans-180
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE82]'
 - en: gives the same result for `(y, y_dot)` as
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于`(y, y_dot)`，与原先相同的结果如下：
 - en: '[PRE83]'
+  id: totrans-182
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE83]'
 - en: 'where the application of `f_lin` does not redo any of the linearization work.
     We’ll represent the delayed linear part `f_lin : T a -o T b` as a jaxpr.'
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: '在应用`f_lin`时，不会重新执行任何线性化工作。我们将延迟的线性部分`f_lin : T a -o T b`表示为一个jaxpr。'
 - en: 'Tangentially, now that we have linear arrows `-o`, we can provide a slightly
     more informative type for `jvp`:'
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 顺便说一句，既然我们有了线性箭头`-o`，我们可以为`jvp`提供一个稍微更详细的类型：
 - en: '[PRE84]'
+  id: totrans-185
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE84]'
 - en: Here we’re writing `UnrestrictedUse` just to indicate that we have a special
     pair where the first element can be used in an unrestricted (nonlinear) way. In
     conjunction with the linear arrow, this notation is just meant to express that
@@ -798,81 +1184,120 @@
     in a linear way, producing a corresponding nonlinear output (which can be used
     in a nonlinear way) paired with a linear output. This more refined type signature
     encodes the data dependencies in `jvp f`, which are useful for partial evaluation.
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们在这里编写`UnrestrictedUse`只是为了表明我们有一个特殊的对，第一个元素可以以非线性的方式使用。与线性箭头结合使用时，此符号只是用来表示函数`jvp
+    f`以非线性方式使用其第一个输入，但以线性方式使用其第二个输入，生成相应的非线性输出（可以以非线性方式使用），与线性输出配对。这种更精细的类型签名编码了`jvp
+    f`中的数据依赖关系，对于部分评估非常有用。
 - en: 'To build the `f_lin` jaxpr from a JVP, we need to perform partial evaluation:
     we evaluate all the primal values as we trace, but stage the tangent computations
     into a jaxpr. This is our second way to build jaxprs. But where `make_jaxpr` and
     its underlying `JaxprTrace`/`JaxprTracer` interpreters aim to stage out every
     primitive bind, this second approach stages out only those primitive binds with
     a data dependence on tangent inputs.'
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 要从JVP构建`f_lin`的jaxpr，我们需要执行部分评估：在我们追踪时评估所有原始值，但是将切线计算分阶段到一个jaxpr中。这是我们构建jaxprs的第二种方式。但是，与`make_jaxpr`及其基础的`JaxprTrace`/`JaxprTracer`解释器的目标是分阶段所有原始绑定不同，这第二种方法仅分阶段那些具有对切线输入的数据依赖性的原始绑定。
 - en: 'First, some utilities:'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，一些实用工具：
 - en: '[PRE85]'
+  id: totrans-189
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE85]'
 - en: 'Next, we’ll write `linearize` by combining `jvp` together with a general partial
     evaluation transformation, to be added next:'
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将编写`linearize`，通过将`jvp`与一般的部分评估转换组合在一起：
 - en: '[PRE86]'
+  id: totrans-191
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE86]'
 - en: Now we turn to the general partial evaluation transformation. The goal is to
     accept a Python callable and a list of inputs, some known and some unknown, and
     to produce (1) all the outputs which can be computed from the known inputs, together
     with (2) a jaxpr representing the part of the Python callable’s computation which
     can only be performed after the remaining inputs are known.
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们转向一般的部分评估转换。目标是接受一个Python可调用函数和一个输入列表，其中一些已知，一些未知，并产生（1）可以从已知输入计算出来的所有输出，以及（2）表示仅在其余输入已知后才能执行的Python可调用函数计算的japxr。
 - en: This transformation is tricky to summarize in a type signature. If we assume
     the input function’s type signature is `(a1, a2) -> (b1, b2)`, where `a1` and
     `a2` represent the known and unknown inputs, respectively, and where `b1` only
     has a data dependency on `a1` while `b2` has some data dependency on `a2`, then
     we might write
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种转换很难用一个类型签名来总结。如果我们假设输入函数的类型签名是`(a1, a2) -> (b1, b2)`，其中`a1`和`a2`分别表示已知和未知的输入，并且其中`b1`仅对`a1`有数据依赖性，而`b2`对`a2`有一些数据依赖性，那么我们可能会写成：
 - en: '[PRE87]'
+  id: totrans-194
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE87]'
 - en: In words, given values for the inputs of type `a1`, `partial_eval` produces
     the outputs of type `b1` along with “residual” values of existentially-quantified
     type `r` representing the intermediates required to complete the computation in
     the second stage. It also produces a function of type `(r, a2) -> b2` which accepts
     the residual values as well as the remaining inputs and produces the remaining
     outputs.
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: 简言之，给定类型为 `a1` 的输入值，`partial_eval` 将生成类型为 `b1` 的输出值以及代表在第二阶段完成计算所需的存在量化类型 `r`
+    的“残余”值。它还会生成一个类型为 `(r, a2) -> b2` 的函数，该函数接受残余值以及剩余输入，并生成剩余输出。
 - en: 'We like to think of partial evaluation as “unzipping” one computation into
     two. For example, consider this jaxpr:'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们喜欢将部分评估视为将一个计算“解压”为两个的过程。例如，考虑以下 `jaxpr`：
 - en: '[PRE88]'
+  id: totrans-197
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE88]'
 - en: 'A jaxpr for the JVP would look like:'
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: JVP 的 `jaxpr` 将如下所示：
 - en: '[PRE89]'
+  id: totrans-199
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE89]'
 - en: 'If we imagine applying partial evaluation to this jaxpr with the first input
     known and the second unknown, we end up ‘unzipping’ the JVP jaxpr into primal
     and tangent jaxprs:'
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们想象将部分评估应用于此 `jaxpr`，第一个输入已知，第二个输入未知，我们将 `JVP` 的 `jaxpr` “解压”为原始和切线 `jaxpr`：
 - en: '[PRE90]'
+  id: totrans-201
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE90]'
 - en: '[PRE91]'
+  id: totrans-202
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE91]'
 - en: This second jaxpr represents the linear computation that we want from `linearize`.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 这第二个 `jaxpr` 表示我们从 `linearize` 中希望得到的线性计算。
 - en: 'However, unlike in this jaxpr example, we want the computation on known values
     to occur while evaluating the input Python callable. That is, rather than forming
     a jaxpr for the entire function `(a1, a2) -> (b1, b2)`, staging all operations
@@ -884,23 +1309,37 @@
     keeps the primal computation in Python. As a consequence, our `Trace` and `Tracer`
     subclasses must on the fly sort out what can be evaluated and what must be staged
     out into a jaxpr.'
+  id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: '然而，与此 `jaxpr` 示例不同的是，我们希望在评估输入的 Python 可调用函数时，对已知值进行计算。换句话说，我们不想在整个函数 `(a1,
+    a2) -> (b1, b2)` 的 `jaxpr` 中首先将所有操作分离出 Python，然后再确定哪些可以立即评估，哪些必须延迟。我们只想形成那些由于依赖于未知输入而必须延迟的操作的
+    `jaxpr`。在自动微分的背景下，这正是使我们能够处理诸如 `grad(lambda x: x**2 if x > 0 else 0.)` 函数的特性。Python
+    控制流能够正常工作，因为部分评估保持了 Python 中的原始计算。因此，我们的 `Trace` 和 `Tracer` 子类必须动态地分辨出哪些可以评估，哪些必须分离到
+    `jaxpr` 中。'
 - en: 'First, we start with a `PartialVal` class, which represents a value that can
     be either known or unknown:'
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们从 `PartialVal` 类开始，它表示可以是已知或未知的值：
 - en: '[PRE92]'
+  id: totrans-206
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE92]'
 - en: 'Partial evaluation will take a list of `PartialVal`s representing inputs, and
     return a list of `PartialVal` outputs along with a jaxpr representing the delayed
     computation:'
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 部分评估将接受一个表示输入的 `PartialVal` 列表，并返回一个表示延迟计算的 `jaxpr` 的 `PartialVal` 输出列表：
 - en: '[PRE93]'
+  id: totrans-208
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE93]'
 - en: 'Next we need to implement `PartialEvalTrace` and its `PartialEvalTracer`. This
     interpreter will build a jaxpr on the fly while tracking data dependencies. To
     do so, it builds a bipartite directed acyclic graph (DAG) between `PartialEvalTracer`
@@ -908,21 +1347,33 @@
     for how to compute some values from others. One kind of recipe is a `JaxprEqnRecipe`,
     corresponding to a `JaxprEqn`’s primitive application, but we also have recipe
     types for constants and lambda binders:'
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们需要实现 `PartialEvalTrace` 及其 `PartialEvalTracer`。此解释器将在跟踪数据依赖关系的同时动态构建 `jaxpr`。为此，它在
+    `PartialEvalTracer` 节点（代表分阶段的值）和 `JaxprRecipe` 节点（代表如何从其他值计算某些值的公式）之间建立了一个二部有向无环图（DAG）。一种类型的配方是
+    `JaxprEqnRecipe`，对应于 `JaxprEqn` 的原语应用，但我们还有常量和 Lambda 绑定器的配方类型：
 - en: '[PRE94]'
+  id: totrans-210
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE94]'
 - en: '[PRE95]'
+  id: totrans-211
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE95]'
 - en: The `PartialEvalTrace` contains the logic for constructing the graph of `JaxprRecipe`s
     and `PartialEvalTracer`s. Each argument corresponds to a `LambdaBindingRecipe`
     leaf node, and each constant is a `ConstRecipe` leaf node holding a reference
     to the constant. All other tracers and recipes come from `process_primitive`,
     which forms tracers with `JaxprEqnRecipe`s.
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: '`PartialEvalTrace` 包含构建 `JaxprRecipe` 和 `PartialEvalTracer` 图形的逻辑。每个参数对应于 `LambdaBindingRecipe`
+    叶节点，每个常量都是一个 `ConstRecipe` 叶节点，保存对常量的引用。所有其他跟踪器和配方都来自 `process_primitive`，它使用
+    `JaxprEqnRecipe` 形成具有 `JaxprEqn` 的原语应用的跟踪器。'
 - en: 'For most primitives, the `process_primitive` logic is straightforward: if all
     inputs are known then we can bind the primitive on the known values (evaluating
     it in Python) and avoid forming tracers corresponding to the output. If instead
@@ -931,94 +1382,145 @@
     we need avals, which we get from the abstract eval rules. (Notice that tracers
     reference `JaxprEqnRecipe`s, and `JaxprEqnRecipe`s reference tracers; we avoid
     circular garbage by using weakrefs.)'
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于大多数原语，`process_primitive`逻辑很简单：如果所有输入都已知，我们可以在已知值上绑定原语（在Python中评估它），并避免形成对应于输出的追踪器。如果任何输入未知，则我们转而进行`JaxprEqnRecipe`的阶段输出，表示原语应用。为了构建代表未知输出的追踪器，我们需要aval，这些aval来自抽象评估规则。（请注意，追踪器引用`JaxprEqnRecipe`，而`JaxprEqnRecipe`引用追踪器；我们通过使用弱引用来避免循环垃圾。）
 - en: That `process_primitive` logic applies to most primitives, but `xla_call_p`
     requires recursive treatment. So we special-case its rule in a `partial_eval_rules`
     dict.
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: '`process_primitive`逻辑适用于大多数原语，但`xla_call_p`需要递归处理。因此，我们在`partial_eval_rules`字典中特别处理它的规则。'
 - en: '[PRE96]'
+  id: totrans-215
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE96]'
 - en: Now that we can build graph representations of jaxprs with `PartialEvalTrace`,
     we need a mechanism to convert the graph representation to a standard jaxpr. The
     jaxpr corresponds to a topological sort of the graph.
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们可以用`PartialEvalTrace`构建jaxprs的图形表示，我们需要一种机制将图形表示转换为标准的jaxpr。jaxpr对应于图形的拓扑排序。
 - en: '[PRE97]'
+  id: totrans-217
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE97]'
 - en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
     code cell source Hide code cell source</summary>
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: <details class="hide above-input"><summary aria-label="Toggle hidden content">显示代码单元源代码
+    隐藏代码单元源代码</summary>
 - en: '[PRE98]</details>'
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE98]</details>'
 - en: Now we can linearize!
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们可以进行线性化了！
 - en: '[PRE99]'
+  id: totrans-221
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE99]'
 - en: '[PRE100]'
+  id: totrans-222
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE100]'
 - en: To handle `linearize`-of-`jit`, we still need to write a partial evaluation
     rule for `xla_call_p`. Other than tracer bookkeeping, the main task is to perform
     partial evaluation of a jaxpr, ‘unzipping’ it into two jaxprs.
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 要处理`linearize`-of-`jit`，我们仍然需要为`xla_call_p`编写部分评估规则。除了追踪器的记账外，主要任务是对jaxpr执行部分评估，将其“解压”为两个jaxpr。
 - en: 'There are actually two rules to write: one for trace-time partial evaluation,
     which we’ll call `xla_call_partial_eval`, and one for partial evaluation of jaxprs,
     which we’ll call `xla_call_peval_eqn`.'
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: 实际上有两个规则需要编写：一个是跟踪时间部分评估的规则，我们将其称为`xla_call_partial_eval`，另一个是jaxprs的部分评估规则，我们将其称为`xla_call_peval_eqn`。
 - en: '[PRE101]'
+  id: totrans-225
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE101]'
 - en: 'With that, we can compose `linearize` and `jit` however we like:'
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过这样，我们可以随心所欲地组合`linearize`和`jit`：
 - en: '[PRE102]'
+  id: totrans-227
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE102]'
 - en: '[PRE103]'
+  id: totrans-228
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE103]'
 - en: '[PRE104]'
+  id: totrans-229
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE104]'
 - en: '[PRE105]'
+  id: totrans-230
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE105]'
 - en: '`vjp` and `grad`'
+  id: totrans-231
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`vjp`和`grad`'
 - en: 'The `vjp` transformation works a lot like linearize. Its type signature is
     analogous:'
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: '`vjp`变换的工作方式与线性化非常相似。其类型签名类似：'
 - en: '[PRE106]'
+  id: totrans-233
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE106]'
 - en: The only difference is that we transpose the linear part of the computation
     before returning it, so that it goes from type `T a -o T b` to type `T b -o T
     a`. That is, we’ll implement `vjp` as, essentially,
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: 唯一的区别在于，我们在返回之前转置计算的线性部分，以便从类型`T a -o T b`变为类型`T b -o T a`。也就是说，我们将`vjp`实现为以下内容：
 - en: '[PRE107]'
+  id: totrans-235
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE107]'
 - en: Since we have the linear computation as a jaxpr, not just a Python callable,
     we can implement the transpose transformation as a jaxpr interpreter.
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们将线性计算作为jaxpr，而不仅仅是Python可调用的函数，因此我们可以将转置转换实现为jaxpr解释器。
 - en: '[PRE108]'
+  id: totrans-237
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE108]'
 - en: We use `UndefPrimal` instances to indicate which arguments with respect to which
     we want to transpose. These arise because in general, being explicit about closed-over
     values, we want to transpose functions of type `a -> b -o c` to functions of type
@@ -1027,76 +1529,119 @@
     positions using `UndefPrimal`. We register `UndefPrimal` as a pytree node because
     the pytree mechanism gives a handy way to prune these placeholders out of argument
     lists.
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们使用`UndefPrimal`实例来指示我们希望进行转置的参数。这是因为通常情况下，我们想要明确关闭值，我们希望将类型为`a -> b -o c`的函数转置为类型为`a
+    -> c -o b`的函数。更一般地说，与函数线性相关的输入可能分散在参数列表中。因此，我们使用`UndefPrimal`指示线性位置。我们将`UndefPrimal`注册为一个pytree节点，因为pytree机制提供了一种方便的方法来从参数列表中剪除这些占位符。
 - en: 'Next, we can write `eval_jaxpr_transposed`, along with transpose rules for
     all primitives which can be linear in at least one argument:'
+  id: totrans-239
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们可以编写`eval_jaxpr_transposed`，以及对所有至少可以线性的原语编写转置规则：
 - en: '[PRE109]'
+  id: totrans-240
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE109]'
 - en: '[PRE110]'
+  id: totrans-241
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE110]'
 - en: 'Now that we can linearize and transpose, we can finally write `grad`:'
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们可以进行线性化和转置，最后我们可以编写`grad`：
 - en: '[PRE111]'
+  id: totrans-243
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE111]'
 - en: '[PRE112]'
+  id: totrans-244
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE112]'
 - en: '[PRE113]'
+  id: totrans-245
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE113]'
 - en: '[PRE114]'
+  id: totrans-246
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE114]'
 - en: '[PRE115]'
+  id: totrans-247
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE115]'
 - en: '[PRE116]'
+  id: totrans-248
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE116]'
 - en: '[PRE117]'
+  id: totrans-249
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE117]'
 - en: 'Here’s something of a compositionality stress test:'
+  id: totrans-250
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里是一个组合性压力测试：
 - en: '[PRE118]'
+  id: totrans-251
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE118]'
 - en: 'Part 5: the control flow primitives `cond`'
+  id: totrans-252
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 第5部分：控制流原语`cond`
 - en: Next we’ll add higher-order primitives for staged-out control flow. These resemble
     `jit` from Part 3, another higher-order primitive, but differ in that they are
     parameterized by multiple callables rather than just one.
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来我们将添加用于暂停控制流的高阶原语。这类似于第 3 部分中的`jit`，另一个高阶原语，但它们不同之处在于它们是由多个可调用参数化的，而不仅仅是一个。
 - en: Adding `cond`
+  id: totrans-254
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 添加`cond`
 - en: We introduce a `cond` primitive to represent conditional application of one
     function or another inside a jaxpr. We write the type of `cond` as `Bool -> (a
     -> b) -> (a -> b) -> a -> b`. In words, `cond` takes a boolean representing the
     predicate and two functions of equal types. Depending on the value of the predicate,
     it applies one function or the other to its final argument.
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们引入了`cond`原语来表示在 jaxpr 中条件应用一个函数或另一个函数。我们用`Bool -> (a -> b) -> (a -> b) ->
+    a -> b`来表示`cond`的类型。简而言之，`cond`接受一个代表谓词的布尔值和两个相同类型的函数。根据谓词的值，它将一个函数应用于最后一个参数。
 - en: 'In Python, we represent it as a function which itself takes two functions as
     arguments. As with `jit`, the first step is to call `make_jaxpr` on its callable
     arguments to turn them into jaxprs:'
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 Python 中，我们表示它为一个函数，它本身接受两个函数作为参数。与`jit`一样，第一步是在其可调用参数上调用`make_jaxpr`，将它们转换为
+    jaxprs：
 - en: '[PRE119]'
+  id: totrans-257
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE119]'
 - en: We require `true_jaxpr` and `false_jaxpr` to have the same type, but because
     they might close over different constants (and because jaxprs can only represent
     closed terms, i.e. can’t have free variables and are instead closure-converted)
@@ -1104,127 +1649,204 @@
     lists of the two jaxprs. (To be more economical we could try to identify pairs
     of constants with the same shapes, but instead we just concatenate the lists of
     constants.)
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们要求`true_jaxpr`和`false_jaxpr`具有相同的类型，但是因为它们可能封闭于不同的常量（而且因为 jaxprs 只能表示封闭项，即不能有自由变量，而是闭包转换），我们需要使用辅助函数`_join_jaxpr_consts`来使这两个
+    jaxprs 的输入绑定列表一致。（为了更经济，我们可以尝试识别具有相同形状的常量对，但我们只是简单地连接常量列表。）
 - en: 'Next we can turn to adding interpreter rules for `cond`. Its evaluation rule
     is simple:'
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一步，我们可以添加`cond`的解释规则。它的评估规则很简单：
 - en: '[PRE120]'
+  id: totrans-260
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE120]'
 - en: '[PRE121]'
+  id: totrans-261
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE121]'
 - en: '[PRE122]'
+  id: totrans-262
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE122]'
 - en: 'For its JVP and vmap rules, we only need to call the same `jvp_jaxpr` and `vmap_jaxpr`
     utilities we created for `jit`, followed by another pass of `_join_jaxpr_consts`:'
+  id: totrans-263
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于它的 JVP 和 vmap 规则，我们只需要调用我们为`jit`创建的相同的`jvp_jaxpr`和`vmap_jaxpr`实用程序，然后再次使用`_join_jaxpr_consts`：
 - en: '[PRE123]'
+  id: totrans-264
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE123]'
 - en: '[PRE124]'
+  id: totrans-265
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE124]'
 - en: '[PRE125]'
+  id: totrans-266
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE125]'
 - en: '[PRE126]'
+  id: totrans-267
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE126]'
 - en: '[PRE127]'
+  id: totrans-268
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE127]'
 - en: '[PRE128]'
+  id: totrans-269
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE128]'
 - en: Notice that we’re not currently supporting the case where the predicate value
     itself is batched. In mainline JAX, we handle this case by transforming the conditional
     to a [select primitive](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.select.html).
     That transformation is semantically correct so long as `true_fun` and `false_fun`
     do not involve any side-effecting primitives.
+  id: totrans-270
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，目前我们不支持谓词值本身是批量化的情况。在 JAX 的主流版本中，我们通过将条件转换成[选择原语](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.select.html)来处理这种情况。只要`true_fun`和`false_fun`不涉及任何产生副作用的原语，这种转换在语义上是正确的。
 - en: Another thing not represented here, but present in the mainline JAX, is that
     applying transformations to two jaxprs of equal type might result in jaxprs of
     different types. For example, applying the mainline JAX version of `vmap_jaxpr`
     to the identity-function jaxpr
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里没有表现出来的另一件事，但在主流 JAX 中存在的是，将两个相同类型的 jaxprs 进行转换可能导致不同类型的 jaxprs。例如，将`vmap_jaxpr`的主流
+    JAX 版本应用于恒等函数 jaxpr
 - en: '[PRE129]'
+  id: totrans-272
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE129]'
 - en: would result in a jaxpr with a batched output, of type `[float32[10]] -> [float32[10]]`
     if the batch size were 10, while applying it to the zero-function jaxpr
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
+  zh: 将导致一个带有批处理输出的 jaxpr，类型为`[float32[10]] -> [float32[10]]`，如果批处理大小为 10，而将其应用于零函数
+    jaxpr
 - en: '[PRE130]'
+  id: totrans-274
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE130]'
 - en: would result in a jaxpr with an unbatched output, of type `[float32[10]] ->
     [float32[]]`. This is an optimization, aimed at not batching values unnecessarily.
     But it means that in `cond` we’d need an extra step of joining the two transformed
     jaxprs to have consistent output types. We don’t need this step here because we
     chose `vmap_jaxpr` always to batch all outputs over the leading axis.
+  id: totrans-275
   prefs: []
   type: TYPE_NORMAL
+  zh: 会导致一个带有未批处理输出的 jaxpr，类型为`[float32[10]] -> [float32[]]`。这是一种优化，旨在不必要地组合值。但这意味着在`cond`中，我们需要额外的步骤来连接两个转换后的
+    jaxprs 以获得一致的输出类型。我们不需要在这里进行这一步，因为我们选择了一直在主导轴上批处理所有输出的`vmap_jaxpr`。
 - en: 'Next we can turn to abstract evaluation and XLA lowering rules:'
+  id: totrans-276
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一步，我们可以转向抽象评估和 XLA 降级规则：
 - en: '[PRE131]'
+  id: totrans-277
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE131]'
 - en: '[PRE132]'
+  id: totrans-278
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE132]'
 - en: '[PRE133]'
+  id: totrans-279
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE133]'
 - en: Finally, to support reverse-mode automatic differentiation, we need partial
     evaluation and transposition rules. For partial evaluation, we need to introduce
     another jaxpr-munging utility, `_join_jaxpr_res`, to handle the fact that applying
     partial evaluation to `true_fun` and `false_fun` will in general result in distinct
     residuals. We use `_join_jaxpr_res` to make the output types of the transformed
     jaxprs consistent (while `_join_jaxpr_consts` dealt with input types).
+  id: totrans-280
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，为了支持反向模式自动微分，我们需要部分评估和转置规则。对于部分评估，我们需要引入另一个 `jaxpr-munging` 实用程序 `_join_jaxpr_res`，以处理应用于
+    `true_fun` 和 `false_fun` 的部分评估通常会导致不同的残余。我们使用 `_join_jaxpr_res` 使转换后的 `jaxprs`
+    的输出类型保持一致（而 `_join_jaxpr_consts` 处理了输入类型）。
 - en: '[PRE134]'
+  id: totrans-281
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE134]'
 - en: '[PRE135]'
+  id: totrans-282
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE135]'
 - en: '[PRE136]'
+  id: totrans-283
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE136]'
 - en: '[PRE137]'
+  id: totrans-284
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE137]'
 - en: '[PRE138]'
+  id: totrans-285
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE138]'
 - en: '[PRE139]'
+  id: totrans-286
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE139]'
 - en: 'Transposition is a fairly straightforward application of `transpose_jaxpr`:'
+  id: totrans-287
   prefs: []
   type: TYPE_NORMAL
+  zh: 转置是 `transpose_jaxpr` 的一个相当简单的应用：
 - en: '[PRE140]'
+  id: totrans-288
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE140]'
 - en: '[PRE141]'
+  id: totrans-289
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE141]'
 - en: '[PRE142]'
+  id: totrans-290
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE142]'
 - en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
     code cell source Hide code cell source</summary>
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
+  zh: <details class="hide above-input"><summary aria-label="Toggle hidden content">显示代码单元源代码
+    隐藏代码单元源代码</summary>
 - en: '[PRE143]</details>'
+  id: totrans-292
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE143]</details>'

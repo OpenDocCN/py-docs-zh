@@ -1,723 +1,1144 @@
 - en: Distributed arrays and automatic parallelization
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 分布式数组和自动并行化
 - en: 原文：[`jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html`](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html`](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html)
 - en: '![Open in Colab](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/Distributed_arrays_and_automatic_parallelization.ipynb)
     ![Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/Distributed_arrays_and_automatic_parallelization.ipynb)'
+  id: totrans-2
   prefs: []
   type: TYPE_IMG
+  zh: '![在 Colab 中打开](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/Distributed_arrays_and_automatic_parallelization.ipynb)
+    ![在 Kaggle 中打开](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/Distributed_arrays_and_automatic_parallelization.ipynb)'
 - en: This tutorial discusses parallelism via `jax.Array`, the unified array object
     model available in JAX v0.4.1 and newer.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 本教程讨论了通过 `jax.Array` 实现的并行计算，这是 JAX v0.4.1 及更高版本中可用的统一数组对象模型。
 - en: '[PRE0]'
+  id: totrans-4
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: '⚠️ WARNING: The notebook requires 8 devices to run.'
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: ⚠️ 警告：此笔记本需要 8 个设备才能运行。
 - en: '[PRE1]'
+  id: totrans-6
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: Intro and a quick example
+  id: totrans-7
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 简介和一个快速示例
 - en: By reading this tutorial notebook, you’ll learn about `jax.Array`, a unified
     datatype for representing arrays, even with physical storage spanning multiple
     devices. You’ll also learn about how using `jax.Array`s together with `jax.jit`
     can provide automatic compiler-based parallelization.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过阅读这本教程笔记本，您将了解 `jax.Array`，一种用于表示数组的统一数据类型，即使物理存储跨越多个设备。您还将学习如何使用 `jax.Array`
+    与 `jax.jit` 结合，实现基于编译器的自动并行化。
 - en: 'Before we think step by step, here’s a quick example. First, we’ll create a
     `jax.Array` sharded across multiple devices:'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们逐步思考之前，这里有一个快速示例。首先，我们将创建一个跨多个设备分片的 `jax.Array`：
 - en: '[PRE2]'
+  id: totrans-10
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '[PRE3]'
+  id: totrans-11
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: '[PRE4]'
+  id: totrans-12
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: '[PRE5]'
+  id: totrans-13
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'Next, we’ll apply a computation to it and visualize how the result values are
     stored across multiple devices too:'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将对其应用计算，并可视化结果值如何存储在多个设备上：
 - en: '[PRE6]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: '[PRE7]'
+  id: totrans-16
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'The evaluation of the `jnp.sin` application was automatically parallelized
     across the devices on which the input values (and output values) are stored:'
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jnp.sin` 应用的评估已自动并行化，该应用跨存储输入值（和输出值）的设备：'
 - en: '[PRE8]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: '[PRE9]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: '[PRE10]'
+  id: totrans-20
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '[PRE11]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Now let’s look at each of these pieces in more detail!
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们更详细地查看每个部分！
 - en: '`Sharding` describes how array values are laid out in memory across devices'
+  id: totrans-23
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: '`Sharding` 描述了如何将数组值布局在跨设备的内存中。'
 - en: Sharding basics, and the `PositionalSharding` subclass
+  id: totrans-24
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Sharding 基础知识和 `PositionalSharding` 子类
 - en: To parallelize computation across multiple devices, we first must lay out input
     data across multiple devices.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在多个设备上并行计算，我们首先必须在多个设备上布置输入数据。
 - en: In JAX, `Sharding` objects describe distributed memory layouts. They can be
     used with `jax.device_put` to produce a value with distributed layout.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 JAX 中，`Sharding` 对象描述了分布式内存布局。它们可以与 `jax.device_put` 结合使用，生成具有分布式布局的值。
 - en: 'For example, here’s a value with a single-device `Sharding`:'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，这里是一个单设备 `Sharding` 的值：
 - en: '[PRE12]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '[PRE13]'
+  id: totrans-29
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: '[PRE14]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: Here, we’re using the `jax.debug.visualize_array_sharding` function to show
     where the value `x` is stored in memory. All of `x` is stored on a single device,
     so the visualization is pretty boring!
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们使用 `jax.debug.visualize_array_sharding` 函数来展示内存中存储值 `x` 的位置。整个 `x` 存储在单个设备上，所以可视化效果相当无聊！
 - en: 'But we can shard `x` across multiple devices by using `jax.device_put` and
     a `Sharding` object. First, we make a `numpy.ndarray` of `Devices` using `mesh_utils.create_device_mesh`,
     which takes hardware topology into account for the `Device` order:'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是我们可以通过使用 `jax.device_put` 和 `Sharding` 对象将 `x` 分布在多个设备上。首先，我们使用 `mesh_utils.create_device_mesh`
+    制作一个 `Devices` 的 `numpy.ndarray`，该函数考虑了硬件拓扑以确定 `Device` 的顺序：
 - en: '[PRE15]'
+  id: totrans-33
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'Then, we create a `PositionalSharding` and use it with `device_put`:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们创建一个 `PositionalSharding` 并与 `device_put` 一起使用：
 - en: '[PRE16]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '[PRE17]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'Here `sharding` is a `PositionalSharding` which acts like an array with sets
     of devices as elements:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的 `sharding` 是一个 `PositionalSharding`，它的作用类似于一个具有设备集合作为元素的数组：
 - en: '[PRE18]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '[PRE19]'
+  id: totrans-39
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: The device numbers here are not in numerical order, because the mesh reflects
     the underlying toroidal topology of the device.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的设备编号不是按数字顺序排列的，因为网格反映了设备的基础环形拓扑结构。
 - en: 'By writing `PositionalSharding(ndarray_of_devices)`, we fix the device order
     and the initial shape. Then we can reshape it:'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过编写 `PositionalSharding(ndarray_of_devices)`，我们确定了设备顺序和初始形状。然后我们可以对其进行重新形状化：
 - en: '[PRE20]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: '[PRE21]'
+  id: totrans-43
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: '[PRE22]'
+  id: totrans-44
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: '[PRE23]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'To use `device_put` with a data array `x`, we can reshape the `sharding` into
     a shape that is *congruent* with `x.shape`, meaning a shape with the same length
     as `x.shape` and where each element evenly divides the corresponding element of
     `x.shape`:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 要使用`device_put`与数据数组`x`，我们可以将`sharding`重新形状为与`x.shape`*同余*的形状，这意味着具有与`x.shape`相同长度的形状，并且其中每个元素均匀地分割对应`x.shape`的元素：
 - en: '[PRE24]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: 'For example, we can reshape `sharding` to have shape `(4, 2)`, then use it
     in a `device_put`:'
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，我们可以将`sharding`重新形状为`(4, 2)`，然后在`device_put`中使用它：
 - en: '[PRE25]'
+  id: totrans-49
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: '[PRE26]'
+  id: totrans-50
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: '[PRE27]'
+  id: totrans-51
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: '[PRE28]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: Here `y` represents the same *value* as `x`, but its shards (i.e. slices) are
     stored in different devices’ memories.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的`y`代表与`x`相同的*值*，但其片段（即切片）存储在不同设备的内存中。
 - en: 'Different `PositionalSharding` shapes result in different distributed layouts
     (i.e. shardings) of the result:'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 不同的`PositionalSharding`形状会导致结果的不同分布布局（即分片）：
 - en: '[PRE29]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: '[PRE30]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: '[PRE31]'
+  id: totrans-57
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: '[PRE32]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: In some cases, we don’t just want to store each slice of `x` in a single device’s
     memory; we might want to *replicate* some slices, meaning storing copies of a
     slice’s values in multiple devices’ memories.
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 在某些情况下，我们不只是想将`x`的每个切片存储在单个设备的内存中；我们可能希望在多个设备的内存中*复制*一些切片，即在多个设备的内存中存储切片的值。
 - en: 'With `PositionalSharding`, we can express replication by calling the reducer
     method `replicate`:'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用`PositionalSharding`，我们可以通过调用reducer方法`replicate`来表达复制：
 - en: '[PRE33]'
+  id: totrans-61
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: '[PRE34]'
+  id: totrans-62
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: '[PRE35]'
+  id: totrans-63
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: '[PRE36]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: Here the visualization shows that `x` is sharded two ways along its second dimension
     (and not sharded along the first dimension), and each of those shards is replicated
     four ways (i.e. stored in four device memories).
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的可视化显示了`x`沿其第二维以两种方式分片（而不沿第一维分片），每个片段都复制了四种方式（即存储在四个设备内存中）。
 - en: 'The `replicate` method is analogous to the familiar NumPy array reduction methods
     like `.sum()` and `.prod()`. It operates along an axis performing a set union.
     So if `sharding` has shape `(4, 2)`, then `sharding.replicate(0, keepdims=True)`
     has shape `(1, 2)`, and `sharding.replicate(1, keepdims=True)` has shape `(4,
     1)`. Unlike analogous NumPy methods, `keepdims=True` is actually the default,
     so reduced-over axes aren’t squeezed:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: '`replicate`方法类似于熟悉的NumPy数组缩减方法，如`.sum()`和`.prod()`。它沿着一个轴执行集合并操作。因此，如果`sharding`的形状为`(4,
+    2)`，那么`sharding.replicate(0, keepdims=True)`的形状为`(1, 2)`，`sharding.replicate(1,
+    keepdims=True)`的形状为`(4, 1)`。与NumPy方法不同，`keepdims=True`实际上是默认的，因此减少的轴不会被压缩：'
 - en: '[PRE37]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: '[PRE38]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: '[PRE39]'
+  id: totrans-69
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: '[PRE40]'
+  id: totrans-70
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: '`NamedSharding` gives a way to express shardings with names'
+  id: totrans-71
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`NamedSharding`提供了一种使用名称表达分片的方式。'
 - en: So far we’ve worked with `PositionalSharding`, but there are alternative ways
     to express shardings. In fact, `Sharding` is an interface, and any class that
     implements that interface can be used with functions like `device_put`.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，我们已经使用了`PositionalSharding`，但还有其他表达分片的替代方法。实际上，`Sharding`是一个接口，任何实现该接口的类都可以与`device_put`等函数一起使用。
 - en: 'Another convenient way to express sharding is with the `NamedSharding`:'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一种方便的表达分片的方法是使用`NamedSharding`：
 - en: '[PRE41]'
+  id: totrans-74
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: '[PRE42]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: 'We can define a helper function to make things simpler:'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以定义一个辅助函数使事情更简单：
 - en: '[PRE43]'
+  id: totrans-77
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: '[PRE44]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: '[PRE45]'
+  id: totrans-79
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: 'Here, we use `P(''a'', ''b'')` to express that the first and second axes of
     `x` should be sharded over the device mesh axes `''a''` and `''b''`, respectively.
     We can easily switch to `P(''b'', ''a'')` to shard the axes of `x` over different
     devices:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们使用`P('a', 'b')`来表达`x`的第一和第二轴应该分片到设备网格轴`'a'`和`'b'`上。我们可以轻松切换到`P('b', 'a')`以在不同设备上分片`x`的轴：
 - en: '[PRE46]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: '[PRE47]'
+  id: totrans-82
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: '[PRE48]'
+  id: totrans-83
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: '[PRE49]'
+  id: totrans-84
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: Here, because `P('a', None)` doesn’t mention the `Mesh` axis name `'b'`, we
     get replication over the axis `'b'`. The `None` here is just acting as a placeholder
     to line up against the second axis of the value `x`, without expressing sharding
     over any mesh axis. (As a shorthand, trailing `None`s can be omitted, so that
     `P('a', None)` means the same thing as `P('a')`. But it doesn’t hurt to be explicit!)
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里，因为`P('a', None)`没有提及`Mesh`轴名`'b'`，我们在轴`'b'`上得到了复制。这里的`None`只是一个占位符，用于与值`x`的第二轴对齐，而不表示在任何网格轴上进行分片。（简写方式是，尾部的`None`可以省略，因此`P('a',
+    None)`的意思与`P('a')`相同。但是明确说明并不会有害！）
 - en: 'To shard only over the second axis of `x`, we can use a `None` placeholder
     in the `PartitionSpec`:'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 要仅在`x`的第二轴上进行分片，我们可以在`PartitionSpec`中使用`None`占位符。
 - en: '[PRE50]'
+  id: totrans-87
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: '[PRE51]'
+  id: totrans-88
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: '[PRE52]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: '[PRE53]'
+  id: totrans-90
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: 'For a fixed mesh, we can even partition one logical axis of `x` over multiple
     device mesh axes:'
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于固定的网格，我们甚至可以将`x`的一个逻辑轴分割到多个设备网格轴上：
 - en: '[PRE54]'
+  id: totrans-92
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: '[PRE55]'
+  id: totrans-93
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: Using `NamedSharding` makes it easy to define a device mesh once and give its
     axes names, then just refer to those names in `PartitionSpec`s for each `device_put`
     as needed.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用`NamedSharding`可以轻松定义一次设备网格并为其轴命名，然后只需在需要时在每个`device_put`的`PartitionSpec`中引用这些名称。
 - en: Computation follows data sharding and is automatically parallelized
+  id: totrans-95
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 计算遵循数据分片并自动并行化
 - en: 'With sharded input data, the compiler can give us parallel computation. In
     particular, functions decorated with `jax.jit` can operate over sharded arrays
     without copying data onto a single device. Instead, computation follows sharding:
     based on the sharding of the input data, the compiler decides shardings for intermediates
     and output values, and parallelizes their evaluation, even inserting communication
     operations as necessary.'
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用分片输入数据，编译器可以给我们并行计算。特别是，用 `jax.jit` 装饰的函数可以在分片数组上操作，而无需将数据复制到单个设备上。相反，计算遵循分片：基于输入数据的分片，编译器决定中间结果和输出值的分片，并并行评估它们，必要时甚至插入通信操作。
 - en: 'For example, the simplest computation is an elementwise one:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，最简单的计算是逐元素的：
 - en: '[PRE56]'
+  id: totrans-98
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: '[PRE57]'
+  id: totrans-99
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: '[PRE58]'
+  id: totrans-100
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: Here for the elementwise operation `jnp.sin` the compiler chose the output sharding
     to be the same as the input. Moreover, the compiler automatically parallelized
     the computation, so that each device computed its output shard from its input
     shard in parallel.
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里对于逐元素操作 `jnp.sin`，编译器选择了输出分片与输入相同。此外，编译器自动并行化计算，因此每个设备都可以并行计算其输出片段。
 - en: In other words, even though we wrote the `jnp.sin` computation as if a single
     machine were to execute it, the compiler splits up the computation for us and
     executes it on multiple devices.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，即使我们将 `jnp.sin` 的计算写成单台机器执行，编译器也会为我们拆分计算并在多个设备上执行。
 - en: 'We can do the same for more than just elementwise operations too. Consider
     a matrix multiplication with sharded inputs:'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们不仅可以对逐元素操作执行相同操作。考虑使用分片输入的矩阵乘法：
 - en: '[PRE59]'
+  id: totrans-104
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: '[PRE60]'
+  id: totrans-105
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: 'Here the compiler chose the output sharding so that it could maximally parallelize
     the computation: without needing communication, each device already has the input
     shards it needs to compute its output shard.'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里编译器选择了输出分片，以便最大化并行计算：无需通信，每个设备已经具有计算其输出分片所需的输入分片。
 - en: 'How can we be sure it’s actually running in parallel? We can do a simple timing
     experiment:'
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们如何确保它实际上是并行运行的？我们可以进行简单的时间实验：
 - en: '[PRE61]'
+  id: totrans-108
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE61]'
 - en: '[PRE62]'
+  id: totrans-109
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE62]'
 - en: '[PRE63]'
+  id: totrans-110
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE63]'
 - en: '[PRE64]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE64]'
 - en: '[PRE65]'
+  id: totrans-112
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE65]'
 - en: '[PRE66]'
+  id: totrans-113
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE66]'
 - en: '[PRE67]'
+  id: totrans-114
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE67]'
 - en: '[PRE68]'
+  id: totrans-115
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE68]'
 - en: 'Even copying a sharded `Array` produces a result with the sharding of the input:'
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 即使复制一个分片的 `Array`，也会产生具有输入分片的结果：
 - en: '[PRE69]'
+  id: totrans-117
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE69]'
 - en: '[PRE70]'
+  id: totrans-118
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE70]'
 - en: 'So computation follows data placement: when we explicitly shard data with `jax.device_put`,
     and apply functions to that data, the compiler attempts to parallelize the computation
     and decide the output sharding. This policy for sharded data is a generalization
     of [JAX’s policy of following explicit device placement](https://jax.readthedocs.io/en/latest/faq.html#controlling-data-and-computation-placement-on-devices).'
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，当我们使用 `jax.device_put` 明确分片数据并对该数据应用函数时，编译器会尝试并行化计算并决定输出分片。这种对分片数据的策略是[JAX遵循显式设备放置策略的泛化](https://jax.readthedocs.io/en/latest/faq.html#controlling-data-and-computation-placement-on-devices)。
 - en: When explicit shardings disagree, JAX errors
+  id: totrans-120
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 当明确分片不一致时，JAX会报错
 - en: 'But what if two arguments to a computation are explicitly placed on different
     sets of devices, or with incompatible device orders? In these ambiguous cases,
     an error is raised:'
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是如果计算的两个参数在不同的设备组上明确放置，或者设备顺序不兼容，会发生错误：
 - en: '[PRE71]'
+  id: totrans-122
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE71]'
 - en: '[PRE72]'
+  id: totrans-123
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE72]'
 - en: '[PRE73]'
+  id: totrans-124
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE73]'
 - en: '[PRE74]'
+  id: totrans-125
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE74]'
 - en: '[PRE75]'
+  id: totrans-126
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE75]'
 - en: We say arrays that have been explicitly placed or sharded with `jax.device_put`
     are *committed* to their device(s), and so won’t be automatically moved. See the
     [device placement FAQ](https://jax.readthedocs.io/en/latest/faq.html#controlling-data-and-computation-placement-on-devices)
     for more information.
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们说通过 `jax.device_put` 明确放置或分片的数组已经*锁定*在它们的设备上，因此不会自动移动。请查看 [设备放置常见问题解答](https://jax.readthedocs.io/en/latest/faq.html#controlling-data-and-computation-placement-on-devices)
+    获取更多信息。
 - en: 'When arrays are *not* explicitly placed or sharded with `jax.device_put`, they
     are placed *uncommitted* on the default device. Unlike committed arrays, uncommitted
     arrays can be moved and resharded automatically: that is, uncommitted arrays can
     be arguments to a computation even if other arguments are explicitly placed on
     different devices.'
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 当数组没有使用 `jax.device_put` 明确放置或分片时，它们会放置在默认设备上并*未锁定*。与已锁定数组不同，未锁定数组可以自动移动和重新分片：也就是说，未锁定数组可以作为计算的参数，即使其他参数明确放置在不同的设备上。
 - en: 'For example, the output of `jnp.zeros`, `jnp.arange`, and `jnp.array` are uncommitted:'
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，`jnp.zeros`、`jnp.arange` 和 `jnp.array` 的输出都是未锁定的：
 - en: '[PRE76]'
+  id: totrans-130
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE76]'
 - en: '[PRE77]'
+  id: totrans-131
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE77]'
 - en: Constraining shardings of intermediates in `jit`ted code
+  id: totrans-132
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 限制在 `jit` 代码中的中间片段
 - en: 'While the compiler will attempt to decide how a function’s intermediate values
     and outputs should be sharded, we can also give it hints using `jax.lax.with_sharding_constraint`.
     Using `jax.lax.with_sharding_constraint` is much like `jax.device_put`, except
     we use it inside staged-out (i.e. `jit`-decorated) functions:'
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然编译器将尝试决定函数的中间值和输出应如何分片，但我们还可以使用 `jax.lax.with_sharding_constraint` 来给它提供提示。使用
+    `jax.lax.with_sharding_constraint` 类似于 `jax.device_put`，不同之处在于我们在分阶段函数（即 `jit`
+    装饰的函数）内部使用它：
 - en: '[PRE78]'
+  id: totrans-134
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE78]'
 - en: '[PRE79]'
+  id: totrans-135
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE79]'
 - en: '[PRE80]'
+  id: totrans-136
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE80]'
 - en: '[PRE81]'
+  id: totrans-137
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE81]'
 - en: '[PRE82]'
+  id: totrans-138
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE82]'
 - en: '[PRE83]'
+  id: totrans-139
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE83]'
 - en: '[PRE84]'
+  id: totrans-140
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE84]'
 - en: '[PRE85]'
+  id: totrans-141
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE85]'
 - en: By adding `with_sharding_constraint`, we’ve constrained the sharding of the
     output. In addition to respecting the annotation on a particular intermediate,
     the compiler will use annotations to decide shardings for other values.
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过添加 `with_sharding_constraint`，我们限制了输出的分片。除了尊重特定中间变量的注释外，编译器还会使用注释来决定其他值的分片。
 - en: It’s often a good practice to annotate the outputs of computations, for example
     based on how the values are ultimately consumed.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 经常的好做法是注释计算的输出，例如根据值最终如何被使用来注释它们。
 - en: 'Examples: neural networks'
+  id: totrans-144
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 示例：神经网络
 - en: '**⚠️ WARNING: The following is meant to be a simple demonstration of automatic
     sharding propagation with `jax.Array`, but it may not reflect best practices for
     real examples.** For instance, real examples may require more use of `with_sharding_constraint`.'
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: '**⚠️ 警告：以下内容旨在简单演示使用 `jax.Array` 进行自动分片传播，但可能不反映实际示例的最佳实践。** 例如，实际示例可能需要更多使用
+    `with_sharding_constraint`。'
 - en: 'We can use `jax.device_put` and `jax.jit`’s computation-follows-sharding features
     to parallelize computation in neural networks. Here are some simple examples,
     based on this basic neural network:'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以利用 `jax.device_put` 和 `jax.jit` 的计算跟随分片特性来并行化神经网络中的计算。以下是基于这种基本神经网络的一些简单示例：
 - en: '[PRE86]'
+  id: totrans-147
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE86]'
 - en: '[PRE87]'
+  id: totrans-148
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE87]'
 - en: '[PRE88]'
+  id: totrans-149
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE88]'
 - en: '[PRE89]'
+  id: totrans-150
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE89]'
 - en: 8-way batch data parallelism
+  id: totrans-151
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8路批数据并行
 - en: '[PRE90]'
+  id: totrans-152
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE90]'
 - en: '[PRE91]'
+  id: totrans-153
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE91]'
 - en: '[PRE92]'
+  id: totrans-154
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE92]'
 - en: '[PRE93]'
+  id: totrans-155
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE93]'
 - en: '[PRE94]'
+  id: totrans-156
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE94]'
 - en: '[PRE95]'
+  id: totrans-157
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE95]'
 - en: '[PRE96]'
+  id: totrans-158
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE96]'
 - en: '[PRE97]'
+  id: totrans-159
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE97]'
 - en: '[PRE98]'
+  id: totrans-160
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE98]'
 - en: '[PRE99]'
+  id: totrans-161
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE99]'
 - en: '[PRE100]'
+  id: totrans-162
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE100]'
 - en: 4-way batch data parallelism and 2-way model tensor parallelism
+  id: totrans-163
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 4路批数据并行和2路模型张量并行
 - en: '[PRE101]'
+  id: totrans-164
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE101]'
 - en: '[PRE102]'
+  id: totrans-165
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE102]'
 - en: '[PRE103]'
+  id: totrans-166
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE103]'
 - en: '[PRE104]'
+  id: totrans-167
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE104]'
 - en: '[PRE105]'
+  id: totrans-168
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE105]'
 - en: '[PRE106]'
+  id: totrans-169
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE106]'
 - en: '[PRE107]'
+  id: totrans-170
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE107]'
 - en: '[PRE108]'
+  id: totrans-171
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE108]'
 - en: '[PRE109]'
+  id: totrans-172
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE109]'
 - en: '[PRE110]'
+  id: totrans-173
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE110]'
 - en: '[PRE111]'
+  id: totrans-174
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE111]'
 - en: '[PRE112]'
+  id: totrans-175
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE112]'
 - en: '[PRE113]'
+  id: totrans-176
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE113]'
 - en: '[PRE114]'
+  id: totrans-177
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE114]'
 - en: '[PRE115]'
+  id: totrans-178
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE115]'
 - en: '[PRE116]'
+  id: totrans-179
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE116]'
 - en: '[PRE117]'
+  id: totrans-180
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE117]'
 - en: Sharp bits
+  id: totrans-181
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 锐利的部分
 - en: Generating random numbers
+  id: totrans-182
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 生成随机数
 - en: JAX comes with a functional, deterministic [random number generator](https://jax.readthedocs.io/en/latest/jep/263-prng.html).
     It underlies the various sampling functions in the [`jax.random` module](https://jax.readthedocs.io/en/latest/jax.random.html),
     such as `jax.random.uniform`.
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 自带一个功能强大且确定性的 [随机数生成器](https://jax.readthedocs.io/en/latest/jep/263-prng.html)。它支持
+    [`jax.random` 模块](https://jax.readthedocs.io/en/latest/jax.random.html) 中的各种采样函数，如
+    `jax.random.uniform`。
 - en: JAX’s random numbers are produced by a counter-based PRNG, so in principle,
     random number generation should be a pure map over counter values. A pure map
     is a trivially partitionable operation in principle. It should require no cross-device
     communication, nor any redundant computation across devices.
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 的随机数是由基于计数器的PRNG生成的，因此原则上，随机数生成应该是对计数器值的纯映射。原则上，纯映射是一个可以轻松分片的操作。它不应需要跨设备通信，也不应需要设备间的冗余计算。
 - en: However, the existing stable RNG implementation is not automatically partitionable,
     for historical reasons.
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，由于历史原因，现有的稳定RNG实现并非自动可分片。
 - en: 'Consider the following example, where a function draws random uniform numbers
     and adds them to the input, elementwise:'
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 考虑以下示例，其中一个函数绘制随机均匀数并将其逐元素添加到输入中：
 - en: '[PRE118]'
+  id: totrans-187
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE118]'
 - en: 'On a partitioned input, the function `f` produces output that is also partitioned:'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 在分区输入上，函数 `f` 生成的输出也是分区的：
 - en: '[PRE119]'
+  id: totrans-189
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE119]'
 - en: '[PRE120]'
+  id: totrans-190
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE120]'
 - en: 'But if we inspect the compiled computation for `f` on this partitioned input,
     we see that it does involve some communication:'
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是，如果我们检查 `f` 在这个分区输入上的编译计算，我们会发现它确实涉及一些通信：
 - en: '[PRE121]'
+  id: totrans-192
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE121]'
 - en: '[PRE122]'
+  id: totrans-193
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE122]'
 - en: 'One way to work around this is to configure JAX with the experimental upgrade
     flag `jax_threefry_partitionable`. With the flag on, the “collective permute”
     operation is now gone from the compiled computation:'
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 解决这个问题的一种方法是使用实验性升级标志 `jax_threefry_partitionable` 配置 JAX。启用该标志后，编译计算中的“集体排列”操作现在已经消失：
 - en: '[PRE123]'
+  id: totrans-195
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE123]'
 - en: '[PRE124]'
+  id: totrans-196
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE124]'
 - en: 'The output is still partitioned:'
+  id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: 输出仍然是分区的：
 - en: '[PRE125]'
+  id: totrans-198
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE125]'
 - en: '[PRE126]'
+  id: totrans-199
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE126]'
 - en: 'One caveat to the `jax_threefry_partitionable` option, however, is that *the
     random values produced may be different than without the flag set*, even though
     they were generated by the same random key:'
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，`jax_threefry_partitionable` 选项的一个注意事项是，即使是由相同随机密钥生成的，*使用该标志设置后生成的随机值可能与未设置标志时不同*：
 - en: '[PRE127]'
+  id: totrans-201
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE127]'
 - en: '[PRE128]'
+  id: totrans-202
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE128]'
 - en: In `jax_threefry_partitionable` mode, the JAX PRNG remains deterministic, but
     its implementation is new (and under development). The random values generated
     for a given key will be the same at a given JAX version (or a given commit on
     the `main` branch), but may vary across releases.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 `jax_threefry_partitionable` 模式下，JAX 的 PRNG 保持确定性，但其实现是新的（并且正在开发中）。为给定密钥生成的随机值在特定的
+    JAX 版本（或 `main` 分支上的特定提交）中将保持相同，但在不同版本之间可能会有所变化。

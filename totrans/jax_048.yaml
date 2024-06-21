@@ -1,20 +1,29 @@
 - en: Using JAX in multi-host and multi-process environments
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 在多主机和多进程环境中使用 JAX
 - en: 原文：[`jax.readthedocs.io/en/latest/multi_process.html`](https://jax.readthedocs.io/en/latest/multi_process.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/multi_process.html`](https://jax.readthedocs.io/en/latest/multi_process.html)
 - en: Introduction
+  id: totrans-2
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 介绍
 - en: This guide explains how to use JAX in environments such as GPU clusters and
     [Cloud TPU](https://cloud.google.com/tpu) pods where accelerators are spread across
     multiple CPU hosts or JAX processes. We’ll refer to these as “multi-process” environments.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 本指南解释了如何在 GPU 集群和[Cloud TPU](https://cloud.google.com/tpu) pod 等环境中使用 JAX，在这些环境中，加速器分布在多个
+    CPU 主机或 JAX 进程上。我们将这些称为“多进程”环境。
 - en: This guide specifically focuses on how to use collective communication operations
     (e.g. `jax.lax.psum()` ) in multi-process settings, although other communication
     methods may be useful too depending on your use case (e.g. RPC, [mpi4jax](https://github.com/mpi4jax/mpi4jax)).
@@ -24,50 +33,75 @@
     e.g. the high-speed interconnects for Cloud TPUs or [NCCL](https://developer.nvidia.com/nccl)
     for GPUs. These links allow collective operations to run across multiple processes’
     worth of accelerators with high performance.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 本指南专门介绍了如何在多进程设置中使用集体通信操作（例如 `jax.lax.psum()` ），尽管根据您的用例，其他通信方法也可能有用（例如 RPC，[mpi4jax](https://github.com/mpi4jax/mpi4jax)）。如果您尚未熟悉
+    JAX 的集体操作，建议从分片计算部分开始。在 JAX 的多进程环境中，重要的要求是加速器之间的直接通信链路，例如 Cloud TPU 的高速互连或[NCCL](https://developer.nvidia.com/nccl)
+    用于 GPU。这些链路允许集体操作在多个进程的加速器上高性能运行。
 - en: Multi-process programming model
+  id: totrans-5
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 多进程编程模型
 - en: 'Key concepts:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 关键概念：
 - en: You must run at least one JAX process per host.
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 您必须在每个主机上至少运行一个 JAX 进程。
 - en: You should initialize the cluster with `jax.distributed.initialize()`.
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 您应该使用 `jax.distributed.initialize()` 初始化集群。
 - en: Each process has a distinct set of *local* devices it can address. The *global*
     devices are the set of all devices across all processes.
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 每个进程都有一组独特的*本地*设备可以访问。*全局*设备是所有进程的所有设备集合。
 - en: Use standard JAX parallelism APIs like `jit()` (see Introduction to sharded
     computation tutorial) and `shard_map()`. jax.jit only accepts globally shaped
     arrays. shard_map allows you to drop to per-device shape.
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用标准的 JAX 并行 API，如 `jit()`（参见分片计算入门教程）和 `shard_map()`。jax.jit 仅接受全局形状的数组。shard_map
+    允许您按设备形状进行降级。
 - en: Make sure all processes run the same parallel computations in the same order.
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保所有进程按照相同顺序运行相同的并行计算。
 - en: Make sure all processes has the same number of local devices.
+  id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保所有进程具有相同数量的本地设备。
 - en: Make sure all devices are the same (e.g., all V100, or all H100).
+  id: totrans-13
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保所有设备相同（例如，全部为 V100 或全部为 H100）。
 - en: Launching JAX processes
+  id: totrans-14
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 启动 JAX 进程
 - en: Unlike other distributed systems where a single controller node manages many
     worker nodes, JAX uses a “multi-controller” programming model where each JAX Python
     process runs independently, sometimes referred to as a Single Program, Multiple
@@ -76,57 +110,86 @@
     processes will load different input data). Furthermore, **you must manually run
     your JAX program on each host!** JAX doesn’t automatically start multiple processes
     from a single program invocation.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 与其他分布式系统不同，其中单个控制节点管理多个工作节点，JAX 使用“多控制器”编程模型，其中每个 JAX Python 进程独立运行，有时称为单程序多数据（SPMD）模型。通常，在每个进程中运行相同的
+    JAX Python 程序，每个进程的执行之间只有轻微差异（例如，不同的进程将加载不同的输入数据）。此外，**您必须手动在每个主机上运行您的 JAX 程序！**
+    JAX 不会从单个程序调用自动启动多个进程。
 - en: (The requirement for multiple processes is why this guide isn’t offered as a
     notebook – we don’t currently have a good way to manage multiple Python processes
     from a single notebook.)
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: （对于多个进程的要求，这就是为什么本指南不作为笔记本提供的原因——我们目前没有好的方法来从单个笔记本管理多个 Python 进程。）
 - en: Initializing the cluster
+  id: totrans-17
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 初始化集群
 - en: To initialize the cluster, you should call `jax.distributed.initialize()` at
     the start of each process. `jax.distributed.initialize()` must be called early
     in the program, before any JAX computations are executed.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 要初始化集群，您应该在每个进程的开始调用 `jax.distributed.initialize()`。`jax.distributed.initialize()`
+    必须在程序中的任何 JAX 计算执行之前早些时候调用。
 - en: 'The API `jax.distributed.initialize()` takes several arguments, namely:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 'API `jax.distributed.initialize()` 接受几个参数，即:'
 - en: '`coordinator_address`: the IP address of process 0 in your cluster, together
     with a port available on that process. Process 0 will start a JAX service exposed
     via that IP address and port, to which the other processes in the cluster will
     connect.'
+  id: totrans-20
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`coordinator_address`：集群中进程 0 的 IP 地址，以及该进程上可用的一个端口。进程 0 将启动一个通过该 IP 地址和端口暴露的
+    JAX 服务，集群中的其他进程将连接到该服务。'
 - en: '`coordinator_bind_address`: the IP address and port to which the JAX service
     on process 0 in your cluster will bind. By default, it will bind to all available
     interfaces using the same port as `coordinator_address`.'
+  id: totrans-21
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`coordinator_bind_address`：集群中进程 0 上的 JAX 服务将绑定到的 IP 地址和端口。默认情况下，它将使用与 `coordinator_address`
+    相同端口的所有可用接口进行绑定。'
 - en: '`num_processes`: the number of processes in the cluster'
+  id: totrans-22
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`num_processes`：集群中的进程数'
 - en: '`process_id`: the ID number of this process, in the range `[0 .. num_processes)`.'
+  id: totrans-23
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`process_id`：本进程的ID号码，范围为`[0 .. num_processes)`。'
 - en: '`local_device_ids`: Restricts the visible devices of the current process to
     `local_device_ids`.'
+  id: totrans-24
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`local_device_ids`：将当前进程的可见设备限制为 `local_device_ids`。'
 - en: 'For example on GPU, a typical usage is:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，在 GPU 上，典型用法如下：
 - en: '[PRE0]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: On Cloud TPU, Slurm and Open MPI environments, you can simply call `jax.distributed.initialize()`
     with no arguments. Default values for the arguments will be chosen automatically.
     When running on GPUs with Slurm and Open MPI, it is assumed that one process is
@@ -134,85 +197,124 @@
     Otherwise it is assumed that one process is started per host, i.e. each process
     will be assigned all local devices. The Open MPI auto-initialization is only used
     when the JAX processes are launched via `mpirun`/`mpiexec`.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 Cloud TPU、Slurm 和 Open MPI 环境中，你可以简单地调用 `jax.distributed.initialize()` 而无需参数。参数的默认值将自动选择。在使用
+    Slurm 和 Open MPI 运行 GPU 时，假定每个 GPU 启动一个进程，即每个进程只分配一个可见本地设备。否则假定每个主机启动一个进程，即每个进程将分配所有本地设备。只有当通过
+    `mpirun`/`mpiexec` 启动 JAX 进程时才会使用 Open MPI 自动初始化。
 - en: '[PRE1]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: On TPU at present calling `jax.distributed.initialize()` is optional, but recommended
     since it enables additional checkpointing and health checking features.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 在当前 TPU 上，调用 `jax.distributed.initialize()` 目前是可选的，但建议使用，因为它启用了额外的检查点和健康检查功能。
 - en: Local vs. global devices
+  id: totrans-30
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 本地与全局设备
 - en: Before we get to running multi-process computations from your program, it’s
     important to understand the distinction between *local* and *global* devices.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 在开始从您的程序中运行多进程计算之前，了解*本地*和*全局*设备之间的区别是很重要的。
 - en: '**A process’s *local* devices are those that it can directly address and launch
     computations on.** For example, on a GPU cluster, each host can only launch computations
     on the directly attached GPUs. On a Cloud TPU pod, each host can only launch computations
     on the 8 TPU cores attached directly to that host (see the [Cloud TPU System Architecture](https://cloud.google.com/tpu/docs/system-architecture)
     documentation for more details). You can see a process’s local devices via `jax.local_devices()`.'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: '**进程的*本地*设备是它可以直接寻址和启动计算的设备。** 例如，在 GPU 集群上，每个主机只能在直接连接的 GPU 上启动计算。在 Cloud
+    TPU pod 上，每个主机只能在直接连接到该主机的 8 个 TPU 核心上启动计算（有关更多详情，请参阅[Cloud TPU 系统架构](https://cloud.google.com/tpu/docs/system-architecture)文档）。你可以通过
+    `jax.local_devices()` 查看进程的本地设备。'
 - en: '**The *global* devices are the devices across all processes.** A computation
     can span devices across processes and perform collective operations via the direct
     communication links between devices, as long as each process launches the computation
     on its local devices. You can see all available global devices via `jax.devices()`.
     A process’s local devices are always a subset of the global devices.'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: '**全局设备是跨所有进程的设备。** 一个计算可以跨进程的设备并通过设备之间的直接通信链路执行集体操作，只要每个进程在其本地设备上启动计算即可。你可以通过
+    `jax.devices()` 查看所有可用的全局设备。一个进程的本地设备总是全局设备的一个子集。'
 - en: Running multi-process computations
+  id: totrans-34
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 运行多进程计算
 - en: So how do you actually run a computation involving cross-process communication?
     **Use the same parallel evaluation APIs that you would in a single process!**
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 那么，你到底如何运行涉及跨进程通信的计算呢？ **使用与单进程中相同的并行评估 API！**
 - en: For example, `shard_map()` can be used to run a parallel computation across
     multiple processes. (If you’re not already familiar with how to use `shard_map`
     to run across multiple devices within a single process, check out the Introduction
     to sharded computation tutorial.) Conceptually, this can be thought of as running
     a pmap over a single array sharded across hosts, where each host “sees” only its
     local shard of the input and output.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，`shard_map()` 可以用于在多个进程间并行计算。（如果您还不熟悉如何使用 `shard_map` 在单个进程内的多个设备上运行，请参阅分片计算介绍教程。）从概念上讲，这可以被视为在跨主机分片的单个数组上运行
+    pmap，其中每个主机只“看到”其本地分片的输入和输出。
 - en: 'Here’s an example of multi-process pmap in action:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面是多进程 pmap 的实际示例：
 - en: '[PRE2]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '**It’s very important that all processes run the same cross-process computations
     in the same order.** Running the same JAX Python program in each process is usually
     sufficient. Some common pitfalls to look out for that may cause differently-ordered
     computations despite running the same program:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: '**非常重要的是，所有进程以相同的跨进程计算顺序运行。** 在每个进程中运行相同的 JAX Python 程序通常就足够了。尽管运行相同程序，但仍需注意可能导致不同顺序计算的一些常见陷阱：'
 - en: Processes passing differently-shaped inputs to the same parallel function can
     cause hangs or incorrect return values. Differently-shaped inputs are safe so
     long as they result in identically-shaped per-device data shards across processes;
     e.g. passing in different leading batch sizes in order to run on different numbers
     of local devices per process is ok, but having each process pad its batch to a
     different max example length is not.
+  id: totrans-40
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将不同形状的输入传递给同一并行函数的进程可能导致挂起或不正确的返回值。只要它们在进程间产生相同形状的每设备数据分片，不同形状的输入是安全的；例如，传递不同的前导批次大小以在不同的本地设备数上运行是可以的，但是每个进程根据不同的最大示例长度填充其批次是不行的。
 - en: “Last batch” issues where a parallel function is called in a (training) loop,
     and one or more processes exit the loop earlier than the rest. This will cause
     the rest to hang waiting for the already-finished processes to start the computation.
+  id: totrans-41
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: “最后一批”问题发生在并行函数在（训练）循环中调用时，其中一个或多个进程比其余进程更早退出循环。这将导致其余进程挂起，等待已经完成的进程开始计算。
 - en: Conditions based on non-deterministic ordering of collections can cause code
     processes to hang. For example, iterating over `set` on current Python versions
     or `dict` [before Python 3.7](https://mail.python.org/pipermail/python-dev/2017-December/151283.html)
     may result in a different ordering on different processes, even with the same
     insertion order.
+  id: totrans-42
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 基于集合的非确定性顺序的条件可能导致代码进程挂起。例如，在当前 Python 版本上遍历 `set` 或者 Python 3.7 之前的 `dict`
+    [可能会导致不同进程的顺序不同](https://mail.python.org/pipermail/python-dev/2017-December/151283.html)，即使插入顺序相同也是如此。

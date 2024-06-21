@@ -1,29 +1,41 @@
 - en: Efficient transposition of replication-inducing collectives
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 复制引发收集的有效转置
 - en: 原文：[`jax.readthedocs.io/en/latest/jep/17111-shmap-transpose.html`](https://jax.readthedocs.io/en/latest/jep/17111-shmap-transpose.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: '[jax.readthedocs.io/en/latest/jep/17111-shmap-transpose.html](https://jax.readthedocs.io/en/latest/jep/17111-shmap-transpose.html)'
 - en: '*mattjj@*, *dougalm@*'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '*mattjj@*，*dougalm@*'
 - en: '*August 2023*'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: '*2023年8月*'
 - en: Motivation
+  id: totrans-4
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 动机
 - en: 'We have an efficiency problem in automatically transposing `shmap`s containing
     certain collectives. The issue arises with `psum` and `all_gather`, specifically
     when the output of the collective is returned to the caller as an unmapped output.
     And it’s not an edge case: for example, it arises when applying `grad` to a `shmap`-based
     batch data parallel neural network loss function which uses `psum` to compute
     the total loss.'
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们在自动转置包含某些收集的`shmap`中遇到了效率问题。问题出现在`psum`和`all_gather`，特别是当收集的输出作为未映射的输出返回给调用者时。这并不是一个边缘情况：例如，在应用`grad`到基于`shmap`的批量数据并行神经网络损失函数时，使用`psum`来计算总损失。
 - en: We’ve known about this problem for some time. An analogous issue exists with
     `pmap`, though it’s been worked around by keeping `grad` inside `pmap` rather
     than outside. A primary goal of the incomplete avals-with-names work was to address
@@ -31,80 +43,117 @@
     while extending and revising them to handle more cases and to be much easier to
     land. Indeed the solution proposed here only affects the `shmap` implementation.
     The rest of the system need not be changed (yet).
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经知道这个问题有一段时间了。与`pmap`类似的问题存在，尽管通过在`pmap`内部而不是外部保留`grad`来解决了这个问题。不完全的带有名称的`avals-with-names`工作的一个主要目标是解决这个转置效率问题的一个版本。这篇文档借鉴了这些想法，同时对其进行了扩展和修订，以处理更多情况，并且更易于落地。事实上，这里提出的解决方案只影响`shmap`的实现。其余系统不需要更改（暂时）。
 - en: The main purpose of this doc is to define this transpose efficiency problem
     and propose an easy-to-land solution.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 这篇文档的主要目的是定义这个转置效率问题，并提出一个易于落地的解决方案。
 - en: 'This doc is not about:'
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 这篇文档不涉及：
 - en: logical axis names on arrays (the only axis names here are just like in `shmap`
     and OG `pmap`);
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 数组上的逻辑轴名称（这里的唯一轴名称与`shmap`和OG `pmap`中的轴名称一样）；
 - en: changing autodiff semantics (all the numbers and (non)errors are staying the
     same, we’re just making things more efficient);
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 更改自动微分语义（所有数字和（非）错误保持不变，我们只是提高效率）；
 - en: allowing user code to reflect on any new information, or really affecting user
     code at all.
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 允许用户代码反映任何新信息，或者实际上根本不影响用户代码。
 - en: 'Problem: efficient transpose of `psum` or `all_gather` depends on whether cotangents
     are invariant across devices'
+  id: totrans-12
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 问题：`psum`或`all_gather`的有效转置取决于共享设备上的余切是否不变
 - en: 'Consider this semi-realistic example, meant to resemble a replicated-parameter
     batch data parallel loss function:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 考虑这个半真实的例子，旨在类似于一个复制参数批量数据并行损失函数：
 - en: '[PRE0]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Notice the `out_specs=P()`, which indicates an unmapped output. If you’re not
     familiar with the notion of unmapped outputs, see the appendix at the bottom of
     this document.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意`out_specs=P()`，它指示未映射的输出。如果您不熟悉未映射输出的概念，请参阅本文档底部的附录。
 - en: 'Most of the details in the `loss` example aren’t important. All that matters
     for our purposes is that we’re applying `psum` (or rather `pmean = lambda x, name:
     psum(x, name) / psum(1, name)`) at the end. So a distilled version looks like
     this:'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: '在`loss`示例中的大多数细节并不重要。对于我们的目的来说，唯一重要的是我们在最后应用了`psum`（或者更确切地说是`pmean = lambda
+    x, name: psum(x, name) / psum(1, name)`）。因此，一个精简版本看起来像这样：'
 - en: '[PRE1]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: We even simplified notation by suppressing the `mesh` argument. In the examples
     to follow it can be inferred from context.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 甚至通过抑制`mesh`参数简化了符号。在接下来的例子中，可以从上下文中推断出来。
 - en: 'What does the transpose look like? Writing `t` to mean function transpose,
     we could evaluate `t(f1)(ybar)` for any `ybar` efficiently by applying the function
     `¿f1_transpose?` below:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 什么样的转置看起来像？写`t`来表示函数转置，我们可以通过应用下面的函数`¿f1_transpose?`有效地评估任意`ybar`对应的`t(f1)(ybar)`：
 - en: '[PRE2]'
+  id: totrans-20
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: But that’s not the transpose we currently get as t(f1).
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 但这并不是我们当前获得的转置`t(f1)`。
 - en: 'Instead, the current recipe for transposition is roughly that we switch `in_specs`
     and `out_specs`, do some division rescaling for unmapped outputs, and transpose
     the body. Because `psum` is its own transpose (as an all-reduce sum), we end up
     producing this transpose:'
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 相反，当前的转置配方大致是我们交换`in_specs`和`out_specs`，对未映射输出进行一些分区重缩放，并转置主体。因为`psum`本身是其自身的转置（作为全归约和的总和），我们最终会产生这个转置：
 - en: '[PRE3]'
+  id: totrans-23
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: This transpose gets the numbers right, but it’s wasteful. We know statically
     from the transpose’s `in_specs=P()` that `ybar` has the same value for each function
     instance, i.e. that its value is device-invariant for devices along the mesh axis
@@ -112,135 +161,203 @@
     just to multiply the value on each device by 8\. (Here 8 refers to the size of
     axis i. The division by 8 comes from the original function’s `out_specs=P()`;
     it and the trivial `psum` basically cancel each other out.)
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个转置虽然得到了正确的数字，但是很浪费。我们从转置的 `in_specs=P()` 静态地知道 `ybar` 对于每个函数实例都具有相同的值，即其值对于沿着被命名为
+    `i` 的网格轴的设备是不变的，然而我们还是对它应用了 `psum`！这使用了昂贵的通信来将每个设备上的值乘以 8。（这里的 8 指的是轴 `i` 的大小。除以
+    8 来自于原始函数的 `out_specs=P()`；它和微不足道的 `psum` 基本上互相抵消了。）
 - en: 'What are we doing wrong? We’re not exploiting the fact that cotangents `ybar`
     corresponding to `f1`’s unmapped outputs are guaranteed to be device-invariant;
     instead, we’re defensively `psum`ming them as if they weren’t because `psum`’s
     transpose can’t be sure given the local information it has. Sometimes the `psum`
     is necessary, as in transposing `f2` with respect to its first argument:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们做错了什么？我们没有利用 `cotangents` `ybar` 对应于 `f1` 的未映射输出是设备不变的这一事实；相反，我们像防御性地 `psum`
+    它们一样处理它们，就像 `psum` 的转置不能确定它们一样。有时 `psum` 是必要的，比如对于关于其第一个参数的 `f2` 的转置：
 - en: '[PRE4]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: Intuitively, if our transpose machinery could tell the difference between Example
     1 and Example 2, we could do better by avoiding the psum and division where possible.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 直观地说，如果我们的转置机制能区分示例 1 和示例 2，我们可以通过尽可能避免在可能的情况下避免 `psum` 和除法来做得更好。
 - en: 'The inefficient examples can be even smaller. Consider transposing this cursed
     identity function:'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 低效的示例甚至可以更小。考虑转置这个被诅咒的恒等函数：
 - en: '[PRE5]'
+  id: totrans-29
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: It keeps getting bigger the more we transpose. How embarrassing!
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 随着我们的转置越来越多，它变得越来越大。真丢人！
 - en: 'And `psum` isn’t the only culprit. Something analogous holds true for `all_gather`:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 而 `psum` 并不是唯一的问题。类似的情况也适用于 `all_gather`：
 - en: '[PRE6]'
+  id: totrans-32
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: This program is a bit artificial. Why do an `all_gather` and feed the result
     into an unmapped output, rather than skipping the `all_gather` in the body and
     just using `out_specs=P('i')` to collect the results? But even though it’s cooked-up,
     this example nevertheless exhibits a transpose which unnecessarily performs communication
     (we could have just performed a non-communicating slice), analogous to Example
     1 for `psum`.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个程序有点人为。为什么要做一个 `all_gather` 并将结果馈送到未映射的输出，而不是跳过主体中的 `all_gather` 并仅使用 `out_specs=P('i')`
+    收集结果？但即使是虚构的，这个例子仍然展示了一个不必要执行通信的转置（我们本可以执行一个非通信的切片），类似于示例 1 中的 `psum`。
 - en: 'Also analogously to the `psum` examples, the defensive `psum_scatter` is necessary
     in some cases:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 类似于 `psum` 示例，防御性的 `psum_scatter` 在某些情况下是必要的：
 - en: '[PRE7]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: So how do we avoid these inefficient transposes?
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 那么我们如何避免这些低效的转置呢？
 - en: Solutions
+  id: totrans-37
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 解决方案
 - en: Here are two solution ideas. They aren’t mutually exclusive. But (spoilers)
     the second one is better, and it’s all we need.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里有两个解决方案的想法。它们并不是互斥的。但是（剧透），第二个更好，并且它是我们所需的全部。
 - en: 'Partial solution “P-sum”: build the ability to express a `psum` into `out_specs`'
+  id: totrans-39
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 部分解决方案 “P-sum”：构建能够将 `psum` 表达到 `out_specs` 中的能力
 - en: This solution is a bit of a strawperson because it would offer only an awkward
     way to write programs. And it wouldn’t even fix everything! But it’s worth considering,
     if only to motivate a more complete solution.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个解决方案有点像一个草人，因为它只会提供一个笨拙的编程方式。而且它甚至不能解决所有问题！但是，考虑到激励更完整的解决方案，这也值得一试。
 - en: 'Example 4 above is artificial because we could have just used `out_specs` instead
     of an `all_gather` in the body:'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面的示例 4 是人为的，因为我们本可以在主体中使用 `out_specs` 而不是一个 `all_gather`：
 - en: '[PRE8]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: The `f4_better` version doesn’t have any transposition problems, since the transpose
     problems arise from collectives in the body.
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: '`f4_better` 版本没有任何转置问题，因为转置问题源于主体中的集体操作。'
 - en: 'Analogously, we could fix Example 1 by extending `out_specs` so that they can
     express summing:'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 类似地，我们可以通过扩展 `out_specs` 来修复示例 1，以便它们可以表达求和：
 - en: '[PRE9]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'So offering `psum`s built into `out_specs` fixes the transpose problem of Example
     1\. But it doesn’t fully fix the cursed identity transpose in Example 3:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，提供内置到 `out_specs` 的 `psum` 解决了示例 1 中的转置问题。但它并没有完全解决示例 3 中的被诅咒的恒等转置：
 - en: '[PRE10]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: It’s an improvement since the program doesn’t continue to get bigger as we keep
     transposing, but we’re still doing wasteful communication.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管程序不会随着我们继续转置而继续增大，这是一个改进，但我们仍在进行浪费的通信。
 - en: 'Full solution: statically track device-varying vs device-invariant intermediates,
     plus new primitives'
+  id: totrans-49
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 完整解决方案：静态追踪设备变化与设备不变的中间值，以及新的基元
 - en: 'This solution has two components:'
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个解决方案有两个组成部分：
 - en: track when values are guaranteed to be device-invariant vs device-varying over
     particular mesh axes, and
+  id: totrans-51
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 追踪数值在特定网格轴上保证是设备不变还是设备变化的时机，
 - en: decompose `psum` into a two-step process, introducing a new `pbroadcast` primitive,
     and introduce new primitives for `all_gather` and its transposes.
+  id: totrans-52
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将`psum`分解为两步过程，引入一个新的`pbroadcast`基元，并引入`all_gather`及其转置的新基元。
 - en: Morally, the tracking of device-invariant vs device-varying information is a
     type-level consideration. But for the expedience of our first implementation,
     we don’t need to literally add the information to abstract values or jaxpr types.
     Before we get to implementation, we’ll first introduce the idea using types.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 从道义上讲，追踪设备不变与设备变化信息是一种类型级别的考虑。但为了第一次实现的方便起见，我们不需要在抽象值或者jaxpr类型中真正添加这些信息。在实施之前，我们会先使用类型引入这个想法。
 - en: Also to follow is a discussion of making the user API convenient and backward
     compatible. But to first introduce the idea, we’ll ignore convenience and instead
     write code that is as explicit as possible.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 同样将讨论如何使用户API既方便又向后兼容。但首先介绍这个想法时，我们会忽略方便性，而是尽可能地编写显式的代码。
 - en: Tracking device invariance in avals (a.k.a. avals-with-names, revived)
+  id: totrans-55
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 在avals（又称带名称的avals，复活）中追踪设备不变性
 - en: We can sometimes tell from static information alone that the values of some
     intermediate variables in the body of a `shmap` are guaranteed to be invariant
     along a mesh axis, in the sense that the function instances (and their corresponding
@@ -248,147 +365,220 @@
     call such values device-invariant. For values that are not device-invariant, we’ll
     say they’re device-varying, though really we mean potentially device-varying from
     the point of view of the type system.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 有时候仅仅通过静态信息，我们就可以断定在`shmap`的主体中一些中间变量的值在整个网格轴上是不变的，这意味着沿着网格轴的函数实例（及其对应的设备）必须都在使用相同的值进行计算。我们将这样的值称为设备不变的。对于那些不是设备不变的值，我们将它们称为设备变化的，尽管从类型系统的角度来看，我们其实是指它们可能在设备层面上是变化的。
 - en: To encode device variance in types, we’ll extend the syntax of types for arrays.
     We’ll write things like `x:f32[3,4]{i}` to indicate that `x` is (potentially)
     device-varying along mesh axis `i` (and device-invariant over any other mesh axes
     of the `shmap`). More generally, we’ll say the grammar for array type syntax is
     something like
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在类型中编码设备变化，我们将扩展数组类型的语法。我们会写类似`x:f32[3,4]{i}`来表示`x`在网格轴`i`上（可能）是设备变化的（在`shmap`的其他网格轴上是设备不变的）。更一般地说，我们会说数组类型语法的语法是这样的
 - en: '[PRE11]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'We’ll also update the typing rules to handle device variance types:'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还将更新类型规则来处理设备变化类型
 - en: for first-order primitives other than collectives
+  id: totrans-60
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于除了集合之外的一阶基元
 - en: for multi-arity primitives, the operand device variance types must be equal
     where shapes must be equal, e.g. `mul x:f32[s1]{r1} y:f32[s2][r2]` requires `r1
     == r2` in addition to `s1 == s2`
+  id: totrans-61
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于多元基元，操作数设备变化类型必须相等，形状也必须相等，例如`mul x:f32[s1]{r1} y:f32[s2][r2]`要求除了`s1 == s2`外还要求`r1
+    == r2`
 - en: the output device variance type must be the same as the operand(s)
+  id: totrans-62
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 输出设备变化类型必须与操作数相同
 - en: for higher-order primitives
+  id: totrans-63
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于高阶基元
 - en: we just instantiate any type variables including the device variance type (and
     checking types for equality checks their device variance types are equal)
+  id: totrans-64
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们只需实例化包括设备变化类型在内的任何类型变量（并检查类型是否相等，检查它们的设备变化类型是否相等）
 - en: (when performing type inference, e.g. for branches of a `cond`, we take the
     union of the sets of axis names in device variance types)
+  id: totrans-65
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: （当进行类型推断时，例如对`cond`的分支，我们会取设备变化类型中轴名称集合的并集）
 - en: for first-order collectives
+  id: totrans-66
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于第一阶集合
 - en: a collective can either accept a device-varying or device-invariant input (along
     a mesh axis corresponding to its axis name parameter); it’s an error to pass a
     device-invariant operand to a collective which accepts device-varying operands
     and vice-versa
+  id: totrans-67
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个集合可以接受设备变化或设备不变的输入（沿着对应其轴名称参数的网格轴）；将设备不变的操作数传递给接受设备变化操作数的集合，反之亦然，会导致错误
 - en: a collective can either produce a device-varying or device-invariant output
+  id: totrans-68
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个集合可以产生设备变化或设备不变的输出
 - en: see the table below As a side benefit, whatever logic implements this type checking
     can subsume `shmap`’s “static analysis” check for whether a `shmap` body function
     is compatible with any unmapped `out_specs`.
+  id: totrans-69
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 请看下面的表格 作为一个附带的好处，任何实现此类型检查的逻辑都可以包含 `shmap` 的“静态分析”检查，以确定任何未映射的 `out_specs`
+    是否与其兼容。
 - en: 'Here’s a table summarizing the device variance typing for collective primitives:'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里是一个总结集体原语设备差异类型的表格：
 - en: '| Name | Device variance type | Example | Lowers to HLO | Transpose |'
+  id: totrans-71
   prefs: []
   type: TYPE_TB
+  zh: '| 名称 | 设备差异类型 | 示例 | 降低到 HLO | 转置 |'
 - en: '| --- | --- | --- | --- | --- |'
+  id: totrans-72
   prefs: []
   type: TYPE_TB
+  zh: '| --- | --- | --- | --- | --- |'
 - en: '| `psum2` | `Varying -> Invariant` | `y:f32[3]{j} = psum(x:f32[3]{i,j}, axis=''i'')`
     | `AllReduceSum` (communication) | `pbroadcast` |'
+  id: totrans-73
   prefs: []
   type: TYPE_TB
+  zh: '| `psum2` | `可变 -> 不变` | `y:f32[3]{j} = psum(x:f32[3]{i,j}, axis=''i'')` |
+    `AllReduceSum` (通讯) | `pbroadcast` |'
 - en: '| `pbroadcast` | `Invariant -> Varying` | `y:f32[3]{i} = pbroadcast(x:f32[3],
     ''i'')` | no-op (no communication) | `psum` |'
+  id: totrans-74
   prefs: []
   type: TYPE_TB
+  zh: '| `pbroadcast` | `不变 -> 可变` | `y:f32[3]{i} = pbroadcast(x:f32[3], ''i'')` |
+    no-op（无通讯） | `psum` |'
 - en: '| `all_to_all` | `Varying -> Varying` | `y:f32[16]{i} = all_to_all(x:f32[16]{i},
     ''i'', 0, 0)` `AllToAll` (communication) | `all_to_all` |  |'
+  id: totrans-75
   prefs: []
   type: TYPE_TB
+  zh: '| `all_to_all` | `可变 -> 可变` | `y:f32[16]{i} = all_to_all(x:f32[16]{i}, ''i'',
+    0, 0)` `AllToAll` (通讯) | `all_to_all` |  |'
 - en: '| `axis_index` | `() -> Varying` | `idx:i32[]{i} = axis_index(''i'')` | `ReplicaId`
     and some arithmetic (no communication) | n/a |'
+  id: totrans-76
   prefs: []
   type: TYPE_TB
+  zh: '| `axis_index` | `() -> 可变` | `idx:i32[]{i} = axis_index(''i'')` | `ReplicaId`
+    和一些算术运算（无通讯） | n/a |'
 - en: '| `psum_scatter` | `Varying -> Varying` | `y:f32[2]{i} = psum_scatter(x:f32[16]{i},
     ''i'')` | `ReduceScatterSum` (communication) | `all_gather` |'
+  id: totrans-77
   prefs: []
   type: TYPE_TB
+  zh: '| `psum_scatter` | `可变 -> 可变` | `y:f32[2]{i} = psum_scatter(x:f32[16]{i}, ''i'')`
+    | `ReduceScatterSum` (通讯) | `all_gather` |'
 - en: '| `all_gather` | `Varying -> Varying` | `y:f32[16]{i} = all_gather(x:f32[2]{i},
     ''i'')` | `AllGather` (communication) | `psum_scatter` |'
+  id: totrans-78
   prefs: []
   type: TYPE_TB
+  zh: '| `all_gather` | `可变 -> 可变` | `y:f32[16]{i} = all_gather(x:f32[2]{i}, ''i'')`
+    | `AllGather` (通讯) | `psum_scatter` |'
 - en: '| `pscatter` | `Invariant -> Varying` | `y:f32[2]{i} = pscatter(x:f32[16],
     ''i'')` | `lambda x: x[axis_index(''i''), None]` (no communication) | `all_gather_invariant`
     |'
+  id: totrans-79
   prefs: []
   type: TYPE_TB
+  zh: '| `pscatter` | `不变 -> 可变` | `y:f32[2]{i} = pscatter(x:f32[16], ''i'')` | `lambda
+    x: x[axis_index(''i''), None]` (无通讯) | `all_gather_invariant` |'
 - en: '| `all_gather_invariant` | `Varying -> Invariant` | `y:f32[16] = all_gather_invariant(x:f32[2]{i},
     ''i'')` | `AllGather` (communication) | `pscatter` |'
+  id: totrans-80
   prefs: []
   type: TYPE_TB
+  zh: '| `all_gather_invariant` | `可变 -> 不变` | `y:f32[16] = all_gather_invariant(x:f32[2]{i},
+    ''i'')` | `AllGather` (通讯) | `pscatter` |'
 - en: There are some surprising things here!
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里有一些令人惊讶的事情！
 - en: We introduced several new primitives, including
+  id: totrans-82
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们引入了几个新的原语，包括
 - en: '`pbroadcast`, which interestingly lowers to a no-op'
+  id: totrans-83
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`pbroadcast`，有趣的是降低为 no-op'
 - en: '`all_gather_invariant`, which lowers to the same thing as `all_gather` but
     has a different device variance type (essentially `all_gather` has a `pbroadcast`
     fused into it, whereas `all_gather_invariant` does not)'
+  id: totrans-84
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`all_gather_invariant`，它降低到与 `all_gather` 相同的内容，但具有不同的设备差异类型（实质上 `all_gather`
+    中融合了 `pbroadcast`，而 `all_gather_invariant` 没有）'
 - en: '`pscatter` which is the dual (transpose) of `all_gather_invariant`'
+  id: totrans-85
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`pscatter`，它是 `all_gather_invariant` 的对偶（转置）'
 - en: all_gather has a device-varying result
+  id: totrans-86
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`all_gather` 有一个设备可变的结果'
 - en: Intuitively, the reason to introduce `pbroadcast` (other than to make the typing
     rules work) is so that `psum` can transpose to a physical no-op. The reason we
     need `all_gather` to have a device-varying result is so that we can transpose
@@ -399,68 +589,108 @@
     We provide `all_gather_invariant` and its transpose `pscatter` mainly for completeness;
     it’s unlikely users will need it (it corresponds to the situation in Example 4,
     which is easy to write differently using `out_specs`).
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 直觉上，引入 `pbroadcast` 的原因（除了使类型规则生效之外）是为了使 `psum` 能转置为物理上的 no-op。我们需要 `all_gather`
+    有一个设备可变的结果，这样我们就可以将其转置为 `psum_scatter`；如果我们将其留在设备不变的结果上，可能需要下游的 `pbroadcast`，这种组合将转置为低效的
+    `psum`，然后是切片 / `pscatter`。因此，我们将 `pbroadcast` “融合到” `all_gather` 中，从而实现有效的转置为
+    `psum_scatter`。我们提供 `all_gather_invariant` 及其转置 `pscatter` 主要是为了完整性；用户不太可能需要它（它对应于示例
+    4 中的情况，可以使用 `out_specs` 进行不同写作）。
 - en: Interestingly, the `psum` and `pbroadcast` transpose pair correspond to the
     `psum_idrev` and `id_psumrev` that users introduced while training LLMs with `pmap`.
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 有趣的是，`psum` 和 `pbroadcast` 的转置对应于用户在训练 LLMs 时引入的 `pmap` 中的 `psum_idrev` 和 `id_psumrev`。
 - en: How this system solves the inefficient transpose examples
+  id: totrans-89
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 这个系统是如何解决低效转置示例的
 - en: 'Consider again the simplified motivating example:'
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 再次考虑简化的激励示例：
 - en: '[PRE12]'
+  id: totrans-91
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'With these new rules, the transpose is:'
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用这些新规则，转置为：
 - en: '[PRE13]'
+  id: totrans-93
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: where evaluating the `pbroadcast` application involves no communication or FLOPs
     at all; it’s a no-op. Notice that if we keep transposing the body does not grow
     in size; indeed `t(t(f1)) == f1`. Efficiency achieved!
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 在评估 `pbroadcast` 应用程序时完全不涉及通信或 FLOP；这是一个无操作。请注意，如果我们保持转置，主体的大小不会增长；确实 `t(t(f1))
+    == f1`。实现了效率！
 - en: 'And we wouldn’t mess up the other examples either, so long as we `pbroadcast`
     to make the types check where needed:'
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 只要我们在需要时插入 `pbroadcast` 以进行类型检查，我们就不会搞砸其他示例：
 - en: '[PRE14]'
+  id: totrans-96
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: Intuitively, in Example 1 we now only have “half the original psum”, whereas
     in Example 2 we get both “halves”. For Example 3 we never need any operations
     in the body at all.
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 直观地，在示例 1 中，我们现在只有“原始 psum 的一半”，而在示例 2 中，我们得到了“两半”。对于示例 3，我们根本不需要主体中的任何操作。
 - en: 'For the `all_gather` examples, Example 4 would need to use `all_reduce_invariant`
     to have an efficient transpose (though it’d be better to instead use `out_specs`
     instead of the collective in the body):'
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于 `all_gather` 示例，示例 4 将需要使用 `all_reduce_invariant` 来实现有效的转置（虽然最好是在主体中使用 `out_specs`
+    而不是集体操作）：
 - en: '[PRE15]'
+  id: totrans-99
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'For Example 5, using the device-varying `all_gather` works as we’d want:'
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于示例 5，使用设备变化的 `all_gather` 的效果与我们期望的一样：
 - en: '[PRE16]'
+  id: totrans-101
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: How to make the API convenient for users (and backward compatible)
+  id: totrans-102
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 如何使 API 对用户方便（并保持向后兼容）
 - en: But what user wants to write `pbroadcast`s? And what developer wants to break
     lots of existing user code involving `psum`s which are not fed into unmapped outputs?
     Not me!
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是，有哪位用户愿意编写`pbroadcast`？有哪位开发人员愿意破坏许多现有用户代码，其中包括未输入到未映射输出的 `psum`？不包括我！
 - en: 'Instead we can automatically insert the `pbroadcast`s. It’s a bit analogous
     to how we do automatic rank promotion at the `jax.numpy` layer, inserting broadcasts
     to avoid rank mismatch errors in binary operators. But it’s much simpler since
@@ -468,109 +698,154 @@
     a multi-arity operation where the operands disagree in their device variance types,
     take the union of operands’ device variance types’ axis name sets and insert `pbroadcast`s
     to lift each operand to the resulting device variance type.'
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 相反，我们可以自动插入`pbroadcast`。这有点类似于我们在 `jax.numpy` 层执行自动等级提升时的方式，插入广播以避免二元运算符中的等级不匹配错误。但它要简单得多，因为我们不需要处理形状元组。典型的规则是：每当我们看到一个多元操作，其中操作数在设备方差类型上存在差异时，我们将操作数的设备方差类型的轴名称集合的并集，并插入`pbroadcast`以将每个操作数提升到结果设备方差类型。
 - en: Automatically inserting `pbroadcast`s just before they’re needed may mean we
     apply the same `pbroadcast` to the same operand multiple times, creating common
     subexpressions. When we transpose, those could turn into a sum-of-`psum`s rather
     than a `psum`-of-sum. We’ll rely on the compiler to clean that up as appropriate.
     If it’s a problem then we could add some simple memoization to the `pbroadcast`-insertion
     pass.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 在需要之前自动插入 `pbroadcast` 可能意味着我们对相同的操作数多次应用相同的 `pbroadcast`，从而创建共同子表达式。当我们转置时，这些可能会变成
+    `psum` 的和而不是 `psum` 的总和。我们将依赖编译器根据需要进行清理。如果这是个问题，我们可以向 `pbroadcast` 插入通行证添加一些简单的记忆化处理。
 - en: The user API for `all_gather` will mean `all_gather_p` by default (not `all_gather_invariant_p`),
     covering the common case and meaning no `pbroadcast`s must be inserted.
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: '`all_gather` 的用户 API 将默认为 `all_gather_p`（而不是 `all_gather_invariant_p`），涵盖常见情况，意味着不需要插入
+    `pbroadcast`。'
 - en: We can provide an option on `shmap` to disable this automatic insertion of `pbroadcast`s,
     in which case it’ll be up to the user to ensure type-correctness. This explicit
     option may be appealing to some who want to be explicit about where the `psum`s
     occur in the backward pass.
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以在 `shmap` 上提供一个选项来禁用这种自动插入`pbroadcast`，在这种情况下，用户需要确保类型正确。这种显式选项可能对一些人很有吸引力，他们希望明确指定向后传递中
+    `psum` 出现的位置。
 - en: How to implement the solution
+  id: totrans-108
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 如何实现解决方案
 - en: The key to making the implementation lightweight is that **we aren’t going to
     add these types to avals or jaxprs**. At least, not at first. That can be expensive
     because it requires updating the rest of JAX, e.g. all consumers of avals and
     jaxprs may need to handle the new types. We’re not falling for that again!
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 使实现轻量级的关键是**我们不会将这些类型添加到 avals 或 jaxprs 中**。至少起初不会。这可能很昂贵，因为它需要更新 JAX 的其余部分，例如
+    avals 和 jaxprs 的所有消费者可能需要处理新类型。我们不会再次上当！
 - en: 'Instead we’re going to keep these extended types as metadata internal to `shmap`,
     just like the current “replication checking for `out_specs`” machinery is internal
     to `shmap`. Indeed this solution amounts to a relatively small extension to that
     existing machinery: it was already tracking the same information; now we’re just
     adding the `pbroadcast`s.'
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 相反，我们将保留这些扩展类型作为`shmap`的内部元数据，就像当前的“`out_specs`复制检查”机制一样。实际上，这个解决方案相当于对现有机制的相对小的扩展：它已经在跟踪相同的信息；现在我们只是添加了`pbroadcast`。
 - en: 'We have at least two options for where to perform the `pbroadcast` insertion:'
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们至少有两种选择来执行`pbroadcast`插入的位置：
 - en: just before transposition, in the transpose rule, where we have a jaxpr of the
     computation to be transposed;
+  id: totrans-112
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 就在转置之前，在转置规则中，我们有了计算的jaxpr；
 - en: in every `shmap` body, whether eagerly executed or staged out, like the current
     “replication checking for `out_specs`” machinery. The former may end up being
     easier since we only have to handle the jaxpr case, and only linear primitives.
     But we’ll start by trying the latter so the implementation here is a strict revision/extension
     to the existing replication-checking logic.
+  id: totrans-113
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在每个`shmap`主体中，无论是急切执行还是分阶段输出，都要像当前的“`out_specs`复制检查”机制一样。前者可能更容易，因为我们只需要处理jaxpr案例，并且只有线性原语。但我们将首先尝试后者，以便此处的实现是对现有复制检查逻辑的严格修订/扩展。
 - en: 'Appendix: defining and motivating maps with unmapped inputs and outputs'
+  id: totrans-114
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 附录：定义和激励具有未映射输入和输出的映射
 - en: For concreteness, we’ll mostly focus on `shmap`, though these same ideas apply
     to e.g. `pmap` and probably `xmap`.
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于具体性，我们将主要关注`shmap`，尽管这些想法同样适用于例如`pmap`和可能的`xmap`。
 - en: An argument/input is *unmapped* along a mesh axis when the corresponding entry
     of `in_specs` doesn’t mention that mesh axis’s name. Logically it means that each
     function instance along that mesh axis gets the same value for the argument. To
     the caller, each operand is sliced according to the mesh axes over which the operand
     is mapped, whereas there is no slicing for mesh axes over which the operand is
     unmapped.
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 当对应的`in_specs`条目未提及该网格轴的名称时，参数/输入沿着网格轴是*未映射*的。逻辑上意味着每个沿着该网格轴的函数实例对于参数得到相同的值。对于调用者来说，每个操作数根据其映射的网格轴进行切片，而对于未映射的网格轴，则没有切片。
 - en: An output is *unmapped* along a mesh axis when the corresponding entry of `out_specs`
     doesn’t mention that mesh axis’s name. Logically it means each function instance
     along that mesh axis must return the same value. To the caller, each result of
     the `shmap` is formed by concatenating the return values of every function instance
     along which the outputs are mapped, whereas for mesh axes over which the output
     is unmapped only one copy of the value is used.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 当对应的`out_specs`条目未提及该网格轴的名称时，输出沿着网格轴是*未映射*的。逻辑上意味着每个沿着该网格轴的函数实例必须返回相同的值。对于调用者来说，`shmap`的每个结果由沿着输出映射的每个函数实例的返回值串联而成，而对于未映射的网格轴，则只使用该值的一个副本。
 - en: See [the `shmap` JEP](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html)
     for examples of unmapped inputs and outputs. For comparison, in `vmap` unmapped
     inputs/outputs are indicated by using `in_axes` / `out_axes` of `None` (rather
     than an `int`).
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 参见[《`shmap` JEP》](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html)，其中展示了未映射输入和输出的示例。作为比较，在`vmap`中，未映射的输入/输出通过使用`in_axes`
+    / `out_axes`为`None`（而不是`int`）来指示。
 - en: 'Here are reasons we like unmapped inputs and outputs for `shmap`:'
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里是我们喜欢`shmap`的未映射输入和输出的原因：
 - en: '**Same expressiveness as `pjit`.** Anything `pjit` can do, the `shmap` escape
     hatch should be able to do too. Or else we’d have a lacking escape hatch! If we
     didn’t have unmapped outputs in `shmap` then we couldn’t express the same batch-parallel
     loss function computations as `pjit`.'
+  id: totrans-120
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**与`pjit`相同的表达能力。** 任何`pjit`能做的事情，`shmap`逃逸通道也应该能做到。否则我们就会缺少逃逸通道！如果`shmap`中没有未映射的输出，那么我们无法表达与`pjit`相同的批并行损失函数计算。'
 - en: '**Closed-over inputs.** Closed-over inputs essentially correspond to unmapped
     inputs, and…'
+  id: totrans-121
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**闭合输入。** 闭合的输入实际上对应于未映射的输入，以及...'
 - en: '**Closure under transposition.** Once we have unmapped inputs, it’s natural
     to be able to transpose to unmapped outputs.'
+  id: totrans-122
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**转置闭包。** 一旦我们有了未映射的输入，将其转置到未映射的输出就是很自然的事情。'
 - en: So unmapped outputs are both canonical and useful!
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，未映射的输出既是规范的又是有用的！

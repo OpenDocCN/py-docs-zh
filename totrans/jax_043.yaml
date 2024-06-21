@@ -1,322 +1,482 @@
 - en: Pipelining and BlockSpecs
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 管道化和块规范
 - en: 原文：[`jax.readthedocs.io/en/latest/pallas/tpu/pipelining.html`](https://jax.readthedocs.io/en/latest/pallas/tpu/pipelining.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/pallas/tpu/pipelining.html`](https://jax.readthedocs.io/en/latest/pallas/tpu/pipelining.html)
 - en: In this guide we’ll cover how memory spaces in TPU work and how to write pipelines
     in Pallas that overlap memory I/O with compute.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本指南中，我们将介绍 TPU 中的内存空间工作原理，并展示如何在 Pallas 中编写可以将内存 I/O 与计算重叠的流水线。
 - en: '[PRE0]'
+  id: totrans-3
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: TPU and its memory spaces
+  id: totrans-4
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: TPU 及其内存空间
 - en: 'A TPU and its TensorCore consist of memory spaces (where arrays can reside),
     registers (which temporarily store scalar and array values) and compute units
     (that do computation with values in registers). Below is a diagram of a TPU in
     which `x` and `y` are arrays that live in high-bandwidth memory (HBM):'
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: TPU 和其 TensorCore 包括内存空间（用于存放数组的区域）、寄存器（临时存储标量和数组值的地方）和计算单元（用于处理寄存器中的值的计算单元）。下图显示了一个
+    TPU 的结构，其中 `x` 和 `y` 是存储在高带宽存储器（HBM）中的数组：
 - en: '![TPU Memory Space Cartoon.png](img/71731074ed22862fb4718d0bfd933742.png)'
+  id: totrans-6
   prefs: []
   type: TYPE_IMG
+  zh: '![TPU 内存空间卡通图.png](img/71731074ed22862fb4718d0bfd933742.png)'
 - en: 'Let’s talk about the components of this diagram in more detail:'
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们更详细地讨论这个图表的组成部分：
 - en: '**Memory spaces**: A TPU has high-bandwidth memory (HBM) which is what we often
     think of as “device memory”. There is also vector memory (VMEM), a cache meant
     for storing vector and array values, and scalar memory (SMEM), a cache designed
     to store scalar values.'
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**内存空间**：TPU 拥有高带宽内存（HBM），这通常被称为“设备内存”。还有向量内存（VMEM），一个用于存储向量和数组值的缓存，以及标量内存（SMEM），一个设计用于存储标量值的缓存。'
 - en: '**Registers**: A TensorCore has two main types of registers: vector registers
     (VREGs) store array values, and scalar registers (SREGs) store scalar values.
     Values can be loaded into memory from their respective caches (VMEM for VREGs
     and SMEM for SREGs).'
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**寄存器**：TensorCore 拥有两种主要类型的寄存器：向量寄存器（VREGs）存储数组值，标量寄存器（SREGs）存储标量值。值可以从相应的缓存（VREG
+    的 VMEM 和 SREG 的 SMEM）加载到内存中。'
 - en: '**Compute units**: A TensorCore has a scalar unit, vector unit (VPU) and matrix
     unit (MXU) that can do numerical computation. Compute units operate on values
     that live in SREGs and VREGs and output values into those registers as well.'
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**计算单元**：TensorCore 包括标量单元、向量单元（VPU）和矩阵单元（MXU），用于进行数值计算。计算单元操作位于 SREG 和 VREG
+    中的值，并将输出值也存储在这些寄存器中。'
 - en: 'In order to do a vectorized computation on our values `x` and `y` that live
     in HBM, we need to:'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了在我们存储在 HBM 中的值 `x` 和 `y` 上执行矢量化计算，我们需要：
 - en: Copy the values `x` and `y` into VMEM.
+  id: totrans-12
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将值 `x` 和 `y` 复制到 VMEM 中。
 - en: Load the values from VMEM into VREGs.
+  id: totrans-13
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 从 VMEM 中加载值到 VREG 中。
 - en: Execute the computation using the VPU or MXU, storing the output in VREGs.
+  id: totrans-14
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用 VPU 或 MXU 执行计算，并将输出存储在 VREG 中。
 - en: Store the values in the output VREGs into VMEM.
+  id: totrans-15
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将输出 VREG 中的值存储到 VMEM 中。
 - en: Copy the output values in VMEM back to HBM.
+  id: totrans-16
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将 VMEM 中的输出值复制回 HBM。
 - en: Let’s implement a Pallas function that does just that!
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们实现一个 Pallas 函数来完成这些操作！
 - en: '[PRE1]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: '[PRE2]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'We’ve written two functions: `add_matrices_kernel` and `add_matrices`.'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们编写了两个函数：`add_matrices_kernel` 和 `add_matrices`。
 - en: '`add_matrices_kernel` operates using `Ref`s that live in VMEM. Loading from
     a VMEM `Ref` produces a value that lives in VREGs. Values in VREGs behave like
     `jax.Array`s in that we can use `jnp` and `jax.lax` operations on them to produce
     new values that live in VREGs. When we produce the values we’d like to return,
     we store them in the output VMEM `Ref`.'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: '`add_matrices_kernel` 操作使用在 VMEM 中存在的 `Ref`。从 VMEM 的 `Ref` 加载会产生一个存在于 VREG
+    中的值。VREG 中的值的行为类似于 `jax.Array`，我们可以在其上使用 `jnp` 和 `jax.lax` 操作来产生新的值，这些新值仍然存在于
+    VREG 中。当我们产生想要返回的值时，我们将它们存储在输出的 VMEM `Ref` 中。'
 - en: The `add_matrices` function acts on `jax.Array`s and returns a `jax.Array`.
     Inside it, we pass `x` and `y` into `pallas_call`. `pallas_call` is responsible
     for copying `x` and `y` into VMEM and for allocating the VMEM buffers that the
     kernel operates on (including allocating `z_vmem_ref`, the output VMEM buffer).
     After the kernel function is finished running, `pallas_call` will also copy the
     value in `z_vmem_ref` to HBM, resulting in an output `jax.Array`.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: '`add_matrices` 函数作用于 `jax.Array`，并返回一个 `jax.Array`。在函数内部，我们将 `x` 和 `y` 传递给
+    `pallas_call`。`pallas_call` 负责将 `x` 和 `y` 复制到 VMEM 中，并分配内核操作的 VMEM 缓冲区（包括分配 `z_vmem_ref`，输出的
+    VMEM 缓冲区）。内核函数运行完成后，`pallas_call` 还将 `z_vmem_ref` 中的值复制到 HBM，最终输出一个 `jax.Array`。'
 - en: Constraints of using VMEM/SMEM
+  id: totrans-23
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用 VMEM/SMEM 的限制
 - en: Pallas exposes access to lower level memory spaces like VMEM and SMEM but writing
     kernels utilizing them adds some considerations.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: Pallas 公开了对低级内存空间（如 VMEM 和 SMEM）的访问，但编写利用它们的内核需要考虑一些因素。
 - en: Memory capacity. VMEM and SMEM are *small*! VMEM on v4 TPUs is only 16MiB and
     SMEM ranges in the tens to hundreds of KiB. If our arrays are too big, we won’t
     even be able to fit them into VMEM at all. For reference, a `f32[2048, 2048]`
     array is 16MiB, so our above kernel won’t scale beyond moderately sized arrays.
+  id: totrans-25
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 内存容量。VMEM 和 SMEM 都很*小*！v4 TPU 上的 VMEM 只有 16MiB，SMEM 的范围在几十到几百 KiB。如果我们的数组太大，甚至无法完全放入
+    VMEM 中。举个例子，一个 `f32[2048, 2048]` 数组就是 16MiB，因此我们上面的核心代码无法处理超过中等大小的数组。
 - en: Memory bandwidth. Copying to/from HBM and VMEM takes a long time, at least compared
     to most compute instructions. The `add_matrices` function above will likely spend
     more time copying between HBM and VMEM than actually performing the addition itself.
+  id: totrans-26
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 内存带宽。从 HBM 和 VMEM 复制数据需要很长时间，至少与大多数计算指令相比是如此。上面的 `add_matrices` 函数很可能在复制 HBM
+    和 VMEM 之间花费的时间比执行加法本身要多。
 - en: With these two constraints in mind, we’ll have to rethink our strategy for getting
     performance out of our TPUs.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 考虑到这两个约束条件，我们必须重新思考如何提高 TPU 的性能策略。
 - en: 'Primer: Pipelining'
+  id: totrans-28
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 引言：流水线
 - en: Pipelining our computation offers a way of dealing with both the memory capacity
     and bandwidth constraints in one fell swoop. What do we mean by pipelining?
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 在一个行动中处理内存容量和带宽约束的流水线计算提供了一种方法。我们所说的流水线是什么意思？
 - en: 'The goal is: *in parallel* copy to/from HBM and VMEM *while* utilizing our
     compute units. Naively this is difficult because in our program above we copy
     *all* of `x` and `y` before we start doing any compute with them, creating a dependence
     between the copy and the compute.'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 目标是：*并行*复制到/从 HBM 和 VMEM *同时*利用我们的计算单元。但在我们的程序中，这种方式相对困难，因为我们在开始进行计算之前先复制了所有的
+    `x` 和 `y`，从而在复制和计算之间创建了依赖关系。
 - en: 'However, if we can chunk up our computation into several subcomputations (e.g.
     when we add two matrices, we can express that as addition of “blocks” of the original
     matrices together), we can now overlap the copies of one of those subcomputations
     with the compute of the other. Let’s walk through a simple example:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，如果我们可以将计算分成几个子计算（例如，当我们将两个矩阵相加时，可以将原始矩阵的“块”相加在一起），我们现在可以将其中一个子计算的复制与另一个计算的执行重叠起来。让我们通过一个简单的例子来演示：
 - en: Let’s say we split our arrays `x` and `y` into `x1, x2` and `y1, y2` (for example,
     split along the leading axis, resulting in two `(256, 512)` arrays for each input.
     We can now execute the following pipelined computation.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设我们将数组 `x` 和 `y` 分成 `x1, x2` 和 `y1, y2`（例如，沿着主轴进行分割，每个输入结果为两个 `(256, 512)`
+    的数组）。现在我们可以执行以下流水线计算。
 - en: Copy `x1` and `y1` into VMEM.
+  id: totrans-33
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 复制 `x1` 和 `y1` 到 VMEM 中。
 - en: Start copying `x2` and `y2` into VMEM
+  id: totrans-34
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 开始将 `x2` 和 `y2` 复制到 VMEM。
 - en: Load `x1, y1` from VMEM into VREGs.
+  id: totrans-35
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 从 VMEM 加载 `x1, y1` 到 VREGs 中。
 - en: Execute the `z1 = x1 + y1` using the compute units.
+  id: totrans-36
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用计算单元执行 `z1 = x1 + y1`。
 - en: Store `z1` into VMEM.
+  id: totrans-37
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将 `z1` 存储到 VMEM 中。
 - en: Start copying `z1` from VMEM back into HBM.
+  id: totrans-38
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 开始将 `z1` 从 VMEM 复制回到 HBM。
 - en: Wait until `x2, y2` have been copied into VMEM.
+  id: totrans-39
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 等待 `x2, y2` 被复制到 VMEM。
 - en: Load `x2, y2` from VMEM into VREGs.
+  id: totrans-40
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 从 VMEM 加载 `x2, y2` 到 VREGs 中。
 - en: Execute the `z2 = x2 + y2` using the compute units.
+  id: totrans-41
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用计算单元执行 `z2 = x2 + y2`。
 - en: Store `z2` into VMEM.
+  id: totrans-42
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将 `z2` 存储到 VMEM 中。
 - en: Wait until `z1` is copied into HBM.
+  id: totrans-43
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 等待 `z1` 被复制到 HBM。
 - en: Start copying `z2` from VMEM back into HBM.
+  id: totrans-44
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 开始将 `z2` 从 VMEM 复制回到 HBM。
 - en: Wait until `z2` is copied into HBM.
+  id: totrans-45
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 等待 `z2` 被复制到 HBM。
 - en: Any time we are doing compute here, we are asynchronously copying something.
     This means that some of the time spent copying is not wasted.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里进行计算时，我们总是异步复制某些内容。这意味着复制过程中的一些时间并不会浪费。
 - en: The two most important numbers for determining how efficient a pipelined computation
     are a) how many floating point operations (FLOPs) we need to execute and b) how
     many bytes we need to copy to execute that computation. The ratio of these two
     (FLOPs/memory usage) is called the *arithmetic intensity* of an operation and
     determines if our pipeline will be compute bound or memory bound.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 决定流水线计算效率的两个最重要的因素是 a) 我们需要执行多少浮点运算（FLOPs）和 b) 我们需要复制多少字节以执行该计算。这两者的比率（FLOPs/内存使用量）称为操作的*算术强度*，并确定我们的流水线是计算受限还是内存受限。
 - en: Pipelining in Pallas
+  id: totrans-48
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: Pallas 中的流水线
 - en: How do we implement a pipeline like the one above in Pallas? It seems like a
     complex sequence of asynchronous data operations and executing kernels that would
     be a pain to implement manually. Fear not! Pallas offers an API for expressing
     pipelines without too much boilerplate, namely through `grid`s and `BlockSpec`s.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们如何在Pallas中实现像上面那样的管道？这似乎是一系列复杂的异步数据操作和执行内核，手动实现可能会很麻烦。不要担心！Pallas提供了一个API来表达管道，而不需要太多样板文件，即通过`grid`和`BlockSpec`。
 - en: '`grid`, a.k.a. kernels in a loop'
+  id: totrans-50
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`grid`，又名循环中的内核'
 - en: 'See how in the above pipelined example, we are executing the same logic multiple
     times: steps 3-5 and 8-10 both execute the same operations, only on different
     inputs. The generalized version of this is a loop in which the same kernel is
     executed multiple times. `pallas_call` provides an option to do exactly that.'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 看看在上述流水线示例中，我们多次执行相同的逻辑：步骤3-5和8-10都执行相同的操作，只是在不同的输入上。这个泛化版本是在同一个内核上多次执行循环。`pallas_call`提供了一个选项来实现这一点。
 - en: 'The number of iterations in the loop is specified via the `grid` argument to
     `pallas_call`. Conceptually:'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 循环中的迭代次数由`pallas_call`的`grid`参数指定。在概念上：
 - en: '[PRE3]'
+  id: totrans-53
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: maps to
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 映射到
 - en: '[PRE4]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: Grids can be generalized to be multi-dimensional, corresponding to nested loops.
     For example,
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 网格可以推广为多维，对应于嵌套循环。例如，
 - en: '[PRE5]'
+  id: totrans-57
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: is equivalent to
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 等价于
 - en: '[PRE6]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: This generalizes to any tuple of integers (a length `d` grid will correspond
     to `d` nested loops).
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 这可以推广到任意整数元组（长度为`d`的网格将对应于`d`个嵌套循环）。
 - en: '`BlockSpec`, a.k.a. how to chunk up inputs'
+  id: totrans-61
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`BlockSpec`，又称如何分块输入'
 - en: The next piece of information we need to provide Pallas in order to automatically
     pipeline our computation is information on how to chunk it up. Specifically, we
     need to provide a mapping between *the iteration of the loop* to *which block
     of our inputs and outputs to be operated on*. A `BlockSpec` is exactly these two
     pieces of information.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了自动管道化我们的计算，我们需要向Pallas提供的下一部分信息是如何对其进行分块的信息。具体来说，我们需要提供一个映射，将*循环的迭代*映射到*操作哪些输入和输出块*。`BlockSpec`正是这两个信息。
 - en: First we pick a `block_shape` for our inputs. In the pipelining example above,
     we had `(512, 512)`-shaped arrays and split them along the leading dimension into
     two `(256, 512)`-shaped arrays. In this pipeline, our `block_shape` would be `(256,
     512)`.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们为我们的输入选择一个`block_shape`。在上面的流水线示例中，我们有`(512, 512)`形状的数组，并沿着主维度分成两个`(256,
+    512)`形状的数组。在这个管道中，我们的`block_shape`将是`(256, 512)`。
 - en: 'We then provide an `index_map` function that maps the iteration space to the
     blocks. Specifically, in the aforementioned pipeline, on the 1st iteration we’d
     like to select `x1` and on the second iteration we’d like to use `x2`. This can
     be expressed with the following `index_map`:'
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们提供一个`index_map`函数，将迭代空间映射到块。具体来说，在上述管道中，第1次迭代我们想选择`x1`，第2次迭代我们想使用`x2`。可以用以下`index_map`表达：
 - en: '[PRE7]'
+  id: totrans-65
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'We’d then construct the `BlockSpec`:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们将构建`BlockSpec`：
 - en: '[PRE8]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: The `BlockSpec`s for `y` and `z` will be the same as the one for `x`.
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: '`BlockSpec`对于`y`和`z`与对`x`的`BlockSpec`将是相同的。'
 - en: Putting it together
+  id: totrans-69
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 汇总
 - en: We provide these arguments to `pallas_call` via `grid`, `in_specs` and `out_specs`
     (`in_specs` corresponds to the tuple of positional arguments, and `out_specs`
     corresponds to the output).
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们通过`grid`、`in_specs`和`out_specs`将这些参数提供给`pallas_call`（`in_specs`对应于位置参数的元组，`out_specs`对应于输出）。
 - en: '[PRE9]'
+  id: totrans-71
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: '[PRE10]'
+  id: totrans-72
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: We’ve only added a little bit of code to our original function to add automatic
     pipelining but the `BlockSpec`s and `grid` do a lot of heavy lifting!
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们只需向原始函数添加了少量代码以添加自动管道，但`BlockSpec`和`grid`做了大量的重复工作！
 - en: How does it work? Well, the `BlockSpec`s provide enough information to start
     *prefetching* blocks of our input from HBM into VMEM. For example, if we are starting
     iteration `i` of our `grid`, we can pass `i + 1` into the `index_map` functions
@@ -324,87 +484,127 @@
     copy for those blocks. Similarly for outputs, we can wait for the outputs of the
     previous iteration to be copied before starting the copy for the current iteration’s
     outputs.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 它是如何工作的？好吧，`BlockSpec`提供足够的信息来开始从HBM到VMEM预取我们输入的块。例如，如果我们开始`grid`的第`i`次迭代，我们可以将`i
+    + 1`传递给`index_map`函数，以获取下一次迭代所需的块。然后，我们可以开始这些块的异步复制。类似地，对于输出，我们可以在开始当前迭代的输出复制之前等待上一次迭代的输出复制完成。
 - en: Parameterizing a pipeline
+  id: totrans-75
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 参数化管道
 - en: It’s common to parameterize the block shapes in our kernel. Block sizes are
     perhaps the most important parameter to tune when optimizing the performance of
     Pallas kernels! They give us control over the pipeline (for example, picking smaller
     blocks adds more iterations to our pipelined loop where each iteration has less
     work to do).
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的内核中，参数化块形状是常见的。当优化Pallas内核的性能时，块大小可能是最重要的参数！它们允许我们控制管道流程（例如，选择较小的块会在我们的流水线循环中增加更多的迭代，每个迭代的工作量较小）。
 - en: Furthermore, we could also carve up the inputs and outputs along the 2nd dimension
     (we are only splitting along the first right now). Let’s write a more general
     kernel that handles both of these features.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，我们还可以沿第二维（目前仅沿第一维进行拆分）划分输入和输出。让我们编写一个更通用的内核，处理这两个特性。
 - en: '[PRE11]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Handling reductions
+  id: totrans-79
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 处理减少
 - en: How would you implement something like `jnp.sum` using `pallas_call`? Specifically,
     we’d like to pipeline across the reduction dimension.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 如何使用`pallas_call`实现类似`jnp.sum`的功能？具体来说，我们希望在减少维度上进行流水线处理。
 - en: Take the example of reducing a `(8, 512, 512)`-shaped array to a `(512, 512)`-shaped
     one.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 以将`(8, 512, 512)`形状的数组减少到`(512, 512)`形状为例。
 - en: '[PRE12]'
+  id: totrans-82
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '[PRE13]'
+  id: totrans-83
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: To do this using `pallas_call`, we could use a grid of size `(8,)` and in each
     iteration `i` load `x[i]` into VMEM. Then we could add `x[i]` to an output VMEM
     buffer. Let’s implement this naively first.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 要使用`pallas_call`实现这一点，我们可以使用大小为`(8,)`的网格，并在每次迭代`i`中将`x[i]`加载到VMEM中。然后我们可以将`x[i]`添加到输出VMEM缓冲区中。让我们先天真地实现这一点。
 - en: '[PRE14]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: '[PRE15]'
+  id: totrans-86
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'Notice how we’ve set up the `BlockSpec`s: we’re loading the entirety of the
     `(512, 512)` dimension into VMEM (no pipelining there) but selecting the `i`-th
     dimension of `x` each iteration in the `index_map`. We are using a `None` for
     that dimension in the block shape, which indicates that we are selecting a singleton
     dimension from `x` that we would like to squeeze away in the kernel. Therefore,
     `x_ref` is `(512, 512)`-shaped in VMEM as well.'
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意我们如何设置`BlockSpecs`：我们将`(512, 512)`维度完全加载到VMEM中（在这里没有流水线），但在块形状的`index_map`中每次迭代选择`x`的第`i`维度。在块形状中，我们对该维度使用`None`，这表示我们正在从`x`中选择一个单维度，我们希望在内核中将其挤压掉。因此，在VMEM中，`x_ref`也是`(512,
+    512)`形状。
 - en: '`out_spec` uses `lambda i: (0, 0)` as its `index_map`, indicating that `o_ref`
     is unchanged over the course of the pipeline. This means that we can update its
     value each iteration by reading from and writing to it. Or can it? Actually there
     is one catch: *`o_ref` is initially garbage*, meaning we’ll be accumulating into
     garbage. This will result in the overall function outputting the incorrect value!'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: '`out_spec`使用`lambda i: (0, 0)`作为其`index_map`，指示在管道过程中`o_ref`保持不变。这意味着我们可以通过从中读取并向其写入来更新其值。或者可以吗？实际上有一个问题：*`o_ref`最初是垃圾*，这意味着我们将累积到垃圾中。这将导致整体函数输出不正确的值！'
 - en: Therefore, **whenever we do a reduction in a kernel, we need to make sure to
     initialize the `Ref` that is storing the reduced value**. We can accomplish this
     by conditionally writing a value to `out_ref` when we’re on iteration 0\. We can
     do this with the helper function `pl.when`, a convenience wrapper around `jax.lax.cond`,
     and `pl.program_id`, which queries which iteration in a grid axis we are in.
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: '因此，**每当我们在内核中进行减少操作时，我们需要确保初始化存储减少值的`Ref`**。我们可以通过在迭代0时有条件地向`out_ref`写入值来实现这一点。我们可以利用辅助函数`pl.when`（一个方便的包装器，围绕`jax.lax.cond`和`pl.program_id`进行操作），查询我们在网格轴上的迭代。 '
 - en: '[PRE16]'
+  id: totrans-90
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '[PRE17]'
+  id: totrans-91
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: This `sum` function now outputs the correct values!
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 此`sum`函数现在输出正确的值！
 - en: One last thing to note about reductions in Pallas are that **they must be done
     in the minormost (rightmost) dimensions of our grid** (our grid is 1-dimensional
     in the above example so we are reducing over its minormost dimension). This is
@@ -413,74 +613,111 @@
     output value back to HBM you cannot revisit it. Therefore, you cannot do a reduction
     across a grid dimension that has any revisiting and therefore all reductions need
     to happen in the rightmost dimensions.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 关于Pallas中减少的最后一件事是**它们必须在我们网格的最小维度（最右边）中完成**（在上面的示例中，我们的网格是1维的，因此我们在其最小维度上进行减少）。这是因为Pallas生成的管道不会从HBM读取输出。一旦将输出值写回到HBM，就不能重新访问它。因此，您不能在具有任何重新访问的网格维度上进行减少，因此所有减少操作都需要在最右维度上进行。
 - en: TPUs in Megacore configuration
+  id: totrans-94
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: Megacore配置的TPU
 - en: Some TPU chips have two TensorCores but appear as one device to JAX users. This
     is called “megacore”. The separate TensorCores have their own separate VMEM, VREGs,
     SMEM, SREGs and compute units but *share HBM*.
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 一些 TPU 芯片有两个 TensorCores，但对 JAX 用户来说，它们表现为一个设备。这被称为“megacore”。这两个独立的 TensorCores
+    分别拥有自己的 VMEM、VREGs、SMEM、SREGs 和计算单元，但*共享 HBM*。
 - en: '![TPU Memory Space Cartoon (Megacore).png](img/33da0e860f68c4eaac876c87d0586a95.png)'
+  id: totrans-96
   prefs: []
   type: TYPE_IMG
+  zh: '![TPU 内存空间卡通（Megacore）.png](img/33da0e860f68c4eaac876c87d0586a95.png)'
 - en: Conceptually, TPUs in Megacore behave like very simple GPUs, i.e. they have
     only two threads. How do we modify our kernels to utilize both TensorCores simultaneously?
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 从概念上讲，Megacore 中的 TPU 行为类似于非常简单的 GPU，即只有两个线程。我们如何修改我们的内核以同时利用两个 TensorCores？
 - en: The basic idea is that if we have embarrassingly parallel dimensions in our
     computation, we can split up those dimensions across the TensorCores. We can indicate
     which dimensions are parallelizable by providing an annotation to `pallas_call`
     called `dimension_semantics`.
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 基本思想是，如果我们在计算中有尴尬地并行的维度，我们可以将这些维度分配到 TensorCores 上。我们可以通过向 `pallas_call` 提供一个称为
+    `dimension_semantics` 的注释来指示哪些维度是可并行化的。
 - en: '[PRE18]'
+  id: totrans-99
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '[PRE19]'
+  id: totrans-100
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: '`dimension_semantics` should be a tuple of same length as `grid` where each
     entry is either `"parallel"` or `"arbitrary"`. `"parallel"` indicates to Pallas
     that the iterations of the for loop corresponding to that dimension can be executed
     independently without affecting the correctness of the program. `"arbitrary"`
     indicates to Pallas that there can be no assumptions made about this grid dimension
     and it therefore cannot be parallelized.'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: '`dimension_semantics` 应该是一个与 `grid` 长度相同的元组，其中每个条目都是`"parallel"`或`"arbitrary"`。`"parallel"`
+    表示对 Pallas 来说，与该维度对应的 for 循环的迭代可以独立执行，而不会影响程序的正确性。`"arbitrary"` 表示对 Pallas 来说，在这个网格维度上不能做任何假设，因此不能并行化。'
 - en: By specifying `dimension_semantics`, we now execute the kernel simultaneously
     on each TensorCore. Pallas will handle splitting up the grid automatically.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过指定 `dimension_semantics`，我们现在可以同时在每个 TensorCore 上执行内核。Pallas 将自动处理网格的分割。
 - en: Note that Megacore is only currently available on TPU `v4` and TPU `v5p`. Supplying
     `dimension_semantics` annotations is a no-op on other platforms, but *not* specifying
     it will result in only one TensorCore being used (even if there are more than
     one available).
+  id: totrans-103
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 请注意，Megacore 目前仅适用于 TPU `v4` 和 TPU `v5p`。在其他平台上提供 `dimension_semantics` 注释是一个空操作，但*不*指定它将导致只使用一个
+    TensorCore（即使有多个可用）。
 - en: Conclusion
+  id: totrans-104
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 结论
 - en: In this guide we covered how to express TPU pipelines using `pallas_call`, `grid`
     and `BlockSpec`s. We covered how to express nested loops via a multi-dimensional
     grid and how to handle reductions by initialize our accumulators at the beginning
     of the reduction. We also learned how to handle Megacore by adding annotations
     to the kernel.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本指南中，我们讨论了如何使用 `pallas_call`、`grid` 和 `BlockSpec` 表达 TPU 管道。我们讨论了如何通过多维网格表达嵌套循环，并在减少开始时初始化累加器的情况下处理归约。我们还学习了如何通过向内核添加注释来处理
+    Megacore。
 - en: 'Exercises left to the reader:'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 读者留给的练习：
 - en: Try implementing a `sum` kernel that pipelines the other dimensions as well
+  id: totrans-107
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 尝试实现一个 `sum` 内核，该内核也可以管道化其他维度
 - en: Add megacore support to the `add` kernel and the `sum` kernel as well.
+  id: totrans-108
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 还要将 `add` 内核和 `sum` 内核添加到 Megacore 支持中。

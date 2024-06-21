@@ -1,23 +1,33 @@
 - en: Type Annotation Roadmap for JAX
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: JAX 的类型注释路线图
 - en: 原文：[`jax.readthedocs.io/en/latest/jep/12049-type-annotations.html`](https://jax.readthedocs.io/en/latest/jep/12049-type-annotations.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/jep/12049-type-annotations.html`](https://jax.readthedocs.io/en/latest/jep/12049-type-annotations.html)
 - en: '*Author: jakevdp*'
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*作者：jakevdp*'
 - en: '*Date: August 2022*'
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*日期：2022 年 8 月*'
 - en: Background
+  id: totrans-4
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 背景
 - en: Python 3.0 introduced optional function annotations ([PEP 3107](https://peps.python.org/pep-3107/)),
     which were later codified for use in static type checking around the release of
     Python 3.5 ([PEP 484](https://peps.python.org/pep-0484/)). To some degree, type
@@ -27,8 +37,13 @@
     a bit patchwork, and efforts to add more have been hampered by more fundamental
     design questions. This doc attempts to summarize those issues and generate a roadmap
     for the goals and non-goals of type annotations in JAX.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: Python 3.0 引入了可选的函数注释（[PEP 3107](https://peps.python.org/pep-3107/)），这些注释后来在
+    Python 3.5 发布时被规范为静态类型检查的一部分（[PEP 484](https://peps.python.org/pep-0484/)）。在很大程度上，类型注释和静态类型检查已经成为许多
+    Python 开发工作流程的一个重要组成部分，为此我们在 JAX API 的许多地方添加了注释。目前在 JAX 中的类型注释有些零散，增加更多注释的努力受到了更基本的设计问题的阻碍。本文试图总结这些问题，并为
+    JAX 中类型注释的目标和非目标制定路线图。
 - en: 'Why do we need such a roadmap? Better/more comprehensive type annotations are
     a frequent request from users, both internally and externally. In addition, we
     frequently receive pull requests from external users (for example, [PR #9917](https://github.com/google/jax/pull/9917),
@@ -38,125 +53,180 @@
     Protocols to address the challenges inherent to full-fledged annotation of JAX’s
     use of Python. This document details JAX’s goals and recommendations for type
     annotations within the package.'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 为什么我们需要这样的路线图？更好/更全面的类型注释是用户（包括内部和外部用户）经常提出的请求。此外，我们经常收到来自外部用户的拉取请求（例如，[PR＃9917](https://github.com/google/jax/pull/9917)，[PR＃10322](https://github.com/google/jax/pull/10322)），试图改进
+    JAX 的类型注释：对于 JAX 团队成员来说，审查此类贡献是否有益并不总是清楚，特别是当它们引入复杂的协议来解决 JAX 对 Python 的完全注释所固有的挑战时。本文详细介绍了
+    JAX 对包中类型注释的目标和建议。
 - en: Why type annotations?
+  id: totrans-7
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 为什么需要类型注释？
 - en: There are a number of reasons that a Python project might wish to annotate their
     code-base; we’ll summarize them in this document as Level 1, Level 2, and Level
     3.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 有许多原因使得 Python 项目希望对其代码库进行注释；我们将在本文档中总结为 Level 1、Level 2 和 Level 3。
 - en: 'Level 1: Annotations as documentation'
+  id: totrans-9
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Level 1：作为文档的注释
 - en: 'When originally introduced in [PEP 3107](https://peps.python.org/pep-3107/),
     type annotations were motivated partly by the ability to use them as concise,
     inline documentation of function parameter types and return types. JAX has long
     utilized annotations in this manner; an example is the common pattern of creating
     type names aliased to `Any`. An example can be found in `lax/slicing.py` [[source](https://github.com/google/jax/blob/2bc3e39cd9104071ee39dacac22abd51b94eb27e/jax/_src/lax/slicing.py#L47-L58)]:'
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 最初在 [PEP 3107](https://peps.python.org/pep-3107/) 中引入时，类型注释部分是由于可以将其用作函数参数类型和返回类型的简洁内联文档。JAX
+    长期以来一直以这种方式使用注释；一个例子是常见的创建类型名称并将其别名为 `Any` 的模式。可以在 `lax/slicing.py` 中找到一个例子[[source](https://github.com/google/jax/blob/2bc3e39cd9104071ee39dacac22abd51b94eb27e/jax/_src/lax/slicing.py#L47-L58)]：
 - en: '[PRE0]'
+  id: totrans-11
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: For the purposes of static type checking, this use of `Array = Any` for array
     type annotations puts no constraint on the argument values (`Any` is equivalent
     to no annotation at all), but it does serve as a form of useful in-code documentation
     for the developer.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 出于静态类型检查的目的，这种使用 `Array = Any` 用于数组类型注释对参数值没有任何限制（`Any` 等同于没有注释），但它确实作为开发人员在代码中有用的形式化文档。
 - en: 'For the sake of generated documentation, the name of the alias gets lost (the
     [HTML docs](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.slice.html)
     for `jax.lax.slice` report operand as type `Any`), so the documentation benefit
     does not go beyond the source code (though we could enable some `sphinx-autodoc`
     options to improve this: See [autodoc_type_aliases](https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#confval-autodoc_type_aliases)).'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了生成文档，别名的名称会丢失（`jax.lax.slice`的[HTML文档](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.slice.html)将操作数报告为类型`Any`），因此文档的好处并未超出源代码（尽管我们可以启用一些`sphinx-autodoc`选项来改进此功能：参见[autodoc_type_aliases](https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#confval-autodoc_type_aliases)）。
 - en: A benefit of this level of type annotation is that it is never wrong to annotate
     a value with `Any`, so it will provide a concrete benefit to developers and users
     in the form of documentation, without added complexity of satisfying the stricter
     needs of any particular static type checker.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种类型注解的一个好处是，用`Any`注释一个值永远不会错，因此它将以文档的形式为开发者和用户提供实际的好处，而无需满足任何特定静态类型检查器更严格的需求的复杂性。
 - en: 'Level 2: Annotations for intelligent autocomplete'
+  id: totrans-15
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第2级：智能自动完成的注解
 - en: Many modern IDEs take advantage of type annotations as inputs to [intelligent
     code completion](https://en.wikipedia.org/wiki/Intelligent_code_completion) systems.
     One example of this is the [Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance)
     extension for VSCode, which uses Microsoft’s [pyright](https://github.com/microsoft/pyright)
     static type checker as a source of information for VSCode’s [IntelliSense](https://code.visualstudio.com/docs/editor/intellisense)
     completions.
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 许多现代IDE利用类型注解作为智能代码补全系统的输入。其中一个例子是VSCode的[Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance)扩展，它使用微软的[pyright](https://github.com/microsoft/pyright)静态类型检查器作为VSCode
+    [IntelliSense](https://code.visualstudio.com/docs/editor/intellisense)完成的信息源。
 - en: This use of type checking requires going further than the simple aliases used
     above; for example, knowing that the `slice` function returns an alias of `Any`
     named `Array` does not add any useful information to the code completion engine.
     However, were we to annotate the function with a `DeviceArray` return type, the
     autocomplete would know how to populate the namespace of the result, and thus
     be able to suggest more relevant autocompletions during the course of development.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种类型检查的使用需要比上述简单的别名更深入的了解；例如，知道`slice`函数返回一个名为`Array`的`Any`别名并不会为代码完成引擎增添任何有用的信息。然而，如果我们用`DeviceArray`标注函数的返回类型，自动完成将了解如何填充结果的命名空间，因此在开发过程中能够提供更相关的自动完成建议。
 - en: 'JAX has begun to add this level of type annotation in a few places; one example
     is the `jnp.ndarray` return type within the `jax.random` package [[source](https://github.com/google/jax/blob/2bc3e39cd9104071ee39dacac22abd51b94eb27e/jax/_src/random.py#L359)]:'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX已经在几个地方开始添加这种类型注解的级别；一个例子是`jax.random`包中的`jnp.ndarray`返回类型 [[来源](https://github.com/google/jax/blob/2bc3e39cd9104071ee39dacac22abd51b94eb27e/jax/_src/random.py#L359)]：
 - en: '[PRE1]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'In this case `jnp.ndarray` is an abstract base class that forward-declares
     the attributes and methods of JAX arrays ([see source](https://github.com/google/jax/blob/2bc3e39cd9104071ee39dacac22abd51b94eb27e/jax/_src/numpy/ndarray.py#L41)),
     and so Pylance in VSCode can offer the full set of autocompletions on results
     from this function. Here is a screenshot showing the result:'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这种情况下，`jnp.ndarray`是一个抽象基类，用于预先声明JAX数组的属性和方法（[见源代码](https://github.com/google/jax/blob/2bc3e39cd9104071ee39dacac22abd51b94eb27e/jax/_src/numpy/ndarray.py#L41)），因此VSCode中的Pylance可以为该函数的结果提供完整的自动完成集合。这里是显示结果的屏幕截图：
 - en: '![VSCode Intellisense Screenshot](img/6cb109f4ac985649f2344a2dd040c9e6.png)'
+  id: totrans-21
   prefs: []
   type: TYPE_IMG
+  zh: '![VSCode IntelliSense 截图](img/6cb109f4ac985649f2344a2dd040c9e6.png)'
 - en: Listed in the autocomplete field are all methods and attributes declared by
     the abstract `ndarray` class. We’ll discuss further below why it was necessary
     to create this abstract class rather than annotating with `DeviceArray` directly.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 在自动完成字段中列出了抽象`ndarray`类声明的所有方法和属性。我们将在下面进一步讨论为什么需要创建这个抽象类，而不是直接用`DeviceArray`进行注释。
 - en: 'Level 3: Annotations for static type-checking'
+  id: totrans-23
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第3级：静态类型检查的注解
 - en: 'These days, static type-checking often is the first thing people think of when
     considering the purpose of type annotations in Python code. While Python does
     not do any runtime checking of types, several mature static type checking tools
     exist that can do this as part of a CI test suite. The most important ones for
     JAX are the following:'
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 当今，静态类型检查通常是人们在考虑 Python 代码中类型注解目的时首先考虑的事情。虽然 Python 不会对类型进行任何运行时检查，但存在几种成熟的静态类型检查工具，可以作为
+    CI 测试套件的一部分进行此类检查。对于 JAX 来说，最重要的工具如下：
 - en: '[python/mypy](https://github.com/python/mypy) is more or less the standard
     in the open Python world. JAX currently runs mypy on a subset of source files
     within the Github Actions CI checks.'
+  id: totrans-25
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[python/mypy](https://github.com/python/mypy) 在开放的 Python 社区中几乎成为了标准。JAX 目前在
+    Github Actions 的 CI 检查中对一部分源文件运行 mypy。'
 - en: '[google/pytype](https://github.com/google/pytype) is Google’s static type checker,
     and projects which depend on JAX within Google frequently use this.'
+  id: totrans-26
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[google/pytype](https://github.com/google/pytype) 是 Google 的静态类型检查器，Google
+    内部依赖 JAX 的项目经常使用此工具。'
 - en: '[microsoft/pyright](https://github.com/microsoft/pyright) is important as the
     static type checker used within VSCode for the Pylance completions mentioned previously.'
+  id: totrans-27
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[microsoft/pyright](https://github.com/microsoft/pyright) 是 VSCode 中用于之前提到的
+    Pylance 完成的静态类型检查器，具有重要意义。'
 - en: Full static type checking is the strictest of all the type annotation applications,
     because it will surface an error any time your type annotations are not precisely
     correct. On the one hand, this is nice because your static type analysis may catch
     faulty type annotations (for example, a case where a `DeviceArray` method is missing
     from the `jnp.ndarray` abstract class).
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 完全的静态类型检查是所有类型注解应用中最严格的，因为它会在您的类型注解不精确时立即出现错误。一方面，这很好，因为您的静态类型分析可能会捕获到错误的类型注解（例如，`DeviceArray`
+    方法在 `jnp.ndarray` 抽象类中缺失的情况）。
 - en: 'On the other hand, this strictness can make the type checking process very
     brittle in packages that often rely on duck-typing rather than strict type-safe
     APIs. You’ll currently find code comments like `#type: ignore` (for mypy) or `#pytype:
@@ -167,30 +237,45 @@
     they are due to real & subtle bugs in the behavior of pytype or mypy. In rare
     cases, they may be due to the fact that JAX uses Python patterns that are difficult
     or even impossible to express in terms of Python’s static type annotation syntax.'
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: '另一方面，这种严格性可能会使得依赖鸭子类型而不是严格类型安全 API 的软件包在类型检查过程中变得非常脆弱。你会在 JAX 代码库中当前发现大量像 `#type:
+    ignore`（对于 mypy）或 `#pytype: disable`（对于 pytype）这样的代码注释。这些通常代表了出现类型问题的情况；它们可能是
+    JAX 类型注解中的不准确之处，或者是静态类型检查器在正确跟踪代码控制流时的不准确之处。偶尔，它们可能是由于 pytype 或 mypy 行为中真正而微妙的错误造成的。在罕见的情况下，它们可能是由于
+    JAX 使用了在 Python 的静态类型注解语法中难以甚至不可能表达的 Python 模式。'
 - en: Type annotation challenges for JAX
+  id: totrans-30
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: JAX 的类型注解挑战
 - en: JAX currently has type annotations that are a mixture of different styles, and
     aimed at all three levels of type annotation discussed above. Partly, this comes
     from the fact that JAX’s source code poses a number of unique challenges for Python’s
     type annotation system. We’ll outline them here.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 目前的类型注解是不同风格的混合，并针对上述所有三个类型注解层级。部分原因是因为 JAX 的源代码对 Python 的类型注解系统提出了许多独特的挑战。我们将在这里概述它们。
 - en: 'Challenge 1: pytype, mypy and developer friction'
+  id: totrans-32
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 挑战 1：pytype、mypy 和开发人员的摩擦
 - en: 'One challenge JAX currently faces is that package development must satisfy
     the constraints of two different static type checking systems, `pytype` (used
     by internal CI and internal Google projects) and `mypy` (used by external CI and
     external dependencies). Although the two type checkers have broad overlap in their
     behavior, each presents its own unique corner cases, as evidenced by the numerous
     `#type: ignore` and `#pytype: disable` statements throughout the JAX codebase.'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 'JAX 目前面临的一个挑战是，软件包开发必须满足两种不同静态类型检查系统的约束，即 `pytype`（用于内部 CI 和 Google 内部项目）和
+    `mypy`（用于外部 CI 和外部依赖）。尽管这两种类型检查器在行为上有广泛的重叠，但每种都展示了其独特的特例情况，这可以从 JAX 代码库中遍布的众多
+    `#type: ignore` 和 `#pytype: disable` 语句中看出。'
 - en: 'This creates friction in development: internal contributors may iterate until
     tests pass, only to find that on export their pytype-approved code falls afoul
     of mypy. For external contributors, it’s often the opposite: a recent example
@@ -198,12 +283,16 @@
     after it failed internal Google pytype checks. Each time we move a type annotation
     from Level 1 (`Any` everywhere) to Level 2 or 3 (stricter annotations), it introduces
     more potential for such frustrating developer experiences.'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 这给开发带来了摩擦：内部贡献者可能会迭代直到测试通过，然后发现在导出时他们通过pytype验证的代码在mypy中不符合要求。对于外部贡献者来说，情况通常相反：一个最近的例子是[#9596](https://github.com/google/jax/issues/9596)，在未能通过Google内部的pytype检查后不得不回滚。每次我们将类型注释从第1级（到处都是`Any`）移动到第2或第3级（更严格的注释），都会增加这种令人沮丧的开发体验的可能性。
 - en: 'Challenge 2: array duck-typing'
+  id: totrans-35
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 挑战2：数组鸭子类型
 - en: 'One particular challenge for annotating JAX code is its heavy use of duck-typing.
     An input to a function marked `Array` in general could be one of many different
     types: a JAX `DeviceArray`, a NumPy `np.ndarray`, a NumPy scalar, a Python scalar,
@@ -213,12 +302,17 @@
     positives for many valid uses. This means that type annotations for JAX functions
     will not be short or trivial, but we would have to effectively develop a set of
     JAX-specific typing extensions similar to those in the [`numpy.typing` package](https://github.com/numpy/numpy/blob/main/numpy/_typing/_array_like.py).'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: '注释JAX代码的一个特殊挑战是其广泛使用的鸭子类型。一般情况下标记为`Array`的函数的输入可能是许多不同类型之一：JAX的`DeviceArray`、NumPy的`np.ndarray`、NumPy标量、Python标量、Python序列、带有`__array__`属性的对象、带有`__jax_array__`属性的对象或任何`jax.Tracer`的变体。因此，简单的注释如`def
+    func(x: DeviceArray)`将不足以满足要求，并且会导致许多有效用法的误报。这意味着对于JAX函数的类型注释不会简短或琐碎，但我们必须有效地开发一组类似于[`numpy.typing`包](https://github.com/numpy/numpy/blob/main/numpy/_typing/_array_like.py)中的JAX特定类型扩展。'
 - en: 'Challenge 3: transformations and decorators'
+  id: totrans-37
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 挑战3：转换和装饰器
 - en: 'JAX’s Python API relies heavily on function transformations (`jit()`, `vmap()`,
     `grad()`, etc.), and this type of API poses a particular challenge for static
     type analysis. Flexible annotation for decorators has been a [long-standing issue](https://github.com/python/mypy/issues/1927)
@@ -233,20 +327,28 @@
     All that to say: it’s not yet clear that the API of JAX’s function transforms
     can be suitably annotated within the current constraints of Python type annotation
     tools.'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX的Python API严重依赖于函数转换（`jit()`、`vmap()`、`grad()`等），这种类型的API对静态类型分析提出了特殊挑战。装饰器的灵活注释一直是mypy包的[长期问题](https://github.com/python/mypy/issues/1927)，最近才通过引入`ParamSpec`（详见[PEP
+    612](https://peps.python.org/pep-0612/)，并在Python 3.10中添加）解决。因为JAX遵循[NEP 29](https://numpy.org/neps/nep-0029-deprecation_policy.html)，在2024年中期之后才能依赖Python
+    3.10的功能。与此同时，Protocols可作为部分解决方案使用（JAX在[#9950](https://github.com/google/jax/issues/9950)中为jit和其他方法添加了此功能），而ParamSpec可以通过`typing_extensions`包使用（原型在[#9999](https://github.com/google/jax/issues/9999)中），尽管这目前揭示了mypy中的基本错误（见[python/mypy#12593](https://github.com/python/mypy/issues/12593)）。总之：目前尚不清楚JAX函数转换的API是否能在当前Python类型注释工具的限制下得到适当注释。
 - en: 'Challenge 4: array annotation lack of granularity'
+  id: totrans-39
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 挑战4：数组注释缺乏细粒度
 - en: Another challenge here is common to all array-oriented APIs in Python, and has
     been part of the JAX discussion for several years (see [#943](https://github.com/google/jax/issues/943)).
     Type annotations have to do with the Python class or type of an object, whereas
     in array-based languages often the attributes of the class are more important.
     In the case of NumPy, JAX, and similar packages, often we would wish to annotate
     particular array shapes and data types.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个挑战是Python所有面向数组的API共同面临的问题，多年来一直是JAX讨论的一部分（见[#943](https://github.com/google/jax/issues/943)）。类型注解涉及对象的Python类或类型，而在基于数组的语言中，类的属性通常更为重要。在NumPy、JAX及类似包中，我们经常希望注释特定的数组形状和数据类型。
 - en: For example, the arguments to the `jnp.linspace` function must be scalar values,
     but in JAX scalars are represented by zero-dimensional arrays. So in order for
     annotations to not raise false positives, we must allow these arguments to be
@@ -255,20 +357,27 @@
     annotations with this level of granularity via Variadic Type Generics (see [PEP
     646](https://peps.python.org/pep-0646/), slated for Python 3.11) but like `ParamSpec`,
     support for this feature will take a while to stabilize.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，`jnp.linspace`函数的参数必须是标量值，但在JAX中，标量由零维数组表示。因此，为了使注释不引发误报，我们必须允许这些参数是*任意*数组。另一个例子是`jax.random.choice`的第二个参数，在`shape=()`时必须具有`dtype=int`。Python计划通过可变类型泛型（参见[PEP
+    646](https://peps.python.org/pep-0646/)，计划用于Python 3.11）来实现类型注解的这种粒度，但像`ParamSpec`一样，支持这一功能还需要一段时间来稳定。
 - en: There are some third-party projects that may help in the meantime, in particular
     [google/jaxtyping](https://github.com/google/jaxtyping), but this uses non-standard
     annotations and may not be suitable for annotating the core JAX library itself.
     All told, the array-type-granularity challenge is less of an issue than the other
     challenges, because the main effect is that array-like annotations will be less
     specific than they otherwise could be.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 在此期间，有一些第三方项目可能会有所帮助，特别是[google/jaxtyping](https://github.com/google/jaxtyping)，但这些使用非标准注解，可能不适用于对核心JAX库本身进行注释。总的来说，数组类型粒度挑战的问题不如其他挑战那么严重，因为主要影响是数组类似的注释将不如其本应该的那样具体。
 - en: 'Challenge 5: imprecise APIs inherited from NumPy'
+  id: totrans-43
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 第五个挑战：从NumPy继承的不精确API
 - en: 'A large part of JAX’s user-facing API is inherited from NumPy within the `jax.numpy`
     submodule. NumPy’s API was developed years before static type checking became
     part of the Python language, and follows Python’s historic recommendations to
@@ -276,21 +385,30 @@
     coding style, in which strict type-checking at runtime is discouraged. As a concrete
     example of this, consider the [`numpy.tile()`](https://numpy.org/doc/stable/reference/generated/numpy.tile.html#numpy.tile
     "(in NumPy v2.0)") function, which is defined like this:'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX用户界面API的大部分内容都继承自`jax.numpy`子模块中的NumPy。NumPy的API在Python语言静态类型检查成为一部分之前就已经开发多年，遵循Python的历史建议使用一种[鸭子类型](https://docs.python.org/3/glossary.html#term-duck-typing)/[EAFP](https://docs.python.org/3/glossary.html#term-eafp)编码风格，其中不鼓励在运行时进行严格的类型检查。作为具体例子，考虑[`numpy.tile()`](https://numpy.org/doc/stable/reference/generated/numpy.tile.html#numpy.tile
+    "(在NumPy v2.0中)")函数，它的定义如下：
 - en: '[PRE2]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'Here the *intent* is that `reps` would contain either an `int` or a sequence
     of `int` values, but the *implementation* allows `tup` to be any iterable. When
     adding annotations to this kind of duck-typed code, we could take one of two routes:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的*意图*是`reps`应该包含一个`int`或者一个`int`值的序列，但*实现*允许`tup`是任何可迭代的对象。在对这种鸭子类型的代码添加注释时，我们可以采取两种路线之一：
 - en: 'We may choose to annotate the *intent* of the function’s API, which here might
     be something like `reps: Union[int, Sequence[int]]`.'
+  id: totrans-47
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '我们可以选择注释函数API的*意图*，在这里可能是类似`reps: Union[int, Sequence[int]]`的内容。'
 - en: 'Conversely, we may choose to annotate the *implementation* of the function,
     which here might look something like `reps: Union[ConvertibleToInt, Iterable[ConvertibleToInt]]`
     where `ConvertibleToInt` is a special protocol that covers the exact mechanism
@@ -299,9 +417,14 @@
     is not sufficient here because there are objects in Python that duck-type as iterables
     but do not satisfy a static type check against `Iterable` (namely, an object that
     is iterable via `__getitem__` rather than `__iter__`.)'
+  id: totrans-48
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '相反，我们可以选择注释函数的*实现*，在这里可能看起来像是 `reps: Union[ConvertibleToInt, Iterable[ConvertibleToInt]]`，其中
+    `ConvertibleToInt` 是一个特殊的协议，涵盖了我们的函数将输入转换为整数的确切机制（即通过 `__int__`、通过 `__index__`、通过
+    `__array__` 等）。此外，请注意，从严格意义上讲，`Iterable` 在这里是不足够的，因为在 Python 中有些对象虽然通过 `__getitem__`
+    是可迭代的，但不能满足静态类型检查的 `Iterable` （比如，用于 `__iter__` 而不是 `__getitem__` 的对象）。'
 - en: 'The advantage of #1, annotating intent, is that the annotations are more useful
     to the user in communicating the API contract; while for the developer the flexibility
     leaves room for refactoring when necessary. The down-side (particularly for gradually-typed
@@ -309,55 +432,81 @@
     but would be flagged as incorrect by a type checker. Gradual typing of an existing
     duck-typed API means that the current annotation is implicitly `Any`, so changing
     this to a stricter type may present to users as a breaking change.'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: '#1 的优势，在于注释意图，是注释在传达 API 合约时对用户更有用；而对于开发者来说，灵活性则为在必要时重构留下了余地。缺点（特别是对于像 JAX
+    这样的渐进式类型 API 来说）是，现有用户代码很可能是运行正确的，但在类型检查器中会被标记为不正确。现有鸭子类型 API 的渐进类型化意味着当前的注释隐式是
+    `Any`，因此将其更改为更严格的类型可能会对用户产生破坏性的改变。'
 - en: Broadly speaking, annotating intent better serves Level 1 type checking, while
     annotating implementation better serves Level 3, while Level 2 is more of a mixed
     bag (both intent and implementation are important when it comes to annotations
     in IDEs).
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 总体而言，在 IDE 注释中，更好地服务于 Level 1 类型检查的是注释意图，而更好地服务于 Level 3 的是注释实现，而 Level 2 则是一种混合体（在
+    IDE 注释中，注释意图和实现都很重要）。
 - en: JAX type annotation roadmap
+  id: totrans-51
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: JAX 类型注释路线图
 - en: With this framing (Level 1/2/3) and JAX-specific challenges in mind, we can
     begin to develop our roadmap for implementing consistent type annotations across
     the JAX project.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这种(Level 1/2/3)和 JAX 特定挑战的框架下，我们可以开始制定我们在 JAX 项目中实施一致类型注释的路线图。
 - en: Guiding Principles
+  id: totrans-53
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 指导原则
 - en: 'For JAX type annotation, we will be guided by the following principles:'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于 JAX 类型注释，我们将遵循以下原则：
 - en: Purpose of type annotations
+  id: totrans-55
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 类型注释的目的
 - en: We would like to support full, *Level 1, 2, and 3* type annotation as far as
     possible. In particular, this means that we should have restrictive type annotations
     on both inputs and outputs to public API functions.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽可能地，我们希望支持完整的*Level 1、2和3*类型注释。特别是这意味着我们应该对公共 API 函数的输入和输出都进行严格的类型注释。
 - en: Annotate for intent
+  id: totrans-57
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 注释以表达意图为目的
 - en: JAX type annotations should in general indicate the **intent** of APIs, rather
     than the implementation, so that the annotations become useful to communicate
     the contract of the API. This means that at times inputs that are valid at runtime
     may not be recognized as valid by the static type checker (one example might be
     an arbitrary iterator passed in place of a shape that is annotated as `Shape =
     Sequence[int]`).
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 类型注释通常应该指示API的**意图**，而不是实现，以便注释在传达 API 合约时变得有用。这意味着有时在运行时有效的输入，在静态类型检查器中可能不被识别为有效（一个例子可能是将任意迭代器传递到标注为
+    `Shape = Sequence[int]` 的形状位置）。
 - en: Inputs should be permissively-typed
+  id: totrans-59
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 输入应该是宽松类型的
 - en: 'Inputs to JAX functions and methods should be typed as permissively as is reasonable:
     for example, while shapes are typically tuples, functions that accept a shape
     should accept arbitrary sequences. Similarly, functions that accept a dtype need
@@ -366,41 +515,60 @@
     such as `np.float64` and `jnp.float64`. In order to make this as uniform as possible
     across the package, we will add a `jax.typing` module with common type specifications,
     starting with broad categories such as:'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 函数和方法的输入应尽可能宽松地进行类型标注：例如，虽然形状通常是元组，但接受形状的函数应接受任意序列。类似地，接受数据类型的函数不必要求是 `np.dtype`
+    的实例，而是任何可转换为数据类型的对象。这可能包括字符串、内置标量类型或标量对象构造函数，如 `np.float64` 和 `jnp.float64`。为了使整个包尽可能统一，我们将添加一个
+    `jax.typing` 模块，其中包含常见的类型规范，从广义类别开始，例如：
 - en: '`ArrayLike` would be a union of anything that can be implicitly converted into
     an array: for example, jax arrays, numpy arrays, JAX tracers, and python or numpy
     scalars'
+  id: totrans-61
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`ArrayLike` 将是可以隐式转换为数组的任何内容的联合：例如，jax 数组、numpy 数组、JAX 追踪器以及 Python 或 numpy
+    标量。'
 - en: '`DTypeLike` would be a union of anything that can be implicitly converted into
     a dtype: for example, numpy dtypes, numpy dtype objects, jax dtype objects, strings,
     and built-in types.'
+  id: totrans-62
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`DTypeLike` 将是可以隐式转换为数据类型的任何内容的联合：例如，numpy 数据类型、numpy 数据类型对象、jax 数据类型对象、字符串和内置类型。'
 - en: '`ShapeLike` would be a union of anything that could be converted into a shape:
     for example, sequences of integer or integer-like objects.'
+  id: totrans-63
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`ShapeLike` 将是可以转换为形状的任何内容的联合：例如，整数或类整数对象的序列。'
 - en: etc.
+  id: totrans-64
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 等等
 - en: Note that these will in general be simpler than the equivalent protocols used
     in [`numpy.typing`](https://numpy.org/doc/stable/reference/typing.html#module-numpy.typing
     "(in NumPy v2.0)"). For example, in the case of `DTypeLike`, JAX does not support
     structured dtypes, so JAX can use a simpler implementation. Similarly, in `ArrayLike`,
     JAX generally does not support list or tuple inputs in place of arrays, so the
     type definition will be simpler than the NumPy analog.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，这些通常比 [`numpy.typing`](https://numpy.org/doc/stable/reference/typing.html#module-numpy.typing
+    "(in NumPy v2.0)") 中使用的等效协议要简单。例如，在 `DTypeLike` 的情况下，JAX 不支持结构化数据类型，因此 JAX 可以使用更简单的实现。同样地，在
+    `ArrayLike` 中，JAX 通常不支持列表或元组输入来代替数组，因此类型定义将比 NumPy 的类似物简单。
 - en: Outputs should be strictly-typed
+  id: totrans-66
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 输出应该是严格类型化的
 - en: 'Conversely, outputs of functions and methods should be typed as strictly as
     possible: for example, for a JAX function that returns an array, the output should
     be annotated with something similar to `jnp.ndarray` rather than `ArrayLike`.
@@ -408,61 +576,87 @@
     returning a shape should always be `Tuple[int]` or a strictly-typed NamedShape
     equivalent. For this purpose, we will implement in `jax.typing` several strictly-typed
     analogs of the permissive types mentioned above, namely:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 相反，函数和方法的输出应尽可能严格地进行类型标注：例如，对于返回数组的 JAX 函数，输出应该用类似 `jnp.ndarray` 的方式进行注释，而不是
+    `ArrayLike`。返回数据类型的函数应始终注释为 `np.dtype`，返回形状的函数应始终为 `Tuple[int]` 或严格类型的 NamedShape
+    等效物。为此，我们将在 `jax.typing` 中实现几个严格类型化的类似于上述宽松类型的模拟，即：
 - en: '`Array` or `NDArray` (see below) for type annotation purposes is effectively
     equivalent to `Union[Tracer, jnp.ndarray]` and should be used to annotate array
     outputs.'
+  id: totrans-68
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用于类型标注目的的 `Array` 或 `NDArray`（见下文）实际上等效于 `Union[Tracer, jnp.ndarray]`，应用于数组输出的标注。
 - en: '`DType` is an alias of `np.dtype`, perhaps with the ability to also represent
     key types and other generalizations used within JAX.'
+  id: totrans-69
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`DType` 是 `np.dtype` 的别名，可能还具有表示 JAX 中使用的关键类型和其他泛化类型的能力。'
 - en: '`Shape` is essentially `Tuple[int, ...]`, perhaps with some additional flexibility
     to account for dynamic shapes.'
+  id: totrans-70
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Shape` 本质上是 `Tuple[int, ...]`，可能具有一些额外的灵活性以适应动态形状的情况。'
 - en: '`NamedShape` is an extension of `Shape` that allows for named shapes as used
     internally in JAX.'
+  id: totrans-71
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`NamedShape` 是 `Shape` 的扩展，允许在 JAX 内部使用的命名形状。'
 - en: etc.
+  id: totrans-72
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 等等
 - en: We will also explore whether the current implementation of `jax.numpy.ndarray`
     can be dropped in favor of making `ndarray` an alias of `Array` or similar.
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还将探讨是否可以放弃当前的 `jax.numpy.ndarray` 实现，以支持将 `ndarray` 作为 `Array` 或类似物的别名。
 - en: Err toward simplicity
+  id: totrans-74
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 倾向于简单性
 - en: Aside from common typing protocols gathered in `jax.typing`, we should err on
     the side of simplicity. We should avoid constructing overly-complex protocols
     for arguments passed to API functions, and instead use simple unions such as `Union[simple_type,
     Any]` in the case that the full type specification of the API cannot be succinctly
     specified. This is a compromise that achieves the goals of Level 1 and 2 annotations,
     while punting on Level 3 in favor of avoiding unnecessary complexity.
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了在`jax.typing`中收集的常见类型协议之外，我们应该偏向简单。在传递给API函数的参数的类型规范无法简洁指定的情况下，我们应避免构建过于复杂的联合，而是使用简单的联合，如`Union[simple_type,
+    Any]`。这是一个妥协，旨在实现Level 1和Level 2的注解目标，同时避免不必要的复杂性，暂时放弃Level 3。
 - en: Avoid unstable typing mechanisms
+  id: totrans-76
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 避免不稳定的类型机制
 - en: 'In order to not add undue development friction (due to the internal/external
     CI differences), we would like to be conservative in the type annotation constructs
     we use: in particular, when it comes to recently-introduced mechanisms such as
     `ParamSpec` ([PEP 612](https://peps.python.org/pep-0612/)) and Variadic Type Generics
     ([PEP 646](https://peps.python.org/pep-0646/)), we would like to wait until support
     in mypy and other tools matures and stabilizes before relying on them.'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了不给开发带来不必要的摩擦（由于内部/外部 CI 差异），我们希望在使用类型注解构造时保守一些：特别是在涉及最近引入的机制如`ParamSpec`（[PEP
+    612](https://peps.python.org/pep-0612/)）和可变类型泛型（[PEP 646](https://peps.python.org/pep-0646/)）时，我们希望在mypy和其他工具支持成熟且稳定之前等待。
 - en: One impact of this is that for the time being, when functions are decorated
     by JAX transformations like `jit`, `vmap`, `grad`, etc. JAX will effectively **strip
     all annotations** from the decorated function. While this is unfortunate, at the
@@ -470,17 +664,24 @@
     solution offered by `ParamSpec` (see [`ParamSpec` mypy bug tracker](https://github.com/python/mypy/issues?q=is%3Aissue+is%3Aopen++label%3Atopic-paramspec+)),
     and we therefore judge it as not ready for full adoption in JAX at this time.
     We will revisit this question in the future once support for such features stabilizes.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中一个影响是，目前在函数被JAX转换（如`jit`、`vmap`、`grad`等）装饰时，JAX 将有效地**剥离所有注解**。尽管这很不幸，但在撰写本文时，mypy与`ParamSpec`提供的潜在解决方案存在一长串的不兼容性（见[`ParamSpec`
+    mypy bug tracker](https://github.com/python/mypy/issues?q=is%3Aissue+is%3Aopen++label%3Atopic-paramspec+)），因此我们认为目前尚不适合在JAX中全面采用。在未来，一旦对此类特性的支持稳定下来，我们将重新审视这个问题。
 - en: Similarly, for the time being we will avoid adding the more complex & granular
     array type annotations offered by the [jaxtyping](http://github.com/google/jaxtyping)
     project. This is a decision we could revisit at a future date.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 同样地，目前我们将避免添加由[jaxtyping](http://github.com/google/jaxtyping)项目提供的更复杂和更精细的数组类型注解。这是我们可以在未来重新审视的决定。
 - en: '`Array` Type Design Considerations'
+  id: totrans-80
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`Array`类型设计考虑因素'
 - en: 'As mentioned above, type annotation of arrays in JAX poses a unique challenge
     because of JAX’s extensive use of duck-typing, i.e. passing and returning `Tracer`
     objects in place actual arrays within jax transformations. This becomes increasingly
@@ -489,72 +690,104 @@
     type hierarchy of the objects in question. For JAX, we need to provide duck-typed
     objects for use in two contexts: **static type annotations** and **runtime instance
     checks**.'
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 如上所述，对于JAX中数组的类型注解，由于JAX广泛使用鸭子类型，即在jax转换中传递和返回`Tracer`对象而不是实际的数组，这带来了独特的挑战。这变得越来越令人困惑，因为用于类型注解的对象通常与用于运行时实例检查的对象重叠，可能与所讨论对象的实际类型层次结构相对应也可能不相对应。对于JAX，我们需要为两个上下文提供鸭子类型对象的解决方案：**静态类型注解**和**运行时实例检查**。
 - en: The following discussion will assume that `jax.Array` is the runtime type on-device
     arrays, which is not yet the case but will be once the work in [#12016](https://github.com/google/jax/issues/12016)
     is complete.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下讨论将假设`jax.Array`是运行时设备上数组的类型，尽管目前尚未实现，但一旦在[#12016](https://github.com/google/jax/issues/12016)中完成工作，将会实现。
 - en: Static type annotations
+  id: totrans-83
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 静态类型注解
 - en: 'We need to provide an object that can be used for duck-typed type annotations.
     Assuming for the moment that we call this object `ArrayAnnotation`, we need a
     solution which satisfies `mypy` and `pytype` for a case like the following:'
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要提供一个可以用于鸭子类型注解的对象。假设我们暂时称此对象为`ArrayAnnotation`，我们需要一个解决方案，能够满足像下面这样的案例在`mypy`和`pytype`中的要求：
 - en: '[PRE3]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'This could be accomplished via a number of approaches, for example:'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 这可以通过多种方法实现，例如：
 - en: 'Use a type union: `ArrayAnnotation = Union[Array, Tracer]`'
+  id: totrans-87
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用类型联合：`ArrayAnnotation = Union[Array, Tracer]`
 - en: Create an interface file that declares `Tracer` and `Array` should be treated
     as subclasses of `ArrayAnnotation`.
+  id: totrans-88
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个接口文件，声明`Tracer`和`Array`应被视为`ArrayAnnotation`的子类。
 - en: Restructure `Array` and `Tracer` so that `ArrayAnnotation` is a true base class
     of both.
+  id: totrans-89
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 重构`Array`和`Tracer`，使`ArrayAnnotation`成为两者的真实基类。
 - en: Runtime instance checks
+  id: totrans-90
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 运行时实例检查
 - en: 'We also must provide an object that can be used for duck-typed runtime `isinstance`
     checks. Assuming for the moment that we call this object `ArrayInstance`, we need
     a solution that passes the following runtime check:'
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 同时，我们必须提供一个可用于鸭子类型运行时`isinstance`检查的对象。假设我们暂时称之为`ArrayInstance`，我们需要一个能通过以下运行时检查的解决方案：
 - en: '[PRE4]'
+  id: totrans-92
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'Again, there are a couple mechanisms that could be used for this:'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 再次强调，可以使用几种机制来实现这一点：
 - en: override `type(ArrayInstance).__instancecheck__` to return `True` for both `Array`
     and `Tracer` objects; this is how `jnp.ndarray` is currently implemented ([source](https://github.com/google/jax/blob/jax-v0.3.17/jax/_src/numpy/ndarray.py#L24-L49)).
+  id: totrans-94
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 覆盖`type(ArrayInstance).__instancecheck__`以使得对`Array`和`Tracer`对象返回`True`；这就是`jnp.ndarray`当前实现的方式（[来源](https://github.com/google/jax/blob/jax-v0.3.17/jax/_src/numpy/ndarray.py#L24-L49)）。
 - en: define `ArrayInstance` as an abstract base class and dynamically register it
     to `Array` and `Tracer`
+  id: totrans-95
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将`ArrayInstance`定义为一个抽象基类，并动态注册到`Array`和`Tracer`。
 - en: restructure `Array` and `Tracer` so that `ArrayInstance` is a true base class
     of both `Array` and `Tracer`
+  id: totrans-96
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 重构`Array`和`Tracer`，使`ArrayInstance`成为两者的真实基类。
 - en: A decision we need to make is whether `ArrayAnnotation` and `ArrayInstance`
     should be the same or different objects. There is some precedent here; for example
     in the core Python language spec, `typing.Dict` and `typing.List` exist for the
@@ -562,258 +795,375 @@
     instance checks. However, `Dict` and `List` are [deprecated](https://peps.python.org/pep-0585/#implementation)
     in newer Python versions in favor of using `dict` and `list` for both annotation
     and instance checks.
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要做出的决定是`ArrayAnnotation`和`ArrayInstance`应该是相同的还是不同的对象。这里有一些先例；例如，在核心 Python
+    语言规范中，`typing.Dict` 和 `typing.List` 存在于注解的缘故，而内置的 `dict` 和 `list` 用于实例检查的缘故。然而，在较新的
+    Python 版本中，`Dict` 和 `List`已被弃用，推荐使用`dict`和`list`用于注解和实例检查。
 - en: Following NumPy’s lead
+  id: totrans-98
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 沿用 NumPy 的做法
 - en: 'In NumPy’s case, `np.typing.NDArray` serves the purpose of type annotations,
     while `np.ndarray` serves the purpose of instance checks (as well as array type
     identity). Given this, it may be reasonable to conform to NumPy’s precedent and
     implement the following:'
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 NumPy 的情况下，`np.typing.NDArray` 用于类型注解，而 `np.ndarray` 用于实例检查（以及数组类型识别）。基于此，遵循
+    NumPy 的先例并实现以下操作可能是合理的：
 - en: '`jax.Array` is the actual type of on-device arrays.'
+  id: totrans-100
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 是在设备上数组的实际类型。'
 - en: '`jax.typing.NDArray` is the object used for duck-typed array annotations.'
+  id: totrans-101
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.typing.NDArray` 是用于鸭子类型数组注解的对象。'
 - en: '`jax.numpy.ndarray` is the object used for duck-typed array instance checks.'
+  id: totrans-102
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.numpy.ndarray` 是用于鸭子类型数组实例检查的对象。'
 - en: 'This might feel somewhat natural to NumPy power-users, however this trifurcation
     would likely be a source of confusion: the choice of which to use for instance
     checks and annotations is not immediately clear.'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于 NumPy 的高级用户来说，这可能会感觉有些自然，然而这种三分法可能会导致混淆：在选择用于实例检查和注解的对象时并不明显。
 - en: Unifying instance checks and annotation
+  id: totrans-104
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 统一实例检查和注解
 - en: Another approach would be to unify type checking and annotation via override
     mechanisms mentioned above.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一种方法是通过上述覆盖机制统一类型检查和注解。
 - en: 'Option 1: Partial unification'
+  id: totrans-106
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 选项 1：部分统一
 - en: 'A partial unification might look like this:'
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 部分统一可能如下所示：
 - en: '`jax.Array` is the actual type of on-device arrays.'
+  id: totrans-108
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 是在设备上数组的实际类型。'
 - en: '`jax.typing.Array` is the object used for duck-typed array annotations (via
     `.pyi` interfaces on `Array` and `Tracer`).'
+  id: totrans-109
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.typing.Array` 是用于鸭子类型数组注解的对象（通过`.pyi`接口在`Array`和`Tracer`上）。'
 - en: '`jax.typing.Array` is also the object used duck-typed instance checks (via
     an `__isinstance__` override in its metaclass)'
+  id: totrans-110
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.typing.Array` 同样用于鸭子类型实例检查（通过其元类中的`__isinstance__`覆盖）'
 - en: In this approach, `jax.numpy.ndarray` would become a simple alias `jax.typing.Array`
     for backward compatibility.
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这种方法中，`jax.numpy.ndarray`将成为向后兼容的简单别名`jax.typing.Array`。
 - en: 'Option 2: Full unification via overrides'
+  id: totrans-112
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 选项 2：通过覆盖进行完全统一
 - en: 'Alternatively, we could opt for full unification via overrides:'
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者，我们可以通过覆盖选择完全统一：
 - en: '`jax.Array` is the actual type of on-device arrays.'
+  id: totrans-114
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 是设备上数组的实际类型。'
 - en: '`jax.Array` is also the object used for duck-typed array annotations (via a
     `.pyi` interface on `Tracer`)'
+  id: totrans-115
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 也是用于鸭子类型数组注释的对象（通过 `Tracer` 上的 `.pyi` 接口）。'
 - en: '`jax.Array` is also the object used for duck-typed instance checks (via an
     `__isinstance__` override in its metaclass)'
+  id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 也是用于鸭子类型实例检查的对象（通过其元类中的 `__isinstance__` 覆盖）。'
 - en: Here, `jax.numpy.ndarray` would become a simple alias `jax.Array` for backward
     compatibility.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，`jax.numpy.ndarray` 将成为向后兼容的简单别名 `jax.Array`。
 - en: 'Option 3: Full unification via class hierarchy'
+  id: totrans-118
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 选项 3：通过类层次结构进行完全统一
 - en: 'Finally, we could opt for full unification via restructuring of the class hierarchy
     and replacing duck-typing with OOP object hierarchies:'
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 最终，我们可以通过重组类层次结构并将鸭子类型替换为面向对象的对象层次结构来选择完全统一：
 - en: '`jax.Array` is the actual type of on-device arrays'
+  id: totrans-120
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 是设备上数组的实际类型。'
 - en: '`jax.Array` is also the object used for array type annotations, by ensuring
     that `Tracer` inherits from `jax.Array`'
+  id: totrans-121
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 也是用于数组类型注释的对象，通过确保 `Tracer` 继承自 `jax.Array` 来实现。'
 - en: '`jax.Array` is also the object used for instance checks, via the same mechanism'
+  id: totrans-122
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 也是通过相同机制进行实例检查的对象。'
 - en: Here `jnp.ndarray` could be an alias for `jax.Array`. This final approach is
     in some senses the most pure, but it is somewhat forced from an OOP design standpoint
     (`Tracer` *is an* `Array`?).
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，`jnp.ndarray` 可以是 `jax.Array` 的一个别名。从面向对象设计的角度来看，这种最终方法在某些方面可能是最纯粹的，但从面向对象设计的角度来看，它有些强行（`Tracer`
+    *是一个* `Array`？）。
 - en: 'Option 4: Partial unification via class hierarchy'
+  id: totrans-124
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 选项 4：通过类层次结构进行部分统一
 - en: 'We could make the class hierarchy more sensible by making `Tracer` and the
     class for on-device arrays inherit from a common base class. So, for example:'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以通过使 `Tracer` 和设备上数组的类继承自一个共同的基类来使类层次结构更合理。因此，例如：
 - en: '`jax.Array` is a base class for `Tracer` as well as the actual type of on-device
     arrays, which might be `jax._src.ArrayImpl` or similar.'
+  id: totrans-126
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 同时也是 `Tracer` 的基类以及设备上数组的实际类型，可能是 `jax._src.ArrayImpl` 或类似的。'
 - en: '`jax.Array` is the object used for array type annotations'
+  id: totrans-127
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 也是用于数组类型注释的对象。'
 - en: '`jax.Array` is also the object used for instance checks'
+  id: totrans-128
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.Array` 也是用于实例检查的对象。'
 - en: Here `jnp.ndarray` would be an alias for `Array`. This may be purer from an
     OOP perspective, but compared to Options 2 and 3 it drops the notion that `type(x)
     is jax.Array` will evaluate to True.
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，`jnp.ndarray` 将是 `Array` 的一个别名。从面向对象编程的角度来看，这可能更加纯粹，但与选项 2 和 3 相比，它取消了 `type(x)
+    is jax.Array` 为 True 的概念。
 - en: Evaluation
+  id: totrans-130
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 评估
 - en: 'Considering the overall strengths and weaknesses of each potential approach:'
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 综合考虑每种潜在方法的优势和劣势：
 - en: 'From a user perspective, the unified approaches (options 2 and 3) are arguably
     best, because they remove the cognitive overhead involved in remembering which
     objects to use for instance checks or annotations: `jax.Array` is all you need
     to know.'
+  id: totrans-132
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从用户的角度来看，统一的方法（选项 2 和 3）可能是最佳的，因为它们消除了记住哪些对象用于实例检查或注释的认知负担：`jax.Array` 是你需要知道的全部。
 - en: However, both options 2 and 3 introduce some strange and/or confusing behavior.
     Option 2 depends on potentially confusing overrides of instance checks, which
     are [not well supported](https://github.com/pybind/pybind11/issues/2696) for classes
     defined in pybind11\. Option 3 requires `Tracer` to be a subclass array. This
     breaks the inheritance model, because it would require `Tracer` objects to carry
     all the baggage of `Array` objects (data buffers, sharding, devices, etc.)
+  id: totrans-133
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 然而，选项 2 和 3 都引入了一些奇怪和/或令人困惑的行为。选项 2 取决于可能令人困惑的实例检查覆盖，这对于在 pybind11 中定义的类并不 [受到良好支持](https://github.com/pybind/pybind11/issues/2696)。选项
+    3 要求 `Tracer` 成为数组的子类。这打破了继承模型，因为它要求 `Tracer` 对象承载 `Array` 对象的所有负担（数据缓冲区、分片、设备等）。
 - en: Option 4 is purer in an OOP sense, and avoids the need for any overrides of
     typical instance check or type annotation behavior. The tradeoff is that the actual
     type of on-device arrays becomes something separate (here `jax._src.ArrayImpl`).
     But the vast majority of users would never have to touch this private implementation
     directly.
+  id: totrans-134
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从面向对象编程的角度来看，选项 4 更为纯粹，并且避免了任何典型实例检查或类型注释行为的覆盖需求。权衡之处在于，设备上数组的实际类型变为某些分离的东西（这里是
+    `jax._src.ArrayImpl`）。但绝大多数用户永远不需要直接触及这个私有实现。
 - en: There are different tradeoffs here, but after discussion we’ve landed on Option
     4 as our way forward.
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里有不同的权衡，但经过讨论，我们决定采用 Option 4 作为我们的前进方式。
 - en: Implementation Plan
+  id: totrans-136
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 实施计划
 - en: 'To move forward with type annotations, we will do the following:'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了推进类型注释，我们将执行以下操作：
 - en: Iterate on this JEP doc until developers and stakeholders are bought-in.
+  id: totrans-138
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 对此JEP文档进行迭代，直到开发者和利益相关者都认可。
 - en: 'Create a private `jax._src.typing` (not providing any public APIs for now)
     and put in it the first level of simple types mentioned above:'
+  id: totrans-139
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 创建一个私有的`jax._src.typing`（目前不提供任何公共API），并将上述简单类型的第一级放入其中：
 - en: Alias `Array = Any` for the time being, as this will take a bit more thought.
+  id: totrans-140
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 暂时将`Array = Any`作为别名，因为这需要更多的思考。
 - en: '`ArrayLike`: a Union of types valid as inputs to normal `jax.numpy` functions'
+  id: totrans-141
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`ArrayLike`：作为输入传递给常规`jax.numpy`函数的类型的联合。'
 - en: '`DType` / `DTypeLike` (Note: numpy uses camel-cased `DType`; we should follow
     this convention for ease of use)'
+  id: totrans-142
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`DType` / `DTypeLike`（注意：numpy使用驼峰式`DType`；我们应该遵循这个惯例以便使用）。'
 - en: '`Shape` / `NamedShape` / `ShapeLike`'
+  id: totrans-143
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Shape` / `NamedShape` / `ShapeLike`'
 - en: The beginnings of this are done in [#12300](https://github.com/google/jax/issues/12300).
+  id: totrans-144
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 这些工作的开端在[#12300](https://github.com/google/jax/issues/12300)已经完成。
 - en: Begin work on a `jax.Array` base class that follows Option 4 from the previous
     section. Initially this will be defined in Python, and use the dynamic registration
     mechanism currently found in the `jnp.ndarray` implementation to ensure correct
     behavior of `isinstance` checks. A `pyi` override for each tracer and array-like
     class would ensure correct behavior for type annotations. `jnp.ndarray` could
     then be make into an alias of `jax.Array`
+  id: totrans-145
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 开始在一个新的`jax.Array`基类上进行工作，该类遵循前一节中的第4个选项。最初，这将在Python中定义，并使用目前在`jnp.ndarray`实现中找到的动态注册机制，以确保`isinstance`检查的正确行为。为每个tracer和类似数组的类创建一个`pyi`覆盖，以确保类型注释的正确行为。然后，`jnp.ndarray`可以成为`jax.Array`的别名。
 - en: As a test, use these new typing definitions to comprehensively annotate functions
     within `jax.lax` according to the guidelines above.
+  id: totrans-146
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 作为测试，根据以上指南，使用这些新的键入定义全面注释`jax.lax`中的函数。
 - en: Continue adding additional annotations one module at a time, focusing on public
     API functions.
+  id: totrans-147
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 继续逐模块添加额外的注释，重点放在公共API函数上。
 - en: In parallel, begin re-implementing a `jax.Array` base class in pybind11, so
     that `ArrayImpl` and `Tracer` can inherit from it. Use a `pyi` definition to ensure
     static type checkers recognize the appropriate attributes of the class.
+  id: totrans-148
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 同时，开始使用pybind11重新实现`jax.Array`基类，以便`ArrayImpl`和`Tracer`可以继承它。使用`pyi`定义确保静态类型检查器识别类的适当属性。
 - en: Once `jax.Array` and `jax._src.ArrayImpl` have fully landed, remove these temporary
     Python implementations.
+  id: totrans-149
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 一旦`jax.Array`和`jax._src.ArrayImpl`完全完成，就删除这些临时的Python实现。
 - en: When all is finalized, create a public `jax.typing` module that makes the above
     types available to users, along with documentation of annotation best practices
     for code using JAX.
+  id: totrans-150
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 一切就绪后，创建一个公共的`jax.typing`模块，使上述类型对用户可用，并提供使用JAX的代码注释最佳实践的文档。
 - en: We will track this work in [#12049](https://github.com/google/jax/issues/12049),
     from which this JEP gets its number.
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将在[#12049](https://github.com/google/jax/issues/12049)中跟踪这项工作，从中获取本JEP的编号。

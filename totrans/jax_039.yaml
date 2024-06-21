@@ -1,20 +1,28 @@
 - en: Pallas Design
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Pallas设计
 - en: 原文：[`jax.readthedocs.io/en/latest/pallas/design.html`](https://jax.readthedocs.io/en/latest/pallas/design.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/pallas/design.html`](https://jax.readthedocs.io/en/latest/pallas/design.html)
 - en: In this document, we explain the initial Pallas design. This is a snapshot of
     some of the earlier design decisions made and Pallas’s specific APIs might have
     changed since.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这份文档中，我们解释了初始的Pallas设计。这是一些早期设计决策的快照，并且Pallas的特定API可能已经发生了变化。
 - en: Introduction
+  id: totrans-3
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: Introduction
 - en: JAX is being used for a diverse set of workloads, from large scale machine learning
     to scientific computing. JAX’s success story is as much a success story for XLA,
     the primary compiler that JAX targets – XLA compiles JAX programs for accelerators
@@ -28,8 +36,10 @@
     in ML systems research take some time to be incorporated into XLA and users often
     want to run ahead with them. Over time, the compiler can incorporate the optimizations
     that were proven out experimentally through hand-tuned kernels.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX被用于各种工作负载，从大规模机器学习到科学计算。JAX的成功故事也是XLA的成功故事，XLA是JAX的主要编译器目标——XLA为加速器编译JAX程序，并使JAX能够扩展到最大的ML模型。JAX描述了在XLA表示HLO中的逻辑计算。HLO描述了逻辑上的计算过程，但不涉及物理执行。对于广泛的ML应用，XLA在编译用户程序方面表现良好，但不可避免地，一些用户会遇到XLA的限制。在这些情况下，我们需要提供一个“逃生通道”，让专家编写手动调优的内核，以在那个时刻超越XLA的性能。此外，ML系统研究的进展需要一些时间才能被整合到XLA中，而用户通常希望提前使用这些优化。随着时间的推移，编译器可以通过手动调优的内核整合已经通过实验验证的优化。
 - en: 'XLA does offer the `CustomCall` mechanism as an escape hatch, but it requires
     users to write C++ and on GPU it requires users to learn the CUDA programming
     model. The CUDA programming model is arguably too low-level for many machine learning
@@ -41,8 +51,10 @@
     arrays with high level operations like `matmul` or `convolution`. Unfortunately,
     this means implementing a custom operation via `CustomCall` is a big investment,
     involving potentially learning C++ and/or GPU programming.'
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: XLA确实提供了`CustomCall`机制作为一种逃生口，但这需要用户编写C++代码，在GPU上还需要用户了解CUDA编程模型。CUDA编程模型对于许多机器学习GPU核心（如矩阵乘法或多头注意力）来说可能过于低级，即使是专家用户也会在使用CUDA来实现高效的矩阵乘法或多头注意力时遇到困难。此外，JAX用户通常熟悉Python和类似NumPy的数组编程，不涉及编写任何C++代码或考虑GPU并行性。所有流行的机器学习框架都共享这一思想：通过高级操作（如`matmul`或`convolution`）来操作（通常是）数组。不幸的是，这意味着通过`CustomCall`实现自定义操作是一项重大投资，可能需要学习C++和/或GPU编程。
 - en: '[Triton](https://triton-lang.org/main/index.html), a GPU compiler built and
     maintained by OpenAI, has taken the ML compiler world by storm. Triton offers
     the best of both worlds: an array-based programming model for GPU kernels. Triton
@@ -52,13 +64,18 @@
     and to generate optimized code from a higher-level representation. While GPUs
     are more flexible than what Triton offers, in the ML domain, Triton seems to be
     expressive enough for many applications.'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: '[Triton](https://triton-lang.org/main/index.html)，由OpenAI构建和维护的GPU编译器，在ML编译器领域引起了轰动。Triton提供了最佳的双赢方案：用于GPU核心的基于数组的编程模型。Triton是PyTorch
+    2.0中`torch.compile`的主要代码生成路径，通过Torch Inductor库。Triton积极地在更高级的表示上隐藏了GPU编程的某些方面，以更易于访问的编程模型从Python中生成优化的代码。虽然GPU比Triton提供的更加灵活，但在ML领域，Triton似乎对许多应用程序来说已经足够表达力。'
 - en: 'In this document, we describe Pallas, an extension to JAX that enables kernel
     programming for both GPUs and TPUs using a Triton-like model. A JAX-based kernel
     language offers several advantages:'
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本文档中，我们描述了 Pallas，这是 JAX 的一个扩展，可以使用类似 Triton 的模型为 GPU 和 TPU 编写核心程序。基于 JAX 的核心语言具有几个优点：
 - en: Although Triton exposes a TPU-like programming model to users, i.e. writing
     programs for tiles of arrays in L1-cache, it is specialized enough to GPU that
     we cannot directly compile Triton for TPU. For example, Triton offers atomic operations
@@ -66,233 +83,339 @@
     on TPU. A higher level front end can abstract away details of the platform while
     surfacing just that tile-based programming model. The kernels will thus be portable
     across different hardware platforms.
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 虽然 Triton 向用户公开了类似 TPU 的编程模型，即在 L1-cache 的数组块上编写程序，但它足够专业以至于我们不能直接为 TPU 编译 Triton。例如，Triton
+    提供了专门用于处理并行写入的原子操作，这在 TPU 上并不一定有意义。一个更高级的前端可以将平台的细节抽象化，只显示基于瓦片的编程模型。这样，核心将在不同的硬件平台上可移植。
 - en: JAX as a tracing-based frontend for numerical computing is both mature and well-used.
     By embedding the kernel programming language in JAX itself, we can re-use JAX’s
     tracing infrastructure and provide a NumPy-like frontend that’s already familiar
     to users.
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 作为基于跟踪的数值计算的前端，JAX 既成熟又广泛使用。通过将核心编程语言嵌入到 JAX 本身中，我们可以重用 JAX 的跟踪基础设施，并提供一个类似
+    NumPy 的前端，这对用户来说已经很熟悉。
 - en: JAX transformations are key to its success, allowing users to express simple
     programs but transform them to achieve complex functionality. We can leverage
     the same transformations (vmap, jvp, etc.) to transform user-written kernels.
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: JAX 转换是其成功的关键，允许用户表达简单的程序，但通过转换实现复杂的功能。我们可以利用相同的转换（vmap、jvp 等）来转换用户编写的核心。
 - en: 'The open question is: is JAX a good fit for a kernel language at all? We think
     so. Triton demonstrates that an array programming language can be practical for
     writing GPU kernels and JAX is just that. JAX has also proven to be a flexible
     front-end for compilers and for program transformations.'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个开放的问题是：JAX 真的适合作为核心语言吗？我们认为是的。Triton 表明，一个数组编程语言可以实际用于编写 GPU 核心，而 JAX 正是如此。JAX
+    还被证明是编译器和程序转换的灵活前端。
 - en: 'We describe Pallas as follows: we first describe the ways in which we extend
     JAX to support writing custom kernels. We then show how we can lower Pallas to
     both Triton and Mosaic. We conclude by describing existing and potential ways
     to transform Pallas kernels via JAX transformations.'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们描述 Pallas 如下：首先描述我们如何扩展 JAX 以支持编写自定义核心。然后展示如何将 Pallas 降低到 Triton 和 Mosaic。最后描述通过
+    JAX 转换转换 Pallas 核心的现有和潜在方法。
 - en: '![Pallas lowering path](img/486eddfb3c3d98b0b7a171911b93dd51.png) Visualization
     of Pallas lowering paths'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: '![Pallas 降低路径](img/486eddfb3c3d98b0b7a171911b93dd51.png) Pallas 降低路径的可视化'
 - en: 'Pallas: Extending JAX for kernels'
+  id: totrans-14
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: Pallas：为核心扩展 JAX
 - en: 'The key point we’d like to make is that Pallas is just JAX, with some extensions:'
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们想要强调的关键点是，Pallas 只是 JAX，附加了一些扩展：
 - en: Users now use reference types called `Ref`s in their JAX code. This gives users
     more precise control over memory access and layout in JAX will more closely resemble
     physical layout.
+  id: totrans-16
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 用户现在在他们的 JAX 代码中使用称为`Ref`的引用类型。这使得用户在 JAX 中更加精确地控制内存访问和布局，其物理布局将更加接近。
 - en: Users write their JAX programs using a subset of JAX primitives, along with
     a set of Pallas-specific primitives.
+  id: totrans-17
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 用户使用 JAX 原语的子集以及一组特定于 Pallas 的原语编写他们的 JAX 程序。
 - en: Users embed their Pallas kernels in an outer JAX program via a special `pallas_call`
     higher-order function, that executes the kernel in a map. It is analogous to `pmap`
     or `shard_map`, except with references to shared memory.
+  id: totrans-18
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 用户通过特殊的`pallas_call`高阶函数将他们的 Pallas 核心嵌入到外部 JAX 程序中，该函数在映射中执行核心。它类似于`pmap`或`shard_map`，但涉及共享内存的引用。
 - en: We’ll go over these three extensions one at a time, by example.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将逐个通过示例讨论这三个扩展。
 - en: Note that these APIs are still experimental and subject to change.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，这些 API 仍处于实验阶段，可能会发生变化。
 - en: Reference types
+  id: totrans-21
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 引用类型
 - en: 'Let’s look at an example Pallas program for adding two vectors:'
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们看一个添加两个向量的示例 Pallas 程序：
 - en: '[PRE0]'
+  id: totrans-23
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Unlike a regular JAX program, `add_kernel` does not receive immutable array
     arguments. Instead, it’s provided with references that can be read from and updated
     in-place using NumPy-like syntax. `Ref`s are not a Pallas-specific concept – they
     were introduced to JAX to represent stateful computations. However, we can leverage
     them when writing kernels that operate on mutable memory too.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 与常规的JAX程序不同，`add_kernel`不接收不可变的数组参数。相反，它提供了可以使用类似NumPy的语法从中读取和原地更新的引用。`Ref`不是Pallas特定的概念
+    - 它们被引入JAX来表示有状态的计算。然而，我们在编写操作可变内存的核心时可以利用它们。
 - en: Pallas kernels not only receive `Ref`s corresponding to the inputs to the kernel,
     but also receive `Ref`s for the outputs as well (specified in `pallas_call` via
     `out_shape`). `Ref`s are special types that cannot be passed into the usual set
     of JAX primitives without being read from first. When you read from a `Ref` you
     get a JAX `Array` type out, and you must write an `Array` into a `Ref`.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: Pallas核心不仅接收与核心输入对应的`Ref`，还接收作为输出的`Ref`（通过`pallas_call`中的`out_shape`指定）。`Ref`是一种特殊类型，不能直接传递给JAX常规的一组原语而不先读取。从`Ref`中读取后，您会得到一个JAX
+    `Array`类型，并且您必须将一个`Array`写入`Ref`。
 - en: Reading from/writing into Refs
+  id: totrans-26
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 从/写入 Refs
 - en: Reading from a `Ref` corresponds to loading an array into the lowest level of
     the memory hierarchy (L1-cache on GPU and vector registers on TPU). Writing into
     a `Ref` is analogous.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 从`Ref`中读取对应于将数组加载到内存层次结构的最低级别（在GPU上是L1缓存，在TPU上是向量寄存器）。写入`Ref`类似。
 - en: '[PRE1]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: Writing to `Ref`s can be done via analogous `__setitem__` style indexing.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以通过类似的`__setitem__`样式索引来写入`Ref`。
 - en: Other forms of indexing (for example, dynamic slicing) can be done via `pallas.load`
     and `pallas.store`, new JAX primitives designed to make loading from/storing into
     memory easier. We’ll discuss these new primitives later.
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 其他形式的索引（例如动态切片）可以通过`pallas.load`和`pallas.store`来完成，这是设计用于更轻松地从/存储到内存的新JAX原语。稍后我们将讨论这些新原语。
 - en: Extending JAX with new Pallas primitives
+  id: totrans-31
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 用新的Pallas原语扩展JAX
 - en: Because JAX was designed with HLO in mind, the set of JAX primitives closely
     mirrors the set of HLO operations. Targeting a new compiler (e.g. Triton or Mosaic)
     means we might need to supplement JAX’s primitives with new ones specific to the
     new compiler. At the same time, we may not be able to lower all JAX primitives,
     so we need to restrict it to a subset.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为JAX是以HLO为目标设计的，其一组原语紧密地反映了HLO操作的一组。针对新的编译器（例如Triton或Mosaic），意味着我们可能需要用新的特定于新编译器的原语补充JAX的原语。同时，我们可能无法将所有JAX原语降低到新编译器，因此我们需要将其限制为一个子集。
 - en: Because Pallas was initially designed with Triton in mind, we offer a set of
     new primitives targeting the Triton programming model. As we’ll show later, we
     can lower these primitives to Mosaic as well.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为Pallas最初是以Triton为目标设计的，我们提供了一组新的原语，目标是Triton编程模型。正如我们稍后将展示的，我们也可以将这些原语降低到Mosaic。
 - en: '`pallas.load` and `pallas.store`'
+  id: totrans-34
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: '`pallas.load`和`pallas.store`'
 - en: '`pallas.load` and `pallas.store` are primitives that allow loading from memory
     and storing into memory. Unlike `__getitem__` and `__setitem__` they are more
     flexible at the cost of being more verbose. Specifically, you can use the `pallas.dynamic_slice`
     (`pallas.ds` for short) construct (which should maybe be upstreamed into JAX to
     be used with Ref `__getitem__` and `__setitem__`).'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: '`pallas.load`和`pallas.store`是允许从内存加载和存储到内存的原语。与`__getitem__`和`__setitem__`不同，它们更灵活，但更冗长。具体来说，您可以使用`pallas.dynamic_slice`（简称`pallas.ds`）构造（可能应该上游到JAX，以便与`Ref`的`__getitem__`和`__setitem__`一起使用）。'
 - en: '[PRE2]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '`pallas.load` and `pallas.store` also support masking via the mask argument.'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: '`pallas.load`和`pallas.store`还支持通过掩码参数进行屏蔽。'
 - en: '[PRE3]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: Masking is important when doing out-of-bounds loads/stores. The operational
     semantics of masking can be compiler-determined (if we understand the documentation
     properly, Triton avoids the read from/write to memory if it’s masked).
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 当进行越界加载/存储时，屏蔽是很重要的。屏蔽的操作语义可以由编译器决定（如果我们正确理解文档的话，Triton在掩码时避免从内存读取/写入）。
 - en: '`pallas.program_id` and `pallas.num_programs`'
+  id: totrans-40
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: '`pallas.program_id`和`pallas.num_programs`'
 - en: As we’ll soon see, we’ll be executing the same Pallas kernels many times (either
     in parallel or in a pipeline depending on the backend). These new primitives tell
     us “where” we are in the execution of the kernel.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如我们将很快看到的，我们将多次执行相同的Pallas核心（根据后端是并行还是管道）。这些新原语告诉我们“我们”在核心执行中的“位置”。
 - en: '`pallas.program_id` takes in an axis argument, which tells us which index in
     an axis of a multidimensional grid this kernel is currently executing in (analogous
     to `threadId` from CUDA programming or `lax.axis_index` in `jax.pmap`). Note that
     we are currently borrowing the “program” terminology from Triton and in the future
     we might want to change it to something more familiar to JAX users.'
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: '`pallas.program_id`接受一个轴参数，告诉我们在多维网格的轴上，此内核当前正在执行的索引（类似于CUDA编程中的`threadId`或`jax.pmap`中的`lax.axis_index`）。请注意，我们目前借用了Triton的“program”术语，将来可能会改为对JAX用户更为熟悉的术语。'
 - en: '[PRE4]'
+  id: totrans-43
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: '`pallas.num_programs` also takes in an axis and returns the grid size for that
     axis.'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: '`pallas.num_programs`还接受一个轴参数，并返回该轴的网格大小。'
 - en: Note that while `program_id` and `num_programs` are Triton-specific terminology
     they are easily generalized to make sense on TPU as well.
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，虽然`program_id`和`num_programs`是Triton特有的术语，但也很容易推广到TPU上。
 - en: Using a subset of JAX primitives in Pallas
+  id: totrans-46
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 在Pallas中使用JAX原语的子集
 - en: Because we’re writing kernels, not high-level HLO programs, some JAX primitives
     may not be able to be represented in our underlying substrate efficiently. However,
     we know we can support most elementwise operations, simple dot products, and JAX
     control flow.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为我们正在编写内核，而不是高级的HLO程序，一些JAX原语可能无法高效地在我们的底层基础设施中表示。但是，我们知道我们可以支持大多数逐元素操作、简单的点积和JAX控制流。
 - en: 'While we haven’t yet mapped out exactly all the JAX primitives that we can
     support in Pallas kernels, we can certainly identify some that are not easy to
     lower or are unlikely to be useful:'
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然我们还没有完全列出我们可以在Pallas内核中支持的所有JAX原语，但我们当然可以确定一些不易降级或不太可能有用的原语：
 - en: '`conv_general` - convolution usually isn’t offered as primitive in the underlying
     hardware.'
+  id: totrans-49
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`conv_general` - 卷积通常不作为底层硬件的原语提供。'
 - en: '`gather/scatter` - the underlying compiler may not support noncontiguous memory
     reads and writes'
+  id: totrans-50
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`gather/scatter` - 底层编译器可能不支持非连续内存读写。'
 - en: Executing Pallas kernels with `pallas_call`
+  id: totrans-51
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 使用`pallas_call`执行Pallas内核
 - en: Now that we’ve written our Pallas kernels (a.k.a. JAX with `Ref`s and the extra
     Pallas primitives), how do we execute them on a GPU or TPU? We use `pallas_call`,
     a higher order function (akin to `jax.jit` and `jax.pmap`) that executes the kernel.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经编写了我们的Pallas内核（也就是带有`Ref`和额外Pallas原语的JAX），我们如何在GPU或TPU上执行它们呢？我们使用`pallas_call`，这是一个高阶函数（类似于`jax.jit`和`jax.pmap`），用于执行内核。
 - en: 'The signature of `pallas_call` is as follows:'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: '`pallas_call`的签名如下：'
 - en: '[PRE5]'
+  id: totrans-54
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: When we provide a kernel to `pallas_call` we provide additional information.
     The first is `out_shape` which tells the kernel what the outputs look like (`pallas_call`
     will pass a `Ref` corresponding to these into the kernel to be written to). The
     rest of the information (`in_specs`, `out_specs`, and `grid`) are information
     about how the kernel will be scheduled on the accelerator.
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们向`pallas_call`提供内核时，我们提供了额外的信息。首先是`out_shape`，它告诉内核输出的形状（`pallas_call`将传递一个对应的`Ref`给内核以进行写入）。其余信息（`in_specs`、`out_specs`和`grid`）是关于内核如何在加速器上调度的信息。
 - en: 'The (rough) semantics for `pallas_call` are as follows:'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: '`pallas_call`的（粗略）语义如下：'
 - en: '[PRE6]'
+  id: totrans-57
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: Specifically, `pallas_call` will “loop” over grid iteration space, applying
     a transformation to the inputs and outputs specified via the `in_specs` and `out_specs`.
     In each iteration, the kernel will be called on the transformed inputs and outputs.
@@ -301,18 +424,24 @@
     over the iteration space, just that every member of the iteration space will be
     looped over. Compilers like Triton and Mosaic will have more specific operational
     semantics associated with the grid.
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 具体来说，`pallas_call`将“循环”遍历网格迭代空间，对通过`in_specs`和`out_specs`指定的输入和输出应用变换。在每次迭代中，内核将在变换后的输入和输出上调用。请注意，“循环”遍历迭代空间可以并行执行（例如在GPU上）。`pallas_call`还不保证循环迭代空间的顺序，只保证会循环遍历迭代空间的每个成员。像Triton和Mosaic这样的编译器将具有与网格相关的更具体的操作语义。
 - en: Transformation functions
+  id: totrans-59
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 变换函数
 - en: The `in_specs` and `out_specs` arguments to `pallas_call` allow inputs and outputs
     to be transformed in some way. The two options that Pallas offers right now are
     an identity transformation (where inputs and outputs are left unchanged), and
     `BlockSpec`s, take fixed-size slices of `Ref`s determined by the loop index.
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: '`pallas_call`的`in_specs`和`out_specs`参数允许以某种方式转换输入和输出。Pallas目前提供的两个选项是恒等变换（其中输入和输出保持不变）和`BlockSpec`，它通过循环索引确定`Ref`的固定大小切片。'
 - en: A `BlockSpec` takes an `index_map` function and a `block_shape`. Logically,
     it takes an array and slices it along each axis into `block_shape` sizes blocks.
     The `index_map` function takes loop indices (from the grid index set) and maps
@@ -320,46 +449,66 @@
     of the `Ref` at the corresponding block. When we specify `None` in an entry in
     block_shape, that corresponds to “mapping” over that dimension, removing it from
     the block within the kernel.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: '`BlockSpec`接受一个`index_map`函数和一个`block_shape`。从逻辑上讲，它接受一个数组，并沿着每个轴将其切片成`block_shape`大小的块。`index_map`函数接受循环索引（从网格索引集）并将其映射到块索引。转换函数将`Ref`转换为对应块的`Ref`的逻辑视图。当我们在`block_shape`的条目中指定`None`时，这对应于在内核中从该维度中“映射”掉它。'
 - en: '[PRE7]'
+  id: totrans-62
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: We could also imagine other `Spec`s that are used with `pallas_call`, for example
     a `Spec` that corresponds to overlapping windows to, say, implement convolutions.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还可以想象其他与`pallas_call`一起使用的`Spec`，例如对应于重叠窗口的`Spec`，以实现卷积等功能。
 - en: Immediate benefits of Pallas as a front-end
+  id: totrans-64
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Pallas作为前端的直接好处
 - en: By offering a JAX front-end for kernel writing, we can immediately reap some
     benefits.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过为内核编写提供JAX前端，我们可以立即获得一些好处。
 - en: More flexible front end
+  id: totrans-66
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 更灵活的前端
 - en: The first is that JAX users are already accustomed to the benefits (and limitations)
     of programming with JAX and its tracing-based transformations. This means users
     can use closures and other familiar Python constructs when writing Pallas kernels.
     This is unlike the existing AST-parsing-based Triton front end or the MLIR builders
     for Mosaic. For example, this makes Pallas far more amenable to templating than
     Triton.
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 第一点是，JAX用户已经习惯于使用JAX及其基于追踪的转换的好处（和局限性）。这意味着用户在编写Pallas内核时可以使用闭包和其他熟悉的Python构造。这与现有基于AST解析的Triton前端或Mosaic的MLIR构建器不同。例如，这使得Pallas比Triton更适合模板化。
 - en: See this example of how we can use higher-order functions in Python to template
     a kernel.
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 请看这个示例，演示了我们如何在Python中使用高阶函数来为内核模板化。
 - en: '[PRE8]'
+  id: totrans-69
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: Emulation mode
+  id: totrans-70
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 模拟模式
 - en: By representing kernels as programs with JAX primitives and some new Pallas
     primitives, we can also lower Pallas programs to StableHLO directly and compile/execute
     them with XLA. Specifically, a `pallas_call` can be implemented as a `lax.scan`
@@ -368,102 +517,152 @@
     We can also use the more reliable and better tested XLA numerics to verify the
     correctness of the Triton and Mosaic compilers. One could also imagine perturbing
     the `scan` ordering to simulate the parallel reads and writes that happen on GPU.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过将内核表示为具有JAX原语和一些新的Pallas原语的程序，我们还可以直接将Pallas程序降级为StableHLO并使用XLA进行编译/执行。具体来说，`pallas_call`可以实现为对网格的`lax.scan`。这使我们能够在任何XLA支持的平台上（甚至是CPU！）开发GPU或TPU内核，并使用JAX/XLA调试工具（如`jax.debug.print`）调试它们。我们还可以使用更可靠和更好测试的XLA数值来验证Triton和Mosaic编译器的正确性。人们还可以想象通过扰动`scan`排序来模拟GPU上发生的并行读写。
 - en: Examples
+  id: totrans-72
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 例子
 - en: '`add`'
+  id: totrans-73
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: '`add`'
 - en: We modify our `add_kernel` example to operate over (2,)-sized blocks using `BlockSpec`s.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们修改我们的`add_kernel`示例，使用`BlockSpec`操作(2,)-大小的块。
 - en: '[PRE9]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: Templated matmul
+  id: totrans-76
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 模板化的矩阵乘法
 - en: In this example, we compute tiles of the output by doing an unrolled accumulation
     over blocks of rows and columns from our input arrays. We inline an activation
     function into the body of the kernel using a higher order function so we can emit
     a fused kernel.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个示例中，我们通过对输入数组的行和列的块进行展开累加来计算输出的瓦片。我们通过高阶函数将激活函数内联到内核体中，以便我们可以发出一个融合内核。
 - en: '[PRE10]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: Lowering Pallas
+  id: totrans-79
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 将Pallas降级
 - en: After users express their Pallas kernels, we lower them to different representations
     depending on the target backend. On GPUs, we lower Pallas to Triton IR, and on
     TPU we lower Pallas to Mosaic.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 用户表达其Pallas内核后，我们根据目标后端将其降级到不同的表示形式。在GPU上，我们将Pallas降级为Triton IR，在TPU上，我们将Pallas降级为Mosaic。
 - en: Lowering Pallas to Triton for GPU
+  id: totrans-81
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 将Pallas降级到Triton以适配GPU
 - en: Lowering Pallas to Triton is easy because Pallas was designed with Triton as
     a target language in mind. The main differences between Pallas and Triton is that
     Triton doesn’t have a notion of `BlockSpec`s and also uses pointers when doing
     memory loads and stores as opposed to indices.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 降低 Pallas 到 Triton 是容易的，因为 Pallas 设计时就以 Triton 为目标语言。Pallas 和 Triton 主要的区别在于
+    Triton 没有 `BlockSpec` 的概念，且在内存加载和存储时使用指针而不是索引。
 - en: Triton supports pointers as an array element type in its language and in Triton
     you can load from and store to arrays of pointers. In Pallas, when given a `(4,
     5)`-shaped `Ref`, `x_ref`, and then do like `x_ref[3, 2]`, we need to lower this
     to computing a Triton pointer to the appropriate row-major position in `x_ref`
     (that is, doing 5 * 3 + 2 * 1). Similarly, when we lower slices to Triton, e.g.
     `x_ref[4, :]` we need to produce an array of pointers `5 * 4 + jnp.arange(3)`.
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: Triton 支持指针作为其语言中的数组元素类型，在 Triton 中可以从数组中加载和存储指针。在 Pallas 中，给定一个 `(4, 5)` 形状的
+    `Ref`，`x_ref`，然后执行 `x_ref[3, 2]` 类似操作时，我们需要将其降级为计算 `x_ref` 中适当行主位置的 Triton 指针（即执行
+    5 * 3 + 2 * 1）。类似地，当我们将切片降级到 Triton 时，例如 `x_ref[4, :]`，我们需要生成一个指针数组 `5 * 4 + jnp.arange(3)`。
 - en: Other than that, lowering to Triton is fairly straightforward. JAX dot products
     can be lowered to Triton dot products and JAX unary primitives are lowered to
     their Triton equivalents. Triton’s atomic operations are lowered via new Pallas
     atomic primitives.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 除此之外，将 Pallas 降级到 Triton 相当直接。JAX 的点积可以降级为 Triton 的点积，JAX 的一元原语则降级为它们的 Triton
+    等价物。Triton 的原子操作通过新的 Pallas 原子原语降级。
 - en: Lowering Pallas to Mosaic for TPU
+  id: totrans-85
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 将 Pallas 降级到 Mosaic 适用于 TPU
 - en: Mosaic consumes (mostly) standard dialect MLIR and emits LLO to be compiled
     for TPU. Pallas can be lowered to Mosaic via translating JAX primitives to MLIR
     (mostly the `vector` and `arith` dialects). The `BlockSpec`s can be converted
     into pipeline schedules (i.e. the `transform_func`s in Mosaic).
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: Mosaic 主要消耗标准的 MLIR 方言，并生成供 TPU 编译的 LLO。Pallas 可以通过将 JAX 原语翻译为 MLIR（主要是 `vector`
+    和 `arith` 方言）来降级到 Mosaic。`BlockSpec` 可以转换为流水线调度（即 Mosaic 中的 `transform_func`）。
 - en: Transforming Pallas
+  id: totrans-87
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 转换 Pallas
 - en: 'A natural question is how do JAX transformations interact with Pallas kernels?
     There are two main ways: transformations inside Pallas kernels and transformations
     outside Pallas kernels.'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个自然的问题是 JAX 变换如何与 Pallas 内核交互？主要有两种方式：Pallas 内核内部的变换和 Pallas 内核外部的变换。
 - en: Transformation inside Pallas kernels should actually “just work”, so long as
     we are able to lower the transformed code. For example, we could use `jax.grad(jnp.sin)(...)`
     inside of a JAX kernel because we can lower a `cos` to both Triton and Mosaic.
     However, we might not be able to lower a `jax.vmap(lax.dynamic_slice)` because
     it could turn into a gather that we cannot lower.
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: Pallas 内核内部的转换实际上“应该只是工作”，只要我们能够降低变换后的代码。例如，我们可以在 JAX 内核中使用 `jax.grad(jnp.sin)(...)`，因为我们可以将
+    `cos` 降低到 Triton 和 Mosaic。然而，我们可能无法将 `jax.vmap(lax.dynamic_slice)` 降低，因为它可能转变为我们无法降级的
+    gather 操作。
 - en: Transformations of Pallas kernels from the outer JAX programs is perhaps the
     more interesting case. How do we handle things like `vmap(pallas_call)` and `grad(pallas_call)`?
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 从外部 JAX 程序转换 Pallas 内核可能是更有趣的情况。我们如何处理像 `vmap(pallas_call)` 和 `grad(pallas_call)`
+    这样的事情？
 - en: '`vmap-of-pallas_call`'
+  id: totrans-91
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: '`vmap-of-pallas_call`'
 - en: vmap automatically vectorizes JAX programs. While kernel writers might want
     precise control over how a batched kernel will behave differently from its unbatched
     variant, we can offer a reasonable default `vmap` rule for `pallas_call` while
@@ -471,19 +670,27 @@
     `vmap`-ed, we augment the `pallas_call` to have an extra grid dimension corresponding
     to the new batch dimension and transform the `BlockSpec`s to handle indexing along
     that dimension.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: '`vmap` 自动将 JAX 程序向量化。虽然内核编写者可能希望精确控制批处理内核与非批处理变体之间的行为差异，但我们可以为 `pallas_call`
+    提供合理的默认 `vmap` 规则，同时提供 `jax.custom_vmap` 定制机制。当对 `pallas_call` 进行 `vmap` 操作时，我们会增加一个额外的网格维度，对应新的批处理维度，并转换
+    `BlockSpec` 以处理沿该维度的索引。'
 - en: '`grad-of-pallas_call`'
+  id: totrans-93
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: '`grad-of-pallas_call`'
 - en: '`grad` of `pallas_call` enables automatic differentiation of kernels. `jax.grad`
     breaks down into applications of three distinct transforms: `jvp`, `partial_eval`
     and `transpose`. In principle, we can re-use most of JAX’s infrastructure when
     implementing these rules for `pallas_call` (since it behaves much like existing
     JAX higher order primitives).'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: '`pallas_call`的`grad`使得内核的自动微分成为可能。`jax.grad`可以分解为三个不同变换的应用：`jvp`、`partial_eval`和`transpose`。原则上，在为`pallas_call`实现这些规则时，我们可以重用大部分JAX的基础设施（因为它的行为与现有的JAX高阶原语类似）。'
 - en: However, automatic differentiation of kernels can result in a performance hit
     due to how memory access is transposed. If we write a GPU kernel with overlapping-and-parallel
     reads and disjoint-but-parallel writes, we automatically transpose it into a kernel
@@ -496,24 +703,34 @@
     Dex. We could also look at how Enzyme approaches this problem. However, AD of
     Pallas kernels may still be useful for a class of kernels that does transpose
     efficiently (for example elementwise kernels).
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，内核的自动微分可能会因内存访问的转置方式而导致性能下降。如果我们编写一个具有重叠和并行读取以及不相交但并行写入的GPU内核，则会自动将其转置为一个具有重叠但并行写入的内核（当以原子方式执行时速度较慢），并且具有不相交但并行读取。为了生成更好地利用共享内存并行性的内核，我们需要重新排序循环并更改内核的向量化方式。不幸的是，在`Pallas`中我们没有一个适合这种操作表示的程序。自动区分内核的一个潜在方向是有效地探索不同的表示形式，也许像`Dex`中的表示形式那样。我们还可以看看`Enzyme`如何解决这个问题。然而，对于能够有效进行转置的内核类别来说，`Pallas`内核的自动微分可能仍然是有用的（例如逐元素内核）。
 - en: In general, though, `jax.custom_vjp` is a viable escape hatch to express Pallas
     kernels that work with `jax.grad`.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 总的来说，`jax.custom_vjp`是一种可行的逃生口，用来表达与`jax.grad`一起工作的`Pallas`内核。
 - en: Other transformations
+  id: totrans-97
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 其他转换
 - en: We could imagine other JAX transformations applying to Pallas kernels that we
     haven’t explicitly explored yet. For example, `checkify` is a JAX transformation
     that does functional error handling. We could imagine using `checkify` with pallas_call
     to allow plumbing out error codes from GPU kernels that indicate if OOB access
     or NaNs were produced.
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以想象其他适用于`Pallas`内核的JAX转换，这些转换我们尚未明确探索。例如，`checkify`是一种进行功能性错误处理的JAX转换。我们可以想象使用`checkify`与`pallas_call`结合使用，以便从GPU内核中传递出错误代码，指示是否产生了OOB访问或NaN。
 - en: Another potential transformation to integrate with is custom_partitioning to
     enable automatically partitionable kernels to be used with pjit.
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个与之集成的潜在转换是`custom_partitioning`，以便使可自动分区的内核可以与`pjit`一起使用。

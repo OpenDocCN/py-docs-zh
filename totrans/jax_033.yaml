@@ -1,409 +1,613 @@
 - en: Exporting and serializing staged-out computations
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 导出和序列化分离计算
 - en: 原文：[`jax.readthedocs.io/en/latest/export/export.html`](https://jax.readthedocs.io/en/latest/export/export.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/export/export.html`](https://jax.readthedocs.io/en/latest/export/export.html)
 - en: 'The Ahead-of-time lowering and compilation APIs produce objects that can be
     used for debugging or for compilation and execution in the same process. Sometimes
     you want to serialize a lowered JAX function for compilation and execution in
     a separate process, perhaps at a later time. This would allow you to:'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 提前降级和编译的 API 生成的对象可用于调试或在同一进程中进行编译和执行。有时候，您希望将降级后的 JAX 函数序列化，以便在稍后的时间在单独的进程中进行编译和执行。这将允许您：
 - en: compile and execute the function in another process or machine without requiring
     access to the JAX program, and without having to repeat the staging-out and lowering,
     e.g., in an inference system.
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在另一个进程或机器上编译并执行该函数，而无需访问 JAX 程序，并且无需重复分离和降低级别，例如在推断系统中。
 - en: trace and lower a function on a machine that does not have access to the accelerator
     for which you want to later compile and execute the function.
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 跟踪和降低一个在没有访问您希望稍后编译和执行该函数的加速器的机器上的函数。
 - en: archive a snapshot of a JAX function, e.g., to be able to reproduce later your
     results. **Note:** check out the compatibility guarantees for this use case.
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 存档 JAX 函数的快照，例如以便稍后能够重现您的结果。**注意：**请查看此用例的兼容性保证。
 - en: 'Here is an example:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里有一个例子：
 - en: '[PRE0]'
+  id: totrans-7
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'Serialization is broken down into two stages:'
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 序列化分为两个阶段：
 - en: exporting to produce an `jax.export.Exported` object that contains the StableHLO
     for the lowered function along with the metadata necessary to call it from another
     JAX function. We have plans to add code to generate `Exported` objects from TensorFlow,
     and to use `Exported` objects from TensorFlow and PyTorch.
+  id: totrans-9
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 导出以生成一个包含降级函数的 StableHLO 和调用它所需的元数据的 `jax.export.Exported` 对象。我们计划添加代码以从 TensorFlow
+    生成 `Exported` 对象，并使用来自 TensorFlow 和 PyTorch 的 `Exported` 对象。
 - en: the actual serialization to a byte array using the flatbuffers format. See Interoperation
     with TensorFlow for an alternative serialization to TensorFlow graph that can
     be used for interoperation with TensorFlow.
+  id: totrans-10
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用 flatbuffers 格式的字节数组进行实际序列化。有关与 TensorFlow 的交互操作的替代序列化，请参阅与 TensorFlow 的互操作性。
 - en: Support for reverse-mode AD
+  id: totrans-11
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 支持反向模式 AD
 - en: 'Serialization can optionally support higher-order reverse-mode AD. This is
     done by serializing the `jax.vjp()` of the primal function along with the primal
     function, up to a user-specified order (default is 0, meaning that the rehydrated
     function cannot be differentiated):'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 序列化可以选择支持高阶反向模式 AD。这是通过将原始函数的 `jax.vjp()` 与原始函数一起序列化，直到用户指定的顺序（默认为 0，意味着重新水化的函数无法区分）完成的：
 - en: '[PRE1]'
+  id: totrans-13
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: Note that the VJP function is computed lazily while serializing, when the JAX
     program is still available. This means that it respects all features of JAX VJP,
     e.g., `jax.custom_vjp()` and `jax.remat()`.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，在序列化时计算 VJP 函数是惰性的，当 JAX 程序仍然可用时。这意味着它遵守 JAX VJP 的所有特性，例如 `jax.custom_vjp()`
+    和 `jax.remat()`。
 - en: Note that the rehydrated function does not support any other transformations,
     e.g., forward-mode AD (jvp), or `jax.vmap()`.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，重新水化的函数不支持任何其他转换，例如前向模式 AD（jvp）或 `jax.vmap()`。
 - en: Compatibility guarantees
+  id: totrans-16
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 兼容性保证
 - en: You should not use the raw StableHLO that is obtained from just lowering (`jax.jit(f).lower(1.).compiler_ir()`)
     for archival and for compilation in another process, for several reasons.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 您不应仅从降低中获取的原始 StableHLO（`jax.jit(f).lower(1.).compiler_ir()`）用于归档和在另一个进程中进行编译，有几个原因。
 - en: First, the compilation may use a different version of the compiler, supporting
     a different version of StableHLO. The `jax.export` module takes care of this by
     using the [portable-artifact feature of StableHLO](https://github.com/openxla/stablehlo/blob/main/docs/compatibility.md)
     to deal with the possible evolution of the StableHLO opset.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，编译可能使用不同版本的编译器，支持不同版本的 StableHLO。`jax.export` 模块通过使用 StableHLO 的 [可移植工件特性](https://github.com/openxla/stablehlo/blob/main/docs/compatibility.md)
+    处理此问题。
 - en: Compatibility guarantees for custom calls
+  id: totrans-19
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 自定义调用的兼容性保证
 - en: Second, the raw StableHLO may contain custom calls referencing C++ functions.
     JAX uses custom calls for lowering of a small number of primitives, e.g., linear
     algebra primitives, sharding annotations, or Pallas kernels. These do not fall
     under the compatibility guarantees for StableHLO. The C++ implementations of these
     functions change rarely, but they can change.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 其次，原始的 StableHLO 可能包含引用 C++ 函数的自定义调用。JAX 用于降低少量基元的自定义调用，例如线性代数基元、分片注释或 Pallas
+    核心。这些不在 StableHLO 的兼容性保证范围内。这些函数的 C++ 实现很少更改，但确实会更改。
 - en: '`jax.export` makes the following export compatibility guarantees: A JAX exported
     artifact can be compiled and executed by a compiler and JAX runtime system that
     are:'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jax.export` 提供以下导出兼容性保证：JAX 导出的工件可以由编译器和 JAX 运行时系统编译和执行，条件是它们：'
 - en: '**up to 6 months newer** than the version of JAX used for exporting (we say
     that JAX export offers **6 months backward compatibility**). This is useful if
     we want to archive the exported artifact to be compiled and executed later.'
+  id: totrans-22
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**比用于导出的 JAX 版本新的长达 6 个月**（我们称 JAX 导出提供**6 个月的向后兼容性**）。如果要归档导出的工件以便稍后编译和执行，这很有用。'
 - en: '**up to 3 weeks older** than the version of JAX used for exporting (we say
     that JAX export offers **3 weeks forward compatibility**). This is useful if we
     want to compile and run an exported artifact with a consumer that was built and
     deployed before the export, e.g., an inference system that is already deployed
     when the exporting is done.'
+  id: totrans-23
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**比用于导出的 JAX 版本旧的长达 3 周**（我们称 JAX 导出提供**3 周的向前兼容性**）。如果要使用已在导出完成时已部署的消费者编译和运行导出的工件，例如已部署的推断系统。'
 - en: (The particular compatibility window lengths are the same that JAX [promised
     for jax2tf](https://github.com/google/jax/blob/main/jax/experimental/jax2tf/README.md#usage-saved-model),
     and are based on [TensorFlow Compatibility](https://www.tensorflow.org/guide/versions#graph_and_checkpoint_compatibility_when_extending_tensorflow).
     The terminology “backward compatibility” is from the perspective of the consumer,
     e.g., the inference system.)
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: （特定的兼容性窗口长度与 JAX 对于 jax2tf 所[承诺的相同](https://github.com/google/jax/blob/main/jax/experimental/jax2tf/README.md#usage-saved-model)，并基于[TensorFlow
+    的兼容性](https://www.tensorflow.org/guide/versions#graph_and_checkpoint_compatibility_when_extending_tensorflow)。术语“向后兼容性”是从消费者的角度，例如推断系统。）
 - en: What **matters is when the exporting and consuming components were built**,
     not the time when the exporting and the compilation happen. For external JAX users,
     it is [possible to run JAX and jaxlib at different versions](https://jax.readthedocs.io/en/latest/jep/9419-jax-versioning.html#how-are-jax-and-jaxlib-versioned);
     what matters is when the jaxlib release was built.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 重要的是导出和消费组件的构建时间，而不是导出和编译发生的时间。对于外部 JAX 用户来说，可以在[不同版本的 JAX 和 jaxlib 上运行](https://jax.readthedocs.io/en/latest/jep/9419-jax-versioning.html#how-are-jax-and-jaxlib-versioned)；重要的是
+    jaxlib 发布的构建时间。
 - en: 'To reduce chances of incompatibility, internal JAX users should:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 为减少不兼容的可能性，内部 JAX 用户应该：
 - en: '**rebuild and redeploy consumer systems as frequently as possible**.'
+  id: totrans-27
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**尽可能频繁地重建和重新部署消费系统**。'
 - en: 'and external users should:'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 外部用户应该：
 - en: run the exporting and consumer systems with the same version of jaxlib, whenever
     possible, and
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 尽可能以相同版本的 jaxlib 运行导出和消费系统，并
 - en: export for archival **with the latest released version of jaxlib**.
+  id: totrans-30
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用最新发布版本的 jaxlib 进行归档导出。
 - en: The compatibility guarantees do not apply if you bypass the `jax.export` APIs
     to obtain the StableHLO code.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果绕过 `jax.export` API 获取 StableHLO 代码，则不适用兼容性保证。
 - en: Only a subset of custom calls are guaranteed stable and have compatibility guarantees
     ([see list](https://github.com/search?q=repo%3Agoogle%2Fjax%20_CUSTOM_CALL_TARGETS_GUARANTEED_STABLE&amp;type=code)).
     We continuously add more custom call targets to the allowed list along with backwards
     compatibility tests. If you try to serialize code that invokes other custom call
     targets you will get an error during exporting.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 只有部分自定义调用被保证稳定，并具有兼容性保证（[参见列表](https://github.com/search?q=repo%3Agoogle%2Fjax%20_CUSTOM_CALL_TARGETS_GUARANTEED_STABLE&amp;type=code)）。我们会持续向允许列表中添加更多自定义调用目标，同时进行向后兼容性测试。如果尝试序列化调用其他自定义调用目标的代码，则在导出期间会收到错误。
 - en: 'If you want to disable this safety check for a specific custom call, e.g.,
     with target `my_target`, you can add `export.DisabledSafetyCheck.custom_call("my_target")`
     to the `disabled_checks` parameter of the `export` method, as in the following
     example:'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您希望禁用特定自定义调用的此安全检查，例如目标为 `my_target`，您可以将 `export.DisabledSafetyCheck.custom_call("my_target")`
+    添加到 `export` 方法的 `disabled_checks` 参数中，如以下示例所示：
 - en: '[PRE2]'
+  id: totrans-34
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Cross-platform and multi-platform export
+  id: totrans-35
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 跨平台和多平台导出
 - en: 'JAX lowering is platform specific for a small number of JAX primitives. By
     default, the code is lowered and exported for the accelerator present on the exporting
     machine:'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX降级对于少数JAX原语是平台特定的。默认情况下，代码将为导出机器上的加速器进行降级和导出：
 - en: '[PRE3]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: There is a safety check that will be raise an error when trying to compile an
     `Exported` object on a machine that does not have the accelerator for which the
     code was exported.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 存在一个安全检查，当尝试在没有为其导出代码的加速器的机器上编译 `Exported` 对象时会引发错误。
 - en: You can specify explicitly for what platforms the code should be exported. This
     allows you to specify a different accelerator than you have available at export
     time, and it even allows you to specify multi-platform lexport to obtain an `Exported`
     object that can be compiled and executed on multiple platforms.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以明确指定代码应导出到哪些平台。这使您能够在导出时指定不同于您当前可用的加速器，甚至允许您指定多平台导出以获取一个可以在多个平台上编译和执行的`Exported`对象。
 - en: '[PRE4]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: For multi-platform export, the StableHLO will contain multiple lowerings but
     only for those primitives that require it, so the resulting module size should
     be only marginally larger than the size of a module with default export. As an
     extreme case, when serializing a module without any primitives with platform-specific
     lowering, you will get the same StableHLO as for the single-plaform export.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于多平台导出，StableHLO将包含多个降级版本，但仅针对那些需要的原语，因此生成的模块大小应该只比具有默认导出的模块稍大一点。作为极端情况，当序列化一个没有任何需要平台特定降级的原语的模块时，您将获得与单平台导出相同的StableHLO。
 - en: '[PRE5]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Shape polymorphic export
+  id: totrans-43
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 形状多态导出
 - en: When used in JIT mode, JAX will trace and lower a function separately for each
     combination of input shapes. When exporting, it is possible in some cases to use
     dimension variables for some input dimensions in order to obtain an exported artifact
     that can be used with multiple combinations of input shapes.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 当在即时编译（JIT）模式下使用时，JAX将为每个输入形状的组合单独跟踪和降低函数。在导出时，有时可以对某些输入维度使用维度变量，以获取一个可以与多种输入形状组合一起使用的导出物件。
 - en: See the Shape polymorphism documentation.
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 请参阅形状多态文档。
 - en: Device polymorphic export
+  id: totrans-46
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 设备多态导出
 - en: An exported artifact may contain sharding annotations for inputs, outputs and
     for some intermediates, but these annotations do not refer directly to the actual
     physical devices that existed at exporting time. Instead, the sharding annotations
     refer to logical devices. This means that you can compile and run the exported
     artifacts on different physical devices that were used for exporting.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 导出的物件可能包含用于输入、输出和一些中间结果的分片注释，但这些注释不直接引用在导出时存在的实际物理设备。相反，分片注释引用逻辑设备。这意味着您可以在不同于导出时使用的物理设备上编译和运行导出的物件。
 - en: '[PRE6]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'It is an error to try to invoke an exported artifact with a different number
     of devices than it was exported for:'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 尝试使用与导出时不同数量的设备调用导出物件是错误的：
 - en: '[PRE7]'
+  id: totrans-50
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'There are helper functions to shard the inputs for calling an exported artifacts
     using a new mesh constructed at the call site:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 有助于为使用新网格调用导出物件分片输入的辅助函数：
 - en: '[PRE8]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'As a special facility, if a function was exported for 1 device and if it contains
     no sharding annotations, then it can be invoked on an argument of the same shape
     but sharded on multiple devices, and the compiler will shard the function appropriately:'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为特殊功能，如果一个函数为1个设备导出，并且不包含分片注释，则可以在具有相同形状但在多个设备上分片的参数上调用它，并且编译器将适当地分片函数：
 - en: '[PRE9]python'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: '[PRE9]python'
 - en: '>>> import jax'
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> import jax'
 - en: '>>> from jax import export'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> from jax import export'
 - en: '>>> from jax.sharding import Mesh, NamedSharding'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> from jax.sharding import Mesh, NamedSharding'
 - en: '>>> from jax.sharding import PartitionSpec as P'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> from jax.sharding import PartitionSpec as P'
 - en: '>>> def f(x):'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> def f(x):'
 - en: '...   return jnp.cos(x)'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: '...   return jnp.cos(x)'
 - en: '>>> arg = jnp.arange(4)'
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> arg = jnp.arange(4)'
 - en: '>>> exp = export.export(jax.jit(f))(arg)'
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> exp = export.export(jax.jit(f))(arg)'
 - en: '>>> exp.in_avals'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> exp.in_avals'
 - en: (ShapedArray(int32[4]),)
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: (ShapedArray(int32[4]),)
 - en: '>>> exp.nr_devices'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> exp.nr_devices'
 - en: '1'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: '1'
 - en: '>>> # Prepare the mesh for calling `exp`.'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> # 准备用于调用 `exp` 的网格。'
 - en: '>>> calling_mesh = Mesh(jax.local_devices()[:4], ("b",))'
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> calling_mesh = Mesh(jax.local_devices()[:4], ("b",))'
 - en: '>>> # Shard the arg according to what `exp` expects.'
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> # Shard the arg according to what `exp` expects.'
 - en: '>>> sharded_arg = jax.device_put(arg,'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> sharded_arg = jax.device_put(arg,'
 - en: '...                              NamedSharding(calling_mesh, P("b")))'
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: '...                              NamedSharding(calling_mesh, P("b")))'
 - en: '>>> res = exp.call(sharded_arg)'
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> res = exp.call(sharded_arg)'
 - en: '[PRE10]'
+  id: totrans-73
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '>>> from jax import export'
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> from jax import export'
 - en: '>>> exp: export.Exported = export.export(jnp.cos)(1.)'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> exp: export.Exported = export.export(jnp.cos)(1.)'
 - en: '>>> exp.calling_convention_version'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> exp.calling_convention_version'
 - en: '9'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: '9'
 - en: '[PRE11]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: '>>> from jax import export'
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> from jax import export'
 - en: '>>> (export.minimum_supported_calling_convention_version, export.maximum_supported_calling_convention_version)'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> (export.minimum_supported_calling_convention_version, export.maximum_supported_calling_convention_version)'
 - en: (9, 9)
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: (9, 9)
 - en: '>>> from jax._src import config'
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> from jax._src import config'
 - en: '>>> with config.jax_export_calling_convention_version(9):'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: '>>> with config.jax_export_calling_convention_version(9):'
 - en: '...  exp = export.export(jnp.cos)(1.)'
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: '...  exp = export.export(jnp.cos)(1.)'
 - en: '...  exp.calling_convention_version'
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: '...  exp.calling_convention_version'
 - en: '9'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: '9'
 - en: '[PRE12]'
+  id: totrans-87
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: func public main(
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: func public main(
 - en: 'platform_index: i32 {jax.global_constant="_platform_index"},'
+  id: totrans-89
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'platform_index: i32 {jax.global_constant="_platform_index"},'
 - en: 'token_in: token,'
+  id: totrans-90
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'token_in: token,'
 - en: 'arg: f32[?, ?]) {'
+  id: totrans-91
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'arg: f32[?, ?]) {'
 - en: arg_w = hlo.get_dimension_size(arg, 0)
+  id: totrans-92
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: arg_w = hlo.get_dimension_size(arg, 0)
 - en: dim1 = hlo.get_dimension_size(arg, 1)
+  id: totrans-93
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: dim1 = hlo.get_dimension_size(arg, 1)
 - en: arg_h = hlo.floordiv(dim1, 2)
+  id: totrans-94
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: arg_h = hlo.floordiv(dim1, 2)
 - en: 'call _check_shape_assertions(arg)  # See below'
+  id: totrans-95
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'call _check_shape_assertions(arg)  # See below'
 - en: token = new_token()
+  id: totrans-96
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: token = new_token()
 - en: token_out, res = call _wrapped_jax_export_main(platform_index,
+  id: totrans-97
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: token_out, res = call _wrapped_jax_export_main(platform_index,
 - en: arg_h,
+  id: totrans-98
   prefs:
   - PREF_IND
   - PREF_IND
@@ -420,7 +624,9 @@
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: arg_h,
 - en: arg_w,
+  id: totrans-99
   prefs:
   - PREF_IND
   - PREF_IND
@@ -437,7 +643,9 @@
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: arg_w,
 - en: token_in,
+  id: totrans-100
   prefs:
   - PREF_IND
   - PREF_IND
@@ -454,7 +662,9 @@
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: token_in,
 - en: arg)
+  id: totrans-101
   prefs:
   - PREF_IND
   - PREF_IND
@@ -471,246 +681,364 @@
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: arg)
 - en: return token_out, res
+  id: totrans-102
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: return token_out, res
 - en: '}'
+  id: totrans-103
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '}'
 - en: '[PRE13]'
+  id: totrans-104
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: func private _wrapped_jax_export_main(
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: func private _wrapped_jax_export_main(
 - en: 'platform_index: i32 {jax.global_constant="_platform_index"},'
+  id: totrans-106
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'platform_index: i32 {jax.global_constant="_platform_index"},'
 - en: 'arg_h: i32 {jax.global_constant="h"},'
+  id: totrans-107
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'arg_h: i32 {jax.global_constant="h"},'
 - en: 'arg_w: i32 {jax.global_constant="w"},'
+  id: totrans-108
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'arg_w: i32 {jax.global_constant="w"},'
 - en: 'arg_token: stablehlo.token {jax.token=True},'
+  id: totrans-109
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'arg_token: stablehlo.token {jax.token=True},'
 - en: 'arg: f32[?, ?]) -> (stablehlo.token, ...)'
+  id: totrans-110
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'arg: f32[?, ?]) -> (stablehlo.token, ...)'
 - en: '[PRE14]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'func private _check_shape_assertions(arg: f32[?, ?]) {'
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 'func private _check_shape_assertions(arg: f32[?, ?]) {'
 - en: '# Check that w is >= 1'
+  id: totrans-113
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '# Check that w is >= 1'
 - en: arg_w = hlo.get_dimension_size(arg, 0)
+  id: totrans-114
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: arg_w = hlo.get_dimension_size(arg, 0)
 - en: custom_call @shape_assertion(arg_w >= 1, arg_w,
+  id: totrans-115
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: custom_call @shape_assertion(arg_w >= 1, arg_w,
 - en: error_message="Dimension variable 'w' must have integer value >= 1\. Found {0}")
+  id: totrans-116
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: error_message="Dimension variable 'w' must have integer value >= 1\. Found {0}")
 - en: '# Check that dim1 is even'
+  id: totrans-117
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '# Check that dim1 is even'
 - en: dim1 = hlo.get_dimension_size(arg, 1)
+  id: totrans-118
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: dim1 = hlo.get_dimension_size(arg, 1)
 - en: custom_call @shape_assertion(dim1 % 2 == 0, dim1,
+  id: totrans-119
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: custom_call @shape_assertion(dim1 % 2 == 0, dim1,
 - en: error_message="Dimension variable 'h' must have integer value >= 1\. Found non-zero
     remainder {0}")
+  id: totrans-120
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: error_message="Dimension variable 'h' must have integer value >= 1\. Found non-zero
+    remainder {0}")
 - en: '# Check that h >= 1'
+  id: totrans-121
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '# Check that h >= 1'
 - en: arg_h = hlo.floordiv(dim1, 2)
+  id: totrans-122
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: arg_h = hlo.floordiv(dim1, 2)
 - en: custom_call @shape_assertion(arg_h >= 1, arg_h,
+  id: totrans-123
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: custom_call @shape_assertion(arg_h >= 1, arg_h,
 - en: error_message=""Dimension variable 'h' must have integer value >= 1\. Found
     {0}")
+  id: totrans-124
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: error_message=""Dimension variable 'h' must have integer value >= 1\. Found
+    {0}")
 - en: '```'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: '```'
 - en: '### Calling convention versions'
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: '### Calling convention versions'
 - en: 'We list here a history of the calling convention version numbers:'
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 'We list here a history of the calling convention version numbers:'
 - en: Version 1 used MHLO & CHLO to serialize the code, not supported anymore.
+  id: totrans-128
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Version 1 used MHLO & CHLO to serialize the code, not supported anymore.
 - en: Version 2 supports StableHLO & CHLO. Used from October 2022\. Not supported
     anymore.
+  id: totrans-129
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Version 2 supports StableHLO & CHLO. Used from October 2022\. Not supported
+    anymore.
 - en: Version 3 supports platform checking and multiple platforms. Used from February
     2023\. Not supported anymore.
+  id: totrans-130
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Version 3 supports platform checking and multiple platforms. Used from February
+    2023\. Not supported anymore.
 - en: Version 4 supports StableHLO with compatibility guarantees. This is the earliest
     version at the time of the JAX native serialization launch. Used in JAX from March
     15, 2023 (cl/516885716). Starting with March 28th, 2023 we stopped using `dim_args_spec`
     (cl/520033493). The support for this version was dropped on October 17th, 2023
     (cl/573858283).
+  id: totrans-131
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Version 4 supports StableHLO with compatibility guarantees. This is the earliest
+    version at the time of the JAX native serialization launch. Used in JAX from March
+    15, 2023 (cl/516885716). Starting with March 28th, 2023 we stopped using `dim_args_spec`
+    (cl/520033493). The support for this version was dropped on October 17th, 2023
+    (cl/573858283).
 - en: Version 5 adds support for `call_tf_graph`. This is currently used for some
     specialized use cases. Used in JAX from May 3rd, 2023 (cl/529106145).
+  id: totrans-132
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Version 5 adds support for `call_tf_graph`. This is currently used for some
+    specialized use cases. Used in JAX from May 3rd, 2023 (cl/529106145).
 - en: Version 6 adds support for the `disabled_checks` attribute. This version mandates
     a non-empty `platforms` attribute. Supported by XlaCallModule since June 7th,
     2023 and available in JAX since June 13th, 2023 (JAX 0.4.13).
+  id: totrans-133
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 第 6 版添加了对 `disabled_checks` 属性的支持。此版本要求 `platforms` 属性不为空。自 2023 年 6 月 7 日由
+    XlaCallModule 支持，自 2023 年 6 月 13 日（JAX 0.4.13）起支持 JAX。
 - en: Version 7 adds support for `stablehlo.shape_assertion` operations and for `shape_assertions`
     specified in `disabled_checks`. See [Errors in presence of shape polymorphism](https://github.com/google/jax/blob/main/jax/experimental/jax2tf/README.md#errors-in-presence-of-shape-polymorphism).
     Supported by XlaCallModule since July 12th, 2023 (cl/547482522), available in
     JAX serialization since July 20th, 2023 (JAX 0.4.14), and the default since August
     12th, 2023 (JAX 0.4.15).
+  id: totrans-134
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 第 7 版增加了对 `stablehlo.shape_assertion` 操作和在 `disabled_checks` 中指定的 `shape_assertions`
+    的支持。参见[形状多态性存在错误](https://github.com/google/jax/blob/main/jax/experimental/jax2tf/README.md#errors-in-presence-of-shape-polymorphism)。自
+    2023 年 7 月 12 日（cl/547482522）由 XlaCallModule 支持，自 2023 年 7 月 20 日（JAX 0.4.14）起支持
+    JAX 序列化，并自 2023 年 8 月 12 日（JAX 0.4.15）起成为默认选项。
 - en: Version 8 adds support for the `jax.uses_shape_polymorphism` module attribute
     and enables the shape refinement pass only when the attribute is present. Supported
     by XlaCallModule since July 21st, 2023 (cl/549973693), available in JAX since
     July 26th, 2023 (JAX 0.4.14), and the default since October 21st, 2023 (JAX 0.4.20).
+  id: totrans-135
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 第 8 版添加了对 `jax.uses_shape_polymorphism` 模块属性的支持，并仅在该属性存在时启用形状细化传递。自 2023 年 7
+    月 21 日（cl/549973693）由 XlaCallModule 支持，自 2023 年 7 月 26 日（JAX 0.4.14）起支持 JAX，并自
+    2023 年 10 月 21 日（JAX 0.4.20）起成为默认选项。
 - en: Version 9 adds support for effects. See the docstring for `export.Exported`
     for the precise calling convention. In this calling convention version we also
     tag the platform index and the dimension variables arguments with `jax.global_constant`
     attributes. Supported by XlaCallModule since October 27th, 2023, available in
     JAX since October 20th, 2023 (JAX 0.4.20), and the default since February 1st,
     2024 (JAX 0.4.24). This is the only supported version as of 27th of March, 2024.
+  id: totrans-136
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 第 9 版添加了对 effects 的支持。详见 `export.Exported` 的文档字符串获取准确的调用约定。在此调用约定版本中，我们还使用 `jax.global_constant`
+    属性标记平台索引和维度变量参数。自 2023 年 10 月 27 日由 XlaCallModule 支持，自 2023 年 10 月 20 日（JAX 0.4.20）起支持
+    JAX，并自 2024 年 2 月 1 日（JAX 0.4.24）起成为默认选项。截至 2024 年 3 月 27 日，这是唯一支持的版本。
 - en: Migration guide from jax.experimental.export
+  id: totrans-137
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 从 `jax.experimental.export` 迁移指南。
 - en: 'On June 14, 2024 we deprecated the `jax.experimental.export` APIs in favor
     of `jax.export` APIs. There have been some minor changes:'
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 2024 年 6 月 14 日，我们废弃了 `jax.experimental.export` API，采用了 `jax.export` API。有一些小改动：
 - en: '`jax.experimental.export.export`:'
+  id: totrans-139
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.experimental.export.export`：'
 - en: The old function used to allow any Python callable, or the result of `jax.jit`.
     Now only the latter is accepted. You have to manually apply `jax.jit` to the function
     to export before calling `export`.
+  id: totrans-140
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 旧函数允许任何 Python 可调用对象或 `jax.jit` 的结果。现在仅接受后者。在调用 `export` 前必须手动应用 `jax.jit` 到要导出的函数。
 - en: The old `lowering_parameters` kwarg is now named `platforms`
+  id: totrans-141
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 旧的 `lowering_parameters` 关键字参数现在命名为 `platforms`。
 - en: '`jax.experimental.export.default_lowering_platform()` is now at `jax.export.default_export_platform()`.'
+  id: totrans-142
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.experimental.export.default_lowering_platform()` 现在是 `jax.export.default_export_platform()`。'
 - en: '`jax.experimental.export.call` is now a method of the `jax.export.Exported`
     object. Instead of `export.call(exp)` you should use `exp.call`.'
+  id: totrans-143
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.experimental.export.call` 现在是 `jax.export.Exported` 对象的一个方法。不再使用 `export.call(exp)`，应使用
+    `exp.call`。'
 - en: '`jax.experimental.export.serialize` is now a method of the `jax.export.Exported`
     object. Instead of `export.serialize(exp)` you should use `exp.serialize()`.'
+  id: totrans-144
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.experimental.export.serialize` 现在是 `jax.export.Exported` 对象的一个方法。不再使用
+    `export.serialize(exp)`，应使用 `exp.serialize()`。'
 - en: The configuration flag `--jax-serialization-version` is deprecated. Use `--jax-export-calling-convention-version`.
+  id: totrans-145
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 配置标志 `--jax-serialization-version` 已弃用。使用 `--jax-export-calling-convention-version`。
 - en: The value `jax.experimental.export.minimum_supported_serialization_version`
     is now at `jax.export.minimum_supported_calling_convention_version`.
+  id: totrans-146
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.experimental.export.minimum_supported_serialization_version` 的值现在在 `jax.export.minimum_supported_calling_convention_version`。'
 - en: The following fields of `jax.export.Exported` have been renamed
+  id: totrans-147
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jax.export.Exported` 的以下字段已重命名。'
 - en: '`uses_shape_polymorphism` is now `uses_global_constants`'
+  id: totrans-148
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`uses_shape_polymorphism` 现在是 `uses_global_constants`。'
 - en: '`mlir_module_serialization_version` is now `calling_convention_version`'
+  id: totrans-149
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`mlir_module_serialization_version` 现在是 `calling_convention_version`。'
 - en: '`lowering_platforms` is now `platforms`.'
+  id: totrans-150
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`lowering_platforms` 现在是 `platforms`。'

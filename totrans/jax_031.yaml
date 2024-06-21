@@ -1,197 +1,283 @@
 - en: Ahead-of-time lowering and compilation
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 提前降低和编译
 - en: 原文：[`jax.readthedocs.io/en/latest/aot.html`](https://jax.readthedocs.io/en/latest/aot.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/aot.html`](https://jax.readthedocs.io/en/latest/aot.html)
 - en: JAX offers several transformations, such as `jax.jit` and `jax.pmap`, returning
     a function that is compiled and runs on accelerators or the CPU. As the JIT acronym
     indicates, all compilation happens *just-in-time* for execution.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX提供了几种转换，如`jax.jit`和`jax.pmap`，返回一个编译并在加速器或CPU上运行的函数。正如JIT缩写所示，所有编译都是*即时*执行的。
 - en: Some situations call for *ahead-of-time* (AOT) compilation instead. When you
     want to fully compile prior to execution time, or you want control over when different
     parts of the compilation process take place, JAX has some options for you.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 有些情况需要进行*提前*（AOT）编译。当你希望在执行之前完全编译，或者希望控制编译过程的不同部分何时发生时，JAX为您提供了一些选项。
 - en: 'First, let’s review the stages of compilation. Suppose that `f` is a function/callable
     output by `jax.jit()`, say `f = jax.jit(F)` for some input callable `F`. When
     it is invoked with arguments, say `f(x, y)` where `x` and `y` are arrays, JAX
     does the following in order:'
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，让我们回顾一下编译的阶段。假设`f`是由`jax.jit()`输出的函数/可调用对象，例如对于某个输入可调用对象`F`，`f = jax.jit(F)`。当它用参数调用时，例如`f(x,
+    y)`，其中`x`和`y`是数组，JAX按顺序执行以下操作：
 - en: '**Stage out** a specialized version of the original Python callable `F` to
     an internal representation. The specialization reflects a restriction of `F` to
     input types inferred from properties of the arguments `x` and `y` (usually their
     shape and element type).'
+  id: totrans-5
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**Stage out**原始Python可调用`F`的特殊版本到内部表示。专门化反映了`F`对从参数`x`和`y`的属性推断出的输入类型的限制（通常是它们的形状和元素类型）。'
 - en: '**Lower** this specialized, staged-out computation to the XLA compiler’s input
     language, StableHLO.'
+  id: totrans-6
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**Lower**这种特殊的阶段计算到XLA编译器的输入语言StableHLO。'
 - en: '**Compile** the lowered HLO program to produce an optimized executable for
     the target device (CPU, GPU, or TPU).'
+  id: totrans-7
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**Compile**降低的HLO程序以生成针对目标设备（CPU、GPU或TPU）的优化可执行文件。'
 - en: '**Execute** the compiled executable with the arrays `x` and `y` as arguments.'
+  id: totrans-8
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**Execute**使用数组`x`和`y`作为参数执行编译后的可执行文件。'
 - en: 'JAX’s AOT API gives you direct control over steps #2, #3, and #4 (but not #1),
     plus some other features along the way. An example:'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX的AOT API允许您直接控制步骤#2、#3和#4（但不包括#1），以及沿途的一些其他功能。例如：
 - en: '[PRE0]'
+  id: totrans-10
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Note that the lowered objects can be used only in the same process in which
     they were lowered. For exporting use cases, see the Exporting and serialization
     APIs.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，降低的对象只能在它们被降低的同一进程中使用。有关导出用例，请参阅导出和序列化API。
 - en: See the `jax.stages` documentation for more details on what functionality the
     lowering and compiled functions provide.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 有关降低和编译函数提供的功能的更多详细信息，请参见`jax.stages`文档。
 - en: In place of `jax.jit` above, you can also `lower(...)` the result of `jax.pmap()`,
     as well as `pjit` and `xmap` (from `jax.experimental.pjit` and `jax.experimental.maps`
     respectively). In each case, you can `compile()` the result similarly.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的`jax.jit`的位置，您还可以`lower(...)``jax.pmap()`的结果，以及`pjit`和`xmap`（分别来自`jax.experimental.pjit`和`jax.experimental.maps`）。在每种情况下，您也可以类似地`compile()`结果。
 - en: All optional arguments to `jit`—such as `static_argnums`—are respected in the
     corresponding lowering, compilation, and execution. Again the same goes for `pmap`,
     `pjit`, and `xmap`.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 所有`jit`的可选参数——如`static_argnums`——在相应的降低、编译和执行中都得到尊重。同样适用于`pmap`、`pjit`和`xmap`。
 - en: 'In the example above, we can replace the arguments to `lower` with any objects
     that have `shape` and `dtype` attributes:'
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上述示例中，我们可以将`lower`的参数替换为具有`shape`和`dtype`属性的任何对象：
 - en: '[PRE1]'
+  id: totrans-16
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: More generally, `lower` only needs its arguments to structurally supply what
     JAX must know for specialization and lowering. For typical array arguments like
     the ones above, this means `shape` and `dtype` fields. For static arguments, by
     contrast, JAX needs actual array values (more on this below).
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 更一般地说，`lower`只需其参数结构上提供JAX必须了解的内容进行专门化和降低。对于像上面的典型数组参数，这意味着`shape`和`dtype`字段。相比之下，对于静态参数，JAX需要实际的数组值（下面会详细说明）。
 - en: 'Invoking an AOT-compiled function with arguments that are incompatible with
     its lowering raises an error:'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用与其降低不兼容的参数调用AOT编译函数会引发错误：
 - en: '[PRE2]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Relatedly, AOT-compiled functions cannot be transformed by JAX’s just-in-time
     transformations such as `jax.jit`, `jax.grad()`, and `jax.vmap()`.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 与此相关的是，AOT编译函数不能通过JAX的即时转换（如`jax.jit`、`jax.grad()`和`jax.vmap()`）进行转换。
 - en: Lowering with static arguments
+  id: totrans-21
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用静态参数进行降低
 - en: 'Lowering with static arguments underscores the interaction between options
     passed to `jax.jit`, the arguments passed to `lower`, and the arguments needed
     to invoke the resulting compiled function. Continuing with our example above:'
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用静态参数进行降级强调了传递给`jax.jit`的选项、传递给`lower`的参数以及调用生成的编译函数所需的参数之间的交互。继续我们上面的示例：
 - en: '[PRE3]'
+  id: totrans-23
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: The result of `lower` is not safe to serialize directly for use in a different
     process. See Exporting and serialization for additional APIs for this purpose.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: '`lower`的结果不能直接序列化以供在不同进程中使用。有关此目的的额外API，请参见导出和序列化。'
 - en: Note that `lower` here takes two arguments as usual, but the subsequent compiled
     function accepts only the remaining non-static second argument. The static first
     argument (value 7) is taken as a constant at lowering time and built into the
     lowered computation, where it is possibly folded in with other constants. In this
     case, its multiplication by 2 is simplified, resulting in the constant 14.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，这里的`lower`像往常一样接受两个参数，但随后生成的编译函数仅接受剩余的非静态第二个参数。静态的第一个参数（值为7）在降级时被视为常量，并内置到降级计算中，其中可能会与其他常量一起折叠。在这种情况下，它的乘以2被简化为常量14。
 - en: 'Although the second argument to `lower` above can be replaced by a hollow shape/dtype
     structure, it is necessary that the static first argument be a concrete value.
     Otherwise, lowering would err:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管上面`lower`的第二个参数可以被一个空的形状/数据类型结构替换，但静态的第一个参数必须是一个具体的值。否则，降级将会出错：
 - en: '[PRE4]'
+  id: totrans-27
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: AOT-compiled functions cannot be transformed
+  id: totrans-28
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: AOT编译的函数不能被转换
 - en: 'Compiled functions are specialized to a particular set of argument “types,”
     such as arrays with a specific shape and element type in our running example.
     From JAX’s internal point of view, transformations such as `jax.vmap()` alter
     the type signature of functions in a way that invalidates the compiled-for type
     signature. As a policy, JAX simply disallows compiled functions to be involved
     in transformations. Example:'
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 编译函数专门针对一组特定的参数“类型”，例如我们正在运行的示例中具有特定形状和元素类型的数组。从JAX的内部角度来看，诸如`jax.vmap()`之类的转换会以一种方式改变函数的类型签名，使得已编译的类型签名失效。作为一项政策，JAX简单地禁止已编译的函数参与转换。示例：
 - en: '[PRE5]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: A similar error is raised when `g_aot` is involved in autodiff (e.g. `jax.grad()`).
     For consistency, transformation by `jax.jit` is disallowed as well, even though
     `jit` does not meaningfully modify its argument’s type signature.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 当`g_aot`参与自动微分（例如`jax.grad()`）时也会引发类似的错误。为了一致性，`jax.jit`的转换也被禁止，尽管`jit`并没有实质性地修改其参数的类型签名。
 - en: Debug information and analyses, when available
+  id: totrans-32
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 调试信息和分析，在可用时
 - en: In addition to the primary AOT functionality (separate and explicit lowering,
     compilation, and execution), JAX’s various AOT stages also offer some additional
     features to help with debugging and gathering compiler feedback.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了主要的AOT功能（分离和显式的降级、编译和执行），JAX的各种AOT阶段还提供一些额外的功能，以帮助调试和收集编译器反馈。
 - en: For instance, as the initial example above shows, lowered functions often offer
     a text representation. Compiled functions do the same, and also offer cost and
     memory analyses from the compiler. All of these are provided via methods on the
     `jax.stages.Lowered` and `jax.stages.Compiled` objects (e.g., `lowered.as_text()`
     and `compiled.cost_analysis()` above).
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，正如上面的初始示例所示，降级函数通常提供文本表示。编译函数也是如此，并且还提供来自编译器的成本和内存分析。所有这些都通过`jax.stages.Lowered`和`jax.stages.Compiled`对象上的方法提供（例如，上面的`lowered.as_text()`和`compiled.cost_analysis()`）。
 - en: 'These methods are meant as an aid for manual inspection and debugging, not
     as a reliably programmable API. Their availability and output vary by compiler,
     platform, and runtime. This makes for two important caveats:'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些方法旨在帮助手动检查和调试，而不是作为可靠的可编程API。它们的可用性和输出因编译器、平台和运行时而异。这导致了两个重要的注意事项：
 - en: If some functionality is unavailable on JAX’s current backend, then the method
     for it returns something trivial (and `False`-like). For example, if the compiler
     underlying JAX does not provide a cost analysis, then `compiled.cost_analysis()`
     will be `None`.
+  id: totrans-36
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 如果某些功能在JAX当前的后端上不可用，则其方法将返回某些微不足道的东西（类似于`False`）。例如，如果支持JAX的编译器不提供成本分析，则`compiled.cost_analysis()`将为`None`。
 - en: If some functionality is available, there are still very limited guarantees
     on what the corresponding method provides. The return value is not required to
     be consistent—in type, structure, or value—across JAX configurations, backends/platforms,
     versions, or even invocations of the method. JAX cannot guarantee that the output
     of `compiled.cost_analysis()` on one day will remain the same on the following
     day.
+  id: totrans-37
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 如果某些功能可用，则对应方法提供的内容仍然有非常有限的保证。返回值在 JAX 的配置、后端/平台、版本或甚至方法的调用之间，在类型、结构或值上不需要保持一致。JAX
+    无法保证 `compiled.cost_analysis()` 在一天的输出将会在随后的一天保持相同。
 - en: When in doubt, see the package API documentation for `jax.stages`.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果有疑问，请参阅 `jax.stages` 的包 API 文档。
 - en: Inspecting staged-out computations
+  id: totrans-39
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 检查暂停的计算
 - en: 'Stage #1 in the list at the top of this note mentions specialization and staging,
     prior to lowering. JAX’s internal notion of a function specialized to the types
     of its arguments is not always a reified data structure in memory. To explicitly
     construct a view of JAX’s specialization of a function in the internal [Jaxpr
     intermediate language](https://jax.readthedocs.io/en/latest/jaxpr.html), see `jax.make_jaxpr()`.'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 此笔记顶部列表中的第一个阶段提到专业化和分阶段，之后是降低。JAX 内部对其参数类型专门化的函数的概念，并非始终在内存中具体化为数据结构。要显式构建 JAX
+    在内部[Jaxpr 中间语言](https://jax.readthedocs.io/en/latest/jaxpr.html)中函数专门化的视图，请参见
+    `jax.make_jaxpr()`。

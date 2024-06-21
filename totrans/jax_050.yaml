@@ -1,16 +1,22 @@
 - en: SPMD multi-device parallelism with shard_map
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用 `shard_map` 的 SPMD 多设备并行性
 - en: 原文：[`jax.readthedocs.io/en/latest/notebooks/shard_map.html`](https://jax.readthedocs.io/en/latest/notebooks/shard_map.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/notebooks/shard_map.html`](https://jax.readthedocs.io/en/latest/notebooks/shard_map.html)
 - en: '`shard_map` is a single-program multiple-data (SPMD) multi-device parallelism
     API to map a function over shards of data. Mapped function applications, or *instances*,
     communicate with each other via explicit collective communication operations.'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '`shard_map` 是一种单程序多数据（SPMD）多设备并行性 API，用于在数据分片上映射函数。映射的函数应用或*实例*通过显式的集合通信操作进行通信。'
 - en: '`shard_map` is complementary to, and composable with, the automatic compiler-based
     parallelization built into `jit`. With `jit` you write code as if for a single
     device, and [the compiler can automatically partition computation over multiple
@@ -20,176 +26,269 @@
     Or you can do a bit of both: take manual control across groups of devices while
     leaving within-group device partitioning up to the compiler. The two approaches
     can be mixed, matched, and composed as needed.'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: '`shard_map` 是与 `jit` 内置的自动编译器并行化互补且可组合的。使用 `jit`，你编写的代码就像为单个设备编写的一样，并且[编译器可以自动将计算分区到多个设备上](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html)，在幕后生成每个设备的代码和通信集合。使用
+    `shard_map`，你可以控制自己的分区代码和显式集合。或者你可以同时进行一些操作：在组设备中手动控制同时保留组内设备分区给编译器。这两种方法可以根据需要混合、匹配和组合。'
 - en: If you’re familiar with `pmap`, think of `shard_map` as an evolution. It’s more
     expressive, performant, and composable with other JAX APIs. It even works eagerly,
     for easier debugging! (For more, see [a detailed comparison to `pmap`.](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html#why-don-t-pmap-or-xmap-already-solve-this))
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您熟悉 `pmap`，可以将 `shard_map` 视为其演进。它更具表现力、性能和与其他 JAX API 可组合。它甚至可以急切地工作，更易于调试！（更多信息，请参阅[与
+    `pmap` 的详细比较。](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html#why-don-t-pmap-or-xmap-already-solve-this)）
 - en: By reading this tutorial, you’ll learn how to use `shard_map` to get full control
     over your multi-device code. You’ll see in detail how it composes with `jax.jit`’s
     automatic parallelization and `jax.grad`’s automatic differentiation. We’ll also
     give some basic examples of neural network parallelization strategies.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过阅读本教程，您将学习如何使用 `shard_map` 来完全控制您的多设备代码。您将详细了解它如何与 `jax.jit` 的自动并行化和 `jax.grad`
+    的自动微分结合使用。我们还将给出一些神经网络并行化策略的基本示例。
 - en: 'We’ll assume this tutorial is being run in an environment with eight devices:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们假设本教程在具有八个设备的环境中运行：
 - en: '[PRE0]'
+  id: totrans-7
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: So, let’s see a `shard_map`!
+  id: totrans-8
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 所以，让我们来看一个 `shard_map` 吧！
 - en: 'Without further ado, here’s a toy example:'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 不多说了，这里是一个玩具例子：
 - en: '[PRE1]'
+  id: totrans-10
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: '[PRE2]'
+  id: totrans-11
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'This function computes a matrix multiply in parallel by performing local block
     matrix multiplies followed by a collective sum operation. We can check the result
     is correct:'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个函数通过执行本地块矩阵乘法，然后进行集合求和操作来并行计算矩阵乘积。我们可以检查结果是否正确：
 - en: '[PRE3]'
+  id: totrans-13
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: '[PRE4]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'The result is sharded along its rows:'
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 结果沿其行被分片：
 - en: '[PRE5]'
+  id: totrans-16
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: '[PRE6]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: At a high level, `shard_map` is kind of like `vmap` or `pmap`, in that we’re
     mapping a function over pieces of array data, but notice that
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 在高层次上，`shard_map` 在某种程度上类似于 `vmap` 或 `pmap`，因为我们在数组数据的部分上映射函数，但请注意
 - en: '`shard_map` slices up inputs into blocks (and the output is formed by concatenating
     result blocks), keeping the rank the same, whereas `vmap` would reduce the rank
     by mapping away an axis;'
+  id: totrans-19
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`shard_map` 将输入切片成块（输出由连接结果块形成），保持秩不变，而 `vmap` 则通过映射掉一个轴来减少秩；'
 - en: the `mesh` argument lets us control precise device placement of computation
     and results;
+  id: totrans-20
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`mesh` 参数允许我们控制计算和结果的精确设备放置；'
 - en: we’re mapping over multiple data axes at once, and setting up multiple axis
     names for collectives (both `'x'` and `'y'` here);
+  id: totrans-21
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们同时映射多个数据轴，并设置多个轴名称以进行集合操作（这里有 `'x'` 和 `'y'`）；
 - en: since we’re not using `jax.jit` yet, everything is eagerly evaluated, and we
     can even `print` intermediate values for debugging.
+  id: totrans-22
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 因为我们还没有使用 `jax.jit`，一切都是急切地评估的，我们甚至可以打印中间值以进行调试。
 - en: 'The above code is performing the same computation as this `jax.jit` automatic
     parallelization code:'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述代码执行与此 `jax.jit` 自动并行化代码相同的计算：
 - en: '[PRE7]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: '[PRE8]'
+  id: totrans-25
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'We can think of `shard_map` as performing a `device_put` or `with_sharding_constraint`
     on its inputs according to its `mesh` and `in_specs` arguments, so the blocks
     over which `matmul_basic` operates are the same as in `matmul_reference`:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以将 `shard_map` 视为根据其 `mesh` 和 `in_specs` 参数在其输入上执行 `device_put` 或 `with_sharding_constraint`，因此
+    `matmul_basic` 操作的块与 `matmul_reference` 中的相同：
 - en: '[PRE9]'
+  id: totrans-27
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: '[PRE10]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '[PRE11]'
+  id: totrans-29
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: '[PRE12]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '[PRE13]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: Slow down, start with the basics!
+  id: totrans-32
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 放慢速度，从基础开始！
 - en: Rank-reducing vs rank-preserving maps
+  id: totrans-33
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 降维与保持秩的映射
 - en: 'We can think of `vmap` and `pmap` as unstacking each array input along an axis
     (e.g. unpacking a 2D matrix into its 1D rows), applying its body function to each
     piece, and stacking the results back together, at least when collectives aren’t
     involved:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以将 `vmap` 和 `pmap` 看作是沿轴（例如将 2D 矩阵解包成其 1D 行）对每个数组输入应用其主体函数，然后将结果堆叠在一起，至少在不涉及集合操作时是这样的：
 - en: '[PRE14]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: '[PRE15]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: For example, if `xs` had shape `f32[8,5]` then each `x` would have shape `f32[5]`,
     and if each `f(x)` had shape `f32[3,7]` then the final stacked result `vmap(f)(xs)`
     would have shape `f32[8,3,7]`. That is, each application of the body function
     `f` takes as argument inputs with one fewer axis than the corresponding argument
     to `vmap(f)`. We can say these are *rank-reducing maps* with unstacking/stacking
     of inputs/outputs.
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，如果 `xs` 的形状为 `f32[8,5]`，那么每个 `x` 的形状将为 `f32[5]`，如果每个 `f(x)` 的形状为 `f32[3,7]`，那么最终堆叠的结果
+    `vmap(f)(xs)` 的形状将为 `f32[8,3,7]`。也就是说，函数 `f` 的每个应用都以比 `vmap(f)` 对应参数少一个轴的输入作为参数。我们可以说这些是*降维映射*，输入/输出的解包/堆叠。
 - en: 'The number of logical applications of `f`, or *instances* of `f`, is determined
     by the size of the input axis being mapped over: for example, if we map over an
     input axis of size 8, semantically we get 8 logical applications of the function.'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 函数 `f` 的逻辑应用数量，或称为 `f` 的*实例*，取决于被映射输入轴的大小：例如，如果我们映射一个大小为 8 的输入轴，语义上我们得到函数的 8
+    个逻辑应用。
 - en: 'In contrast, `shard_map` does not have this rank-reducing behavior. Instead,
     we can think of it as slicing (or “unconcatenating”) along input axes into blocks,
     applying the body function, and concatenating the results back together (again
     when collectives aren’t involved):'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 相比之下，`shard_map` 并没有这种降维行为。相反，我们可以将其视为沿输入轴切片（或“取消连接”）成块，应用主体函数，然后将结果再次连接在一起（同样是在不涉及集合操作时）：
 - en: '[PRE16]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '[PRE17]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: Recall that `jnp.split` slices its input into equally-sized blocks with the
     same rank, so that if in the above example `y` had shape `f32[8,5]` then each
     `y_blk` would have shape `f32[2,5]`, and if each `f(y_blk)` had shape `f32[3,7]`
     then the final concatenated result `shard_map(f, ...)(y)` would have shape `f32[12,7]`.
     So `shard_map` maps over *shards*, or blocks, of its inputs. We can say it’s a
     *rank-preserving map* with unconcatenating/concatenating of its inputs/outputs.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 回想一下，`jnp.split` 将其输入切片为相同大小的块，以便如果在上述示例中 `y` 的形状为 `f32[8,5]`，那么每个 `y_blk` 的形状将为
+    `f32[2,5]`，如果每个 `f(y_blk)` 的形状为 `f32[3,7]`，那么最终连接的结果 `shard_map(f, ...)(y)` 的形状将为
+    `f32[12,7]`。因此，`shard_map` 对其输入进行*保持秩的映射*，输入/输出的取消连接/连接。
 - en: 'The number of logical applications of `f` is determined by the mesh size, not
     by any input axis size: for example, if we have a mesh of total size 4 (i.e. over
     4 devices) then semantically we get 4 logical applications of the function, corresponding
     to the 4 devices physically computing them.'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 函数 `f` 的逻辑应用数量由网格大小决定，而不是任何输入轴的大小：例如，如果我们有总大小为 4 的网格（即在 4 个设备上），那么语义上我们得到函数的
+    4 个逻辑应用，对应于物理计算这些函数的 4 个设备。
 - en: Controlling how each input is split (unconcatenated) and tiled with `in_specs`
+  id: totrans-44
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 控制每个输入如何分割（取消连接）并与 `in_specs` 平铺
 - en: 'Each of the `in_specs` identifies some of the corresponding input array’s axes
     with mesh axes by name using `PartitionSpec`s, representing how to split (or unconcatenate)
     that input into the blocks to which the body function is applied. That identification
@@ -199,31 +298,47 @@
     mesh axis size does not evenly divide the input array axis size.) If an input’s
     pspec does not mention a mesh axis name, then there’s no splitting over that mesh
     axis. For example:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 每个 `in_specs` 通过 `PartitionSpec` 标识某些对应输入数组轴的网格轴名称，表示如何将该输入分割（或解串联）为应用体函数的块。该标识确定了碎片大小；当输入轴与网格轴标识为同一时，输入沿该逻辑轴分割（解串联）为数目等于相应网格轴大小的片段。（如果相应的网格轴大小不能整除输入数组轴大小，则出错。）如果输入的
+    `pspec` 未提及网格轴名称，则在该网格轴上没有分割。例如：
 - en: '[PRE18]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '[PRE19]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: Here, because the input pspec did not mention the mesh axis name `'j'`, no input
     array axis is split over that mesh axis; similarly, because the second axis of
     the input array is not identified with (and hence split over) any mesh axis, application
     of `f1` gets a full view of the input along that axis.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，因为输入 `pspec` 未提及网格轴名称 `'j'`，因此没有输入数组轴沿该网格轴进行分割；类似地，因为输入数组的第二轴没有标识（因此没有沿任何网格轴分割），`f1`
+    的应用获得了沿该轴的完整视图。
 - en: 'When a mesh axis is not mentioned in an input pspec, we can always rewrite
     to a less efficient program where all mesh axes are mentioned but the caller performs
     a `jnp.tile`, for example:'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 当输入 `pspec` 中未提及网格轴时，我们可以始终重写为一个效率较低的程序，其中所有网格轴都被提及，但调用者执行 `jnp.tile`，例如：
 - en: '[PRE20]'
+  id: totrans-50
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: '[PRE21]'
+  id: totrans-51
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: In other words, because each input pspec can mention each mesh axis name zero
     or one times, rather than having to mention each name exactly once, we can say
     that in addition to the `jnp.split` built into its input, `shard_map` also has
@@ -231,17 +346,25 @@
     need to be carried out physically, depending on the arguments’ physical sharding
     layout). The tiling to use is not unique; we could also have tiled along the first
     axis, and used the pspec `P(('j', 'i'), None)`.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，因为每个输入 `pspec` 可以零次或一次提及每个网格轴名称，而不必精确一次提及每个名称，我们可以说除了其输入中内置的 `jnp.split`
+    外，`shard_map` 还有一个至少逻辑上内置的 `jnp.tile`（尽管根据参数的物理分片布局，可能不需要进行物理铺设）。要使用的铺设方式不唯一；我们也可以沿第一个轴进行铺设，并使用
+    `pspec P(('j', 'i'), None)`。
 - en: Physical data movement is possible on inputs, as each device needs to have a
     copy of the appropriate data.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以在输入上进行物理数据移动，因为每个设备都需要有适当数据的副本。
 - en: Controlling how each output assembled by concatenation, block transposition,
     and untiling using `out_specs`
+  id: totrans-54
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 通过 `out_specs` 控制每个由连接、块转置和使用 `out_specs` 反铺设组装的输出。
 - en: Analogously to the input side, each of the `out_specs` identifies some of the
     corresponding output array’s axes with mesh axes by name, representing how the
     output blocks (one for each application of the body function, or equivalently
@@ -252,478 +375,724 @@
     an error if an output shape of the body function, i.e. an output block shape,
     has a rank too small for the concatenation described by the corresponding output
     pspec.)
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 类似于输入端，`out_specs` 中的每个标识符通过名称将输出数组的一些轴与网格轴相关联，表示应如何将输出块（每个体函数应用的一个，或等效地每个物理设备一个）重新组装以形成最终输出值。例如，在上述
+    `f1` 和 `f2` 的例子中，`out_specs` 表明我们应该沿两个轴连接在一起形成最终输出，结果在两种情况下都是形状为 `(12, 24)` 的数组
+    `y`。（如果体函数的输出形状，即输出块形状，对应的输出 `pspec` 描述的连接的秩过小，则出错。）
 - en: 'When a mesh axis name is not mentioned in an output pspec, it represents an
     un-tiling: when the user writes an output pspec which does not mention one of
     the mesh axis names, they promise that the output blocks are equal along that
     mesh axis, and so only one block along that axis is used in the output (rather
     than concatenating all the blocks together along that mesh axis). For example,
     using the same mesh as above:'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 当一个网格轴名称在输出 pspec 中未被提及时，表示一个取消铺设：用户编写一个输出 pspec，其中未提及网格轴名称之一，他们保证输出块沿该网格轴是相等的，因此在输出中只使用一个沿该轴的块（而不是沿该网格轴连接所有块）。例如，使用与上述相同的网格：
 - en: '[PRE22]'
+  id: totrans-57
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: '[PRE23]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'The body function closing over an array value is equivalent to passing it as
     an augment with a corresponding input pspec of P(None, None). As another example,
     following more closely to the other examples above:'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 闭合在数组值上的主体函数等效于将其作为具有相应输入 pspec 的增强传递。作为另一个示例，更接近于上述其他示例：
 - en: '[PRE24]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: '[PRE25]'
+  id: totrans-61
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: 'The result has a second axis size of 6, half the size of the input’s second
     axis. In this case, the un-tile expressed by not mentioning the mesh axis name
     `''j''` in the output pspec was safe because of the collective `psum`, which ensures
     each output block is equal along the corresponding mesh axis. Here are two more
     examples where we vary which mesh axes are mentioned in the output pspec:'
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 结果的第二轴大小为 6，输入的第二轴大小的一半。在这种情况下，通过在输出 pspec 中未提及网格轴名称 `'j'` 来表达取消铺设是安全的，因为集体
+    `psum` 确保每个输出块沿相应的网格轴是相等的。以下是两个更改输出 pspec 中提及的网格轴的示例：
 - en: '[PRE26]'
+  id: totrans-63
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: '[PRE27]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: On the physical side, not mentioning a mesh axis name in an output pspec assembles
     an `Array` from the output device buffers with replicated layout along that mesh
     axis.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 在物理方面，在输出 pspec 中未提及网格轴名称将使用沿该网格轴复制布局从输出设备缓冲区组装 `Array`。
 - en: There is no runtime check that the output blocks are actually equal along a
     mesh axis to be un-tiled along, or equivalently that the corresponding physical
     buffers have equal values and thus can be interpreted as a replicated layout for
     a single logical array. But we can provide a static check mechanism which raises
     an error on all potentially-incorrect programs.
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 没有运行时检查，以确保输出块实际上沿网格轴是相等的，从而可以取消铺设，或者等效地说，相应的物理缓冲区具有相等的值，因此可以被解释为单个逻辑数组的复制布局。但是，我们可以提供一个静态检查机制，在所有潜在不正确的程序上引发错误。
 - en: Because the `out_specs` can mention mesh axis names zero or one times, and because
     they can be mentioned in any order, we can say that in addition to the `jnp.concatenate`
     built into its output, `shard_map` also has both an *untile* and a *block transpose*
     built into its output.
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为 `out_specs` 可以零次或一次提及网格轴名称，并且可以以任何顺序提及，所以除了其输出中内置的 `jnp.concatenate` 外，`shard_map`
+    还包括 *取消铺设* 和 *块转置*。
 - en: Physical data movement is not possible on outputs, no matter the output pspec.
     Instead, `out_specs` just encodes how to assemble the block outputs into `Array`s,
     or physically how to interpret the buffers across devices as the physical layout
     of a single logical `Array`.
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 输出上无论输出 pspec 如何，物理数据移动都是不可能的。相反，`out_specs` 只是编码如何将块输出组装成 `Array`，或者物理上如何解释跨设备的缓冲区作为单个逻辑
+    `Array` 的物理布局。
 - en: API Specification
+  id: totrans-69
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: API 规范
 - en: '[PRE28]'
+  id: totrans-70
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: 'where:'
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中：
 - en: communication collectives like `psum` in the body of `f` can mention the axis
     names of `mesh`;
+  id: totrans-72
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 `f` 的主体中，像 `psum` 这样的通信集合可以提及 `mesh` 的轴名称；
 - en: '`mesh` encodes devices arranged in an array and with associated axis names,
     just like it does for `sharding.NamedSharding`;'
+  id: totrans-73
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`mesh` 编码排列成数组并带有关联轴名称的设备，就像 `sharding.NamedSharding` 一样；'
 - en: '`in_specs` and `out_specs` are `PartitionSpec`s which can affinely mention
     axis names from `mesh` to express slicing/unconcatenation and concatenation of
     inputs and outputs, respectively, with unmentioned names corresponding to replication
     and untiling (assert-replicated-so-give-me-one-copy), respectively;'
+  id: totrans-74
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`in_specs` 和 `out_specs` 是 `PartitionSpec`，可以用来从 `mesh` 中仿射地提及轴名称，以表达输入和输出的切片/未连接和连接，分别对应于未提及名称的复制和取消铺设（断言-复制-因此-给我-一个-副本）；'
 - en: '`auto` is an optional set of axis names corresponding to the subset of names
     of `mesh` to treat automatically in the body, as in the caller, rather than manually;'
+  id: totrans-75
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`auto` 是对应于 `mesh` 名称子集的可选轴名称，在主体中自动处理，如在调用者中，而不是手动处理；'
 - en: '`check_rep` is an optional boolean indicating whether to check statically for
     any replication errors in `out_specs`, and also whether to enable a related automatic
     differentiation optimization (see [JEP](https://jax.readthedocs.io/en/latest/jep/17111-shmap-transpose.html)).'
+  id: totrans-76
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`check_rep`是一个可选布尔值，指示静态检查`out_specs`中是否存在任何复制错误，并且是否启用相关的自动微分优化（参见[JEP](https://jax.readthedocs.io/en/latest/jep/17111-shmap-transpose.html)）。'
 - en: The shapes of the arguments passed to `f` have the same ranks as the arguments
     passed to `shard_map`-of-`f`, and the shape of an argument to `f` is computed
     from the shape `shape` of the corresponding argument to `shard_map`-of-`f` and
     the corresponding `PartitionSpec` `spec` as roughly `tuple(sz // (1 if n is None
     else mesh.shape[n]) for sz, n in zip(shape, spec))`.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 传递给`f`的参数的形状与传递给`shard_map`-of-`f`的参数的形状具有相同的秩，`f`的参数的形状从相应的`shard_map`-of-`f`的形状`shape`和相应的`PartitionSpec`
+    `spec`中粗略计算为`tuple(sz // (1 if n is None else mesh.shape[n]) for sz, n in zip(shape,
+    spec))`。
 - en: Collectives tutorial
+  id: totrans-78
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 集合教程
 - en: 'A `shard_map` need not be a pure map: function applications can communicate
     with each other via *collectives*, using axis names defined in the `mesh` argument.'
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: '`shard_map`不必是纯映射：函数应用可以通过*集合*与彼此通信，使用在`mesh`参数中定义的轴名称。'
 - en: 'Recall that `shard_map` maps a function over shards, or blocks, of input data,
     so that this:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 请记住，`shard_map`将函数映射到输入数据的分片或块，因此这样：
 - en: '[PRE29]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: 'Computes the same values, evaluating applications of `f` to the same argument
     values, as this reference function:'
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 计算相同的值，评估对相同参数值的`f`的应用，如此参考函数：
 - en: '[PRE30]'
+  id: totrans-83
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: We call these applications of `f` to different argument shards *function instances*.
     Each function instance is executed on a different device (or subset of devices).
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将这些对不同参数分片的`f`的应用称为*函数实例*。每个函数实例在不同的设备（或设备子集）上执行。
 - en: These reference semantics work when `f` has no communication collectives in
     it. But what if we want the function instances to communicate, corresponding to
     having cross-device communication? That is, what are the reference semantics when
     `f` contains a collective? Say `f` has just one collective, and is of the form
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些引用语义在`f`中没有通信集合时有效。但是如果我们希望函数实例进行通信，即进行跨设备通信，该怎么办？也就是说，当`f`包含一个集合时，引用语义是什么？假设`f`只有一个集合，并且形式如下：
 - en: '[PRE31]'
+  id: totrans-86
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: 'where we’re assuming there’s only one mesh axis we’re mapping over, and `axis_name`
     is the corresponding name for it. Then the reference semantics would look more
     like:'
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设我们映射的唯一网格轴只有一个，并且`axis_name`是其对应的名称。然后引用语义看起来更像是：
 - en: '[PRE32]'
+  id: totrans-88
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: Notice that `collective_ref` might depend on all the `z_blocks`. That is, while
     `f_part1` and `f_part2` are mapped over blocks independently, a collective introduces
     some amount of cross-block dependence. Physically, that means communication across
     devices. Exactly what communication happens, and what values are computed, depend
     on the collective.
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，`collective_ref`可能依赖于所有的`z_blocks`。也就是说，虽然`f_part1`和`f_part2`独立地映射到块上，但是集合引入了跨块依赖。在物理上，这意味着跨设备的通信。确切地说，通信发生了什么，以及计算了什么值，取决于集合。
 - en: '`psum`'
+  id: totrans-90
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: '`psum`'
 - en: 'The simplest collective may be `jax.lax.psum`, which computes an all-reduce-sum
     along a device mesh axis (or multiple axes). Here’s a toy example:'
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 最简单的集合可能是`jax.lax.psum`，它沿着设备网格轴（或多个轴）计算全归约和。这里是一个玩具示例：
 - en: '![Illustration of a psum computation.](img/931361580e53b1b6d260185b850fb92f.png)'
+  id: totrans-92
   prefs: []
   type: TYPE_IMG
+  zh: '![psum计算示例的插图。](img/931361580e53b1b6d260185b850fb92f.png)'
 - en: '[PRE33]'
+  id: totrans-93
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: '[PRE34]'
+  id: totrans-94
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: '[PRE35]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: '[PRE36]'
+  id: totrans-96
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: The prints show that each function application starts with its own chunk of
     the argument value `x_block`. After the `psum`, each function application has
     the same value of `y_block`, computed by summing the applications’ `x_block` values
     together.
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 打印显示，每个函数应用都从其自己的参数值块`x_block`开始。在`psum`之后，每个函数应用都有相同的`y_block`值，通过将应用的`x_block`值求和而得到。
 - en: In the case where there’s a single axis name in the computation, we could say
     that the `collective_ref` reference implementation for `psum` is
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 在计算中存在单个轴名称的情况下，我们可以说`collective_ref`对于`psum`的引用实现是：
 - en: '[PRE37]'
+  id: totrans-99
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: Notice also that because `f1` returns `y_block`, the result of a `psum` over
     `'i'`, we can use `out_specs=P()` so the caller gets a single logical copy of
     the result value, rather than a tiled result.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 还要注意，因为`f1`返回`y_block`，对`'i'`进行`psum`的结果，我们可以使用`out_specs=P()`，这样调用者就可以得到单个逻辑副本的结果值，而不是平铺的结果。
 - en: 'When there is more than one mesh axis, we can perform a `psum` over each one
     separately, or over multiple axes at once:'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 当存在多个网格轴时，我们可以分别对每个轴执行`psum`，或者同时对多个轴执行：
 - en: '[PRE38]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: '[PRE39]'
+  id: totrans-103
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: By applying a `psum` over mesh axis `'i'`, we get values of `y_block` which
     are equal along axis ‘`i'`, but not axis `'j'`. (So we can use `out_specs=P(None,
     'j')` to get a single logical result along that axis.)
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过在网格轴 `'i'` 上应用 `psum`，我们得到沿 `'i'` 轴相等的 `y_block` 值，但不沿 `'j'` 轴相等。（因此，我们可以使用
+    `out_specs=P(None, 'j')` 来获取沿该轴的单一逻辑结果。）
 - en: 'If we apply the `psum` over both axes, the `y_block` value is equal along both
     axes:'
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们在两个轴上应用 `psum`，则 `y_block` 值沿两个轴相等：
 - en: '[PRE40]'
+  id: totrans-106
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: '[PRE41]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: In machine learning, we often use `psum` to compute total losses or, when we
     have a `grad` inside the `shard_map`ped function body, total gradients.
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 在机器学习中，我们经常使用 `psum` 来计算总损失，或者当我们在 `shard_map` 函数体内有一个 `grad` 时，计算总梯度。
 - en: In the sequel, we’ll see how `psum` can be implemented in terms of other primitives,
     which gives some intuition about its communication cost.
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将看到如何用其他基元实现 `psum`，这些基元能够对其通信成本提供一些直观的理解。
 - en: '`all_gather`'
+  id: totrans-110
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: '`all_gather`'
 - en: 'Another fundamental operation is gathering array shards along an axis, so that
     each function application has a full copy of the data along that axis:'
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个基本操作是沿轴收集数组片段，以便每个函数应用程序在该轴上都有数据的完整副本：
 - en: '![Illustration of an all_gather computation.](img/ec65cb3ece67fc37d896ecfb7adae327.png)'
+  id: totrans-112
   prefs: []
   type: TYPE_IMG
+  zh: '![Illustration of an all_gather computation.](img/ec65cb3ece67fc37d896ecfb7adae327.png)'
 - en: '[PRE42]'
+  id: totrans-113
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: '[PRE43]'
+  id: totrans-114
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: The prints show that each function application again starts with its own chunk
     of the argument value `x_block`. After the `all_gather`, they have a common value,
     computed by concatenating the values of `x_block`.
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 打印显示，每个函数应用程序再次以其自己的 `x_block` 参数值块的一个片段开始。在 `all_gather` 后，它们具有一个通过连接 `x_block`
+    值计算得到的共同值。
 - en: (Notice that we actually can’t set `out_specs=P()` here. For technical reasons
     related to automatic differentiation, we consider the output of `all_gather` not
     to be guaranteed invariant across devices. If we wanted it to be guaranteed invariant,
     we could use `jax.lax.all_gather_invariant`, or in this case we could just avoid
     doing the `all_gather` in the function body and instead just use `out_specs=P('i')`
     to perform the concatenation.)
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: （请注意，我们实际上不能在此处设置 `out_specs=P()`。由于与自动微分相关的技术原因，我们认为 `all_gather` 的输出不保证在不同设备上不变。如果我们希望它保证不变，我们可以使用
+    `jax.lax.all_gather_invariant`，或者在这种情况下，我们可以避免在函数体中执行 `all_gather`，而是只使用 `out_specs=P('i')`
+    来执行连接。）
 - en: 'When `tiled=False` (the default), results are stacked along a new axis instead
     of concatenated:'
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 当 `tiled=False`（默认情况下）时，结果沿新轴堆叠而不是连接：
 - en: '[PRE44]'
+  id: totrans-118
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: '[PRE45]'
+  id: totrans-119
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: We could write the `collective_ref` reference semantics function for `all_gather`
     as
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以为 `all_gather` 编写 `collective_ref` 引用语义函数：
 - en: '[PRE46]'
+  id: totrans-121
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: In deep learning, we might use `all_gather`s on parameters in fully sharded
     data parallelism (FSDP).
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 在深度学习中，我们可以在完全分片数据并行性（FSDP）中对参数使用 `all_gather`。
 - en: '`psum_scatter`'
+  id: totrans-123
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: '`psum_scatter`'
 - en: 'The `jax.lax.psum_scatter` collective is a bit less intuitive. It’s like `psum`
     except each function instance gets only one shard of the result:'
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jax.lax.psum_scatter` 集合操作有点不那么直观。它类似于 `psum`，但每个函数实例只获得结果的一个分片：'
 - en: '![Illustration of a psum_scatter computation.](img/5f72573ffc461c26ed22dc45fe810e1d.png)'
+  id: totrans-125
   prefs: []
   type: TYPE_IMG
+  zh: '![Illustration of a psum_scatter computation.](img/5f72573ffc461c26ed22dc45fe810e1d.png)'
 - en: '[PRE47]'
+  id: totrans-126
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: '[PRE48]'
+  id: totrans-127
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: As shown by the prints, each resulting `y_block` has a smaller size than the
     argument `x_block`, unlike with `psum`. Moreover, compared to `psum`, here each
     `y_block` only represents a slice of the sum of the `x_block`s across function
     instances. (Even though each function instance gets only one shard of the sum,
     the final output `y` is the same as in the `psum` example because here we use
     `out_specs=P('i')` to concatenate each function instance’s output.)
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 如打印所示，每个结果的 `y_block` 比参数 `x_block` 的大小要小，与 `psum` 不同。此外，与 `psum` 相比，这里每个 `y_block`
+    只表示函数实例的 `x_block` 总和的一个片段。 （尽管每个函数实例只获得总和的一个分片，但最终输出 `y` 与 `psum` 示例中的相同，因为我们在这里使用
+    `out_specs=P('i')` 来连接每个函数实例的输出。）
 - en: 'In terms of what values are computed, a `collective_ref` reference implementation
     might look like:'
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 在计算的值方面，`collective_ref` 参考实现可能如下所示：
 - en: '[PRE49]'
+  id: totrans-130
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: 'It’s not captured in the semantics reference implementation, but `psum_scatter`
     is useful because these results can be computed more efficiently, with less communication,
     than a full `psum`. In fact, one way to think of `psum_scatter` is as “the first
     half of a `psum`, before an `all_gather`”. That is, one way to implement `psum`
     is:'
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 语义参考实现中未捕获，但 `psum_scatter` 很有用，因为这些结果可以比完整的 `psum` 更高效地计算，通信量更少。事实上，可以将 `psum_scatter`
+    看作是 `psum` 的“前半部分，即 `all_gather`”的一种方式。也就是说，实现 `psum` 的一种方式是：
 - en: '[PRE50]'
+  id: totrans-132
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: Indeed, this implementation is often used on both TPU and GPU!
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 实际上，这种实现经常在TPU和GPU上使用！
 - en: The reason `psum_scatter` can require about half the communication as a full
     `psum` is illustrated the `ppermute` section.
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: '`psum_scatter`需要约一半通信量的原因在`ppermute`部分有所体现。'
 - en: Another intuition is that we can use `psum_scatter` to implement a distributed
     matrix multiplication with inputs and outputs sharded over the same axis. In machine
     learning, `psum_scatter` can be used in tensor-parallel matrix multiplies or fully-sharded
     data parallel gradient accumulation, as shown in the examples to follow.
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个直觉是，我们可以使用`psum_scatter`来实现分布式矩阵乘法，其中输入和输出在相同的轴上分片。在机器学习中，`psum_scatter`可以用于张量并行矩阵乘法或完全分片数据并行梯度累积，如下例所示。
 - en: '`ppermute`'
+  id: totrans-136
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: '`ppermute`'
 - en: 'The `jax.lax.ppermute` collective provides the most direct way for function
     instances to send data to one another. Given a mesh axis and a list of `(source_index,
     destination_index)` pairs representing indices along that mesh axis, `ppermute`
     sends its argument value from each source function instance to each destination:'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jax.lax.ppermute`集合提供了实例函数相互发送数据的最直接方式。给定一个网格轴和一个表示沿着该网格轴的索引的`(source_index,
+    destination_index)`对列表，`ppermute`将其参数值从每个源函数实例发送到每个目标：'
 - en: '[PRE51]'
+  id: totrans-138
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: '[PRE52]'
+  id: totrans-139
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: In this case, with just two function instances, each instance’s value of `y_block`
     is the other’s value of `x_block`.
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这种情况下，仅有两个函数实例，每个实例的`y_block`值是另一个实例的`x_block`值。
 - en: Source indices and destination indices can’t be repeated. If an index does not
     appear as a destination, then the value of the corresponding function instance’s
     result is an array of zeros.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 源索引和目标索引不能重复。如果一个索引未出现为目标，则相应函数实例结果的值为零数组。
 - en: A `collective_ref` reference implementation could look like
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个`collective_ref`的参考实现可能是这样的：
 - en: '[PRE53]'
+  id: totrans-143
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: 'Other collectives can be implemented efficiently, in terms of total communication,
     using `ppermute`s where each function passes data only to its neighbors. For example,
     we could implement `psum_scatter` using a sequence of `ppermute`s and local additions
     this way:'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 其他集合操作可以通过使用`ppermute`来实现，其中每个函数只向其邻居传递数据，从而在总通信量方面实现高效。例如，我们可以用这种方式实现`psum_scatter`，通过一系列`ppermute`和本地加法：
 - en: '![Illustration of a psum_scatter implementation.](img/c94992ab8c119394f2df5936638f799b.png)'
+  id: totrans-145
   prefs: []
   type: TYPE_IMG
+  zh: '![展示一个psum_scatter实现。](img/c94992ab8c119394f2df5936638f799b.png)'
 - en: 'Or, with a numerical example:'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者，举个数值示例：
 - en: '![Illustration of a psum_scatter implementation.](img/c705081a80eb07f99df90b32d8c3e0ab.png)'
+  id: totrans-147
   prefs: []
   type: TYPE_IMG
+  zh: '![展示一个psum_scatter实现。](img/c705081a80eb07f99df90b32d8c3e0ab.png)'
 - en: 'Intuitively, on each iteration each function instance sends ‘up’ the value
     it received on the previous iteration, and reduces (adds) the value it receives
     this iteration. In code, it might look like this:'
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 直观地说，每次迭代时，每个函数实例都将前一次迭代接收到的值“上送”，并在本次迭代中减少（添加）它接收到的值。在代码中，可能看起来像这样：
 - en: '[PRE54]'
+  id: totrans-149
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: '[PRE55]'
+  id: totrans-150
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: '[PRE56]'
+  id: totrans-151
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: On TPU, there are higher-dimensional variants of this algorithm to exploit multiple
     bidirectional physical mesh axes.
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 在TPU上，有更高维度的算法变体来利用多向双向物理网格轴。
 - en: 'Notice that `psum_scatter` is the transpose of `all_gather`. Indeed, a way
     to implement `all_gather` in terms of `ppermute` looks like the reverse of the
     above process:'
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，`psum_scatter`是`all_gather`的转置。事实上，实现`all_gather`的一种方式是使用`ppermute`的逆过程：
 - en: '![Illustration of an all_gather implementation.](img/ad90205decf32098ca6aaa8799d8853c.png)'
+  id: totrans-154
   prefs: []
   type: TYPE_IMG
+  zh: '![展示一个all_gather实现。](img/ad90205decf32098ca6aaa8799d8853c.png)'
 - en: In deep learning, we might use `ppermute` when implementing SPMD pipeline parallelism,
     where we divide our network along its depth into stages and evaluate the applications
     of stages in parallel. Or we might use `ppermute` in parallelizing the evaluation
     of convolutional layers, where we shard over spatial axes and thus devices must
     communicate “halos” to each other. Or it may be used under-the-hood in tensor-parallel
     matrix multiplies.
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 在深度学习中，当实现SPMD管道并行时，我们可能会使用`ppermute`，其中我们沿着深度将网络分割成阶段并并行评估阶段的应用。或者，当并行化卷积层的评估时，我们可能会使用`ppermute`，其中我们在空间轴上分片，因此设备必须相互通信“halos”。或者在张量并行矩阵乘法的幕后使用它。
 - en: '`all_to_all`'
+  id: totrans-156
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: '`all_to_all`'
 - en: 'A final collective is `all_to_all`, which is essentially a block matrix transpose
     operating along one positional axis and one cross-device axis:'
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后一个集合操作是`all_to_all`，它本质上是沿一个位置轴和一个跨设备轴进行的块矩阵转置操作：
 - en: '![Illustration of an all_to_all computation.](img/c50a4e367be0e5f102e6c82c1a02c1da.png)'
+  id: totrans-158
   prefs: []
   type: TYPE_IMG
+  zh: '![展示一个all_to_all计算。](img/c50a4e367be0e5f102e6c82c1a02c1da.png)'
 - en: '[PRE57]'
+  id: totrans-159
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: '[PRE58]'
+  id: totrans-160
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: The `split_axis` argument indicates which positional axis should be sharded
     and partitioned across the mesh axis. The `concat_axis` argument indicates the
     axis along which the communicated results should be concatenated or stacked.
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: '`split_axis` 参数指示应该在网格轴上分片和分区的位置轴。`concat_axis` 参数指示应该在通信结果应该被连接或堆叠的轴。'
 - en: When `tiled=False` (the default), the `split_axis` axis size must equal the
     size of the mesh axis named `axis_name`, and a new axis of that size is created
     at position `concat_axis` for the stacked results. When `tiled=True`, the `split_axis`
     axis size need only be evenly divisible by the size of the mesh axis, and results
     are concatenated along the existing axis `concat_axis`.
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 当 `tiled=False`（默认情况下），`split_axis` 轴的大小必须等于命名为 `axis_name` 的网格轴的大小，并且在位置 `concat_axis`
+    创建一个新的该大小的轴用于堆叠结果。当 `tiled=True` 时，`split_axis` 轴的大小只需可以被网格轴的大小整除，结果沿现有轴 `concat_axis`
+    连接。
 - en: 'The `collective_ref` reference semantics when `split_axis=0` and `concat_axis=0`
     might look like:'
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 当 `split_axis=0` 和 `concat_axis=0` 时，`collective_ref` 引用语义可能如下：
 - en: '[PRE59]'
+  id: totrans-164
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: In deep learning, we might use `all_to_all` in mixture-of-expert routing, where
     we first sort our local batch of examples according to which expert they should
     go to, then apply an `all_to_all` to redistribute examples to experts.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 在深度学习中，我们可能在专家混合路由中使用 `all_to_all`，我们首先根据它们应该去的专家对我们的本地批次的示例进行排序，然后应用 `all_to_all`
+    重新分发示例到专家。
 - en: Toy examples
+  id: totrans-166
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 玩具示例
 - en: How might we use `shard_map` and collective communication in practice? These
     examples, while simple, give some idea.
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们如何在实践中使用 `shard_map` 和集体通信？这些例子虽然简单，但提供了一些思路。
 - en: Matrix multiplies
+  id: totrans-168
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 矩阵乘法
 - en: Parallelizing matrix multiplication is central in scaling up deep learning models,
     both for training and for inference. When `jax.jit` automatically parallelizes
     matrix multiplication, it can use one of several different strategies, depending
@@ -731,204 +1100,314 @@
     of those parallelized routines more explicitly using `shard_map`? And how can
     we optimize them to get better compute/communication overlap and thus improve
     FLOP utilization?
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 并行化矩阵乘法对于扩展深度学习模型至关重要，无论是用于训练还是推断。当 `jax.jit` 自动并行化矩阵乘法时，它可以使用几种不同的策略，这取决于矩阵大小、硬件细节和其他因素。我们如何更明确地编写一些使用
+    `shard_map` 并行化的例程？如何优化它们以获得更好的计算/通信重叠，从而提高 FLOP 利用率？
 - en: '[PRE60]'
+  id: totrans-170
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: '[PRE61]'
+  id: totrans-171
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE61]'
 - en: 'Example 1: `all-gather` on one side'
+  id: totrans-172
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 示例 1：`all-gather` 在一侧
 - en: 'Consider performing a matrix multiplication where we shard the left-hand side
     argument (can think: parameters) on its leading (non-contracting) dimension:'
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 考虑执行一个矩阵乘法，在这个过程中我们在其主（非收缩）维度上分片左侧参数（可以考虑：参数）：
 - en: '[PRE62]'
+  id: totrans-174
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE62]'
 - en: 'And wee shard the right-hand side argument (can think: activations) on its
     contracting dimension, with a similar sharding for the output:'
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 并且我们在其收缩维度上分片右侧参数（可以考虑：激活），输出也类似分片：
 - en: '[PRE63]'
+  id: totrans-176
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE63]'
 - en: 'To perform this matrix multiplication, we can first all-gather the right-hand
     side and then perform local matrix multiplies against the sharded left-hand side:'
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了执行这个矩阵乘法，我们可以首先全收集右侧，然后对分片左侧进行本地矩阵乘法：
 - en: '[PRE64]'
+  id: totrans-178
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE64]'
 - en: '[PRE65]'
+  id: totrans-179
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE65]'
 - en: '[PRE66]'
+  id: totrans-180
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE66]'
 - en: 'That’s great, but we’re not getting any compute/communication overlap here:
     before we can start the matmul, we need the `all_gather` to complete. Here’s a
     profile using the same code, but on larger example shapes (`(8192, 8192)` for
     `lhs` and `(8192, 1024)` for `rhs`):'
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 这很棒，但我们这里没有计算/通信重叠：在我们可以开始矩阵乘法之前，我们需要 `all_gather` 完成。这里是使用相同代码的性能分析，但在更大的示例形状上
+    (`lhs` 为 `(8192, 8192)`，`rhs` 为 `(8192, 1024)`)：
 - en: '![Profile of an all-gather matmul without overlap.](img/e3d458832dd99012b0f2d265902e1230.png)'
+  id: totrans-182
   prefs: []
   type: TYPE_IMG
+  zh: '![没有重叠的 all-gather 矩阵乘法分析](img/e3d458832dd99012b0f2d265902e1230.png)'
 - en: 'We can get compute/communication overlap if instead of calling `all_gather`
     we basically inline our above implementation of `all_gather` in terms of `ppermute`,
     then interleave steps of the gather permutation with local matrix multiplies:'
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们不是调用 `all_gather`，而是基本上在我们的 `ppermute` 实现中内联我们上面的 `all_gather`，那么我们可以获得计算/通信重叠，然后交错进行收集排列步骤与本地矩阵乘法的步骤：
 - en: '[PRE67]'
+  id: totrans-184
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE67]'
 - en: '[PRE68]'
+  id: totrans-185
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE68]'
 - en: '[PRE69]'
+  id: totrans-186
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE69]'
 - en: 'This implementation allows overlap between communication and computation, and
     also avoids gathering a large intermediate onto each device. But on TPU it uses
     only half the interconnect bandwidth by permuting in only one direction along
     the ring. To permute bidirectionally, we just split the blocks in half and send
     each half in each direction:'
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 此实现允许在通信和计算之间重叠，并且还避免在每个设备上聚合大量中间数据。但在TPU上，通过沿环的一个方向仅置换，仅使用一半的互连带宽。要双向置换，我们只需将块分成两半，并将每半分别发送到每个方向：
 - en: '[PRE70]'
+  id: totrans-188
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE70]'
 - en: '[PRE71]'
+  id: totrans-189
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE71]'
 - en: '[PRE72]'
+  id: totrans-190
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE72]'
 - en: '![Profile of an all-gather matmul with overlap.](img/d7543b8af3d8962ebb005907a96fec45.png)'
+  id: totrans-191
   prefs: []
   type: TYPE_IMG
+  zh: '![具有重叠的全聚合matmul剖面。](img/d7543b8af3d8962ebb005907a96fec45.png)'
 - en: In practice, to reduce compile times we would probably roll this into a `jax.lax.fori_loop`.
     We might also have additional axes of parallelism involved.
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 在实践中，为了减少编译时间，我们可能会将这些内容合并到`jax.lax.fori_loop`中。我们可能还涉及额外的轴并行化。
 - en: 'Example 2: `psum_scatter` the result'
+  id: totrans-193
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 示例2：`psum_scatter`结果
 - en: 'Another sharding we might start with has both `lhs` and `rhs` sharded along
     their contracting dimensions, with the output sharded like `rhs` again:'
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个我们可以开始的分片方法是，将`lhs`和`rhs`沿其收缩维度进行分片，输出再次像`rhs`一样进行分片：
 - en: '[PRE73]'
+  id: totrans-195
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE73]'
 - en: 'Here we can use a `reduce_scatter` to perform the contraction sum over shards:'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们可以使用`reduce_scatter`来执行分片上的收缩求和：
 - en: '[PRE74]'
+  id: totrans-197
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE74]'
 - en: '[PRE75]'
+  id: totrans-198
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE75]'
 - en: 'But the scattering communication must wait for the entire local matrix multiply
     to finish before it can start. To get communication/computation overlap, we can
     inline an implementation of `psum_scatter` in terms of `ppermute`, then interleave
     the communication steps with local matrix multiplies:'
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
+  zh: 但散射通信必须等待整个本地矩阵乘法完成后才能开始。为了实现通信/计算重叠，我们可以内联`psum_scatter`的`ppermute`实现，然后将通信步骤与本地矩阵乘法交错进行：
 - en: '[PRE76]'
+  id: totrans-200
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE76]'
 - en: '[PRE77]'
+  id: totrans-201
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE77]'
 - en: '[PRE78]'
+  id: totrans-202
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE78]'
 - en: 'As in the previous example, to fully utilize interconnects on TPU, we’d run
     a bidirectional version:'
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 如前例所示，为了充分利用TPU上的互连，我们将运行一个双向版本：
 - en: '[PRE79]'
+  id: totrans-204
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE79]'
 - en: '[PRE80]'
+  id: totrans-205
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE80]'
 - en: '[PRE81]'
+  id: totrans-206
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE81]'
 - en: Neural networks
+  id: totrans-207
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 神经网络
 - en: 'We can use `shard_map` to parallelize computation in neural networks, either
     by itself or in combination with the automatic partitioning in `jax.jit`. This
     section has a few examples based on this toy neural network and random data:'
+  id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以使用`shard_map`来并行计算神经网络中的计算，可以单独使用，也可以与`jax.jit`中的自动分区组合使用。本节基于此玩具神经网络和随机数据提供了一些示例：
 - en: '[PRE82]'
+  id: totrans-209
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE82]'
 - en: '[PRE83]'
+  id: totrans-210
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE83]'
 - en: '[PRE84]'
+  id: totrans-211
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE84]'
 - en: Compare these examples with the purely [automatic partitioning examples in the
     “Distributed arrays and automatic partitioning” doc](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html).
     While in those automatic partitioning examples we don’t need to edit the model
     functions to use different parallelization strategies, with `shard_map` we often
     do.
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: 将这些示例与纯粹的[“分布式数组和自动分区”文档中的自动分区示例](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html)进行比较。在这些自动分区示例中，我们无需编辑模型函数即可使用不同的并行化策略，而在`shard_map`中，我们经常需要这样做。
 - en: 8-way batch data parallelism
+  id: totrans-213
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8路批次数据并行
 - en: The simplest multi-device parallelism strategy is to shard the batch of inputs
     and targets over multiple devices, replicate the parameters over those devices,
     and apply the model in parallel to those shards of data. To evaluate the total
     loss, the devices need only communicate with a scalar-sized all-reduce-sum at
     the end. (To evaluate the gradient of the loss, the devices must perform all-reduce-sums
     of parameter gradients in the backward pass.)
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: 最简单的多设备并行策略是将输入和目标的批次在多个设备上进行分片，将参数复制到这些设备上，并并行应用模型于数据的这些分片。为了评估总损失，设备只需在末尾进行标量大小的全约和求和。（为了评估损失的梯度，设备必须在后向传播中执行参数梯度的全约和求和。）
 - en: '[PRE85]'
+  id: totrans-215
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE85]'
 - en: 'We can check that the loss and its gradients match the reference (base) model:'
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以检查损失及其梯度是否与参考（基础）模型匹配：
 - en: '[PRE86]'
+  id: totrans-217
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE86]'
 - en: '[PRE87]'
+  id: totrans-218
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE87]'
 - en: '[PRE88]'
+  id: totrans-219
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE88]'
 - en: '[PRE89]'
+  id: totrans-220
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE89]'
 - en: 'We can print the compiler IR to inspect the gradient computation and verify
     that the collective all-reduce-sum operations happen where we’d expect: at the
     end of the forward pass to compute the loss value, and in the backward pass to
     compute the total parameter gradients.'
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以打印编译器IR以检查梯度计算，并验证在预期位置进行的集体全约和求和操作：在前向传播的末尾计算损失值时，以及在后向传播中计算总参数梯度时。
 - en: 8-way fully sharded data parallelism (FSDP)
+  id: totrans-222
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8路完全分片数据并行（FSDP）
 - en: Another strategy is to additionally shard the parameters over the devices, all-gathering
     each one when the full value is needed for the `jnp.dot` or bias addition. Since
     we only have one full parameter in local device memory at a time, rather than
@@ -936,84 +1415,122 @@
     we free up significant memory that we can use for larger models or larger batch
     sizes. And because XLA will overlap computation and inter-device communication,
     the wall-clock time doesn’t suffer.
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一种策略是在设备上额外对参数进行分片，在需要完整值进行`jnp.dot`或偏置添加时进行全部聚集。由于我们每次只在本地设备内存中保留一个完整的参数，而不像前面的DP示例中在所有设备内存中保留所有参数，这样我们可以释放出大量内存，用于更大的模型或更大的批处理大小。并且由于XLA会重叠计算和设备间通信，所以墙钟时间不会受影响。
 - en: 'So now we need collectives in two places: the model prediction function `predict`
     needs to all-gather the parameters before they’re used, and as in the DP case
     the loss function needs to sum the local losses to compute the total loss.'
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，现在我们需要在两个地方进行集体操作：模型预测函数`predict`需要在使用参数之前对其进行全部聚集，而与DP情况一样，损失函数需要对本地损失进行求和以计算总损失。
 - en: 'There’s one other ingredient we need: we don’t want to store the fully gathered
     parameters from the forward pass for use on the backward pass. Instead, we want
     to gather them again on the backward pass. We can express that by using `jax.remat`
     with a [custom policy](https://jax.readthedocs.io/en/latest/notebooks/autodiff_remat.html#custom-policies-for-what-s-saveable)
     (or a `custom_vjp`), though XLA typically does that rematerialization automatically.'
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 还有一项我们需要的内容：我们不希望在反向传播中存储从前向传播中完全聚集的参数。相反，我们希望在反向传播时再次聚集它们。我们可以通过使用`jax.remat`与[自定义策略](https://jax.readthedocs.io/en/latest/notebooks/autodiff_remat.html#custom-policies-for-what-s-saveable)（或`custom_vjp`）来表达这一点，尽管XLA通常会自动进行该重现操作。
 - en: This general [FSDP approach](https://engineering.fb.com/2021/07/15/open-source/fsdp/)
     is similar to [weight update sharding (WUS)](https://arxiv.org/abs/2004.13336)
     and [ZeRO-3](https://arxiv.org/abs/1910.02054).
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种通用的[FSDP方法](https://engineering.fb.com/2021/07/15/open-source/fsdp/)类似于[权重更新分片（WUS）](https://arxiv.org/abs/2004.13336)和[ZeRO-3](https://arxiv.org/abs/1910.02054)。
 - en: '[PRE90]'
+  id: totrans-227
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE90]'
 - en: 'Again we can check that the loss and its gradients match the reference model:'
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 再次，我们可以检查损失及其梯度是否与参考模型匹配：
 - en: '[PRE91]'
+  id: totrans-229
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE91]'
 - en: '[PRE92]'
+  id: totrans-230
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE92]'
 - en: 8-way tensor parallelism (TP)
+  id: totrans-231
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8路张量并行性（TP）
 - en: Usually we don’t use tensor model parallelism by itself, but seeing it in isolation
     is a good warmup on parallel matrix multiplication. It’s also a good example of
     using `shard_map` in a library function, called in a larger `jit`-based computation.
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 通常我们不单独使用张量模型并行性，但单独看它可以作为并行矩阵乘法的一个良好热身。这也是在库函数中使用`shard_map`的一个良好示例，被调用于基于`jit`的大型计算中。
 - en: The parallelization idea is that we’ll keep the data/activations sharded over
     its feature axis (rather than its batch axis), and we’ll similarly shard weight
     matrices over their input-feature axis (and biases over their feature axis). Then
     to perform the parallel matrix multiplication, we’ll perform local matrix multiplications
     followed by a `psum_scatter` to sum the local results and efficiently scatter
     the result’s shards.
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 并行化的理念是我们将保持数据/激活沿其特征轴分片（而不是批处理轴），并且我们将类似地在输入特征轴上分片权重矩阵（和在其特征轴上的偏置）。然后，为了执行并行矩阵乘法，我们将执行本地矩阵乘法，然后进行`psum_scatter`以对本地结果求和并高效地分散结果的分片。
 - en: '[PRE93]'
+  id: totrans-234
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE93]'
 - en: FSDP + TP, with `shard_map` at the top level
+  id: totrans-235
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: FSDP + TP，在顶层使用`shard_map`
 - en: We can compose these strategies together, using multiple axes of parallelism.
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以将这些策略组合在一起，使用多轴并行性。
 - en: '[PRE94]'
+  id: totrans-237
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE94]'
 - en: 'Notice how we have to do *two* collective reductions: one over `''feats''`
     and one over `''batch''`. In the pure TP example, we didn’t write the `''feats''`
     reduction explicitly because we only used `shard_map` within `gemm_tp`; in the
     caller `loss_tp`, the compiler automatically translated our use of `jnp.sum` to
     perform a `psum` as needed given the sharded result returned by `predict_tp`.'
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意我们必须进行*两次*集体归约的方式：一次是在`'feats'`上，另一次是在`'batch'`上。在纯TP示例中，我们没有显式写出`'feats'`归约，因为我们仅在`gemm_tp`内部使用了`shard_map`；在调用`loss_tp`时，编译器会自动将我们对`jnp.sum`的使用转换为根据`predict_tp`返回的分片结果执行所需的`psum`。
 - en: '[PRE95]'
+  id: totrans-239
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE95]'
 - en: '[PRE96]'
+  id: totrans-240
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE96]'
 - en: SPMD pipeline parallelism (PP)
+  id: totrans-241
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: SPMD管道并行性（PP）
 - en: With pipeline parallelism we aim to parallelize the evaluation of layers at
     different depths in our network. For example, one device might compute the application
     of the first layer while another device computes the application of the second;
@@ -1021,46 +1538,70 @@
     second passes its results to the device responsible for the third layer, and the
     process repeats. In general the number of pipeline stages may be different from
     the number of layers, as each stage may be responsible for multiple layers.
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过流水线并行，我们的目标是并行评估网络中不同深度层的层。例如，一个设备可能计算第一层的应用，而另一个设备计算第二层的应用；当它们完成时，第一个设备将其结果传递给第二个设备，而第二个设备将其结果传递给负责第三层的设备，这个过程重复进行。一般来说，流水线阶段的数量可能与层的数量不同，因为每个阶段可能负责多个层。
 - en: With SPMD pipelining, we exploit the fact that most layers in the network apply
     the computation, just with different parameter values. In particular, we can stack
     together all the parameters except for those for the first and last layers, then
     use a `shard_map` to map over blocks of those layer parameters, where each block
     of parameters corresponds to a pipeline stage. We then use the `jax.lax.ppermute`
     collective to shift data down the parallel pipeline.
+  id: totrans-243
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用SPMD流水线，我们利用网络中大多数层应用计算的事实，只是参数值不同。特别是，我们可以堆叠除了第一层和最后一层之外的所有参数，然后使用`shard_map`将这些层参数块映射到管道阶段。然后我们使用`jax.lax.ppermute`集合来沿并行管道向下移动数据。
 - en: This particular pipelining strategy is essentially [the GPipe strategy](https://arxiv.org/abs/1811.06965).
     There are several variants, as well as quite different strategies, and which is
     appropriate can depend on the speed of the networking between stages and batch
     sizes. But for this tutorial we’ll focus on just one strategy.
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种特定的流水线策略本质上是[GPipe策略](https://arxiv.org/abs/1811.06965)。有几种变体以及相当不同的策略，哪一种适合取决于各阶段之间的网络速度和批量大小。但是在本教程中，我们将专注于只有一种策略。
 - en: 'First, we choose some pipeline parameters:'
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们选择一些流水线参数：
 - en: '[PRE97]'
+  id: totrans-246
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE97]'
 - en: '[PRE98]'
+  id: totrans-247
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE98]'
 - en: '[PRE99]'
+  id: totrans-248
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE99]'
 - en: '[PRE100]'
+  id: totrans-249
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE100]'
 - en: '[PRE101]'
+  id: totrans-250
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE101]'
 - en: '[PRE102]'
+  id: totrans-251
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE102]'
 - en: '[PRE103]'
+  id: totrans-252
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE103]'
 - en: '[PRE104]'
+  id: totrans-253
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE104]'

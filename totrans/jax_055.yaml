@@ -1,201 +1,302 @@
 - en: Control autodiff’s saved values with jax.checkpoint (aka jax.remat)
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用`jax.checkpoint`控制自动微分的保存数值（又名`jax.remat`）
 - en: 原文：[`jax.readthedocs.io/en/latest/notebooks/autodiff_remat.html`](https://jax.readthedocs.io/en/latest/notebooks/autodiff_remat.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/notebooks/autodiff_remat.html`](https://jax.readthedocs.io/en/latest/notebooks/autodiff_remat.html)
 - en: '[PRE0]'
+  id: totrans-2
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: TL;DR
+  id: totrans-3
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 简而言之
 - en: Use the `jax.checkpoint` decorator (aliased as `jax.remat`) with `jax.grad`
     to control which intermediates are saved on the forward pass versus recomputed
     on the backward pass, trading off memory and FLOPs.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用`jax.checkpoint`装饰器（别名为`jax.remat`），结合`jax.grad`来控制前向传播时保存哪些中间值，以及在反向传播时重新计算哪些中间值，从而在内存和FLOP之间进行权衡。
 - en: '**Don’t miss the practical notes for a discussion about how `jax.checkpoint`
     interacts with `jax.jit`.**'
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: '**不要错过关于`jax.checkpoint`如何与`jax.jit`交互的实用说明。**'
 - en: 'Without using `jax.checkpoint`, the forward pass of `jax.grad(f)(x)` saves,
     for use on the backward pass, the values of Jacobian coefficients and other intermediates.
     We call these saved values *residuals*:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果不使用`jax.checkpoint`，`jax.grad(f)(x)`的前向传播将保存雅可比系数和其他中间值以供后向传播使用。我们称这些保存的值为*残差*：
 - en: '[PRE1]'
+  id: totrans-7
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: '[PRE2]'
+  id: totrans-8
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'By applying `jax.checkpoint` to sub-functions, as a decorator or at specific
     application sites, we force JAX not to save any of that sub-function’s residuals.
     Instead, only the inputs of a `jax.checkpoint`-decorated function might be saved,
     and any residuals consumed on the backward pass are re-computed from those inputs
     as needed:'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过对子函数应用`jax.checkpoint`，无论是作为装饰器还是在特定的应用站点，我们都强制JAX不保存该子函数的任何残差。相反，只有`jax.checkpoint`装饰的函数的输入可能会被保存，并且在反向传播时从这些输入重新计算任何消耗的残差：
 - en: '[PRE3]'
+  id: totrans-10
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: '[PRE4]'
+  id: totrans-11
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: Here the values of two `sin` applications are saved because they are arguments
     in subsequent applications of the `jax.checkpoint`-decorated `g` function, and
     inputs to a `jax.checkpoint`-decorated function may be saved. But no values of
     `cos` applications are saved.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里保存了两个`sin`应用的值，因为它们是`jax.checkpoint`装饰的`g`函数后续应用的参数，并且`jax.checkpoint`装饰的函数的输入可能会被保存。但没有保存任何`cos`应用的值。
 - en: 'To control which values are saveable without having to edit the definition
     of the function to be differentiated, you can use a rematerialization *policy*.
     Here is an example that saves only the results of `dot` operations with no batch
     dimensions (since they are often FLOP-bound, and hence worth saving rather than
     recomputing):'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 要控制哪些值可保存，而无需编辑要区分的函数的定义，您可以使用重新材料化*策略*。以下是一个例子，仅保存没有批次维度的`dot`操作的结果（因为它们通常是FLOP限制的，因此值得保存而不是重新计算）：
 - en: '[PRE5]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: '[PRE6]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'You can also use policies to refer to intermediate values you name using `jax.ad_checkpoint.checkpoint_name`:'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 您还可以使用策略来引用使用`jax.ad_checkpoint.checkpoint_name`命名的中间值：
 - en: '[PRE7]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: '[PRE8]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'When playing around with these toy examples, we can get a closer look at what’s
     going on using the `print_fwd_bwd` utility defined in this notebook:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 在玩弄这些玩具示例时，我们可以使用在此笔记本中定义的`print_fwd_bwd`实用程序更详细地了解正在进行的操作：
 - en: '[PRE9]'
+  id: totrans-20
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: '[PRE10]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '[PRE11]'
+  id: totrans-22
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: '[PRE12]'
+  id: totrans-23
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '[PRE13]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: Let’s think step by step
+  id: totrans-25
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 让我们一步一步地思考
 - en: You might want to first (re)read [the Autodiff Cookbook Part 1](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html).
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可能希望首先（重新）阅读[自动微分手册第1部分](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html)。
 - en: Fundamentals of `jax.checkpoint`
+  id: totrans-27
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`jax.checkpoint`的基础知识'
 - en: In both `jax.linearize` and `jax.vjp` there is flexibility in how and when some
     values are computed. Different choices can trade off memory use against FLOPs.
     JAX provides control over these choices with `jax.checkpoint`.
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 在`jax.linearize`和`jax.vjp`中，如何以及何时计算某些值有灵活性。不同的选择可以在内存使用和FLOP之间进行权衡。JAX通过`jax.checkpoint`提供了对这些选择的控制。
 - en: 'One such choice is whether to perform Jacobian coefficient computations on
     the forward pass, as soon as the inputs are available, or on the backward pass,
     just before the coefficients are needed. Consider the example of `sin_vjp`:'
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中之一是在前向传播时执行雅可比系数计算，即在输入可用时立即进行，或者在反向传播时，在需要系数之前进行。考虑`sin_vjp`的例子：
 - en: '[PRE14]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'Another valid implementation would compute the value of `jnp.cos(x)` on the
     backward pass rather than on the forward pass:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 在反向传播时，另一种有效的实现方式是计算`jnp.cos(x)`的值，而不是在前向传播时：
 - en: '[PRE15]'
+  id: totrans-32
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: For this particular function, the amount of memory used by the two versions
     is the same, though we’ve reduced the FLOPs for the primal computation (i.e. the
     forward pass) and increased the FLOPs for the cotangent computation (i.e. the
     backward pass).
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于这个特定的函数，两个版本使用的内存量是相同的，尽管我们减少了原始计算的FLOP并增加了余切计算的FLOP。
 - en: 'There’s another choice when it comes to function composition. Recall our VJP
     rule for a composition of two functions:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 当涉及函数组合时，我们还有另一种选择。回顾我们的两个函数组合的VJP规则：
 - en: '[PRE16]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'An alternative is:'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一种选择是：
 - en: '[PRE17]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'In words, this alternative implementation doesn’t compute `g_vjp`, or the residual
     values in its closure, on the forward pass. Instead it only computes them in the
     backward pass `f_bwd2`. That means `f_vjp_checkpoint` requires less memory: if
     `g` and `h` each required similar amounts of memory for their residuals, each
     much larger than `x`, then the function produced by `f_vjp_checkpoint(x)` requires
     half the memory as that of `f_vjp(x)`!'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，这种替代实现不会在前向传播中计算`g_vjp`或其闭包中的残差值。而是只在后向传播`f_bwd2`中计算它们。这意味着`f_vjp_checkpoint`需要更少的内存：如果`g`和`h`每个都需要类似量级的内存来存储其残差，远大于`x`，那么由`f_vjp_checkpoint(x)`生成的函数所需的内存量仅为`f_vjp(x)`的一半！
 - en: 'The cost we pay is redundant work: in `f_bwd2` we must re-evaluate `g(x)` as
     part of `jax.vjp(g, x)` just to discard its value (in the underscore variable
     on the line `_, g_vjp = jax.vjp(g, x)`).'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们所付出的代价是冗余工作：在`f_bwd2`中，我们必须重新评估`g(x)`作为`jax.vjp(g, x)`的一部分，只是为了丢弃它的值（在下划线变量的行中`_,
+    g_vjp = jax.vjp(g, x)`）。
 - en: 'We can get this VJP behavior in autodiff � without having to write VJP functions
     directly � by instead using `jax.checkpoint` in an alternative definition of the
     original function `f`:'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以在自动微分中实现这种VJP行为，而不必直接编写VJP函数，而是通过在原始函数`f`的另一种定义中使用`jax.checkpoint`来实现：
 - en: '[PRE18]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: 'In other words, we apply `jax.checkpoint` to `g`, the first stage of `f`, rather
     than to `f` itself. This way, when we evaluate `jax.grad(f_checkpoint)(x)`, we’d
     get a computation like:'
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，我们将`jax.checkpoint`应用于`f`的第一阶段`g`，而不是`f`本身。这样，当我们评估`jax.grad(f_checkpoint)(x)`时，我们会得到如下计算：
 - en: run the forward pass of `g`, discarding residual values;
+  id: totrans-43
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行`g`的前向传播，丢弃残差值；
 - en: run the forward pass of `h`, saving residuals;
+  id: totrans-44
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行`h`的前向传播，保存残差；
 - en: run the backward pass of `h`, consuming residuals from step 2;
+  id: totrans-45
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行`h`的后向传播，使用步骤2中的残差；
 - en: re-run the forward pass of `g`, saving residuals;
+  id: totrans-46
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 重新运行`g`的前向传播，保存残差；
 - en: run the backward pass of `g`, consuming residuals from step 4.
+  id: totrans-47
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行`g`的后向传播，使用步骤4中的残差。
 - en: 'That is, by evaluating `jax.grad(f_checkpoint)(x)` we’d get the same computation
     as:'
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，通过评估`jax.grad(f_checkpoint)(x)`，我们会得到与如下计算相同的结果：
 - en: '[PRE19]'
+  id: totrans-49
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: In general, `jax.checkpoint(foo)` is a new function which has the same input-output
     behavior as `foo`, but behaves differently under autodiff, particularly under
     `jax.linearize` and `jax.vjp` (and their wrappers, like `jax.grad`) but not `jax.jvp`.
@@ -203,107 +304,155 @@
     is stored on the forward pass; on the backward pass, residuals (i.e. intermediates
     from `foo` and its Jacobian coefficient values needed for the backward pass) are
     recomputed.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 通常情况下，`jax.checkpoint(foo)`是一个新函数，其输入输出行为与`foo`相同，但在自动微分下行为不同，特别是在`jax.linearize`和`jax.vjp`（以及它们的包装器，如`jax.grad`）中，但不包括`jax.jvp`。在求导时，只有经过`jax.checkpoint`的函数的输入会在前向传播时存储；在后向传播时，会重新计算残差（即来自`foo`及其雅可比系数值的中间值，这些值在后向传播时需要重新计算）。
 - en: 'Notice that if `f = lambda x: h(g(x))` is the function we want to differentiate,
     i.e. if we want to apply `jax.grad(f)`, we don’t get any memory savings by applying
     `jax.checkpoint` to `f` itself. That’s because evaluating `jax.grad(jax.checkpoint(f))(x)`
     would lead to a computation like:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: '注意，如果`f = lambda x: h(g(x))`是我们想要求导的函数，即如果我们想应用`jax.grad(f)`，那么对`f`本身应用`jax.checkpoint`不会节省任何内存。这是因为评估`jax.grad(jax.checkpoint(f))(x)`会导致如下计算：'
 - en: run the forward pass, discarding all residuals;
+  id: totrans-52
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行前向传播，丢弃所有残差；
 - en: immediately re-run the forward pass, saving residuals;
+  id: totrans-53
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 立即重新运行前向传播，保存残差；
 - en: run the backward pass, consuming residuals from step 2.
+  id: totrans-54
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行后向传播，使用步骤2中的残差。
 - en: 'That is, in code we’d have something like:'
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，代码中我们会有类似这样的东西：
 - en: '[PRE20]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'We also wouldn’t get any memory savings by applying `jax.checkpoint` to `h`,
     the second stage of `f`. That’s because evaluating `jax.grad(lambda x: jax.checkpoint(h)(g(x)))`
     would lead to a computation like:'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: '如果对`h`的第二阶段应用`jax.checkpoint`，我们也不会获得任何内存节省。这是因为评估`jax.grad(lambda x: jax.checkpoint(h)(g(x)))`会导致如下计算：'
 - en: run the forward pass of `g`, saving residuals;
+  id: totrans-58
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行`g`的前向传播，保存残差；
 - en: run the forward pass of `h`, discarding residuals;
+  id: totrans-59
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行`h`的前向传播，丢弃残差；
 - en: immediately re-run the forward pass of `h`, saving residuals;
+  id: totrans-60
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 立即重新运行`h`的前向传播，保存残差；
 - en: run the backward pass of `h`, consuming residuals from step 3;
+  id: totrans-61
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行`h`的后向传播，使用步骤3中的残差；
 - en: run the backward pass of `g`, consuming residuals from step 1.
+  id: totrans-62
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运行`g`的后向传播，消耗步骤1中的剩余项。
 - en: 'That is, in code we’d have something like:'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 这样，在代码中，我们会有类似以下的内容：
 - en: '[PRE21]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: 'Slightly more generally, if we had a chain composition of functions, like `f
     = lambda x: f3(f2(f1(x)))`, and we were interested in evaluating `jax.grad(f)`,
     we could say that:'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: '稍微更一般地说，如果我们有一个函数链组合，如`f = lambda x: f3(f2(f1(x)))`，并且我们有兴趣评估`jax.grad(f)`，我们可以说：'
 - en: we shouldn’t apply `jax.checkpoint` to the whole function `f`, since that wouldn’t
     save any memory (and will perform wasteful recomputation);
+  id: totrans-66
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们不应将`jax.checkpoint`应用于整个函数`f`，因为这不会节省任何内存（并且会执行浪费的重新计算）；
 - en: we shouldn’t apply `jax.checkpoint` to the last sub-function `f3`, since that
     wouldn’t save any memory (and will perform wasteful recomputation);
+  id: totrans-67
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们不应将`jax.checkpoint`应用于最后一个子函数`f3`，因为这不会节省任何内存（并且会执行浪费的重新计算）；
 - en: 'we could apply `jax.checkpoint` to `f1`, `f2`, or their composition `lambda
     x: f2(f1(x))`, since any of those might save memory and would express different
     memory/recompute tradeoffs.'
+  id: totrans-68
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '我们可以将`jax.checkpoint`应用于`f1`、`f2`或它们的组合`lambda x: f2(f1(x))`，因为这些任意一个都可能节省内存，并且会表达不同的内存/重新计算折衷。'
 - en: Custom policies for what’s saveable
+  id: totrans-69
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 什么可以保存的自定义策略
 - en: 'As shown so far, using `jax.checkpoint` switches from one extreme to another:'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止所展示的，使用`jax.checkpoint`会从一个极端切换到另一个：
 - en: without `jax.checkpoint`, JAX’s autodiff tends to compute everything possible
     on the forward pass and store it for the backward pass;
+  id: totrans-71
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 没有`jax.checkpoint`，JAX的自动微分倾向于在前向传播中计算尽可能多的内容，并为后向传播存储它；
 - en: with a `jax.checkpoint` decorator, we instead compute as little as possible
     on the forward pass and recompute values as needed on the backward pass.
+  id: totrans-72
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用`jax.checkpoint`装饰器，我们在前向传播中尽量少计算，并根据需要在后向传播中重新计算值。
 - en: To operate between these two extremes, saving some things and not others, we
     can carefully place `jax.checkpoint` decorators on sub-functions. But that requires
     editing the function to be differentiated, e.g. model code, which may be inconvenient.
     It can also be hard to experiment with variations.
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在这两个极端之间操作，保存某些东西而不保存其他东西，我们可以在子函数上谨慎地放置`jax.checkpoint`装饰器。但这需要编辑要求微分的函数，例如模型代码，这可能不方便。也很难对变体进行实验。
 - en: So an alternative is to use the `policy` argument to `jax.checkpoint`. A policy
     is a callable (i.e. a function) which takes as input a type-level specification
     of a first order primitive application and returns a boolean indicating whether
@@ -312,213 +461,330 @@
     code, a policy should be selected from the attributes on `jax.checkpoint_policies`,
     like `jax.checkpoint_policies.dots_with_no_batch_dims_saveable`, since the API
     for writing custom policy callables is considered internal.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，一个替代方法是使用`jax.checkpoint`的`policy`参数。策略是一个可调用对象（即一个函数），它以一种类型级别的原始应用规范作为输入，并返回一个布尔值，指示是否允许将相应的输出值保存为剩余项（或者必须在（共）切向计算中根据需要重新计算）。为了编写健壮的代码，应从`jax.checkpoint_policies`的属性中选择策略，例如`jax.checkpoint_policies.dots_with_no_batch_dims_saveable`，因为编写自定义策略可调用对象的API被认为是内部的。
 - en: 'For example, consider this function to be differentiated:'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，考虑要微分的这个函数：
 - en: '[PRE22]'
+  id: totrans-76
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: '[PRE23]'
+  id: totrans-77
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: '[PRE24]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: '[PRE25]'
+  id: totrans-79
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: 'Instead of saving so many values on the forward pass, perhaps we only want
     to save the results of matrix multiplications with no batch dimension (since they
     may be FLOP- rather than memory-bound). We can do that using the policy `jax.checkpoint_policies.dots_with_no_batch_dims_saveable`:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 而不是在前向传播中保存这么多值，也许我们只想保存没有批处理维度的矩阵乘法结果（因为它们可能是FLOP而不是内存绑定）。我们可以使用策略`jax.checkpoint_policies.dots_with_no_batch_dims_saveable`来实现这一点：
 - en: '[PRE26]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: '[PRE27]'
+  id: totrans-82
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: Notice also that by providing a policy, we didn’t need to edit the code defining
     `loss`, `predict`, or `layer`. That is particularly convenient if we want to experiment
     with policies in calling code (e.g. a training script) without changing library
     code (e.g. the neural network library).
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 还要注意，通过提供一个策略，我们无需编辑定义`loss`、`predict`或`layer`的代码。如果我们希望在调用代码（例如训练脚本）中进行策略实验而不更改库代码（例如神经网络库），这特别方便。
 - en: 'Some policies can refer to values named with `jax.ad_checkpoint.checkpoint_name`:'
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 一些策略可以引用名为`jax.ad_checkpoint.checkpoint_name`的值：
 - en: '[PRE28]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: 'By itself, `checkpoint_name` is just an identity function. But because some
     policy functions know to look for them, we can use the names to control whether
     certain values output by `checkpoint_name` are considered saveable:'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 单独看，`checkpoint_name` 只是一个身份函数。但因为某些策略函数知道如何查找它们，我们可以使用这些名称来控制 `checkpoint_name`
+    输出的某些值是否被视为可保存的：
 - en: '[PRE29]'
+  id: totrans-87
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: '[PRE30]'
+  id: totrans-88
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: '[PRE31]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: '[PRE32]'
+  id: totrans-90
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: Another policy which refers to names is `jax.checkpoint_policies.save_only_these_names`.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个涉及名称的策略是 `jax.checkpoint_policies.save_only_these_names`。
 - en: 'Some of the policies are:'
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 某些策略包括：
 - en: '`everything_saveable` (the default strategy, as if `jax.checkpoint` were not
     being used at all)'
+  id: totrans-93
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`everything_saveable`（默认策略，就像根本没有使用 `jax.checkpoint` 一样）'
 - en: '`nothing_saveable` (i.e. rematerialize everything, as if a custom policy were
     not being used at all)'
+  id: totrans-94
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`nothing_saveable`（即重新生成所有内容，就像根本没有使用自定义策略一样）'
 - en: '`dots_saveable` or its alias `checkpoint_dots`'
+  id: totrans-95
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`dots_saveable` 或其别名 `checkpoint_dots`'
 - en: '`dots_with_no_batch_dims_saveable` or its alias `checkpoint_dots_with_no_batch_dims`'
+  id: totrans-96
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`dots_with_no_batch_dims_saveable` 或其别名 `checkpoint_dots_with_no_batch_dims`'
 - en: '`save_anything_but_these_names` (save any values except for the output of `checkpoint_name`
     with any of the names given)'
+  id: totrans-97
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`save_anything_but_these_names`（保存任何值，但不包括具有给定名称的 `checkpoint_name` 输出）'
 - en: '`save_any_names_but_these` (save only named values, i.e. any outputs of `checkpoint_name`,
     except for those with the names given)'
+  id: totrans-98
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`save_any_names_but_these`（仅保存命名值，即 `checkpoint_name` 的任何输出，但不包括给定名称）'
 - en: '`save_only_these_names` (save only named values, and only among the names given)'
+  id: totrans-99
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`save_only_these_names`（仅保存命名值，并且仅限于给定的名称）'
 - en: Policies only indicate what is saveable; a value is only saved if it’s actually
     needed by the backward pass.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 策略仅指示可保存的内容；只有在反向传播实际需要时才会保存值。
 - en: 'Advanced: recursive `jax.checkpoint`'
+  id: totrans-101
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 高级：递归的 `jax.checkpoint`
 - en: By applying `jax.checkpoint` in the right way, there are many tradeoffs between
     memory usage and (re)computation that can be expressed. One surprising example
     is *recursive* checkpointing, where we apply `jax.checkpoint` to a function which
     itself calls `jax.checkpoint`-decorated functions in a way so that memory usage
     from the chain composition of \(D\) functions scales like \(\mathcal{O}(\log_2
     D)\) rather than \(\mathcal{O}(D)\).
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过适当地应用 `jax.checkpoint`，可以表达许多内存使用和（重新）计算之间的权衡。一个令人惊讶的例子是 *递归* 检查点处理，在这种情况下，我们将
+    `jax.checkpoint` 应用于一个函数，该函数本身调用以 `jax.checkpoint` 装饰的函数，以便从 \(D\) 函数链的组合中内存使用按
+    \(\mathcal{O}(\log_2 D)\) 而非 \(\mathcal{O}(D)\) 缩放。
 - en: 'As a toy example, consider the chain composition of multiple `jnp.sin` functions:'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为一个玩具例子，考虑多个 `jnp.sin` 函数的链式组合：
 - en: '[PRE33]'
+  id: totrans-104
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: '[PRE34]'
+  id: totrans-105
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: 'In general, the number of stored residuals scales linearly with the length
     of the chain:'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 通常来说，存储的残差数量与链的长度成线性比例：
 - en: '[PRE35]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: '[PRE36]'
+  id: totrans-108
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: 'But we can apply `jax.checkpoint` recursively to improve the scaling:'
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 但我们可以递归地应用 `jax.checkpoint` 来改善缩放效果：
 - en: '[PRE37]'
+  id: totrans-110
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: '[PRE38]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: '[PRE39]'
+  id: totrans-112
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: '[PRE40]'
+  id: totrans-113
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: '[PRE41]'
+  id: totrans-114
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: 'The cost here, as usual, is recomputation: in particular, we end up performing
     \(\mathcal{O}(\log_2 D)\) times as many FLOPs:'
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的成本，与通常一样，是重新计算：特别是，我们最终要执行 \(\mathcal{O}(\log_2 D)\) 倍的 FLOPs：
 - en: '[PRE42]'
+  id: totrans-116
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: '[PRE43]'
+  id: totrans-117
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: '[PRE44]'
+  id: totrans-118
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: '[PRE45]'
+  id: totrans-119
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: Practical notes
+  id: totrans-120
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 实际注意事项
 - en: When differentiated functions are staged out to XLA for compilation, for example
     by applying `jax.jit` to a function which contains a `jax.grad` call, XLA will
     automatically optimize the computation, including decisions about when to compute
     or rematerialize values. As a result, **`jax.checkpoint` often isn’t needed for
     differentiated functions under a `jax.jit`**. XLA will optimize things for you.
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 当不同函数被分阶段送到 XLA 进行编译时，例如将 `jax.jit` 应用于包含 `jax.grad` 调用的函数时，XLA 将自动优化计算，包括决定何时计算或重新生成值。因此，在
+    `jax.jit` 下，**通常不需要使用 `jax.checkpoint` 对不同函数进行检查点处理**。XLA 将为您优化这些内容。
 - en: One exception is when using staged-out control flow, like `jax.lax.scan`. Automatic
     compiler optimizations across multiple control flow primitives, e.g. across a
     forward-pass `scan` and the corresponding backward-pass `scan`, typically aren’t
     aren’t as thorough. As a result, it’s often a good idea to use `jax.checkpoint`
     on the body function passed to `jax.lax.scan`.
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个例外是在使用分阶段控制流（例如 `jax.lax.scan`）时。跨多个控制流原语的自动编译器优化，例如在正向传播 `scan` 和相应的反向传播
+    `scan` 之间，通常不够彻底。因此，经常建议在传递给 `jax.lax.scan` 的主体函数上使用 `jax.checkpoint`。
 - en: 'For example, one common pattern in large [Transformer models](https://en.wikipedia.org/wiki/Transformer_(machine_learning_model))
     is to express the architecture as a `jax.lax.scan` over layers so as to reduce
     compilation times. That is, using a simple fully-connected network as an analogy,
     instead of writing something like this:'
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，在大型[Transformer模型](https://en.wikipedia.org/wiki/Transformer_(machine_learning_model))中的一个常见模式是将架构表达为通过层的`jax.lax.scan`，以减少编译时间。也就是说，类比于一个简单的全连接网络，我们不是写像这样的代码：
 - en: '[PRE46]'
+  id: totrans-124
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: 'We would instead iterate over the layer application with `jax.lax.scan`:'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以使用`jax.lax.scan`来迭代层应用：
 - en: '[PRE47]'
+  id: totrans-126
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: 'This scan-over-layers version reduces compile times, but by foiling some compiler
     optimizations it can lead to inefficient computation of gradients. To mitigate
     the issue, we would use `jax.checkpoint` on the scanned function:'
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种逐层扫描的版本可以减少编译时间，但可能会阻碍一些编译器优化，导致梯度计算效率低下。为了缓解这个问题，我们可以在扫描函数上使用`jax.checkpoint`：
 - en: '[PRE48]'
+  id: totrans-128
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: By using `jax.checkpoint` this way, we’re manually controlling which values
     JAX’s autodiff saves between the forward and backward passes, and hence not relying
     on XLA optimizations to choose for us.
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过这种方式使用`jax.checkpoint`，我们手动控制JAX自动微分在前向和反向传播之间保存的值，从而不依赖于XLA优化来为我们选择。

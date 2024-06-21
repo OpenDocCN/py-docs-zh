@@ -1,18 +1,27 @@
 - en: How JAX primitives work
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: JAX 基元的工作方式
 - en: 原文：[`jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html`](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html`](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html)
 - en: '![Open in Colab](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/How_JAX_primitives_work.ipynb)
     ![Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/How_JAX_primitives_work.ipynb)'
+  id: totrans-2
   prefs: []
   type: TYPE_IMG
+  zh: '![在 Colab 中打开](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/How_JAX_primitives_work.ipynb)
+    ![在 Kaggle 中打开](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/How_JAX_primitives_work.ipynb)'
 - en: '*necula@google.com*, October 2019.'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: '*necula@google.com*，2019 年 10 月。'
 - en: JAX implements certain transformations of Python functions, e.g., `jit`, `grad`,
     `vmap`, or `pmap`. The Python functions to be transformed must be JAX-traceable,
     which means that as the Python function executes the only operations it applies
@@ -22,295 +31,461 @@
     value is `ShapedArray(float32[2,2])`, which captures the type and the shape of
     values, but not the concrete data values. JAX primitives know how to operate on
     both concrete data values and on the JAX abstract values.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 实现了 Python 函数的某些转换，例如 `jit`、`grad`、`vmap` 或 `pmap`。要转换的 Python 函数必须是 JAX
+    可追踪的，这意味着当 Python 函数执行时，它对数据应用的唯一操作是检查数据属性（例如形状或类型）或称为 JAX 基元的特殊操作。特别地，JAX 可追踪的函数有时会被
+    JAX 用抽象参数调用。例如，JAX 抽象值的一个示例是 `ShapedArray(float32[2,2])`，它捕获了值的类型和形状，但不是具体数据值。JAX
+    基元知道如何在具体数据值和 JAX 抽象值上操作。
 - en: The JAX-transformed functions must themselves be JAX-traceable functions, to
     ensure that these transformations can be composed, e.g., `jit(jacfwd(grad(f)))`.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 转换后的 JAX 函数本身必须是 JAX 可追踪的函数，以确保这些转换可以组合，例如 `jit(jacfwd(grad(f)))`。
 - en: There are pre-defined JAX primitives corresponding to most XLA operations, e.g.,
     add, matmul, sin, cos, indexing. JAX comes with an implementation of numpy functions
     in terms of JAX primitives, which means that Python programs using JAX’s implementation
     of numpy are JAX-traceable and therefore transformable. Other libraries can be
     made JAX-traceable by implementing them in terms of JAX primitives.
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 已经预定义了对应大多数 XLA 操作的基元，例如 add、matmul、sin、cos 和索引。JAX 还提供了以 JAX 基元为基础实现 numpy
+    函数的功能，这意味着使用 JAX 的 numpy 实现的 Python 程序是 JAX 可追踪的，因此可以进行变换。其他库可以通过在 JAX 基元的基础上实现它们来使其能够被
+    JAX 追踪。
 - en: The set of JAX primitives is extensible. Instead of reimplementing a function
     in terms of pre-defined JAX primitives, one can define a new primitive that encapsulates
     the behavior of the function.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 基元的集合是可扩展的。可以定义一个新的基元，封装函数的行为，而不是在预定义的 JAX 基元的基础上重新实现函数。
 - en: '**The goal of this document is to explain the interface that a JAX primitive
     must support in order to allow JAX to perform all its transformations.**'
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: '**本文档的目标是解释 JAX 基元必须支持的接口，以允许 JAX 执行其所有转换。**'
 - en: Consider that we want to add to JAX support for a multiply-add function with
     three arguments, defined mathematically as “multiply_add(x, y, z) = x * y + z”.
     This function operates on 3 identically-shaped tensors of floating point values
     and performs the operations pointwise.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 考虑我们想要为 JAX 添加支持三个参数的乘加函数，数学上定义为“multiply_add(x, y, z) = x * y + z”。该函数在三个形状相同的浮点数值张量上逐点执行操作。
 - en: Using existing primitives
+  id: totrans-10
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用现有的基元
 - en: 'The easiest way to define new functions is to write them in terms of JAX primitives,
     or in terms of other functions that are themselves written using JAX primitives,
     e.g., those defined in the `jax.lax` module:'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 定义新函数的最简单方法是使用 JAX 基元或者已经用 JAX 基元编写的其他函数，例如在 `jax.lax` 模块中定义的函数：
 - en: '[PRE0]'
+  id: totrans-12
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: '[PRE1]'
+  id: totrans-13
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: In order to understand how JAX is internally using the primitives, we add some
     helpers for tracing function calls.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了理解 JAX 如何内部使用这些基元，我们添加了一些帮助函数来跟踪函数调用。
 - en: '[PRE2]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'Instead of using `jax.lax` primitives directly, we can use other functions
     that are already written in terms of those primitives, such as those in `jax.numpy`:'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 而不是直接使用 `jax.lax` 基元，我们可以使用已经用这些基元编写的其他函数，例如 `jax.numpy` 中的函数：
 - en: '[PRE3]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: '[PRE4]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: Notice that in the process of computing `grad`, JAX invokes `square_add_numpy`
     and `multiply_add_numpy` with special arguments `ConcreteArray(...)` (described
     further below in this colab). It is important to remember that a JAX-traceable
     function must be able to operate not only on concrete arguments but also on special
     abstract arguments that JAX may use to abstract the function execution.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，在计算 `grad` 的过程中，JAX 调用了 `square_add_numpy` 和 `multiply_add_numpy`，并使用特殊的参数
+    `ConcreteArray(...)`（在此 colab 中进一步描述）。重要的是要记住，一个 JAX 可追溯的函数必须能够不仅在具体参数上运行，还能在
+    JAX 可能使用的特殊抽象参数上运行。
 - en: The JAX traceability property is satisfied as long as the function is written
     in terms of JAX primitives.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 只要函数是用 JAX 原语编写的，JAX 的可追溯性属性就得到满足。
 - en: Defining new JAX primitives
+  id: totrans-21
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 定义新的 JAX 原语
 - en: The right way to add support for multiply-add is in terms of existing JAX primitives,
     as shown above. However, in order to demonstrate how JAX primitives work let us
     pretend that we want to add a new primitive to JAX for the multiply-add functionality.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 为支持乘加功能的正确方式是使用现有的 JAX 原语，如上所示。然而，为了展示 JAX 原语的工作方式，让我们假装我们想为 JAX 添加一个新的原语来实现乘加功能。
 - en: '[PRE5]'
+  id: totrans-23
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: If we try to call the newly defined functions we get an error, because we have
     not yet told JAX anything about the semantics of the new primitive.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们尝试调用新定义的函数，我们会得到一个错误，因为我们尚未告诉 JAX 关于新原语的语义。
 - en: '[PRE6]'
+  id: totrans-25
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: '[PRE7]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: '[PRE8]'
+  id: totrans-27
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: Primal evaluation rules
+  id: totrans-28
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 原始评估规则
 - en: '[PRE9]'
+  id: totrans-29
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: '[PRE10]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '[PRE11]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: '[PRE12]'
+  id: totrans-32
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: JIT
+  id: totrans-33
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: JIT
 - en: 'If we now try to use `jit` we get a `NotImplementedError`:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在如果我们尝试使用 `jit`，我们会得到一个 `NotImplementedError`：
 - en: '[PRE13]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: '[PRE14]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: '[PRE15]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Abstract evaluation rules
+  id: totrans-38
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 抽象评估规则
 - en: 'In order to JIT the function, and for other transformations as well, JAX first
     evaluates it abstractly using only the shape and type of the arguments. This abstract
     evaluation serves multiple purposes:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了 JIT 函数以及其他转换，JAX 首先使用只有参数的形状和类型的抽象方式进行评估。这种抽象评估有多重目的：
 - en: Gets the sequence of JAX primitives that are used in the computation. This sequence
     will be compiled.
+  id: totrans-40
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 获取计算中使用的 JAX 原语序列。这个序列将被编译。
 - en: Computes the shape and type of all vectors and operations used in the computation.
+  id: totrans-41
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 计算所有向量和操作在计算中使用的形状和类型。
 - en: For example, the abstraction of a vector with 3 elements may be `ShapedArray(float32[3])`,
     or `ConcreteArray([1., 2., 3.])`. In the latter case, JAX uses the actual concrete
     value wrapped as an abstract value.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，具有 3 个元素的向量的抽象可能是 `ShapedArray(float32[3])` 或 `ConcreteArray([1., 2., 3.])`。在后一种情况下，JAX
+    使用实际的具体值包装为抽象值。
 - en: '[PRE16]'
+  id: totrans-43
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '[PRE17]'
+  id: totrans-44
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'If we re-attempt to JIT, we see how the abstract evaluation proceeds, but we
     get another error, about missing the actual XLA compilation rule:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们重新尝试进行 JIT 编译，我们可以看到抽象评估的过程，但是我们会遇到另一个错误，关于缺少实际的 XLA 编译规则：
 - en: '[PRE18]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '[PRE19]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: '[PRE20]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: XLA Compilation rules
+  id: totrans-49
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: XLA 编译规则
 - en: JAX compilation works by compiling each primitive into a graph of XLA operations.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 编译通过将每个原语编译成 XLA 操作的图形来工作。
 - en: This is the biggest hurdle to adding new functionality to JAX, because the set
     of XLA operations is limited, and JAX already has pre-defined primitives for most
     of them. However, XLA includes a `CustomCall` operation that can be used to encapsulate
     arbitrary functionality defined using C++.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是向 JAX 添加新功能的最大障碍，因为 XLA 操作的集合是有限的，并且 JAX 已经为大多数操作预定义了原语。然而，XLA 包括一个 `CustomCall`
+    操作，可以用来封装使用 C++ 定义的任意功能。
 - en: '[PRE21]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: '[PRE22]'
+  id: totrans-53
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: Now we succeed to JIT. Notice below that JAX first evaluates the function abstractly,
     which triggers the `multiply_add_abstract_eval` function, and then compiles the
     set of primitives it has encountered, including `multiply_add`. At this point
     JAX invokes `multiply_add_xla_translation`.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们成功 JIT。请注意下面，JAX 首先抽象评估函数，触发 `multiply_add_abstract_eval` 函数，然后编译它遇到的一系列原语，包括
+    `multiply_add`。在这一点上，JAX 调用 `multiply_add_xla_translation`。
 - en: '[PRE23]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: '[PRE24]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: Below is another use of `jit` where we compile only with respect to the first
     argument. Notice how the second argument to `square_add_prim` is concrete, which
     leads in the third argument to `multiply_add_abstract_eval` being `ConcreteArray`.
     We see that `multiply_add_abstract_eval` may be used with both `ShapedArray` and
     `ConcreteArray`.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面是另一个 `jit` 的用法，我们只编译关于第一个参数的部分。请注意，`square_add_prim` 的第二个参数是具体的，这导致第三个参数 `multiply_add_abstract_eval`
+    是 `ConcreteArray`。我们看到 `multiply_add_abstract_eval` 可以与 `ShapedArray` 和 `ConcreteArray`
+    一起使用。
 - en: '[PRE25]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: '[PRE26]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: Forward differentiation
+  id: totrans-60
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 前向微分
 - en: JAX implements forward differentiation in the form of a Jacobian-vector product
     (see the [JAX autodiff cookbook](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html#Jacobian-Matrix-and-Matrix-Jacobian-products)).
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 在形式上实现了前向微分，即雅可比向量积（参见[JAX 自动微分手册](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html#Jacobian-Matrix-and-Matrix-Jacobian-products)）。
 - en: If we attempt now to compute the `jvp` function we get an error because we have
     not yet told JAX how to differentiate the `multiply_add` primitive.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，如果我们尝试计算 `jvp` 函数，会出现错误，因为我们尚未告诉 JAX 如何区分 `multiply_add` 原语。
 - en: '[PRE27]'
+  id: totrans-63
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: '[PRE28]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: '[PRE29]'
+  id: totrans-65
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: '[PRE30]'
+  id: totrans-66
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: '[PRE31]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: '[PRE32]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: 'TO EXPLAIN:'
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 解释如下：
 - en: Why is JAX using ConcreteArray in square_add_prim? There is no abstract evaluation
     going on here.
+  id: totrans-70
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: JAX 在 `square_add_prim` 中为何使用 ConcreteArray？这里没有进行抽象评估。
 - en: Not sure how to explain that multiply_add_prim is invoked with ConcreteValue,
     yet we do not call the multiply_add_abstract_eval.
+  id: totrans-71
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 不确定如何解释 `multiply_add_prim` 是如何使用 ConcreteValue 调用的，但我们却没有调用 `multiply_add_abstract_eval`。
 - en: I think it would be useful to show the jaxpr here
+  id: totrans-72
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我认为在这里展示 jaxpr 将会很有用。
 - en: JIT of forward differentiation
+  id: totrans-73
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: JIT 的前向微分
 - en: 'We can apply JIT to the forward differentiation function:'
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以将 JIT 应用于前向微分函数：
 - en: '[PRE33]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: '[PRE34]'
+  id: totrans-76
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: Notice that first we evaluate `multiply_add_value_and_jvp` abstractly, which
     in turn evaluates abstractly both the primal and the tangent evaluation (a total
     of 3 invocations of the `ma` primitive). Then we compile the 3 occurrences of
     the primitive.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，我们首先抽象评估 `multiply_add_value_and_jvp`，它进而抽象评估 `ma` 的原始和切线评估（共 3 次调用 `ma`
+    原语）。然后编译这 3 次出现的原语。
 - en: Reverse differentiation
+  id: totrans-78
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 反向微分
 - en: If we attempt now to use reverse differentiation we see that JAX starts by using
     the `multiply_add_value_and_jvp` to compute the forward differentiation for abstract
     values, but then runs into a `NotImplementedError`.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们现在尝试使用反向微分，我们会看到 JAX 首先使用 `multiply_add_value_and_jvp` 来计算抽象值的前向微分，但随后遇到
+    `NotImplementedError`。
 - en: When computing the reverse differentiation JAX first does abstract evaluation
     of the forward differentiation code `multiply_add_value_and_jvp` to obtain a trace
     of primitives that compute the output tangent. Observe that JAX performs this
@@ -319,156 +494,245 @@
     value `Zero` for the tangent corresponding to the 3rd argument of `ma`. This reflects
     the fact that we do not differentiate w.r.t. the 2nd argument to `square_add_prim`,
     which flows to the 3rd argument to `multiply_add_prim`.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 在计算反向微分时，JAX 首先对前向微分代码 `multiply_add_value_and_jvp` 进行抽象评估，以获取一个追踪原语，用于计算输出切线。请注意，JAX
+    使用具体值评估此抽象评估以进行微分点，而使用抽象值评估切线。还需注意，JAX 对第三个参数的特殊抽象切线值 `Zero`，反映了我们不对 `square_add_prim`
+    的第二个参数进行微分，其流向 `multiply_add_prim` 的第三个参数。
 - en: Observe also that during the abstract evaluation of the tangent we pass the
     value 0.0 as the tangent for the 3rd argument. This is due to the use of the `make_zero`
     function in the definition of `multiply_add_value_and_jvp`.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 还需注意，在计算切线的抽象评估期间，我们将值 `0.0` 作为第三个参数的切线传递。这是因为在 `multiply_add_value_and_jvp`
+    的定义中使用了 `make_zero` 函数。
 - en: '[PRE35]'
+  id: totrans-82
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: '[PRE36]'
+  id: totrans-83
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: '[PRE37]'
+  id: totrans-84
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: The above error is because there is a missing piece for JAX to be able to use
     the forward differentiation code to compute reverse differentiation.
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述错误是因为缺少一个部分，JAX 无法使用前向微分代码来计算反向微分。
 - en: Transposition
+  id: totrans-86
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 转置
 - en: As explained above, when computing reverse differentiation JAX obtains a trace
     of primitives that compute the tangent using forward differentiation. Then, **JAX
     interprets this trace abstractly backwards** and for each primitive it applies
     a **transposition** rule.
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如上文所述，在计算反向微分时，JAX 获取了一个原语的追踪，使用前向微分计算切线。然后，**JAX 以抽象方式反向解释此追踪**，并对每个原语应用**转置**规则。
 - en: 'To understand what is going on, consider for now a simpler example of the function
     “f(x, y) = x * y + y”. Assume we need to differentiate at the point `(2., 4.)`.
     JAX will produce the following JVP tangent calculation of `ft` from the tangents
     of the input `xt` and `yt`:'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 要理解正在发生的情况，请暂时考虑一个更简单的例子，函数“f(x, y) = x * y + y”。假设我们需要在点 `(2., 4.)` 处进行微分。JAX
+    将从输入 `xt` 和 `yt` 的切线计算中生成以下 JVP 切线计算的 `ft`：
 - en: '[PRE38]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: By construction, the tangent calculation is always linear in the input tangents.
     The only non-linear operator that may arise in the tangent calculation is multiplication,
     but then one of the operands is constant.
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于构造，切线计算在输入切线中始终是线性的。在切线计算中可能出现的唯一非线性操作符是乘法，但其中一个操作数是常量。
 - en: 'JAX will produce the reverse differentiation computation by processing the
     JVP computation backwards. For each operation in the tangent computation, it accumulates
     the cotangents of the variables used by the operation, using the cotangent of
     the result of the operation:'
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 将通过反向处理 JVP 计算来生成反向微分计算。对于切线计算中的每个操作，它累积操作使用的变量的余切，使用操作结果的余切：
 - en: '[PRE39]'
+  id: totrans-92
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: One can verify that this computation produces `xct = 4.` and `yct = 3.`, which
     are the partial derivatives of the function `f`.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以验证该计算产生了 `xct = 4.` 和 `yct = 3.`，这是函数 `f` 的偏导数。
 - en: 'JAX knows for each primitive that may appear in a JVP calculation how to transpose
     it. Conceptually, if the primitive `p(x, y, z)` is linear in the arguments `y`
     and `z` for a constant value of `x`, e.g., `p(x, y, z) = y*cy + z*cz`, then the
     transposition of the primitive is:'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 对于可能出现在 JVP 计算中的每个原语都知道如何对其进行转置。从概念上讲，如果原语 `p(x, y, z)` 在参数 `y` 和 `z` 的常量值
+    `x` 下是线性的，例如 `p(x, y, z) = y*cy + z*cz`，那么原语的转置是：
 - en: '[PRE40]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: Notice that `p_transpose` takes the cotangent of the output of the primitive
     and a value corresponding to each argument of the primitive. For the linear arguments,
     the transposition gets an undefined `_` value, and for the other arguments it
     gets the actual constants. The transposition returns a cotangent value for each
     argument of the primitive, with the value `None` returned for the constant arguments.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意 `p_transpose` 获取原语输出的余切以及与原语的每个参数对应的值。对于线性参数，转置获取未定义的 `_` 值，对于其他参数，获取实际的常数。转置为原语的每个参数返回一个余切值，对于常数参数返回
+    `None` 值。
 - en: In particular,
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 特别地，
 - en: '[PRE41]'
+  id: totrans-98
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: '[PRE42]'
+  id: totrans-99
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: 'Now we can complete the run of the `grad`:'
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们可以完成 `grad` 的运行：
 - en: '[PRE43]'
+  id: totrans-101
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: '[PRE44]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: 'Notice the two calls to `multiply_add_transpose`. They correspond to the two
     uses of `multiply_add_prim` in the computation of the `output_tangent` in `multiply_add_value_and_jvp`.
     The first call to transpose corresponds to the last use of `multiply_add_prim`:
     `multiply_add_prim(xt, y, ...)` where `y` is the constant 2.0.'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意到两次调用 `multiply_add_transpose`。它们对应于在 `multiply_add_value_and_jvp` 的 `output_tangent`
+    计算中使用 `multiply_add_prim` 的两次使用。第一次调用转置对应于 `multiply_add_prim(xt, y, ...)` 的最后使用，其中
+    `y` 是常数 2.0。
 - en: JIT of reverse differentiation
+  id: totrans-104
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 反向微分的 JIT
 - en: Notice that the abstract evaluation of the `multiply_add_value_and_jvp` is using
     only abstract values, while in the absence of JIT we used `ConcreteArray`.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意 `multiply_add_value_and_jvp` 的抽象评估仅使用抽象值，在 JIT 缺失时我们使用了 `ConcreteArray`。
 - en: '[PRE45]'
+  id: totrans-106
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: '[PRE46]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: Batching
+  id: totrans-108
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 批处理
 - en: 'The batching transformation takes a point-wise computation and turns it into
     a computation on vectors. If we try it right now, we get a `NotImplementedError`:'
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 批处理转换将点式计算转变为向量上的计算。如果我们现在尝试，会得到 `NotImplementedError`：
 - en: '[PRE47]'
+  id: totrans-110
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: '[PRE48]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: '[PRE49]'
+  id: totrans-112
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: We need to tell JAX how to evaluate the batched version of the primitive. In
     this particular case, the `multiply_add_prim` already operates pointwise for any
     dimension of input vectors. So the batched version can use the same `multiply_add_prim`
     implementation.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要告诉 JAX 如何评估原语的批处理版本。在这种特殊情况下，`multiply_add_prim` 已经适用于任意维度的输入向量逐点运算。因此，批处理版本可以使用相同的
+    `multiply_add_prim` 实现。
 - en: '[PRE50]'
+  id: totrans-114
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: '[PRE51]'
+  id: totrans-115
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: '[PRE52]'
+  id: totrans-116
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: JIT of batching
+  id: totrans-117
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 批处理的 JIT
 - en: '[PRE53]'
+  id: totrans-118
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: '[PRE54]'
+  id: totrans-119
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'

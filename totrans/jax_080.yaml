@@ -1,152 +1,228 @@
 - en: Investigating a regression
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 调查回归
 - en: 原文：[`jax.readthedocs.io/en/latest/investigating_a_regression.html`](https://jax.readthedocs.io/en/latest/investigating_a_regression.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/investigating_a_regression.html`](https://jax.readthedocs.io/en/latest/investigating_a_regression.html)
 - en: So you updated JAX and you hit a speed regression? You have a little bit of
     time and are ready to investigate this? Let’s first make a JAX issue. But if you
     can pinpoint the commit that triggered the regression, it will really help us.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 所以，您更新了 JAX，并且遇到了速度回归？您有一点时间并且准备好调查吗？让我们首先提一个 JAX 问题。但如果您能够确定触发回归的提交，这将确实帮助我们。
 - en: This document explains how we identified the commit that caused a [15% performance
     regression](https://github.com/google/jax/issues/17686).
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 本文说明了我们如何确定导致[15% 性能回归](https://github.com/google/jax/issues/17686)的提交。
 - en: Steps
+  id: totrans-4
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 步骤
 - en: This can be done easily if the reproducer is quick enough. This is a brute force
     method and not a bisection, but if the reproducer is quick enough, it works well.
     This makes sure that you always test XLA and JAX commits that are compatible.
     It also limits XLA recompilation.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果复现器足够快，这可以很容易地完成。这是一种蛮力方法而非二分法，但如果复现器足够快，它会很有效。这确保了您始终测试兼容的 XLA 和 JAX 提交。它还限制了
+    XLA 的重新编译。
 - en: 'Here is a suggested investigation strategy:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里是建议的调查策略：
 - en: You can do a brute force test of nightly containers between the 2 releases.
+  id: totrans-7
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 您可以在两个版本之间的每日容器上进行蛮力测试。
 - en: Hourly recompilation while keeping XLA and JAX in sync.
+  id: totrans-8
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 每小时重新编译，同时保持 XLA 和 JAX 的同步。
 - en: 'Final verification: maybe a manual check of a few commits (or a git bisect).'
+  id: totrans-9
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 最终验证：也许需要手动检查几个提交（或者使用 git bisect）。
 - en: Nightly investigation.
+  id: totrans-10
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 每日调查。
 - en: This can be done by using [JAX-Toolbox nightly containers](https://github.com/NVIDIA/JAX-Toolbox).
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 这可以通过使用[JAX-Toolbox 每夜容器](https://github.com/NVIDIA/JAX-Toolbox)来完成。
 - en: Some days, bugs prevent the container from being built, or there are temporary
     regressions. Just discard those days.
+  id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 有些日子，错误会阻止容器的构建，或者会出现临时回归。请忽略这些日子。
 - en: So you should end up with a specific day or a few days where the regression
     happens.
+  id: totrans-13
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 因此，您应该最终得到出现回归的具体日期或几天。
 - en: 'To automate this, you need 2 python scripts:'
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 要自动化这个过程，您需要两个 Python 脚本：
 - en: 'test_runner.sh: will start the containers and the test.'
+  id: totrans-15
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'test_runner.sh: 将启动容器和测试。'
 - en: 'test.sh: will install missing dependencies and run the test'
+  id: totrans-16
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'test.sh: 将安装缺失的依赖项并运行测试。'
 - en: 'Here are real example scripts used for the issue: https://github.com/google/jax/issues/17686'
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里是用于该问题的真实示例脚本：[https://github.com/google/jax/issues/17686](https://github.com/google/jax/issues/17686)
 - en: 'test_runner.sh:'
+  id: totrans-18
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'test_runner.sh:'
 - en: '[PRE0]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'test.sh:'
+  id: totrans-20
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'test.sh:'
 - en: '[PRE1]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'Then you can grep each output to see when the regression happens: `grep MLUPS
     OUT*`. Here are the results we got:'
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，您可以对每个输出执行 grep 命令以查看回归发生的时间：`grep MLUPS OUT*`。这是我们得到的结果：
 - en: '[PRE2]'
+  id: totrans-23
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: This found that 8-24 was good, but 8-26 was bad. On 8-25 there was another issue
     that prevented from getting results. So we need to investigate hourly between
     8-24 and 8-26\. There was a smaller slowdown earlier, lets ignore it for this
     example. It would be only another hourly investigation between those dates.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 这发现 8-24 是好的，但 8-26 是坏的。在 8-25 上有另一个问题，阻止了获取结果。因此，我们需要在 8-24 和 8-26 之间的每小时进行调查。较早的减速可以忽略，仅需在这些日期之间再进行一次小时调查即可。
 - en: Hourly investigation.
+  id: totrans-25
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 每小时调查。
 - en: This does a checkout of JAX and XLA at each hour between the 2 dates, rebuilds
     everything and runs the test. The scripts are structured differently. We start
     the working container and keep it. Then inside it, we only trigger incremental
     XLA builds except for the first build. So it is much faster after the first iteration.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 这在两个日期之间的每个小时检出 JAX 和 XLA，重建所有内容并运行测试。这些脚本结构不同。我们启动工作容器并保持它。然后在容器内，我们只触发增量 XLA
+    构建，第一次构建除外。因此，在第一次迭代后速度要快得多。
 - en: 'test_runner2.sh:'
+  id: totrans-27
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'test_runner2.sh:'
 - en: '[PRE3]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'test2.sh:'
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'test2.sh:'
 - en: '[PRE4]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: Now, you can execute the grep command on the new output files to see which hours
     the issue appeared between.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，您可以在新的输出文件上执行 grep 命令，查看问题出现的小时。
 - en: Final verification
+  id: totrans-32
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 最终验证
 - en: With this, you need to check the JAX and XLA history between those hours. Maybe
     there are a few commits to test. You can use git bisect if you want to be fancy.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过这样，您需要检查这些小时之间的 JAX 和 XLA 历史记录。也许有几个提交需要测试。如果您想要花哨一点，可以使用 git bisect。
 - en: Can this be improved?
+  id: totrans-34
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 是否可以改进这个过程？
 - en: Yes! If it was a crash regression, being able to do a bisect would be useful.
     But it would be more complicated. If someone want to contribute such instructions,
     please submit a PR ;)
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 是的！如果这是一个崩溃回归，能够进行二分法测试将非常有用。但这会更加复杂。如果有人想贡献这样的说明，请提交 PR ;)
 - en: For speed regressions, a bisect can hide some information. We wouldn’t see as
     easily that there were two regressions here.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于速度回归，二分法可以隐藏一些信息。我们不会那么容易地看到这里有两个回归。

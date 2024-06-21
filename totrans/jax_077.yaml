@@ -1,21 +1,32 @@
 - en: 'jax.extend: a module for extensions'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: jax.extend：一个用于扩展的模块
 - en: 原文：[`jax.readthedocs.io/en/latest/jep/15856-jex.html`](https://jax.readthedocs.io/en/latest/jep/15856-jex.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/jep/15856-jex.html`](https://jax.readthedocs.io/en/latest/jep/15856-jex.html)
 - en: '[@froystig](https://github.com/froystig), [@sharadmv](https://github.com/sharadmv),
     [@jakevdp](https://github.com/jakevdp), [@yashk2810](https://github.com/yashk2810)'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '[@froystig](https://github.com/froystig), [@sharadmv](https://github.com/sharadmv),
+    [@jakevdp](https://github.com/jakevdp), [@yashk2810](https://github.com/yashk2810)'
 - en: May 2023
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 2023年5月
 - en: '[PRE0]'
+  id: totrans-4
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Several projects depend on JAX’s codebase internals, often to use its core machinery
     (e.g. to write a [transformation over its IR](https://jax.readthedocs.io/en/latest/notebooks/Writing_custom_interpreters_in_Jax.html))
     or to extend it (e.g. to [define new primitives](https://github.com/dfm/extending-jax)).
@@ -23,117 +34,165 @@
     designed for external use, and (b) that circumventing JAX’s public API is [unsupported](https://jax.readthedocs.io/en/latest/api_compatibility.html).
     In other words, our internals are often used like a library, but are neither structured
     nor updated like one.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 多个项目依赖于JAX的代码库内部，通常用于使用其核心机制（例如编写[其IR上的转换](https://jax.readthedocs.io/en/latest/notebooks/Writing_custom_interpreters_in_Jax.html)）或扩展它（例如[定义新的原语](https://github.com/dfm/extending-jax)）。这些依赖的两个挑战是（a）我们的内部结构并不都是为外部使用而设计的，以及（b）绕过JAX的公共API是[不受支持的](https://jax.readthedocs.io/en/latest/api_compatibility.html)。换句话说，我们的内部经常被用作库，但既不像库那样结构化也不像库那样更新。
 - en: This proposal considers **introducing a `jax.extend` module that defines a library
     view of some of JAX’s internal components**. We would treat this as a second-tier
     API, still guaranteeing essentially no compatibility policy, but hopefully making
     it easier to spot changes when they happen.
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 此提案考虑**引入一个`jax.extend`模块，定义JAX一些内部组件的库视图**。我们将其视为第二层API，仍然基本不保证兼容性政策，但希望在发生更改时更容易发现。
 - en: The audience for `jax.extend` includes JAX-adjacent Python libraries like [Oryx](https://github.com/jax-ml/oryx),
     [jax-triton](https://github.com/jax-ml/jax-triton), and many others, as well as
     projects experimenting with function transformations, autodiff systems, compiler
     frontends for numerical programming, etc.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jax.extend`的受众包括与JAX相关的Python库，如[Oryx](https://github.com/jax-ml/oryx)，[jax-triton](https://github.com/jax-ml/jax-triton)等，以及进行函数转换、自动微分系统、数值编程编译器前端等实验的项目。'
 - en: This note gives an overview of how `jax.extend` might look, now and eventually.
     It doesn’t lay things out in great detail, instead proposing that we begin iteratively
     developing the module.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 本说明概述了`jax.extend`现在和将来可能的样子。它没有详细列出所有细节，而是建议我们开始逐步开发这个模块。
 - en: Note that `jax.extend` differs from `jax.experimental`, which is a staging ground
     for new features and ideas in progress. Typically, work in `jax.experimental`
     eventually makes into another JAX module or is removed altogether.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，`jax.extend`与`jax.experimental`不同，后者是新功能和正在进行的想法的一个暂存场所。通常，`jax.experimental`中的工作最终会进入另一个JAX模块或被完全移除。
 - en: No compatibility policy
+  id: totrans-10
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 没有兼容性政策
 - en: To keep development overhead low, `jax.extend` would not follow the public [API
     compatibility](https://jax.readthedocs.io/en/latest/api_compatibility.html) policy.
     It would promise no deprecation windows nor backwards compatibility between releases.
     Every release may break existing callers without simple recourse (e.g. without
     a flag reintroducing prior behavior). We would rely on the [changelog](https://jax.readthedocs.io/en/latest/changelog.html)
     to call out such changes.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了保持开发的开销低，`jax.extend`不会遵循公共[API兼容性](https://jax.readthedocs.io/en/latest/api_compatibility.html)政策。它将承诺没有弃用窗口，也没有版本间的向后兼容性。每个发布都可能会破坏现有的调用者，没有简单的回退措施（例如没有重新引入先前行为的标志）。我们将依赖[变更日志](https://jax.readthedocs.io/en/latest/changelog.html)来指出这些更改。
 - en: Callers of `jax.extend` that need to upgrade their code regularly alongside
     JAX releases might find it useful to pin JAX versions as an intermediate step
     between releases. This is a common habit among projects that rely on JAX’s internals
     today. The difference is that it would now come with the help of changelog announcements
     and better intentions regarding library design and naming.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 调用`jax.extend`的调用者可能会发现在JAX发布时与其代码一起定期升级对他们有用。这是当今依赖JAX内部的项目的一个常见习惯。不同之处在于现在它将以更好的意图和更好的库设计和命名帮助中，伴随着变更日志公告的形式出现。
 - en: Iterative development
+  id: totrans-13
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 逐步开发
 - en: 'Having no compatibility policy makes it easier to get started on implementation:
     on day one, we can move a handful of symbols over from internal packages such
     as `jax._src` and today’s `jax.core` and `jax.interpreters`. Then we can iterate
     to improve things from there.'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 没有兼容性政策使得在实施上更容易上手：第一天，我们可以从内部包（如`jax._src`）中移植少量符号到今天的`jax.core`和`jax.interpreters`。然后我们可以迭代改进。
 - en: Possible module overview
+  id: totrans-15
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 可能的模块概述
 - en: 'We can imagine that eventually `jax.extend` would include the following modules:'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以设想，最终`jax.extend`可能包括以下模块：
 - en: '`core` – primitives, the Jaxpr IR, etc.'
+  id: totrans-17
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`core` – 原语，Jaxpr IR 等。'
 - en: '`interpreters` – core transformations (e.g. autodiff, batching) and lowerings.'
+  id: totrans-18
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`interpreters` – 核心转换（例如自动微分、批处理）和降低。'
 - en: '`random` – random bit generation, key splitting and folding, key arrays.'
+  id: totrans-19
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`random` – 随机位生成、关键分割和折叠、关键数组。'
 - en: '`sharding` – extra functionality around distributed arrays.'
+  id: totrans-20
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`sharding` – 关于分布式数组的额外功能。'
 - en: We might also have other symbols in the module at first, such as `jex.api_util`,
     as we work to remove or replace them. Others will be decided in time. For instance,
     `jex.lib` could offer an entry point to jaxlib (and would do so in the immediate
     term), but it’s not clear whether we want to keep it for long.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 最初在模块中可能还有其他符号，例如`jex.api_util`，随着我们的工作，我们将移除或替换它们。其他的时间会决定。例如，`jex.lib`可能在短期内提供访问jexlib的入口点，但是目前还不清楚我们是否想长期保留它。
 - en: Some preliminary thoughts on what each of these might comprise follow.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 对每个这些内容可能包含的一些初步想法的追踪。
 - en: '`jax.extend.core`'
+  id: totrans-23
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`jax.extend.core`'
 - en: 'This should enable callers at least to define new JAX primitives and to process
     the Jaxpr IR (the output of `jax.make_jaxpr(...)`). Supporting this might involve
     providing:'
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 这应该至少使调用者能够定义新的 JAX 原语并处理 Jaxpr IR（`jax.make_jaxpr(...)`的输出）。支持这一点可能涉及提供：
 - en: Access to existing core system primitives, such as today’s `jax._src.lax.add_p`.
+  id: totrans-25
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 访问现有的核心系统原语，例如今天的`jax._src.lax.add_p`。
 - en: Access to IR types, such as the current `jax._src.core.ShapedArray`.
+  id: totrans-26
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 访问 IR 类型，例如当前的`jax._src.core.ShapedArray`。
 - en: Functions for checking and pretty-printing jaxprs.
+  id: totrans-27
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用于检查和漂亮打印jaxprs的功能。
 - en: Functions for building jaxprs explicitly, rather than by staging Python functions
     via `jax.make_jaxpr` (or not!).
+  id: totrans-28
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 明确构建jaxprs的功能，而不是通过`jax.make_jaxpr`分阶段地阶段Python函数（或不阶段化！）。
 - en: At initialization, this module will contain many more symbols than what’s needed
     to define primitives and rules, including various names used in setting up [“final-style
     transformations”](https://jax.readthedocs.io/en/latest/autodidax.html#on-the-fly-final-style-and-staged-initial-style-processing),
@@ -142,64 +201,93 @@
     style approaches, and whether it can do so by a more narrow API than exposing
     `Trace` and `Tracer` entirely. [Oryx](https://github.com/jax-ml/oryx) might help
     guide these decisions.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 在初始化时，这个模块将包含比定义原语和规则所需更多的符号，包括在设置“最终风格转换”时使用的各种名称，例如当前的`jax._src.core.Trace`和`Tracer`类。我们可以重新审视`jex.core`是否应该支持初始风格方法以及是否可以通过比完全暴露`Trace`和`Tracer`更狭窄的API来支持最终风格扩展。[Oryx](https://github.com/jax-ml/oryx)可能会帮助指导这些决策。
 - en: We can also consider relocating `make_jaxpr` itself to `jex.core`.
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还可以考虑将`make_jaxpr`本身迁移到`jax.core`中。
 - en: '`jax.extend.interpreters`'
+  id: totrans-31
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`jax.extend.interpreters`'
 - en: This module would provide a means of registering various transformation rules
     for primitives—defining their behavior under AD, batching, lowering, etc.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 此模块将提供注册各种原语转换规则的手段 —— 定义它们在自动微分、批处理、降低等方面的行为。
 - en: It would initially reflect `jax._src.interpreters` in providing the modules
     `ad`, `batching`, `partial_eval` (for staging Python to Jaxpr, and for linearization
     in AD), `mlir`, `pxla`, and `xla`. The first three might be replaceable by a single
     primitive extension API in `jex.core`. The latter three, used for lowering, could
     be simplified into one module, maybe.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 最初将反映`jax._src.interpreters`，提供模块`ad`、`batching`、`partial_eval`（用于将 Python 编程转换为
+    Jaxpr，并用于自动微分中的线性化）、`mlir`、`pxla`和`xla`。前三者可能可以通过`jax.core`中的单一原语扩展 API 替换。用于降低的后三者可以简化为一个模块，也许。
 - en: Today, to write transformation rules, e.g. for AD and batching, callers may
     need symbols relating to tracers, e.g. `JVPTracer` and `BatchTracer`. This may
     be avoidable later on, and allow us to remove tracer types from `jex`.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 今天，为了编写转换规则，例如用于自动微分和批处理的规则，调用者可能需要与跟踪器相关的符号，例如`JVPTracer`和`BatchTracer`。以后可能可以避免这种情况，并允许我们从`jax`中移除跟踪器类型。
 - en: 'This module plus `jex.core` ought to suffice for replicating today’s custom
     primitive tutorials (e.g. [ours](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html)
     and [dfm’s](https://github.com/dfm/extending-jax)). For instance, defining a primitive
     and its behavior under `jax.jit` would be possible as follows (in the immediate
     term):'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个模块加上`jex.core`应该足以复制今天的自定义原语教程（例如[我们的教程](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html)和[dfm的教程](https://github.com/dfm/extending-jax)）。例如，定义一个原语及其在`jax.jit`下的行为可能如下（在短期内）：
 - en: '[PRE1]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: '`jax.extend.random`'
+  id: totrans-37
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: '`jax.extend.random`'
 - en: This module could expose our mechanism for defining new RNG implementations,
     and functions for working with PRNG key internals (see issue [#9263](https://github.com/google/jax/issues/9263)),
     such as the current `jax._src.prng.random_wrap` and `random_unwrap`.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个模块可以暴露出我们定义新的随机数生成器实现的机制，并提供用于处理PRNG密钥内部的函数（参见问题[#9263](https://github.com/google/jax/issues/9263)），例如当前的`jax._src.prng.random_wrap`和`random_unwrap`。
 - en: It could also expose the keyed hash functions that underlie the built-in RNG
     implementations, such as `jax._src.prng.threefry_2x32`.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 它还可以暴露出构成内置随机数生成器实现基础的键控哈希函数，例如`jax._src.prng.threefry_2x32`。
 - en: '`jax.extend.sharding`'
+  id: totrans-40
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: '`jax.extend.sharding`'
 - en: This module could expose low-level utilities for sharding distributed arrays.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个模块可以暴露出用于分片分布式数组的低级实用工具。
 - en: We have only one item in mind for now. The XLA compiler’s array sharding format
     is more expressive than [those provided by JAX](https://jax.readthedocs.io/en/latest/jax.sharding.html).
     We could provide this as `jex.sharding.XlaOpShardingProto`, corresponding to today’s
     `jax._src.lib.xla_client.OpSharding` internally.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 目前我们只考虑了一项。XLA编译器的数组分片格式比[JAX提供的那些](https://jax.readthedocs.io/en/latest/jax.sharding.html)更具表现力。我们可以将其作为`jex.sharding.XlaOpShardingProto`提供，对应于今天内部的`jax._src.lib.xla_client.OpSharding`。

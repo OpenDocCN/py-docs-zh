@@ -1,260 +1,393 @@
 - en: Writing custom Jaxpr interpreters in JAX
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 在JAX中编写自定义Jaxpr解释器
 - en: 原文：[`jax.readthedocs.io/en/latest/notebooks/Writing_custom_interpreters_in_Jax.html`](https://jax.readthedocs.io/en/latest/notebooks/Writing_custom_interpreters_in_Jax.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/notebooks/Writing_custom_interpreters_in_Jax.html`](https://jax.readthedocs.io/en/latest/notebooks/Writing_custom_interpreters_in_Jax.html)
 - en: '![Open in Colab](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/Writing_custom_interpreters_in_Jax.ipynb)
     ![Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/Writing_custom_interpreters_in_Jax.ipynb)'
+  id: totrans-2
   prefs: []
   type: TYPE_IMG
+  zh: '![在Colab中打开](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/Writing_custom_interpreters_in_Jax.ipynb)
+    ![在Kaggle中打开](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/Writing_custom_interpreters_in_Jax.ipynb)'
 - en: JAX offers several composable function transformations (`jit`, `grad`, `vmap`,
     etc.) that enable writing concise, accelerated code.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX提供了几个可组合的函数转换（`jit`，`grad`，`vmap`等），可以编写简洁且加速的代码。
 - en: Here we show how to add your own function transformations to the system, by
     writing a custom Jaxpr interpreter. And we’ll get composability with all the other
     transformations for free.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里我们展示了如何通过编写自定义Jaxpr解释器来向系统添加自己的函数转换。而且我们将自动获得与所有其他转换的可组合性。
 - en: '**This example uses internal JAX APIs, which may break at any time. Anything
     not in [the API Documentation](https://jax.readthedocs.io/en/latest/jax.html)
     should be assumed internal.**'
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: '**此示例使用了内部JAX API，可能随时会中断。任何不在[API文档](https://jax.readthedocs.io/en/latest/jax.html)中的内容都应视为内部内容。**'
 - en: '[PRE0]'
+  id: totrans-6
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: What is JAX doing?
+  id: totrans-7
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: JAX在做什么？
 - en: JAX provides a NumPy-like API for numerical computing which can be used as is,
     but JAX’s true power comes from composable function transformations. Take the
     `jit` function transformation, which takes in a function and returns a semantically
     identical function but is lazily compiled by XLA for accelerators.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX为数值计算提供了类似NumPy的API，可以直接使用，但JAX真正的强大之处在于可组合的函数转换。例如`jit`函数转换接受一个函数并返回一个语义上相同的函数，但由XLA进行惰性编译以加速器。
 - en: '[PRE1]'
+  id: totrans-9
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: When we call `fast_f`, what happens? JAX traces the function and constructs
     an XLA computation graph. The graph is then JIT-compiled and executed. Other transformations
     work similarly in that they first trace the function and handle the output trace
     in some way. To learn more about Jax’s tracing machinery, you can refer to the
     [“How it works”](https://github.com/google/jax#how-it-works) section in the README.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们调用`fast_f`时，会发生什么？JAX会追踪函数并构建一个XLA计算图。然后将图进行即时编译（JIT）并执行。其他转换类似，它们首先会追踪函数并以某种方式处理输出追踪。要了解更多关于JAX追踪机制的信息，您可以参考README中的[“How
+    it works”](https://github.com/google/jax#how-it-works)部分。
 - en: Jaxpr tracer
+  id: totrans-11
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: Jaxpr追踪器
 - en: A tracer of special importance in Jax is the Jaxpr tracer, which records ops
     into a Jaxpr (Jax expression). A Jaxpr is a data structure that can be evaluated
     like a mini functional programming language and thus Jaxprs are a useful intermediate
     representation for function transformation.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: Jax中一个特别重要的追踪器是Jaxpr追踪器，它将操作记录到一个Jaxpr（Jax表达式）中。Jaxpr是一种数据结构，可以像小型函数式编程语言一样进行评估，因此Jaxprs是函数转换的有用中间表示。
 - en: 'To get a first look at Jaxprs, consider the `make_jaxpr` transformation. `make_jaxpr`
     is essentially a “pretty-printing” transformation: it transforms a function into
     one that, given example arguments, produces a Jaxpr representation of its computation.
     `make_jaxpr` is useful for debugging and introspection. Let’s use it to look at
     how some example Jaxprs are structured.'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 要首次查看Jaxprs，可以考虑`make_jaxpr`转换。`make_jaxpr`本质上是一个“漂亮打印”转换：它将一个函数转换为一个函数，给定示例参数，生成其计算的Jaxpr表示。`make_jaxpr`对于调试和内省非常有用。让我们使用它来查看一些示例Jaxprs的结构。
 - en: '[PRE2]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '[PRE3]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: '`jaxpr.invars` - the `invars` of a Jaxpr are a list of the input variables
     to Jaxpr, analogous to arguments in Python functions.'
+  id: totrans-16
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jaxpr.invars` - Jaxpr的`invars`是一个输入变量列表，类似于Python函数的参数。'
 - en: '`jaxpr.outvars` - the `outvars` of a Jaxpr are the variables that are returned
     by the Jaxpr. Every Jaxpr has multiple outputs.'
+  id: totrans-17
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jaxpr.outvars` - Jaxpr的`outvars`是由Jaxpr返回的变量。每个Jaxpr都有多个输出。'
 - en: '`jaxpr.constvars` - the `constvars` are a list of variables that are also inputs
     to the Jaxpr, but correspond to constants from the trace (we’ll go over these
     in more detail later).'
+  id: totrans-18
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jaxpr.constvars` - `constvars`是一个变量列表，它们也是Jaxpr的输入之一，但对应于跟踪中的常量（我们稍后会更详细地讨论这些内容）。'
 - en: '`jaxpr.eqns` - a list of equations, which are essentially let-bindings. Each
     equation is a list of input variables, a list of output variables, and a *primitive*,
     which is used to evaluate inputs to produce outputs. Each equation also has a
     `params`, a dictionary of parameters.'
+  id: totrans-19
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jaxpr.eqns` - 一个方程列表，实质上是 let 绑定。每个方程包含输入变量列表、输出变量列表和一个*原语*，用于评估输入以生成输出。每个方程还有一个
+    `params`，即参数字典。'
 - en: Altogether, a Jaxpr encapsulates a simple program that can be evaluated with
     inputs to produce an output. We’ll go over how exactly to do this later. The important
     thing to note now is that a Jaxpr is a data structure that can be manipulated
     and evaluated in whatever way we want.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 总的来说，一个 Jaxpr 封装了一个简单的程序，可以使用输入进行评估以生成输出。稍后我们将详细介绍如何做到这一点。现在需要注意的重要事项是，Jaxpr
+    是一个可以按我们想要的方式操作和评估的数据结构。
 - en: Why are Jaxprs useful?
+  id: totrans-21
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Jaxprs 有什么用处？
 - en: Jaxprs are simple program representations that are easy to transform. And because
     Jax lets us stage out Jaxprs from Python functions, it gives us a way to transform
     numerical programs written in Python.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: Jaxprs 是简单的程序表示，易于转换。由于 Jax 允许我们从 Python 函数中分离出 Jaxprs，它为我们提供了一种转换用 Python 编写的数值程序的方法。
 - en: 'Your first interpreter: `invert`'
+  id: totrans-23
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 您的第一个解释器：`invert`
 - en: Let’s try to implement a simple function “inverter”, which takes in the output
     of the original function and returns the inputs that produced those outputs. For
     now, let’s focus on simple, unary functions which are composed of other invertible
     unary functions.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们尝试实现一个简单的函数“inverter”，它接收原始函数的输出，并返回产生这些输出的输入。现在，让我们专注于由其他可逆的一元函数组成的简单一元函数。
 - en: 'Goal:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 目标：
 - en: '[PRE4]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: The way we’ll implement this is by (1) tracing `f` into a Jaxpr, then (2) interpreting
     the Jaxpr *backwards*. While interpreting the Jaxpr backwards, for each equation
     we’ll look up the primitive’s inverse in a table and apply it.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将通过 (1) 将 `f` 追踪到 Jaxpr 中，然后 (2) 反向解释 Jaxpr 的方式来实现这一点。在反向解释 Jaxpr 过程中，对于每个方程，我们将在表中查找原语的逆，并应用它。
 - en: 1\. Tracing a function
+  id: totrans-28
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 1\. 追踪一个函数
 - en: Let’s use `make_jaxpr` to trace a function into a Jaxpr.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们使用 `make_jaxpr` 来追踪一个函数到 Jaxpr 中。
 - en: '[PRE5]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: '`jax.make_jaxpr` returns a *closed* Jaxpr, which is a Jaxpr that has been bundled
     with the constants (`literals`) from the trace.'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jax.make_jaxpr` 返回一个*封闭*的 Jaxpr，即一个已经与跟踪中的常量（`literals`）捆绑在一起的 Jaxpr。'
 - en: '[PRE6]'
+  id: totrans-32
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: '[PRE7]'
+  id: totrans-33
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 2\. Evaluating a Jaxpr
+  id: totrans-34
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 2\. 评估 Jaxpr
 - en: Before we write a custom Jaxpr interpreter, let’s first implement the “default”
     interpreter, `eval_jaxpr`, which evaluates the Jaxpr as-is, computing the same
     values that the original, un-transformed Python function would.
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 在编写自定义 Jaxpr 解释器之前，让我们首先实现“默认”解释器 `eval_jaxpr`，它按原样评估 Jaxpr，计算与未转换的原始 Python
+    函数相同的值。
 - en: To do this, we first create an environment to store the values for each of the
     variables, and update the environment with each equation we evaluate in the Jaxpr.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 为此，我们首先创建一个环境来存储每个变量的值，并在评估 Jaxpr 中的每个方程时更新该环境。
 - en: '[PRE8]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: '[PRE9]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: '[PRE10]'
+  id: totrans-39
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: Notice that `eval_jaxpr` will always return a flat list even if the original
     function does not.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，即使原始函数不返回平坦列表，`eval_jaxpr` 也将始终返回一个平坦列表。
 - en: Furthermore, this interpreter does not handle higher-order primitives (like
     `jit` and `pmap`), which we will not cover in this guide. You can refer to `core.eval_jaxpr`
     ([link](https://github.com/google/jax/blob/main/jax/core.py)) to see the edge
     cases that this interpreter does not cover.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，这个解释器不处理高阶原语（如 `jit` 和 `pmap`），这些内容不在本指南讨论范围内。您可以参考 `core.eval_jaxpr` ([链接](https://github.com/google/jax/blob/main/jax/core.py))
+    来查看此解释器不涵盖的边界情况。
 - en: Custom `inverse` Jaxpr interpreter
+  id: totrans-42
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 自定义`inverse` Jaxpr 解释器
 - en: An `inverse` interpreter doesn’t look too different from `eval_jaxpr`. We’ll
     first set up the registry which will map primitives to their inverses. We’ll then
     write a custom interpreter that looks up primitives in the registry.
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: '`inverse` 解释器看起来与 `eval_jaxpr` 并无太大不同。我们首先设置注册表，将原语映射到它们的逆。然后编写一个自定义解释器，在注册表中查找原语。'
 - en: It turns out that this interpreter will also look similar to the “transpose”
     interpreter used in reverse-mode autodifferentiation [found here](https://github.com/google/jax/blob/main/jax/interpreters/ad.py#L164-L234).
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 结果表明，这个解释器看起来也类似于反向模式自动微分中使用的“转置”解释器，可以在此处找到：[链接](https://github.com/google/jax/blob/main/jax/interpreters/ad.py#L164-L234)。
 - en: '[PRE11]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: We’ll now register inverses for some of the primitives. By convention, primitives
     in Jax end in `_p` and a lot of the popular ones live in `lax`.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们将为一些原语注册它们的逆。按照惯例，Jax 中的原语以 `_p` 结尾，而其中许多流行的原语位于 `lax` 中。
 - en: '[PRE12]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '`inverse` will first trace the function, then custom-interpret the Jaxpr. Let’s
     set up a simple skeleton.'
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: '`inverse` 将首先跟踪函数，然后自定义解释 Jaxpr。让我们建立一个简单的框架。'
 - en: '[PRE13]'
+  id: totrans-49
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: Now we just need to define `inverse_jaxpr`, which will walk through the Jaxpr
     backward and invert primitives when it can.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们只需要定义 `inverse_jaxpr`，它将反向遍历 Jaxpr 并在可能时反转原语。
 - en: '[PRE14]'
+  id: totrans-51
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: That’s it!
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 就是这样！
 - en: '[PRE15]'
+  id: totrans-53
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Importantly, you can trace through a Jaxpr interpreter.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 重要的是，你可以通过 Jaxpr 解释器进行跟踪。
 - en: '[PRE16]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '[PRE17]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: That’s all it takes to add a new transformation to a system, and you get composition
     with all the others for free! For example, we can use `jit`, `vmap`, and `grad`
     with `inverse`!
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 这就是向系统添加新转换所需的全部内容，而且你可以免费获得所有其他转换的组合！例如，我们可以在 `inverse` 中使用 `jit`、`vmap` 和
+    `grad`！
 - en: '[PRE18]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '[PRE19]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: Exercises for the reader
+  id: totrans-60
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 读者的练习
 - en: Handle primitives with multiple arguments where inputs are partially known,
     for example `lax.add_p`, `lax.mul_p`.
+  id: totrans-61
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 处理具有多个参数的原语，其中输入部分已知，例如 `lax.add_p`，`lax.mul_p`。
 - en: Handle `xla_call` and `xla_pmap` primitives, which will not work with both `eval_jaxpr`
     and `inverse_jaxpr` as written.
+  id: totrans-62
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 处理 `xla_call` 和 `xla_pmap` 原语，这些原语不会与 `eval_jaxpr` 和 `inverse_jaxpr` 一样正常工作。

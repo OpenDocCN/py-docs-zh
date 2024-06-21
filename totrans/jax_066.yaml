@@ -1,88 +1,129 @@
 - en: JAX PRNG Design
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: JAX PRNG 设计
 - en: 原文：[`jax.readthedocs.io/en/latest/jep/263-prng.html`](https://jax.readthedocs.io/en/latest/jep/263-prng.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/jep/263-prng.html`](https://jax.readthedocs.io/en/latest/jep/263-prng.html)
 - en: We want a PRNG design that
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们希望一个PRNG设计
 - en: is **expressive** in that it is convenient to use and it doesn’t constrain the
     user’s ability to write numerical programs with exactly the behavior that they
     want,
+  id: totrans-3
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 是**表达力强**的，因为它方便使用，并且不会限制用户编写具有精确所需行为的数值程序的能力，
 - en: enables **reproducible** program execution in a backend-independent way,
+  id: totrans-4
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 以一种与后端无关的方式启用**可复现的**程序执行，
 - en: has semantics that are **invariant to `@jit` compilation boundaries and device
     backends**,
+  id: totrans-5
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 具有**对`@jit`编译边界和设备后端不变的语义**，
 - en: enables **vectorization for generating array values** using SIMD hardware,
+  id: totrans-6
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用SIMD硬件**启用向量化以生成数组值**，
 - en: is **parallelizable** in that it doesn’t add sequencing constraints between
     random function calls that otherwise would have no data dependence,
+  id: totrans-7
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 是**可并行化**的，因为它不会在随机函数调用之间添加顺序约束，否则这些调用没有数据依赖，
 - en: scales to **multi-replica, multi-core, and distributed computation**,
+  id: totrans-8
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 能够扩展到**多副本、多核和分布式计算**，
 - en: '**fits with JAX and XLA semantics** and design philosophies (which are ultimately
     motivated by other practical concerns).'
+  id: totrans-9
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 与JAX和XLA的语义和设计哲学**契合**（这些哲学最终是由其他实际问题驱动的）。
 - en: As a corollary of these we believe the design should be functional. Another
     corollary is that, at least given current hardware constraints, we’re going to
     do the PRNG in software.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为这些的必然结果，我们认为设计应该是功能性的。另一个推论是，至少在当前硬件约束条件下，我们将在软件中进行PRNG。
 - en: TLDR **JAX PRNG = [Threefry counter PRNG](http://www.thesalmons.org/john/random123/papers/random123sc11.pdf)
     + a functional array-oriented [splitting model](https://dl.acm.org/citation.cfm?id=2503784)**
+  id: totrans-11
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: TLDR **JAX PRNG = [Threefry counter PRNG](http://www.thesalmons.org/john/random123/papers/random123sc11.pdf)
+    + 一个功能性数组导向的[分裂模型](https://dl.acm.org/citation.cfm?id=2503784)**
 - en: Contents
+  id: totrans-12
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 内容
 - en: Three programming models and toy example programs
+  id: totrans-13
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 三种编程模型和玩具示例程序
 - en: Design
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设计
 - en: More realistic example user programs
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 更现实的用户示例程序
 - en: Tradeoffs and alternatives
+  id: totrans-16
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 折衷和替代方案
 - en: Three programming models and toy example programs
+  id: totrans-17
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 三种编程模型和玩具示例程序
 - en: 'Here’s a toy example of a **stateful global** PRNG like the one often used
     in Numpy programs:'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里是一个类似于在Numpy程序中经常使用的**有状态全局**PRNG的玩具示例：
 - en: '[PRE0]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: To achieve reproducibility here we would need to control the order of evaluation
     for bar() and baz() even though there is no explicit data dependence from one
     to the other. This kind of sequencing requirement stemming from reproducibility
@@ -95,29 +136,42 @@
     challenges to achieve compilation invariance (#3) and scaling to multiple replicas
     (#6). Finally, the expressiveness is limited (#1) because there is no way for
     foo() to call bar() or baz() without affecting its own (implicit) PRNG state.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在这里实现可复现性，我们需要控制bar()和baz()的评估顺序，即使它们之间没有显式的数据依赖关系。这种由可复现性（＃2）引起的顺序要求违反了可并行性（＃5），并且与JAX或XLA的功能语义（＃6）不符合，在其中子表达式可以以任何顺序评估。即使我们不需要可复现性，因此允许任何评估顺序，由于需要更新共享状态，跨调用的并行化（＃5）仍将变得困难。此外，由于需要在Python和任何编译代码中访问和维护相同的PRNG状态，这种模型可能会导致工程挑战，以实现编译不变性（＃3）和扩展到多个副本（＃6）。最后，表达力受到限制（＃1），因为没有办法让foo()调用bar()或baz()而不影响其自身的（隐式）PRNG状态。
 - en: 'Whether the model supports vectorization (#4) depends on some additional details.
     In Numpy, PRNG vectorization is limited by a *sequential-equivalent guarantee*:'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 是否模型支持向量化（＃4）取决于一些额外的细节。在Numpy中，PRNG向量化受到*顺序等效保证*的限制：
 - en: '[PRE1]'
+  id: totrans-22
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: To allow for vectorization (#4) within primitive PRNG function calls that generate
     arrays (e.g. to rand() with a shape argument), we drop this sequential-equivalent
     guarantee. This vectorization can be supported by any of the three programming
     models discussed in this section, though it motivates the implementation in terms
     of a counter-based PRNG as described in the next section.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 允许在生成数组的原始 PRNG 函数调用中进行向量化（#4）（例如，使用形状参数调用 rand()），我们放弃了这种顺序等效保证。这种向量化可以由本节讨论的任何三种编程模型支持，尽管它激励我们按照下一节中描述的基于计数器的
+    PRNG 实现来实现。
 - en: 'The stateful PRNG user programming model is not promising. Here’s an example
     of a functional model but lacking a key ingredient that we call splitting:'
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 有状态 PRNG 用户编程模型前景不佳。以下是一个功能模型的示例，但缺少我们称之为分割的关键要素：
 - en: '[PRE2]'
+  id: totrans-25
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'This model explicitly threads the PRNG state through all functions (primitive
     or non-primitive) that generate random values: that is, every random function
     must both accept and return the state. Now there is an explicit data dependence
@@ -125,8 +179,11 @@
     hence sequencing) is made explicit and fits with JAX’s existing semantics (#7),
     unlike in the previous model. This explicit threading can also make the semantics
     invariant to compilation boundaries (#3).'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个模型明确地通过所有生成随机值的函数（原始或非原始）线程化 PRNG 状态：也就是说，每个随机函数都必须接受并返回状态。现在，在 foo() 中，调用
+    baz() 和调用 bar() 之间存在显式的数据依赖关系，因此数据流（以及顺序）是显式的，并且与 JAX 的现有语义相符（#7），与先前的模型不同。这种显式线程化还可以使语义不变到编译边界（#3）。
 - en: 'Explicit threading is inconvenient for the programmer. But worse, it hasn’t
     actually improved the expressiveness (#1): there is still no way for foo() to
     call into bar() or baz() while maintaining its own PRNG state. Without knowledge
@@ -135,38 +192,54 @@
     prospects for parallelization (#5) or scaling to multiple replicas (#6) because
     everything is still sequential, even if the sequencing is made explicit in the
     functional programming sense.'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 对程序员来说，显式线程化是不方便的。但更糟糕的是，它实际上并没有改进表达能力（#1）：foo() 仍然没有办法在调用 bar() 或 baz() 的同时保持自己的
+    PRNG 状态。没有了解其调用者或它们调用的子例程，函数必须在每个地方防御性地传入和返回 rng 状态。此外，它也没有改进并行化的前景（#5）或扩展到多个副本的能力（#6），因为一切仍然是顺序的，即使在功能编程意义上顺序被显式地表示出来。
 - en: 'In short, making the code functional by explicitly threading state isn’t enough
     to achieve our expressiveness (#1) and performance (#5, #6) goals.'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 简而言之，通过显式地线程化状态使代码功能化并不能实现我们的表达性目标（#1）和性能目标（#5，#6）。
 - en: The key problem in both the previous models is that there’s too much sequencing.
     To reduce the amount of sequential dependence we use **functional [splittable](https://dl.acm.org/citation.cfm?id=2503784)
     PRNGs**. Splitting is a mechanism to ‘fork’ a new PRNG state into two PRNG states
     while maintaining the usual desirable PRNG properties (the two new streams are
     computationally parallelizable and produce independent random values, i.e. they
     behave like [multistreams](http://www.thesalmons.org/john/random123/papers/random123sc11.pdf)).
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 在前面的两种模型中的关键问题是存在过多的顺序依赖。为了减少顺序依赖性，我们使用**功能性[splittable](https://dl.acm.org/citation.cfm?id=2503784)
+    PRNGs**。分割是一种机制，用于在保持通常理想的 PRNG 属性的同时‘分叉’新的 PRNG 状态为两个 PRNG 状态（两个新流可以在计算上并行化并产生独立的随机值，即它们的行为类似于[multistreams](http://www.thesalmons.org/john/random123/papers/random123sc11.pdf)）。
 - en: '[PRE3]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'Some points to notice:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 一些需要注意的点：
 - en: 'there is no sequential dependence between the calls to bar() and baz() and
     they can be evaluated in either order without affecting the value of the result,
     which solves the remaining performance goals (#5, #6),'
+  id: totrans-32
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 调用 bar() 和 baz() 的顺序无关紧要，它们可以以任何顺序评估，而不会影响结果的值，这解决了剩下的性能目标（#5，#6），
 - en: functions do not need to return updated versions of PRNGs and it is straightforward
     to call a random subroutine without affecting existing PRNG states, improving
     the expressiveness (#1) from the other functional model.
+  id: totrans-33
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 函数不需要返回更新版本的 PRNG，并且可以直接调用随机子例程而不影响现有的 PRNG 状态，从而改善了来自其他功能模型的表达能力（#1）。
 - en: The example doesn’t show it, but as a consequence of the choice (2) the only
     way to advance the PRNG state is to call split(). That is, we have two ways to
     achieve (1), and they differ in whether they burden the user program with explicit
@@ -174,12 +247,17 @@
     with explicit threading. We prefer the former, i.e. the version with explicit
     splitting, because we can easily implement the explicit-threading version in terms
     of it.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如并未显示，但由于选择（2），推进 PRNG 状态的唯一方法是调用 split()。也就是说，我们有两种实现（1）的方式，它们在是否将显式调用 split()
+    添加到用户程序上有所不同，就像上面的例子一样，或者改为加入显式线程。我们更喜欢前者，即显式分割版本，因为我们可以轻松地基于它实现显式线程版本。
 - en: Design
+  id: totrans-35
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 设计
 - en: 'We can use the *counter-based PRNG* design, and in particular the Threefry
     hash function, as described in [Parallel random numbers: as easy as 1, 2, 3](http://www.thesalmons.org/john/random123/papers/random123sc11.pdf).
     We use the counter to achieve efficient vectorization: for a given key we can
@@ -187,112 +265,163 @@
     over a range of integers [k + 1, …, k + sample_size]. We use the key together
     with the hash function to implement [splittable PRNGs](https://dl.acm.org/citation.cfm?id=2503784):
     that is, splitting is a way to generate two new keys from an existing one.'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: '我们可以使用 *基于计数器的 PRNG* 设计，特别是如 [Parallel random numbers: as easy as 1, 2, 3](http://www.thesalmons.org/john/random123/papers/random123sc11.pdf)
+    中描述的 Threefry 哈希函数。我们利用计数器实现高效的向量化：对于给定的密钥，我们可以通过在整数范围 [k + 1, …, k + sample_size]
+    上映射哈希函数，以向量化的方式生成值数组。我们与哈希函数一起使用密钥实现 [可分割 PRNGs](https://dl.acm.org/citation.cfm?id=2503784)：也就是说，分割是从现有密钥生成两个新密钥的一种方式。'
 - en: '[PRE4]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'Surprisingly, drawing a sample is very similar to splitting! The key is the
     difference in the type of the output (even though the types are identified): in
     one case the value is to be used in forming random samples of interest (e.g. turning
     random bits into a Float representing a random normal) while in the other case
     the value is to be used as a key for further hashing.'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 令人惊讶的是，抽取样本与分割非常相似！关键在于输出类型的差异（即使类型被识别为相同）：在一种情况下，该值用于形成感兴趣的随机样本（例如，将随机比特转换为表示随机正态分布的
+    Float），而在另一种情况下，该值用作进一步哈希的键。
 - en: The asymmetry in the hash function arguments, of type Key and Count, is that
     the latter is trivial and computationally cheap to advance by an arbitrary amount,
     since we just need to increase the integer value, while the former is only advanced
     by hashing. That’s why we use the count argument for vectorization.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 哈希函数参数的不对称性，即 Key 和 Count 类型，后者可以通过任意数量的计算轻松推进，因为我们只需增加整数值，而前者只能通过哈希来推进。这就是为什么我们在向量化中使用计数参数的原因。
 - en: More realistic example user programs
+  id: totrans-40
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 更现实的示例用户程序
 - en: 'Here’s what a training loop on the host might look like when the step requires
     a PRNG (maybe for dropout or for VAE training):'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 当步骤需要 PRNG 时（也许是为了 dropout 或 VAE 训练），在主机上的训练循环可能如下所示：
 - en: '[PRE5]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Notice that we’re burdening the user with explicit splitting of the rng, but
     the rng does not need to be returned from the code at all.
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，我们将用户负担了显式分割的随机数生成器，但代码根本不需要返回随机数生成器。
 - en: 'Here’s how we can use this PRNG model with the stax neural net builder library
     to implement dropout:'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是我们如何在 stax 神经网络构建器库中使用此 PRNG 模型来实现 dropout：
 - en: '[PRE6]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'The rng value here is just the key used for the hash, not a special object.
     The rng argument is passed to every apply_fun, and so it needs to be handled in
     the serial and parallel combinators with splitting:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的 rng 值只是用于哈希的密钥，而不是特殊对象。rng 参数传递给每个 apply_fun，因此需要在串行和并行组合器中进行处理以进行分割：
 - en: '[PRE7]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: Here we’re using a simple extended version of split that can produce multiple
     copies.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们使用了一个简单的扩展版本的 split，可以生成多个副本。
 - en: Tradeoffs and alternatives
+  id: totrans-49
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 折衷和替代方案
 - en: We’re not exploiting any device hardware PRNG
+  id: totrans-50
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 我们没有利用任何设备硬件 PRNG。
 - en: We don’t currently have enough control over the hardware PRNG’s state for all
     backends.
+  id: totrans-51
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们目前无法控制所有后端的硬件 PRNG 状态。
 - en: Even if we did, it would be backend-dependent and we might have to introduce
     sequential dependencies between random calls to ensure deterministic ordering
     and hence reproducibility.
+  id: totrans-52
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 即使我们这样做了，它也会依赖后端，并且我们可能需要在随机调用之间引入顺序依赖关系，以确保确定性排序和因此可重复性。
 - en: We don’t know of any workloads for which the software PRNG should become a bottleneck.
+  id: totrans-53
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们不知道任何软件 PRNG 应成为瓶颈的工作负载。
 - en: We could consider providing an additional API that allows access to a hardware
     PRNG for users who want to give up other desiderata (like strict reproducibility).
+  id: totrans-54
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们可以考虑提供额外的API，允许用户访问硬件PRNG，这样他们就可以放弃其他的期望（比如严格的可重现性）。
 - en: We give up the sequential equivalent guarantee, in which creating a random array
     in one call produces the same values as creating the flattened array one random
     element at a time.
+  id: totrans-55
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 我们放弃了顺序等效的保证，即在一次调用中创建随机数组与逐个创建扁平化数组的随机元素产生相同的值。
 - en: This property is likely incompatible with vectorization (a high priority).
+  id: totrans-56
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这个属性很可能与向量化不兼容（一个高优先级）。
 - en: We don’t know of any users or examples for which this property is important.
+  id: totrans-57
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们不知道有哪些用户或示例认为此属性很重要。
 - en: Users could write a layer on top of this API to provide this guarantee.
+  id: totrans-58
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用户可以在此API之上编写一层以提供此保证。
 - en: We can’t follow the `numpy.random` API exactly.
+  id: totrans-59
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 我们不能完全遵循 `numpy.random` 的API。
