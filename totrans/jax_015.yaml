@@ -1,198 +1,301 @@
 - en: Stateful Computations
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 有状态计算
 - en: 原文：[`jax.readthedocs.io/en/latest/stateful-computations.html`](https://jax.readthedocs.io/en/latest/stateful-computations.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/stateful-computations.html`](https://jax.readthedocs.io/en/latest/stateful-computations.html)
 - en: 'JAX transformations like `jit()`, `vmap()`, `grad()`, require the functions
     they wrap to be pure: that is, functions whose outputs depend *solely* on the
     inputs, and which have no side effects such as updating of global state. You can
     find a discussion of this in [JAX sharp bits: Pure functions](https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#pure-functions).'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 'JAX 的转换（如`jit()`、`vmap()`、`grad()`）要求它们包装的函数是纯粹的：即，函数的输出仅依赖于输入，并且没有副作用，比如更新全局状态。您可以在[JAX
+    sharp bits: Pure functions](https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#pure-functions)中找到关于这一点的讨论。'
 - en: 'This constraint can pose some challenges in the context of machine learning,
     where state may exist in many forms. For example:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 在机器学习的背景下，这种约束可能会带来一些挑战，因为状态可以以多种形式存在。例如：
 - en: model parameters,
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 模型参数，
 - en: optimizer state, and
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 优化器状态，以及
 - en: stateful layers, such as [BatchNorm](https://en.wikipedia.org/wiki/Batch_normalization).
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 像[BatchNorm](https://zh.wikipedia.org/wiki/%E6%89%B9%E9%87%8F%E6%A0%87%E5%87%86)这样的有状态层。
 - en: This section offers some advice of how to properly handle state in a JAX program.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节提供了如何在 JAX 程序中正确处理状态的一些建议。
 - en: 'A simple example: Counter'
+  id: totrans-8
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 一个简单的例子：计数器
 - en: 'Let’s start by looking at a simple stateful program: a counter.'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们首先看一个简单的有状态程序：一个计数器。
 - en: '[PRE0]'
+  id: totrans-10
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: '[PRE1]'
+  id: totrans-11
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: The counter’s `n` attribute maintains the counter’s *state* between successive
     calls of `count`. It is modified as a side effect of calling `count`.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 计数器的`n`属性在连续调用`count`时维护计数器的*状态*。调用`count`的副作用是修改它。
 - en: Let’s say we want to count fast, so we JIT-compile the `count` method. (In this
     example, this wouldn’t actually help speed anyway, for many reasons, but treat
     this as a toy model of JIT-compiling the update of model parameters, where `jit()`
     makes an enormous difference).
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设我们想要快速计数，所以我们即时编译`count`方法。（在这个例子中，这实际上不会以任何方式加快速度，由于很多原因，但把它看作是模型参数更新的玩具模型，`jit()`确实产生了巨大的影响）。
 - en: '[PRE2]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '[PRE3]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: Oh no! Our counter isn’t working. This is because the line
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 哦不！我们的计数器不能工作了。这是因为
 - en: '[PRE4]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'in `count` involves a side effect: it modifies the input counter in-place,
     and so this function is not supported by `jit`. Such side effects are executed
     only once when the function is first traced, and subsequent calls will not repeat
     the side effect. So, how do we fix it?'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 在`count`中涉及副作用：它直接修改了输入的计数器，因此此函数不受`jit`支持。这样的副作用仅在首次跟踪函数时执行一次，后续调用将不会重复该副作用。那么，我们该如何修复它呢？
 - en: 'The solution: explicit state'
+  id: totrans-19
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 解决方案：显式状态
 - en: Part of the problem with our counter was that the returned value didn’t depend
     on the arguments, meaning a constant was “baked into” the compiled output. But
     it shouldn’t be a constant – it should depend on the state. Well, then why don’t
     we make the state into an argument?
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 问题的一部分在于我们的计数器返回值不依赖于参数，这意味着编译输出中包含了一个常数。但它不应该是一个常数 - 它应该依赖于状态。那么，为什么我们不将状态作为一个参数呢？
 - en: '[PRE5]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: '[PRE6]'
+  id: totrans-22
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'In this new version of `Counter`, we moved `n` to be an argument of `count`,
     and added another return value that represents the new, updated, state. To use
     this counter, we now need to keep track of the state explicitly. But in return,
     we can now safely `jax.jit` this counter:'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个`Counter`的新版本中，我们将`n`移动到`count`的参数中，并添加了另一个返回值，表示新的、更新的状态。现在，为了使用这个计数器，我们需要显式地跟踪状态。但作为回报，我们现在可以安全地使用`jax.jit`这个计数器：
 - en: '[PRE7]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: '[PRE8]'
+  id: totrans-25
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: A general strategy
+  id: totrans-26
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 一个一般的策略
 - en: We can apply the same process to any stateful method to convert it into a stateless
     one. We took a class of the form
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以将同样的过程应用到任何有状态方法中，将其转换为无状态方法。我们拿一个形式如下的类
 - en: '[PRE9]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: and turned it into a class of the form
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 并将其转换为以下形式的类
 - en: '[PRE10]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: This is a common [functional programming](https://en.wikipedia.org/wiki/Functional_programming)
     pattern, and, essentially, is the way that state is handled in all JAX programs.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个常见的[函数式编程](https://zh.wikipedia.org/wiki/%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B)模式，本质上就是处理所有
+    JAX 程序中状态的方式。
 - en: Notice that the need for a class becomes less clear once we have rewritten it
     this way. We could just keep `stateless_method`, since the class is no longer
     doing any work. This is because, like the strategy we just applied, object-oriented
     programming (OOP) is a way to help programmers understand program state.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，一旦我们按照这种方式重写它，类的必要性就不那么明显了。我们可以只保留`stateless_method`，因为类不再执行任何工作。这是因为，像我们刚刚应用的策略一样，面向对象编程（OOP）是帮助程序员理解程序状态的一种方式。
 - en: 'In our case, the `CounterV2` class is nothing more than a namespace bringing
     all the functions that use `CounterState` into one location. Exercise for the
     reader: do you think it makes sense to keep it as a class?'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的情况下，`CounterV2` 类只是一个名称空间，将所有使用 `CounterState` 的函数集中在一个位置。读者可以思考：将其保留为类是否有意义？
 - en: Incidentally, you’ve already seen an example of this strategy in the JAX pseudo-randomness
     API, `jax.random`, shown in the :ref:`pseudorandom-numbers` section. Unlike Numpy,
     which manages random state using implicitly updated stateful classes, JAX requires
     the programmer to work directly with the random generator state – the PRNG key.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 顺便说一句，你已经在 JAX 伪随机性 API 中看到了这种策略的示例，即 `jax.random`，在 :ref:`pseudorandom-numbers`
+    部分展示。与 Numpy 不同，后者使用隐式更新的有状态类管理随机状态，而 JAX 要求程序员直接使用随机生成器状态——PRNG 密钥。
 - en: 'Simple worked example: Linear Regression'
+  id: totrans-35
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 简单的工作示例：线性回归
 - en: 'Let’s apply this strategy to a simple machine learning model: linear regression
     via gradient descent.'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们将这种策略应用到一个简单的机器学习模型上：通过梯度下降进行线性回归。
 - en: 'Here, we only deal with one kind of state: the model parameters. But generally,
     you’ll see many kinds of state being threaded in and out of JAX functions, like
     optimizer state, layer statistics for batchnorm, and others.'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里，我们只处理一种状态：模型参数。但通常情况下，你会看到许多种状态在 JAX 函数中交替出现，比如优化器状态、批归一化的层统计数据等。
 - en: The function to look at carefully is `update`.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 需要仔细查看的函数是 `update`。
 - en: '[PRE11]'
+  id: totrans-39
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Notice that we manually pipe the params in and out of the update function.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，我们手动地将参数输入和输出到更新函数中。
 - en: '[PRE12]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '[PRE13]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: '![_images/9d9c2471be1e4c9b8597cfff1433de0fe7ad2ef5b99cc6897ee153d7533d6521.png](img/5b4aeccf88cb97ddf4bb473ef4ec2d12.png)'
+  id: totrans-43
   prefs: []
   type: TYPE_IMG
+  zh: '![_images/9d9c2471be1e4c9b8597cfff1433de0fe7ad2ef5b99cc6897ee153d7533d6521.png](img/5b4aeccf88cb97ddf4bb473ef4ec2d12.png)'
 - en: Taking it further
+  id: totrans-44
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 进一步探讨
 - en: The strategy described above is how any JAX program must handle state when using
     transformations like `jit`, `vmap`, `grad`, etc.
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述描述的策略是任何使用 `jit`、`vmap`、`grad` 等转换的 JAX 程序必须处理状态的方式。
 - en: 'Handling parameters manually seems fine if you’re dealing with two parameters,
     but what if it’s a neural net with dozens of layers? You might already be getting
     worried about two things:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果只涉及两个参数，手动处理参数似乎还可以接受，但如果是有数十层的神经网络呢？你可能已经开始担心两件事情：
 - en: Are we supposed to initialize them all manually, essentially repeating what
     we already write in the forward pass definition?
+  id: totrans-47
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 我们是否应该手动初始化它们，基本上是在前向传播定义中已经编写过的内容？
 - en: Are we supposed to pipe all these things around manually?
+  id: totrans-48
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 我们是否应该手动处理所有这些事情？
 - en: The details can be tricky to handle, but there are examples of libraries that
     take care of this for you. See [JAX Neural Network Libraries](https://github.com/google/jax#neural-network-libraries)
     for some examples.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 处理这些细节可能有些棘手，但有一些库的示例可以为您解决这些问题。请参阅[JAX神经网络库](https://github.com/google/jax#neural-network-libraries)获取一些示例。

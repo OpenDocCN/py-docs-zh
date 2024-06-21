@@ -1,59 +1,87 @@
 - en: Introduction to sharded computation
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 分片计算介绍
 - en: 原文：[`jax.readthedocs.io/en/latest/sharded-computation.html`](https://jax.readthedocs.io/en/latest/sharded-computation.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/sharded-computation.html`](https://jax.readthedocs.io/en/latest/sharded-computation.html)
 - en: This tutorial serves as an introduction to device parallelism for Single-Program
     Multi-Data (SPMD) code in JAX. SPMD is a parallelism technique where the same
     computation, such as the forward pass of a neural network, can be run on different
     input data (for example, different inputs in a batch) in parallel on different
     devices, such as several GPUs or Google TPUs.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 本教程介绍了JAX中单程序多数据（SPMD）代码的设备并行性。SPMD是一种并行技术，可以在不同设备上并行运行相同的计算，比如神经网络的前向传播，可以在不同的输入数据上（比如批量中的不同输入）并行运行在不同的设备上，比如几个GPU或Google
+    TPU上。
 - en: 'The tutorial covers three modes of parallel computation:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 本教程涵盖了三种并行计算模式：
 - en: '*Automatic parallelism via `jax.jit()`*: The compiler chooses the optimal computation
     strategy (a.k.a. “the compiler takes the wheel”).'
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*通过`jax.jit()`自动并行化*：编译器选择最佳的计算策略（也被称为“编译器接管”）。'
 - en: '*Semi-automated parallelism* using `jax.jit()` and `jax.lax.with_sharding_constraint()`'
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用`jax.jit()`和`jax.lax.with_sharding_constraint()`*半自动并行化*
 - en: '*Fully manual parallelism with manual control using `jax.experimental.shard_map.shard_map()`*:
     `shard_map` enables per-device code and explicit communication collectives'
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*使用`jax.experimental.shard_map.shard_map()`进行全手动并行化：`shard_map`可以实现每个设备的代码和显式的通信集合*'
 - en: Using these schools of thought for SPMD, you can transform a function written
     for one device into a function that can run in parallel on multiple devices.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用这些SPMD的思路，您可以将为一个设备编写的函数转换为可以在多个设备上并行运行的函数。
 - en: 'If you are running these examples in a Google Colab notebook, make sure that
     your hardware accelerator is the latest Google TPU by checking your notebook settings:
     **Runtime** > **Change runtime type** > **Hardware accelerator** > **TPU v2**
     (which provides eight devices to work with).'
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您在Google Colab笔记本中运行这些示例，请确保您的硬件加速器是最新的Google TPU，方法是检查笔记本设置：**Runtime** >
+    **Change runtime type** > **Hardware accelerator** > **TPU v2**（提供八个可用设备）。
 - en: '[PRE0]'
+  id: totrans-9
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: '[PRE1]'
+  id: totrans-10
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'Key concept: Data sharding'
+  id: totrans-11
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 关键概念：数据分片
 - en: Key to all of the distributed computation approaches below is the concept of
     *data sharding*, which describes how data is laid out on the available devices.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面列出的所有分布式计算方法的关键是*数据分片*的概念，描述了如何在可用设备上布置数据。
 - en: How can JAX can understand how the data is laid out across devices? JAX’s datatype,
     the `jax.Array` immutable array data structure, represents arrays with physical
     storage spanning one or multiple devices, and helps make parallelism a core feature
@@ -61,291 +89,447 @@
     in mind. Every `jax.Array` has an associated `jax.sharding.Sharding` object, which
     describes which shard of the global data is required by each global device. When
     you create a `jax.Array` from scratch, you also need to create its `Sharding`.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX如何理解数据在各个设备上的布局？JAX的数据类型，`jax.Array`不可变数组数据结构，代表了在一个或多个设备上具有物理存储的数组，并且有助于使并行化成为JAX的核心特性。`jax.Array`对象是专为分布式数据和计算而设计的。每个`jax.Array`都有一个关联的`jax.sharding.Sharding`对象，描述了每个全局设备所需的全局数据的分片情况。当您从头开始创建`jax.Array`时，您还需要创建它的`Sharding`。
 - en: 'In the simplest cases, arrays are sharded on a single device, as demonstrated
     below:'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 在简单的情况下，数组被分片在单个设备上，如下所示：
 - en: '[PRE2]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '[PRE3]'
+  id: totrans-16
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: '[PRE4]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: '[PRE5]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'For a more visual representation of the storage layout, the `jax.debug` module
     provides some helpers to visualize the sharding of an array. For example, `jax.debug.visualize_array_sharding()`
     displays how the array is stored in memory of a single device:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 若要更直观地表示存储布局，`jax.debug`模块提供了一些辅助工具来可视化数组的分片。例如，`jax.debug.visualize_array_sharding()`显示了数组如何存储在单个设备的内存中：
 - en: '[PRE6]'
+  id: totrans-20
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: '[PRE7]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: To create an array with a non-trivial sharding, you can define a `jax.sharding`
     specification for the array and pass this to `jax.device_put()`.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 要创建具有非平凡分片的数组，可以为数组定义一个`jax.sharding`规范，并将其传递给`jax.device_put()`。
 - en: 'Here, define a `NamedSharding`, which specifies an N-dimensional grid of devices
     with named axes, where `jax.sharding.Mesh` allows for precise device placement:'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，定义一个`NamedSharding`，它指定了一个带有命名轴的N维设备网格，其中`jax.sharding.Mesh`允许精确的设备放置：
 - en: '[PRE8]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: '[PRE9]'
+  id: totrans-25
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'Passing this `Sharding` object to `jax.device_put()`, you can obtain a sharded
     array:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 将该`Sharding`对象传递给`jax.device_put()`，就可以获得一个分片数组：
 - en: '[PRE10]'
+  id: totrans-27
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '[PRE11]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: '[PRE12]'
+  id: totrans-29
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: The device numbers here are not in numerical order, because the mesh reflects
     the underlying toroidal topology of the device.
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的设备编号并不按数字顺序排列，因为网格反映了设备的环形拓扑结构。
 - en: 1\. Automatic parallelism via `jit`
+  id: totrans-31
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 1\. 通过`jit`实现自动并行化
 - en: 'Once you have sharded data, the easiest way to do parallel computation is to
     simply pass the data to a `jax.jit()`-compiled function! In JAX, you need to only
     specify how you want the input and output of your code to be partitioned, and
     the compiler will figure out how to: 1) partition everything inside; and 2) compile
     inter-device communications.'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦您有了分片数据，最简单的并行计算方法就是将数据简单地传递给`jax.jit()`编译的函数！在JAX中，您只需指定希望代码的输入和输出如何分区，编译器将会自动处理：1）内部所有内容的分区；2）跨设备的通信的编译。
 - en: The XLA compiler behind `jit` includes heuristics for optimizing computations
     across multiple devices. In the simplest of cases, those heuristics boil down
     to *computation follows data*.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 在`jit`背后的XLA编译器包含了优化跨多个设备的计算的启发式方法。在最简单的情况下，这些启发式方法可以归结为*计算跟随数据*。
 - en: 'To demonstrate how auto-parallelization works in JAX, below is an example that
     uses a `jax.jit()`-decorated staged-out function: it’s a simple element-wise function,
     where the computation for each shard will be performed on the device associated
     with that shard, and the output is sharded in the same way:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了演示JAX中自动并行化的工作原理，下面是一个使用`jax.jit()`装饰的延迟执行函数的示例：这是一个简单的逐元素函数，其中每个分片的计算将在与该分片关联的设备上执行，并且输出也以相同的方式进行分片：
 - en: '[PRE13]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: '[PRE14]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: As computations get more complex, the compiler makes decisions about how to
     best propagate the sharding of the data.
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 随着计算变得更加复杂，编译器会决定如何最佳地传播数据的分片。
 - en: 'Here, you sum along the leading axis of `x`, and visualize how the result values
     are stored across multiple devices (with `jax.debug.visualize_array_sharding()`):'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，您沿着`x`的主轴求和，并可视化结果值如何存储在多个设备上（使用`jax.debug.visualize_array_sharding()`）：
 - en: '[PRE15]'
+  id: totrans-39
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: '[PRE16]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '[PRE17]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'The result is partially replicated: that is, the first two elements of the
     array are replicated on devices `0` and `6`, the second on `1` and `7`, and so
     on.'
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 结果部分复制：即数组的前两个元素复制到设备`0`和`6`，第二个到`1`和`7`，依此类推。
 - en: 2\. Semi-automated sharding with constraints
+  id: totrans-43
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 2\. 使用约束进行半自动分片
 - en: If you’d like to have some control over the sharding used within a particular
     computation, JAX offers the `with_sharding_constraint()` function. You can use
     `jax.lax.with_sharding_constraint()` (in place of (func}`jax.device_put()`) together
     with `jax.jit()` for more control over how the compiler constraints how the intermediate
     values and outputs are distributed.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您希望在特定计算中对使用的分片进行一些控制，JAX提供了`with_sharding_constraint()`函数。您可以使用`jax.lax.with_sharding_constraint()`（而不是`jax.device_put()`）与`jax.jit()`一起更精确地控制编译器如何约束中间值和输出的分布。
 - en: 'For example, suppose that within `f_contract` above, you’d prefer the output
     not to be partially-replicated, but rather to be fully sharded across the eight
     devices:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，假设在上面的`f_contract`中，您希望输出不是部分复制，而是完全在八个设备上进行分片：
 - en: '[PRE18]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '[PRE19]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: '[PRE20]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: This gives you a function with the particular output sharding you’d like.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将为您提供具有所需输出分片的函数。
 - en: 3\. Manual parallelism with `shard_map`
+  id: totrans-50
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 3\. 使用`shard_map`进行手动并行处理
 - en: In the automatic parallelism methods explored above, you can write a function
     as if you’re operating on the full dataset, and `jit` will split that computation
     across multiple devices. By contrast, with `jax.experimental.shard_map.shard_map()`
     you write the function that will handle a single shard of data, and `shard_map`
     will construct the full function.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上述自动并行化方法中，您可以编写一个函数，就像在操作完整数据集一样，`jit`将会将该计算分配到多个设备上执行。相比之下，使用`jax.experimental.shard_map.shard_map()`，您需要编写处理单个数据片段的函数，而`shard_map`将构建完整的函数。
 - en: '`shard_map` works by mapping a function across a particular *mesh* of devices
     (`shard_map` maps over shards). In the example below:'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: '`shard_map`的工作方式是在设备*mesh*上映射函数（`shard_map`在shards上进行映射）。在下面的示例中：'
 - en: As before, `jax.sharding.Mesh` allows for precise device placement, with the
     axis names parameter for logical and physical axis names.
+  id: totrans-53
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 与以往一样，`jax.sharding.Mesh`允许精确的设备放置，使用轴名称参数来表示逻辑和物理轴名称。
 - en: The `in_specs` argument determines the shard sizes. The `out_specs` argument
     identifies how the blocks are assembled back together.
+  id: totrans-54
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`in_specs`参数确定了分片大小。`out_specs`参数标识了如何将块重新组装在一起。'
 - en: '**Note:** `jax.experimental.shard_map.shard_map()` code can work inside `jax.jit()`
     if you need it.'
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: '**注意：** 如果需要，`jax.experimental.shard_map.shard_map()`代码可以在`jax.jit()`内部工作。'
 - en: '[PRE21]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: '[PRE22]'
+  id: totrans-57
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: 'The function you write only “sees” a single batch of the data, which you can
     check by printing the device local shape:'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 您编写的函数只“看到”数据的单个批次，可以通过打印设备本地形状来检查：
 - en: '[PRE23]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: '[PRE24]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: Because each of your functions only “sees” the device-local part of the data,
     it means that aggregation-like functions require some extra thought.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为每个函数只“看到”数据的设备本地部分，这意味着像聚合的函数需要额外的思考。
 - en: 'For example, here’s what a `shard_map` of a `jax.numpy.sum()` looks like:'
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，这是`jax.numpy.sum()`的`shard_map`的示例：
 - en: '[PRE25]'
+  id: totrans-63
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: '[PRE26]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: Your function `f` operates separately on each shard, and the resulting summation
     reflects this.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 您的函数`f`分别在每个分片上运行，并且结果的总和反映了这一点。
 - en: 'If you want to sum across shards, you need to explicitly request it using collective
     operations like `jax.lax.psum()`:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果要跨分片进行求和，您需要显式请求，使用像`jax.lax.psum()`这样的集合操作：
 - en: '[PRE27]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: '[PRE28]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: Because the output no longer has a sharded dimension, set `out_specs=P()` (recall
     that the `out_specs` argument identifies how the blocks are assembled back together
     in `shard_map`).
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为输出不再具有分片维度，所以设置`out_specs=P()`（请记住，`out_specs`参数标识如何在`shard_map`中将块重新组装在一起）。
 - en: Comparing the three approaches
+  id: totrans-70
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 比较这三种方法
 - en: With these concepts fresh in our mind, let’s compare the three approaches for
     a simple neural network layer.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们记忆中掌握这些概念后，让我们比较简单神经网络层的三种方法。
 - en: 'Start by defining your canonical function like this:'
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先像这样定义您的规范函数：
 - en: '[PRE29]'
+  id: totrans-73
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: '[PRE30]'
+  id: totrans-74
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: '[PRE31]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: You can automatically run this in a distributed manner using `jax.jit()` and
     passing appropriately sharded data.
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以使用`jax.jit()`自动以分布式方式运行此操作，并传递适当分片的数据。
 - en: 'If you shard the leading axis of both `x` and `weights` in the same way, then
     the matrix multiplication will automatically happen in parallel:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您以相同的方式分片`x`和`weights`的主轴，则矩阵乘法将自动并行发生：
 - en: '[PRE32]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: '[PRE33]'
+  id: totrans-79
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: 'Alternatively, you can use `jax.lax.with_sharding_constraint()` in the function
     to automatically distribute unsharded inputs:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者，您可以在函数中使用`jax.lax.with_sharding_constraint()`自动分发未分片的输入：
 - en: '[PRE34]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: '[PRE35]'
+  id: totrans-82
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: 'Finally, you can do the same thing with `shard_map`, using `jax.lax.psum()`
     to indicate the cross-shard collective required for the matrix product:'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，您可以使用`shard_map`以相同的方式执行此操作，使用`jax.lax.psum()`指示矩阵乘积所需的跨分片集合：
 - en: '[PRE36]'
+  id: totrans-84
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: '[PRE37]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: Next steps
+  id: totrans-86
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 下一步
 - en: This tutorial serves as a brief introduction of sharded and parallel computation
     in JAX.
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 本教程简要介绍了在JAX中分片和并行计算的概念。
 - en: 'To learn about each SPMD method in-depth, check out these docs:'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 要深入了解每种SPMD方法，请查看以下文档：
 - en: Distributed arrays and automatic parallelization
+  id: totrans-89
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 分布式数组和自动并行化
 - en: SPMD multi-device parallelism with shard_map
+  id: totrans-90
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用`shard_map`进行SPMD多设备并行性
