@@ -1,228 +1,340 @@
 - en: The checkify transformation
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: '`checkify`转换'
 - en: 原文：[`jax.readthedocs.io/en/latest/debugging/checkify_guide.html`](https://jax.readthedocs.io/en/latest/debugging/checkify_guide.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/debugging/checkify_guide.html`](https://jax.readthedocs.io/en/latest/debugging/checkify_guide.html)
 - en: '**TL;DR** Checkify lets you add `jit`-able runtime error checking (e.g. out
     of bounds indexing) to your JAX code. Use the `checkify.checkify` transformation
     together with the assert-like `checkify.check` function to add runtime checks
     to JAX code:'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '**TL;DR** `checkify`允许您向您的JAX代码添加可`jit`的运行时错误检查（例如越界索引）。使用`checkify.checkify`转换与类似断言的`checkify.check`函数一起向JAX代码添加运行时检查：'
 - en: '[PRE0]'
+  id: totrans-3
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'You can also use checkify to automatically add common checks:'
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 您还可以使用`checkify`来自动添加常见的检查：
 - en: '[PRE1]'
+  id: totrans-5
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: Functionalizing checks
+  id: totrans-6
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 功能化检查
 - en: 'The assert-like check API by itself is not functionally pure: it can raise
     a Python Exception as a side-effect, just like assert. So it can’t be staged out
     with `jit`, `pmap`, `pjit`, or `scan`:'
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 与assert类似的检查API本身不是函数纯粹的：它可以作为副作用引发Python异常，就像assert一样。因此，它不能与`jit`、`pmap`、`pjit`或`scan`分阶段执行：
 - en: '[PRE2]'
+  id: totrans-8
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'But the checkify transformation functionalizes (or discharges) these effects.
     A checkify-transformed function returns an error *value* as a new output and remains
     functionally pure. That functionalization means checkify-transformed functions
     can be composed with staging/transforms however we like:'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是`checkify`转换功能化（或卸载）这些效果。一个经过`checkify`转换的函数将错误*值*作为新输出返回，并保持函数纯粹。这种功能化意味着`checkify`转换的函数可以与我们喜欢的任何分阶段/转换进行组合：
 - en: '[PRE3]'
+  id: totrans-10
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: Why does JAX need checkify?
+  id: totrans-11
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: JAX为什么需要`checkify`？
 - en: 'Under some JAX transformations you can express runtime error checks with ordinary
     Python assertions, for example when only using `jax.grad` and `jax.numpy`:'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 在某些JAX转换下，您可以使用普通的Python断言表达运行时错误检查，例如仅使用`jax.grad`和`jax.numpy`时。
 - en: '[PRE4]'
+  id: totrans-13
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'But ordinary assertions don’t work inside `jit`, `pmap`, `pjit`, or `scan`.
     In those cases, numeric computations are staged out rather than evaluated eagerly
     during Python execution, and as a result numeric values aren’t available:'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是普通的断言在`jit`、`pmap`、`pjit`或`scan`中不起作用。在这些情况下，数值计算是在Python执行期间被分阶段地进行评估，因此数值值不可用：
 - en: '[PRE5]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'JAX transformation semantics rely on functional purity, especially when composing
     multiple transformations, so how can we provide an error mechanism without disrupting
     all that? Beyond needing a new API, the situation is trickier still: XLA HLO doesn’t
     support assertions or throwing errors, so even if we had a JAX API which was able
     to stage out assertions, how would we lower these assertions to XLA?'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 在组合多个转换时，JAX转换语义依赖于函数纯度，因此我们如何在不干扰所有这些的情况下提供一个错误机制？除了需要一个新的API之外，情况还更加棘手：XLA
+    HLO不支持断言或抛出错误，因此即使我们有一个能够分阶段断言的JAX API，我们如何将这些断言降低到XLA呢？
 - en: 'You could imagine manually adding run-time checks to your function and plumbing
     out values representing errors:'
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以想象手动向函数添加运行时检查并通过值来传递表示错误：
 - en: '[PRE6]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: The error is a regular value computed by the function, and the error is raised
     outside of `f_checked`. `f_checked` is functionally pure, so we know by construction
     that it’ll already work with `jit`, pmap, pjit, scan, and all of JAX’s transformations.
     The only problem is that this plumbing can be a pain!
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 错误是由函数计算出的常规值，并且错误是在`f_checked`外部引发的。`f_checked`是函数式纯粹的，因此我们知道通过构造，它已经可以与`jit`、`pmap`、`pjit`、`scan`以及所有JAX的转换一起工作。唯一的问题是这些管道可能会很麻烦！
 - en: '`checkify` does this rewrite for you: that includes plumbing the error value
     through the function, rewriting checks to boolean operations and merging the result
     with the tracked error value, and returning the final error value as an output
     to the checkified function:'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: '`checkify`为您完成了这个重写工作：包括通过函数传递错误值、将检查重写为布尔操作并将结果与跟踪的错误值合并，并将最终错误值作为检查函数的输出返回：'
 - en: '[PRE7]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: We call this functionalizing or discharging the effect introduced by calling
     check. (In the “manual” example above the error value is just a boolean. checkify’s
     error values are conceptually similar but also track error messages and expose
     throw and get methods; see `jax.experimental.checkify`). `checkify.check` also
     allows you to add run-time values to your error message by providing them as format
     arguments to the error message.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们称这个过程为功能化或者通过调用检查引入的效果。 （在上面的“手动”示例中，错误值只是一个布尔值。`checkify`的错误值在概念上类似，但还跟踪错误消息并公开抛出和获取方法；参见`jax.experimental.checkify`）。`checkify.check`还允许您通过将其作为格式参数提供给错误消息来将运行时值添加到您的错误消息中。
 - en: 'You could now manually instrument your code with run-time checks, but `checkify`
     can also automatically add checks for common errors! Consider these error cases:'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 您现在可以手动为您的代码添加运行时检查，但 `checkify` 也可以自动添加常见错误的检查！考虑这些错误情况：
 - en: '[PRE8]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: By default `checkify` only discharges `checkify.check`s, and won’t do anything
     to catch errors like the above. But if you ask it to, `checkify` will also instrument
     your code with checks automatically.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，`checkify` 仅释放 `checkify.check`，不会捕获类似上述的错误。但如果您要求，`checkify` 也会自动在您的代码中添加检查。
 - en: '[PRE9]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: The API for selecting which automatic checks to enable is based on Sets. See
     `jax.experimental.checkify` for more details.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 基于 Sets 的 API，用于选择要启用的自动检查。详见 `jax.experimental.checkify` 获取更多详情。
 - en: '`checkify` under JAX transformations.'
+  id: totrans-28
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 在 JAX 变换下的 `checkify`。
 - en: As demonstrated in the examples above, a checkified function can be happily
     jitted. Here’s a few more examples of `checkify` with other JAX transformations.
     Note that checkified functions are functionally pure, and should trivially compose
     with all JAX transformations!
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 如上例所示，checkified 函数可以愉快地进行 jitted 处理。以下是 `checkify` 与其他 JAX 变换的几个示例。请注意，checkified
+    函数在功能上是纯粹的，并且应与所有 JAX 变换轻松组合！
 - en: '`jit`'
+  id: totrans-30
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`jit`'
 - en: You can safely add `jax.jit` to a checkified function, or `checkify` a jitted
     function, both will work.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以安全地向 checkified 函数添加 `jax.jit`，或者 `checkify` 一个 jitted 函数，两者都可以正常工作。
 - en: '[PRE10]'
+  id: totrans-32
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '`vmap`/`pmap`'
+  id: totrans-33
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`vmap`/`pmap`'
 - en: You can `vmap` and `pmap` checkified functions (or `checkify` mapped functions).
     Mapping a checkified function will give you a mapped error, which can contain
     different errors for every element of the mapped dimension.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以 `vmap` 和 `pmap` checkified 函数（或 `checkify` 映射函数）。映射一个 checkified 函数将为您提供一个映射的错误，该错误可以包含映射维度的每个元素的不同错误。
 - en: '[PRE11]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: However, a checkify-of-vmap will produce a single (unmapped) error!
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，`checkify-of-vmap` 将产生单个（未映射）的错误！
 - en: '[PRE12]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '`pjit`'
+  id: totrans-38
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`pjit`'
 - en: '`pjit` of a checkified function *just works*, you only need to specify an additional
     `out_axis_resources` of `None` for the error value output.'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于 checkified 函数的 `pjit` *可以正常工作*，您只需为错误值输出的 `out_axis_resources` 指定额外的 `None`。
 - en: '[PRE13]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: '`grad`'
+  id: totrans-41
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`grad`'
 - en: 'Your gradient computation will also be instrumented if you checkify-of-grad:'
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您使用 `checkify-of-grad`，还将对您的梯度计算进行检查：
 - en: '[PRE14]'
+  id: totrans-43
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: Note that there’s no multiply in `f`, but there is a multiply in its gradient
     computation (and this is where the NaN is generated!). So use checkify-of-grad
     to add automatic checks to both forward and backward pass operations.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，`f` 中没有乘法，但在其梯度计算中有乘法（这就是生成 NaN 的地方！）。因此，请使用 `checkify-of-grad` 为前向和后向传递操作添加自动检查。
 - en: '`checkify.check`s will only be applied to the primal value of your function.
     If you want to use a `check` on a gradient value, use a `custom_vjp`:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: '`checkify.check` 仅应用于函数的主值。如果您想在梯度值上使用 `check`，请使用 `custom_vjp`：'
 - en: '[PRE15]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Strengths and limitations of `jax.experimental.checkify`
+  id: totrans-47
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: '`jax.experimental.checkify` 的优势和限制'
 - en: Strengths
+  id: totrans-48
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 优势
 - en: You can use it everywhere (errors are “just values” and behave intuitively under
     transformations like other values)
+  id: totrans-49
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 您可以在任何地方使用它（错误只是“值”，并在像其他值一样的转换下直观地表现）。
 - en: 'Automatic instrumentation: you don’t need to make local modifications to your
     code. Instead, `checkify` can instrument all of it!'
+  id: totrans-50
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 自动插装：您无需对代码进行本地修改。相反，`checkify` 可以为其所有部分添加插装！
 - en: Limitations
+  id: totrans-51
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 限制
 - en: Adding a lot of runtime checks can be expensive (eg. adding a NaN check to every
     primitive will add a lot of operations to your computation)
+  id: totrans-52
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 添加大量运行时检查可能很昂贵（例如，对每个原语添加 NaN 检查将增加计算中的许多操作）。
 - en: Requires threading error values out of functions and manually throwing the error.
     If the error is not explicitly thrown, you might miss out on errors!
+  id: totrans-53
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 需要将错误值从函数中线程化并手动抛出错误。如果未显式抛出错误，则可能会错过错误！
 - en: Throwing an error value will materialize that error value on the host, meaning
     it’s a blocking operation which defeats JAX’s async run-ahead.
+  id: totrans-54
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 抛出一个错误值将在主机上实现该错误值，这意味着它是一个阻塞操作，这会打败 JAX 的异步先行运行。
