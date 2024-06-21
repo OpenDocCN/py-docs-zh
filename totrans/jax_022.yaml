@@ -1,290 +1,396 @@
 - en: jax.debug.print and jax.debug.breakpoint
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 原文：[`jax.readthedocs.io/en/latest/debugging/print_breakpoint.html`](https://jax.readthedocs.io/en/latest/debugging/print_breakpoint.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
 - en: The `jax.debug` package offers some useful tools for inspecting values inside
     of JIT-ted functions.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
 - en: Debugging with `jax.debug.print` and other debugging callbacks
+  id: totrans-3
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: '**TL;DR** Use `jax.debug.print()` to print traced array values to stdout in
     `jit`- and `pmap`-decorated functions:'
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE0]'
+  id: totrans-5
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: With some transformations, like `jax.grad` and `jax.vmap`, you can use Python’s
     builtin `print` function to print out numerical values. But `print` won’t work
     with `jax.jit` or `jax.pmap` because those transformations delay numerical evaluation.
     So use `jax.debug.print` instead!
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
 - en: Semantically, `jax.debug.print` is roughly equivalent to the following Python
     function
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE1]'
+  id: totrans-8
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: except that it can be staged out and transformed by JAX. See the `API reference`
     for more details.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
 - en: Note that `fmt` cannot be an f-string because f-strings are formatted immediately,
     whereas for `jax.debug.print`, we’d like to delay formatting until later.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
 - en: When to use “*debug*” print?
+  id: totrans-11
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: You should use `jax.debug.print` for dynamic (i.e. traced) array values within
     JAX transformations like `jit`, `vmap`, and others. For printing of static values
     (like array shapes or dtypes), you can use a normal Python `print` statement.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
 - en: Why “*debug*” print?
+  id: totrans-13
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: 'In the name of debugging, `jax.debug.print` can reveal information about *how*
     computations are evaluated:'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Notice that the printed results are in different orders!
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
 - en: By revealing these inner-workings, the output of `jax.debug.print` doesn’t respect
     JAX’s usual semantics guarantees, like that `jax.vmap(f)(xs)` and `jax.lax.map(f,
     xs)` compute the same thing (in different ways). Yet these evaluation order details
     are exactly what we might want to see when debugging!
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
 - en: So use `jax.debug.print` for debugging, and not when semantics guarantees are
     important.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
 - en: More examples of `jax.debug.print`
+  id: totrans-19
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: In addition to the above examples using `jit` and `vmap`, here are a few more
     to have in mind.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
 - en: Printing under `jax.pmap`
+  id: totrans-21
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: When `jax.pmap`-ed, `jax.debug.print`s might be reordered!
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-23
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: Printing under `jax.grad`
+  id: totrans-24
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: 'Under a `jax.grad`, `jax.debug.print`s will only print on the forward pass:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: This behavior is similar to how Python’s builtin `print` works under a `jax.grad`.
     But by using `jax.debug.print` here, the behavior is the same even if the caller
     applies a `jax.jit`.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
 - en: 'To print on the backward pass, just use a `jax.custom_vjp`:'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-29
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Printing in other transformations
+  id: totrans-30
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: '`jax.debug.print` also works in other transformations like `xmap` and `pjit`.'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
 - en: More control with `jax.debug.callback`
+  id: totrans-32
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: In fact, `jax.debug.print` is a thin convenience wrapper around `jax.debug.callback`,
     which can be used directly for greater control over string formatting, or even
     the kind of output.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
 - en: Semantically, `jax.debug.callback` is roughly equivalent to the following Python
     function
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE6]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: As with `jax.debug.print`, these callbacks should only be used for debugging
     output, like printing or plotting. Printing and plotting are pretty harmless,
     but if you use it for anything else its behavior might surprise you under transformations.
     For example, it’s not safe to use `jax.debug.callback` for timing operations,
     since callbacks might be reordered and asynchronous (see below).
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 与 `jax.debug.print` 类似，这些回调只应用于调试输出，比如打印或绘图。打印和绘图相对无害，但如果用于其他用途，它的行为在转换中可能会让你感到意外。例如，不安全地用于计时操作是不安全的，因为回调可能会被重新排序并且是异步的（见下文）。
 - en: Sharp bits
+  id: totrans-37
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 锐利的部分
 - en: Like most JAX APIs, `jax.debug.print` can cut you if you’re not careful.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 像大多数 JAX API 一样，如果使用不当，`jax.debug.print` 也会给你带来麻烦。
 - en: Ordering of printed results
+  id: totrans-39
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 打印结果的顺序
 - en: 'When distinct calls to `jax.debug.print` involve arguments which don’t depend
     on one another, they might be reordered when staged out, e.g. by `jax.jit`:'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 当 `jax.debug.print` 的不同调用涉及彼此不依赖的参数时，在分阶段时可能会被重新排序，例如通过 `jax.jit`：
 - en: '[PRE7]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: Why? Under the hood, the compiler gets a functional representation of the staged-out
     computation, where the imperative order of the Python function is lost and only
     data dependence remains. This change is invisible to users with functionally pure
     code, but in the presence of side-effects like printing, it’s noticeable.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 为什么？在幕后，编译器获得了一个计算的功能表示，其中 Python 函数的命令顺序丢失，只有数据依赖性保留。对于功能纯粹的代码用户来说，这种变化是看不见的，但是在像打印这样的副作用存在时，就会显而易见。
 - en: To preserve the original order of `jax.debug.print`s as written in your Python
     function, you can use `jax.debug.print(..., ordered=True)`, which will ensure
     the relative order of prints is preserved. But using `ordered=True` will raise
     an error under `jax.pmap` and other JAX transformations involving parallelism,
     since ordering can’t be guaranteed under parallel execution.
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 要保持 `jax.debug.print` 在 Python 函数中的原始顺序，可以使用 `jax.debug.print(..., ordered=True)`，这将确保打印的相对顺序保持不变。但是在
+    `jax.pmap` 和涉及并行性的其他 JAX 转换中使用 `ordered=True` 会引发错误，因为在并行执行中无法保证顺序。
 - en: Asynchronous callbacks
+  id: totrans-44
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 异步回调
 - en: Depending on the backend, `jax.debug.print`s may happen asynchronously, i.e.
     not in your main program thread. This means that values could be printed to your
     screen even after your JAX function has returned a value.
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据后端不同，`jax.debug.print` 可能会异步执行，即不在主程序线程中。这意味着值可能在您的 JAX 函数返回值后才被打印到屏幕上。
 - en: '[PRE8]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'To block on the `jax.debug.print`s in a function, you can call `jax.effects_barrier()`,
     which will wait until any remaining side-effects in the function have completed
     as well:'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 要阻塞函数中的 `jax.debug.print`，您可以调用 `jax.effects_barrier()`，它会等待函数中任何剩余的副作用也完成：
 - en: '[PRE9]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: Performance impacts
+  id: totrans-49
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 性能影响
 - en: Unnecessary materialization
+  id: totrans-50
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 不必要的实现
 - en: While `jax.debug.print` was designed to have a minimal performance footprint,
     it can interfere with compiler optimizations and potentially affect the memory
     profile of your JAX programs.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然 `jax.debug.print` 设计为性能影响最小，但它可能会干扰编译器优化，并且可能会影响 JAX 程序的内存配置文件。
 - en: '[PRE10]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: In this example, we are printing intermediate values in between a linear layer
     and the activation function. Compilers like XLA can perform fusion optimizations,
     which might avoid materializing `logits` in memory. But when we use `jax.debug.print`
     on `logits`, we are forcing those intermediates to be materialized, potentially
     slowing down the program and increasing memory usage.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个例子中，我们在线性层和激活函数之间打印中间值。像 XLA 这样的编译器可以执行融合优化，可以避免在内存中实现 `logits`。但是当我们在 `logits`
+    上使用 `jax.debug.print` 时，我们强制这些中间值被实现，可能会减慢程序速度并增加内存使用。
 - en: Furthermore, when using `jax.debug.print` with `jax.pjit`, a global synchronization
     occurs that will materialize values on a single device.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，当使用 `jax.debug.print` 与 `jax.pjit` 时，会发生全局同步，将值实现在单个设备上。
 - en: Callback overhead
+  id: totrans-55
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 回调开销
 - en: '`jax.debug.print` inherently incurs communication between an accelerator and
     its host. The underlying mechanism differs from backend to backend (e.g. GPU vs
     TPU) but in all cases, we’ll need to copy the printed values from device to host.
     In the CPU case, this overhead is smaller.'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jax.debug.print` 本质上会在加速器和其主机之间进行通信。底层机制因后端而异（例如 GPU vs TPU），但在所有情况下，我们需要将打印的值从设备复制到主机。在
+    CPU 情况下，此开销较小。'
 - en: Furthermore, when using `jax.debug.print` with `jax.pjit`, a global synchronization
     occurs that adds some overhead.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，当使用 `jax.debug.print` 与 `jax.pjit` 时，会发生全局同步，增加了一些额外开销。
 - en: Strengths and limitations of `jax.debug.print`
+  id: totrans-58
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: '`jax.debug.print` 的优势和限制'
 - en: Strengths
+  id: totrans-59
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
+  zh: 优势
 - en: Print debugging is simple and intuitive
+  id: totrans-60
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`jax.debug.callback` can be used for other innocuous side-effects'
+  id: totrans-61
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Limitations
+  id: totrans-62
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: Adding print statements is a manual process
+  id: totrans-63
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Can have performance impacts
+  id: totrans-64
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Interactive inspection with `jax.debug.breakpoint()`
+  id: totrans-65
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: '**TL;DR** Use `jax.debug.breakpoint()` to pause the execution of your JAX program
     to inspect values:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE11]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: '![JAX debugger](img/fee2c7fc0abba538525eb7922811ec87.png)'
+  id: totrans-68
   prefs: []
   type: TYPE_IMG
 - en: '`jax.debug.breakpoint()` is actually just an application of `jax.debug.callback(...)`
     that captures information about the call stack. It has the same transformation
     behaviors as `jax.debug.print` as a result (e.g. `vmap`-ing `jax.debug.breakpoint()`
     unrolls it across the mapped axis).'
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
 - en: Usage
+  id: totrans-70
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -292,106 +398,133 @@
     program when it hits the breakpoint. You’ll be presented with a `pdb`-like prompt
     that allows you to inspect the values in the call stack. Unlike `pdb`, you will
     not be able to step through the execution, but you are allowed to resume it.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
 - en: 'Debugger commands:'
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
 - en: '`help` - prints out available commands'
+  id: totrans-73
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`p` - evaluates an expression and prints its result'
+  id: totrans-74
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`pp` - evaluates an expression and pretty-prints its result'
+  id: totrans-75
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`u(p)` - go up a stack frame'
+  id: totrans-76
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`d(own)` - go down a stack frame'
+  id: totrans-77
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`w(here)/bt` - print out a backtrace'
+  id: totrans-78
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`l(ist)` - print out code context'
+  id: totrans-79
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`c(ont(inue))` - resumes the execution of the program'
+  id: totrans-80
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`q(uit)/exit` - exits the program (does not work on TPU)'
+  id: totrans-81
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Examples
+  id: totrans-82
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: Usage with `jax.lax.cond`
+  id: totrans-83
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: When combined with `jax.lax.cond`, the debugger can become a useful tool for
     detecting `nan`s or `inf`s.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE12]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: Sharp bits
+  id: totrans-86
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: 'Because `jax.debug.breakpoint` is a just an application of `jax.debug.callback`,
     it has the same sharp bits as `jax.debug.print`, with a few more caveats:'
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
 - en: '`jax.debug.breakpoint` materializes *even more* intermediates than `jax.debug.print`
     because it forces materialization of all values in the call stack'
+  id: totrans-88
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`jax.debug.breakpoint` has more runtime overhead than a `jax.debug.print` because
     it has to potentially copy all the intermediate values in a JAX program from device
     to host.'
+  id: totrans-89
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Strengths and limitations of `jax.debug.breakpoint()`
+  id: totrans-90
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: Strengths
+  id: totrans-91
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: Simple, intuitive and (somewhat) standard
+  id: totrans-92
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Can inspect many values at the same time, up and down the call stack
+  id: totrans-93
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Limitations
+  id: totrans-94
   prefs:
   - PREF_H4
   type: TYPE_NORMAL
 - en: Need to potentially use many breakpoints to pinpoint the source of an error
+  id: totrans-95
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Materializes many intermediates
+  id: totrans-96
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
