@@ -1,17 +1,21 @@
 - en: External Callbacks in JAX
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 原文：[`jax.readthedocs.io/en/latest/notebooks/external_callbacks.html`](https://jax.readthedocs.io/en/latest/notebooks/external_callbacks.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
 - en: This guide outlines the uses of various callback functions, which allow JAX
     runtimes to execute Python code on the host, even while running under `jit`, `vmap`,
     `grad`, or another transformation.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
 - en: Why callbacks?
+  id: totrans-3
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -19,33 +23,46 @@
     As a simple example, suppose you’d like to print the *value* of some variable
     during the course of a computation. Using a simple Python `print` statement, it
     looks like this:'
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE0]'
+  id: totrans-5
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: '[PRE1]'
+  id: totrans-6
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: What is printed is not the runtime value, but the trace-time abstract value
     (if you’re not famililar with *tracing* in JAX, a good primer can be found in
     [How To Think In JAX](https://jax.readthedocs.io/en/latest/notebooks/thinking_in_jax.html)).
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
 - en: 'To print the value at runtime we need a callback, for example `jax.debug.print`:'
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-9
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '[PRE3]'
+  id: totrans-10
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: This works by passing the runtime value represented by `y` back to the host
     process, where the host can print the value.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
 - en: Flavors of Callback
+  id: totrans-12
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -53,58 +70,73 @@
     implemented in `jax.experimental.host_callback`. The `host_callback` routines
     had some deficiencies, and are now deprecated in favor of several callbacks designed
     for different situations:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
 - en: '`jax.pure_callback()`: appropriate for pure functions: i.e. functions with
     no side effect.'
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`jax.experimental.io_callback()`: appropriate for impure functions: e.g. functions
     which read or write data to disk.'
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`jax.debug.callback()`: appropriate for functions that should reflect the execution
     behavior of the compiler.'
+  id: totrans-16
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: (The `jax.debug.print()` function we used above is a wrapper around `jax.debug.callback()`).
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
 - en: From the user perspective, these three flavors of callback are mainly distinguished
     by what transformations and compiler optimizations they allow.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
 - en: '| callback function | supports return value | `jit` | `vmap` | `grad` | `scan`/`while_loop`
     | guaranteed execution |'
+  id: totrans-19
   prefs: []
   type: TYPE_TB
 - en: '| --- | --- | --- | --- | --- | --- | --- |'
+  id: totrans-20
   prefs: []
   type: TYPE_TB
 - en: '| `jax.pure_callback` | ✅ | ✅ | ✅ | ❌¹ | ✅ | ❌ |'
+  id: totrans-21
   prefs: []
   type: TYPE_TB
 - en: '| `jax.experimental.io_callback` | ✅ | ✅ | ✅/❌² | ❌ | ✅³ | ✅ |'
+  id: totrans-22
   prefs: []
   type: TYPE_TB
 - en: '| `jax.debug.callback` | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |'
+  id: totrans-23
   prefs: []
   type: TYPE_TB
 - en: ¹ `jax.pure_callback` can be used with `custom_jvp` to make it compatible with
     autodiff
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
 - en: ² `jax.experimental.io_callback` is compatible with `vmap` only if `ordered=False`.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
 - en: ³ Note that `vmap` of `scan`/`while_loop` of `io_callback` has complicated semantics,
     and its behavior may change in future releases.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
 - en: Exploring `jax.pure_callback`
+  id: totrans-27
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -112,313 +144,485 @@
     when you want host-side execution of a pure function: i.e. a function that has
     no side-effects (such as printing values, reading data from disk, updating a global
     state, etc.).'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
 - en: The function you pass to `jax.pure_callback` need not actually be pure, but
     it will be assumed pure by JAX’s transformations and higher-order functions, which
     means that it may be silently elided or called multiple times.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 您传递给`jax.pure_callback`的函数实际上不需要是纯的，但它将被JAX的转换和高阶函数假定为纯的，这意味着它可能会被静默地省略或多次调用。
 - en: '[PRE4]'
+  id: totrans-30
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: '[PRE5]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Because `pure_callback` can be elided or duplicated, it is compatible out-of-the-box
     with transformations like `jit` and `vmap`, as well as higher-order primitives
     like `scan` and `while_loop`:”
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为`pure_callback`可以省略或复制，它与`jit`和`vmap`等转换以及像`scan`和`while_loop`这样的高阶原语兼容性开箱即用：""
 - en: '[PRE6]'
+  id: totrans-33
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: '[PRE7]'
+  id: totrans-34
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: '[PRE8]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: '[PRE9]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: '[PRE10]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '[PRE11]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'However, because there is no way for JAX to introspect the content of the callback,
     `pure_callback` has undefined autodiff semantics:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，由于JAX无法审视回调的内容，因此`pure_callback`具有未定义的自动微分语义：
 - en: '[PRE12]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '[PRE13]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: '[PRE14]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: '[PRE15]'
+  id: totrans-43
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'For an example of using `pure_callback` with `jax.custom_jvp`, see *Example:
     `pure_callback` with `custom_jvp`* below.'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 有关使用`pure_callback`与`jax.custom_jvp`的示例，请参见下文*示例：`pure_callback`与`custom_jvp`*。
 - en: 'By design functions passed to `pure_callback` are treated as if they have no
     side-effects: one consequence of this is that if the output of the function is
     not used, the compiler may eliminate the callback entirely:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过设计传递给`pure_callback`的函数被视为没有副作用：这意味着如果函数的输出未被使用，编译器可能会完全消除回调：
 - en: '[PRE16]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '[PRE17]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: '[PRE18]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: In `f1`, the output of the callback is used in the return value of the function,
     so the callback is executed and we see the printed output. In `f2` on the other
     hand, the output of the callback is unused, and so the compiler notices this and
     eliminates the function call. These are the correct semantics for a callback to
     a function with no side-effects.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 在`f1`中，回调的输出在函数返回值中被使用，因此执行回调并且我们看到打印的输出。另一方面，在`f2`中，回调的输出未被使用，因此编译器注意到这一点并消除函数调用。这是对没有副作用的函数回调的正确语义。
 - en: Exploring `jax.experimental.io_callback`
+  id: totrans-50
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 探索`jax.experimental.io_callback`
 - en: In contrast to `jax.pure_callback()`, `jax.experimental.io_callback()` is explicitly
     meant to be used with impure functions, i.e. functions that do have side-effects.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 与`jax.pure_callback()`相比，`jax.experimental.io_callback()`明确用于与有副作用的函数一起使用，即具有副作用的函数。
 - en: As an example, here is a callback to a global host-side numpy random generator.
     This is an impure operation because a side-effect of generating a random number
     in numpy is that the random state is updated (Please note that this is meant as
     a toy example of `io_callback` and not necessarily a recommended way of generating
     random numbers in JAX!).
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，这是一个对全局主机端numpy随机生成器的回调。这是一个不纯的操作，因为在numpy中生成随机数的副作用是更新随机状态（请注意，这只是`io_callback`的玩具示例，并不一定是在JAX中生成随机数的推荐方式！）。
 - en: '[PRE19]'
+  id: totrans-53
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: '[PRE20]'
+  id: totrans-54
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: '[PRE21]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: 'The `io_callback` is compatible with `vmap` by default:'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: '`io_callback`默认与`vmap`兼容：'
 - en: '[PRE22]'
+  id: totrans-57
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: '[PRE23]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: '[PRE24]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: Note, however, that this may execute the mapped callbacks in any order. So,
     for example, if you ran this on a GPU, the order of the mapped outputs might differ
     from run to run.
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 但请注意，这可能以任何顺序执行映射的回调。例如，如果在GPU上运行此代码，则映射输出的顺序可能会因每次运行而异。
 - en: 'If it is important that the order of callbacks be preserved, you can set `ordered=True`,
     in which case attempting to `vmap` will raise an error:'
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果保留回调的顺序很重要，可以设置`ordered=True`，在这种情况下，尝试`vmap`会引发错误：
 - en: '[PRE25]'
+  id: totrans-62
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: '[PRE26]'
+  id: totrans-63
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: 'On the other hand, `scan` and `while_loop` work with `io_callback` regardless
     of whether ordering is enforced:'
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，`scan`和`while_loop`无论是否强制顺序，都与`io_callback`兼容：
 - en: '[PRE27]'
+  id: totrans-65
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: '[PRE28]'
+  id: totrans-66
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: '[PRE29]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: 'Like `pure_callback`, `io_callback` fails under automatic differentiation if
     it is passed a differentiated variable:'
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 与`pure_callback`类似，如果向其传递不同的变量，`io_callback`在自动微分下会失败：
 - en: '[PRE30]'
+  id: totrans-69
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: '[PRE31]'
+  id: totrans-70
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: 'However, if the callback is not dependent on a differentiated variable, it
     will execute:'
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，如果回调不依赖于不同的变量，它将执行：
 - en: '[PRE32]'
+  id: totrans-72
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: '[PRE33]'
+  id: totrans-73
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: Unlike `pure_callback`, the compiler will not remove the callback execution
     in this case, even though the output of the callback is unused in the subsequent
     computation.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 与`pure_callback`不同，在此情况下编译器不会消除回调的执行，即使回调的输出在后续计算中未使用。
 - en: Exploring `debug.callback`
+  id: totrans-75
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 探索`debug.callback`
 - en: Both `pure_callback` and `io_callback` enforce some assumptions about the purity
     of the function they’re calling, and limit in various ways what JAX transforms
     and compilation machinery may do. `debug.callback` essentially assumes *nothing*
     about the callback function, such that the action of the callback reflects exactly
     what JAX is doing during the course of a program. Further, `debug.callback` *cannot*
     return any value to the program.
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: '`pure_callback`和`io_callback`都对调用的函数的纯度做出了一些假设，并以各种方式限制了JAX的变换和编译机制的操作。而`debug.callback`基本上不对回调函数做出任何假设，因此在程序执行过程中完全反映了JAX的操作。此外，`debug.callback`*不能*向程序返回任何值。'
 - en: '[PRE34]'
+  id: totrans-77
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: '[PRE35]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: 'The debug callback is compatible with `vmap`:'
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 调试回调兼容`vmap`：
 - en: '[PRE36]'
+  id: totrans-80
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: '[PRE37]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: And is also compatible with `grad` and other autodiff transformations
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 也兼容`grad`和其他自动微分转换。
 - en: '[PRE38]'
+  id: totrans-83
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: '[PRE39]'
+  id: totrans-84
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: This can make `debug.callback` more useful for general-purpose debugging than
     either `pure_callback` or `io_callback`.
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 这可以使得`debug.callback`比`pure_callback`或`io_callback`更有用于通用调试。
 - en: 'Example: `pure_callback` with `custom_jvp`'
+  id: totrans-86
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 示例：`pure_callback`与`custom_jvp`
 - en: One powerful way to take advantage of `jax.pure_callback()` is to combine it
     with `jax.custom_jvp` (see [Custom derivative rules](https://jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html)
     for more details on `custom_jvp`). Suppose we want to create a JAX-compatible
     wrapper for a scipy or numpy function that is not yet available in the `jax.scipy`
     or `jax.numpy` wrappers.
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 利用`jax.pure_callback()`的一个强大方式是将其与`jax.custom_jvp`结合使用（详见[自定义导数规则](https://jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html)了解更多关于`custom_jvp`的细节）。假设我们想要为尚未包含在`jax.scipy`或`jax.numpy`包装器中的scipy或numpy函数创建一个JAX兼容的包装器。
 - en: 'Here, we’ll consider creating a wrapper for the Bessel function of the first
     kind, implemented in `scipy.special.jv`. We can start by defining a straightforward
     `pure_callback`:'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们考虑创建一个第一类贝塞尔函数的包装器，该函数实现在`scipy.special.jv`中。我们可以先定义一个简单的`pure_callback`：
 - en: '[PRE40]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: 'This lets us call into `scipy.special.jv` from transformed JAX code, including
     when transformed by `jit` and `vmap`:'
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 这使得我们可以从转换后的JAX代码中调用`scipy.special.jv`，包括使用`jit`和`vmap`转换时：
 - en: '[PRE41]'
+  id: totrans-91
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: '[PRE42]'
+  id: totrans-92
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: '[PRE43]'
+  id: totrans-93
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: 'Here is the same result with `jit`:'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里是使用`jit`得到的相同结果：
 - en: '[PRE44]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: '[PRE45]'
+  id: totrans-96
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: 'And here is the same result again with `vmap`:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 并且这里再次是使用`vmap`得到的相同结果：
 - en: '[PRE46]'
+  id: totrans-98
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: '[PRE47]'
+  id: totrans-99
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: 'However, if we call `jax.grad`, we see an error because there is no autodiff
     rule defined for this function:'
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，如果我们调用`jax.grad`，我们会看到一个错误，因为该函数没有定义自动微分规则：
 - en: '[PRE48]'
+  id: totrans-101
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: '[PRE49]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: 'Let’s define a custom gradient rule for this. Looking at the definition of
     the [Bessel Function of the First Kind](https://en.wikipedia.org/?title=Bessel_function_of_the_first_kind),
     we find that there is a relatively straightforward recurrence relationship for
     the derivative with respect to the argument `z`:'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们为此定义一个自定义梯度规则。查看第一类贝塞尔函数的定义([Bessel Function of the First Kind](https://en.wikipedia.org/?title=Bessel_function_of_the_first_kind))，我们发现对于其关于参数`z`的导数有一个相对简单的递推关系：
 - en: \[\begin{split} d J_\nu(z) = \left\{ \begin{eqnarray} -J_1(z),\ &\nu=0\\ [J_{\nu
     - 1}(z) - J_{\nu + 1}(z)]/2,\ &\nu\ne 0 \end{eqnarray}\right. \end{split}\]
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: \[\begin{split} d J_\nu(z) = \left\{ \begin{eqnarray} -J_1(z),\ &\nu=0\\ [J_{\nu
+    - 1}(z) - J_{\nu + 1}(z)]/2,\ &\nu\ne 0 \end{eqnarray}\right. \end{split}\]
 - en: The gradient with respect to \(\nu\) is more complicated, but since we’ve restricted
     the `v` argument to integer types we don’t need to worry about its gradient for
     the sake of this example.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于变量 \(\nu\) 的梯度更加复杂，但由于我们将`v`参数限制为整数类型，因此在这个例子中，我们不需要担心其梯度。
 - en: 'We can use `jax.custom_jvp` to define this automatic differentiation rule for
     our callback function:'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以使用`jax.custom_jvp`来为我们的回调函数定义这个自动微分规则：
 - en: '[PRE50]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: 'Now computing the gradient of our function will work correctly:'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在计算我们函数的梯度将会正确运行：
 - en: '[PRE51]'
+  id: totrans-109
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: '[PRE52]'
+  id: totrans-110
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: 'Further, since we’ve defined our gradient in terms of `jv` itself, JAX’s architecture
     means that we get second-order and higher derivatives for free:'
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，由于我们已经根据`jv`定义了我们的梯度，JAX的架构意味着我们可以免费获得二阶及更高阶的导数：
 - en: '[PRE53]'
+  id: totrans-112
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: '[PRE54]'
+  id: totrans-113
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: Keep in mind that although this all works correctly with JAX, each call to our
     callback-based `jv` function will result in passing the input data from the device
     to the host, and passing the output of `scipy.special.jv` from the host back to
@@ -428,5 +632,7 @@
     are on the same hardware), JAX will generally do this data transfer in a fast,
     zero-copy fashion, making this pattern is a relatively straightforward way extend
     JAX’s capabilities.
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 请记住，尽管这在 JAX 中完全正常运作，每次调用基于回调的`jv`函数都会导致将输入数据从设备传输到主机，并将`scipy.special.jv`的输出从主机传输回设备。当在GPU或TPU等加速器上运行时，这种数据传输和主机同步可能会导致每次调用`jv`时的显著开销。然而，如果您在单个CPU上运行JAX（其中“主机”和“设备”位于同一硬件上），JAX通常会以快速、零拷贝的方式执行此数据传输，使得这种模式相对直接地扩展了JAX的能力。

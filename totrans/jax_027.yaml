@@ -1,14 +1,20 @@
 - en: Understanding Jaxprs
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 理解 Jaxpr
 - en: 原文：[`jax.readthedocs.io/en/latest/jaxpr.html`](https://jax.readthedocs.io/en/latest/jaxpr.html)
+  id: totrans-1
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 原文：[`jax.readthedocs.io/en/latest/jaxpr.html`](https://jax.readthedocs.io/en/latest/jaxpr.html)
 - en: 'Updated: May 3, 2020 (for commit f1a46fe).'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 更新日期：2020 年 5 月 3 日（提交标识为 f1a46fe）。
 - en: Conceptually, one can think of JAX transformations as first trace-specializing
     the Python function to be transformed into a small and well-behaved intermediate
     form that is then interpreted with transformation-specific interpretation rules.
@@ -17,19 +23,28 @@
     NumPy) and it uses the actual Python interpreter to do most of the heavy lifting
     to distill the essence of the computation into a simple statically-typed expression
     language with limited higher-order features. That language is the jaxpr language.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 从概念上讲，可以将 JAX 转换看作是首先对要转换的 Python 函数进行追踪特化，使其转换为一个小型且行为良好的中间形式，然后使用特定于转换的解释规则进行解释。JAX
+    能够在一个如此小的软件包中融合如此多的功能，其中一个原因是它从一个熟悉且灵活的编程接口（Python + NumPy）开始，并使用实际的 Python 解释器来完成大部分繁重的工作，将计算的本质提炼为一个简单的静态类型表达语言，具有有限的高阶特性。那种语言就是
+    jaxpr 语言。
 - en: Not all Python programs can be processed this way, but it turns out that many
     scientific computing and machine learning programs can.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 并非所有 Python 程序都可以以这种方式处理，但事实证明，许多科学计算和机器学习程序可以。
 - en: Before we proceed, it is important to point out that not all JAX transformations
     literally materialize a jaxpr as described above; some, e.g., differentiation
     or batching, will apply transformations incrementally during tracing. Nevertheless,
     if one wants to understand how JAX works internally, or to make use of the result
     of JAX tracing, it is useful to understand jaxprs.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们继续之前，有必要指出，并非所有的 JAX 转换都像上述描述的那样直接生成一个 jaxpr；有些转换（如微分或批处理）会在追踪期间逐步应用转换。然而，如果想要理解
+    JAX 内部工作原理，或者利用 JAX 追踪的结果，理解 jaxpr 是很有用的。
 - en: 'A jaxpr instance represents a function with one or more typed parameters (input
     variables) and one or more typed results. The results depend only on the input
     variables; there are no free variables captured from enclosing scopes. The inputs
@@ -38,387 +53,557 @@
     A `jax.core.ClosedJaxpr` represents a partially-applied `jax.core.Jaxpr`, and
     is what you obtain when you use `jax.make_jaxpr()` to inspect jaxprs. It has the
     following fields:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个 jaxpr 实例表示一个带有一个或多个类型化参数（输入变量）和一个或多个类型化结果的函数。结果仅依赖于输入变量；没有从封闭作用域中捕获的自由变量。输入和输出具有类型，在
+    JAX 中表示为抽象值。代码中有两种相关的 jaxpr 表示，`jax.core.Jaxpr` 和 `jax.core.ClosedJaxpr`。`jax.core.ClosedJaxpr`
+    表示部分应用的 `jax.core.Jaxpr`，当您使用 `jax.make_jaxpr()` 检查 jaxpr 时获得。它具有以下字段：
 - en: '`jaxpr` is a `jax.core.Jaxpr` representing the actual computation content of
     the function (described below).'
+  id: totrans-7
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`jaxpr` 是一个 `jax.core.Jaxpr`，表示函数的实际计算内容（如下所述）。'
 - en: ''
+  id: totrans-8
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: ''
+  id: totrans-9
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: '`consts` is a list of constants.'
+  id: totrans-10
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`consts` 是一个常量列表。'
 - en: 'The most interesting part of the ClosedJaxpr is the actual execution content,
     represented as a `jax.core.Jaxpr` as printed using the following grammar:'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: '`jax.core.ClosedJaxpr` 最有趣的部分是实际的执行内容，使用以下语法打印为 `jax.core.Jaxpr`：'
 - en: '[PRE0]'
+  id: totrans-12
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'where:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中：
 - en: The parameters of the jaxpr are shown as two lists of variables separated by
     `;`. The first set of variables are the ones that have been introduced to stand
     for constants that have been hoisted out. These are called the `constvars`, and
     in a `jax.core.ClosedJaxpr` the `consts` field holds corresponding values. The
     second list of variables, called `invars`, correspond to the inputs of the traced
     Python function.
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: jaxpr 的参数显示为用 `;` 分隔的两个变量列表。第一组变量是引入的用于表示已提升的常量的变量。这些称为 `constvars`，在 `jax.core.ClosedJaxpr`
+    中，`consts` 字段保存相应的值。第二组变量称为 `invars`，对应于跟踪的 Python 函数的输入。
 - en: '`Eqn*` is a list of equations, defining intermediate variables referring to
     intermediate expressions. Each equation defines one or more variables as the result
     of applying a primitive on some atomic expressions. Each equation uses only input
     variables and intermediate variables defined by previous equations.'
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Eqn*` 是一个方程列表，定义了中间变量，这些变量指代中间表达式。每个方程将一个或多个变量定义为在某些原子表达式上应用基元的结果。每个方程仅使用输入变量和由前面的方程定义的中间变量。'
 - en: '`Expr+`: is a list of output atomic expressions (literals or variables) for
     the jaxpr.'
+  id: totrans-16
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Expr+`：是jaxpr的输出原子表达式（文字或变量）列表。'
 - en: 'Equations are printed as follows:'
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 方程式打印如下：
 - en: '[PRE1]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'where:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中：
 - en: '`Var+` are one or more intermediate variables to be defined as the output of
     a primitive invocation (some primitives can return multiple values).'
+  id: totrans-20
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Var+`是要定义为基元调用的输出的一个或多个中间变量（某些基元可以返回多个值）。'
 - en: '`Expr+` are one or more atomic expressions, each either a variable or a literal
     constant. A special variable `unitvar` or literal `unit`, printed as `*`, represents
     a value that is not needed in the rest of the computation and has been elided.
     That is, units are just placeholders.'
+  id: totrans-21
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Expr+`是一个或多个原子表达式，每个表达式可以是变量或字面常量。特殊变量`unitvar`或字面`unit`，打印为`*`，表示在计算的其余部分中不需要的值已被省略。也就是说，单元只是占位符。'
 - en: '`Param*` are zero or more named parameters to the primitive, printed in square
     brackets. Each parameter is shown as `Name = Value`.'
+  id: totrans-22
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Param*`是基元的零个或多个命名参数，打印在方括号中。每个参数显示为`Name = Value`。'
 - en: 'Most jaxpr primitives are first-order (they take just one or more `Expr` as
     arguments):'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 大多数jaxpr基元是一阶的（它们只接受一个或多个`Expr`作为参数）：
 - en: '[PRE2]'
+  id: totrans-24
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: The jaxpr primitives are documented in the `jax.lax` module.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: jaxpr基元在`jax.lax`模块中有文档。
 - en: For example, here is the jaxpr produced for the function `func1` below
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，下面是函数`func1`生成的jaxpr示例
 - en: '[PRE3]'
+  id: totrans-27
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: Here there are no constvars, `a` and `b` are the input variables and they correspond
     respectively to `first` and `second` function parameters. The scalar literal `3.0`
     is kept inline. The `reduce_sum` primitive has named parameter `axes`, in addition
     to the operand `e`.
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里没有constvars，`a`和`b`是输入变量，它们分别对应于`first`和`second`函数参数。标量文字`3.0`保持内联。`reduce_sum`基元具有命名参数`axes`，除了操作数`e`。
 - en: Note that even though execution of a program that calls into JAX builds a jaxpr,
     Python-level control-flow and Python-level functions execute normally. This means
     that just because a Python program contains functions and control-flow, the resulting
     jaxpr does not have to contain control-flow or higher-order features.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，即使执行调用JAX的程序构建了jaxpr，Python级别的控制流和Python级别的函数也会正常执行。这意味着仅因为Python程序包含函数和控制流，生成的jaxpr不一定包含控制流或高阶特性。
 - en: For example, when tracing the function `func3` JAX will inline the call to `inner`
     and the conditional `if second.shape[0] > 4`, and will produce the same jaxpr
     as before
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，当跟踪函数`func3`时，JAX将内联调用`inner`和条件`if second.shape[0] > 4`，并生成与之前相同的jaxpr
 - en: '[PRE4]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: Handling PyTrees
+  id: totrans-32
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 处理PyTrees
 - en: In jaxpr there are no tuple types; instead primitives take multiple inputs and
     produce multiple outputs. When processing a function that has structured inputs
     or outputs, JAX will flatten those and in jaxpr they will appear as lists of inputs
     and outputs. For more details, please see the documentation for PyTrees (Pytrees).
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 在jaxpr中不存在元组类型；相反，基元接受多个输入并产生多个输出。处理具有结构化输入或输出的函数时，JAX将对其进行扁平化处理，并在jaxpr中它们将显示为输入和输出的列表。有关更多详细信息，请参阅PyTrees（Pytrees）的文档。
 - en: For example, the following code produces an identical jaxpr to what we saw before
     (with two input vars, one for each element of the input tuple)
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，以下代码产生与前面看到的相同的jaxpr（具有两个输入变量，每个输入元组的一个）
 - en: '[PRE5]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Constant Vars
+  id: totrans-36
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 常量变量
 - en: Some values in jaxprs are constants, in that their value does not depend on
     the jaxpr’s arguments. When these values are scalars they are represented directly
     in the jaxpr equations; non-scalar array constants are instead hoisted out to
     the top-level jaxpr, where they correspond to constant variables (“constvars”).
     These constvars differ from the other jaxpr parameters (“invars”) only as a bookkeeping
     convention.
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: jaxprs中的某些值是常量，即它们的值不依赖于jaxpr的参数。当这些值是标量时，它们直接在jaxpr方程中表示；非标量数组常量则提升到顶级jaxpr，其中它们对应于常量变量（“constvars”）。这些constvars与其他jaxpr参数（“invars”）在书面上的约定中有所不同。
 - en: Higher-order primitives
+  id: totrans-38
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 高阶基元
 - en: jaxpr includes several higher-order primitives. They are more complicated because
     they include sub-jaxprs.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: jaxpr包括几个高阶基元。它们更复杂，因为它们包括子jaxprs。
 - en: Conditionals
+  id: totrans-40
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 条件语句
 - en: 'JAX traces through normal Python conditionals. To capture a conditional expression
     for dynamic execution, one must use the `jax.lax.switch()` and `jax.lax.cond()`
     constructors, which have the signatures:'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX可以跟踪普通的Python条件语句。要捕获动态执行的条件表达式，必须使用`jax.lax.switch()`和`jax.lax.cond()`构造函数，它们的签名如下：
 - en: '[PRE6]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'Both of these will bind a primitive called `cond` internally. The `cond` primitive
     in jaxprs reflects the more general signature of `lax.switch()`: it takes an integer
     denoting the index of the branch to execute (clamped into valid indexing range).'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 这两个都将在内部绑定一个名为 `cond` 的原始。jaxprs 中的 `cond` 原始反映了 `lax.switch()` 更一般签名的更多细节：它接受一个整数，表示要执行的分支的索引（被夹在有效索引范围内）。
 - en: 'For example:'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如：
 - en: '[PRE7]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'The cond primitive has a number of parameters:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: cond 原始有多个参数：
 - en: branches are jaxprs that correspond to the branch functionals. In this example,
     those functionals each take one input variable, corresponding to `x`.
+  id: totrans-47
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: branches 是对应于分支函数的 jaxprs。在这个例子中，这些函数分别使用一个输入变量 `x`。
 - en: ''
+  id: totrans-48
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: ''
+  id: totrans-49
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: linear is a tuple of booleans that is used internally by the auto-differentiation
     machinery to encode which of the input parameters are used linearly in the conditional.
+  id: totrans-50
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: linear 是一个布尔值元组，由自动微分机制内部使用，用于编码在条件语句中线性使用的输入参数。
 - en: The above instance of the cond primitive takes two operands. The first one (`d`)
     is the branch index, then `b` is the operand (`arg`) to be passed to whichever
     jaxpr in `branches` is selected by the branch index.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: cond 原始的上述实例接受两个操作数。第一个（`d`）是分支索引，然后 `b` 是要传递给 `branches` 中任何 jaxpr 的操作数（`arg`）。
 - en: 'Another example, using `lax.cond()`:'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个例子，使用 `lax.cond()`：
 - en: '[PRE8]'
+  id: totrans-53
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: In this case, the boolean predicate is converted to an integer index (0 or 1),
     and `branches` are jaxprs that correspond to the false and true branch functionals,
     in that order. Again, each functional takes one input variable, corresponding
     to `xfalse` and `xtrue` respectively.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这种情况下，布尔谓词被转换为整数索引（0或1），`branches` 是对应于假和真分支的 jaxprs，按顺序排列。同样，每个函数都使用一个输入变量，分别对应于
+    `xfalse` 和 `xtrue`。
 - en: The following example shows a more complicated situation when the input to the
     branch functionals is a tuple, and the false branch functional contains a constant
     `jnp.ones(1)` that is hoisted as a constvar
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面的示例展示了当分支函数的输入是一个元组时，以及假分支函数包含被作为常量 hoisted 的 `jnp.ones(1)` 的更复杂情况
 - en: '[PRE9]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: While
+  id: totrans-57
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 虽然
 - en: 'Just like for conditionals, Python loops are inlined during tracing. If you
     want to capture a loop for dynamic execution, you must use one of several special
     operations, `jax.lax.while_loop()` (a primitive) and `jax.lax.fori_loop()` (a
     helper that generates a while_loop primitive):'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 就像条件语句一样，Python 循环在追踪期间是内联的。如果要捕获动态执行的循环，必须使用多个特殊操作之一，`jax.lax.while_loop()`（一个原始）和
+    `jax.lax.fori_loop()`（一个生成 while_loop 原始的辅助程序）：
 - en: '[PRE10]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: In the above signature, “C” stands for the type of the loop “carry” value. For
     example, here is an example fori loop
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上述签名中，“C”代表循环“carry”值的类型。例如，这里是一个 fori 循环的示例
 - en: '[PRE11]'
+  id: totrans-61
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'The while primitive takes 5 arguments: `c a 0 b d`, as follows:'
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: while 原始接受 5 个参数：`c a 0 b d`，如下所示：
 - en: 0 constants for `cond_jaxpr` (since `cond_nconsts` is 0)
+  id: totrans-63
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 0 个常量用于 `cond_jaxpr`（因为 `cond_nconsts` 为 0）
 - en: ''
+  id: totrans-64
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: ''
+  id: totrans-65
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: 2 constants for `body_jaxpr` (`c`, and `a`)
+  id: totrans-66
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 两个常量用于 `body_jaxpr`（`c` 和 `a`）
 - en: ''
+  id: totrans-67
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: ''
+  id: totrans-68
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: 3 parameters for the initial value of carry
+  id: totrans-69
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 初始携带值的 3 个参数
 - en: Scan
+  id: totrans-70
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Scan
 - en: 'JAX supports a special form of loop over the elements of an array (with statically
     known shape). The fact that there are a fixed number of iterations makes this
     form of looping easily reverse-differentiable. Such loops are constructed with
     the `jax.lax.scan()` function:'
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: JAX 支持数组元素的特殊形式循环（具有静态已知形状）。由于迭代次数固定，这种形式的循环易于反向可微分。这些循环是用 `jax.lax.scan()`
+    函数构造的：
 - en: '[PRE12]'
+  id: totrans-72
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'This is written in terms of a [Haskell Type Signature](https://wiki.haskell.org/Type_signature):
     `C` is the type of the scan carry, `A` is the element type of the input array(s),
     and `B` is the element type of the output array(s).'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是以 [Haskell 类型签名](https://wiki.haskell.org/Type_signature) 的形式编写的：`C` 是扫描携带的类型，`A`
+    是输入数组的元素类型，`B` 是输出数组的元素类型。
 - en: For the example consider the function `func11` below
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于下面的函数 `func11` 的示例考虑
 - en: '[PRE13]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: The `linear` parameter describes for each of the input variables whether they
     are guaranteed to be used linearly in the body. Once the scan goes through linearization,
     more arguments will be linear.
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: '`linear` 参数描述了每个输入变量在主体中是否保证线性使用。一旦扫描进行线性化，将有更多参数线性使用。'
 - en: 'The scan primitive takes 4 arguments: `b 0.0 a c`, of which:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: scan 原始接受 4 个参数：`b 0.0 a c`，其中：
 - en: one is the free variable for the body
+  id: totrans-78
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 其中一个是主体的自由变量
 - en: ''
+  id: totrans-79
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: ''
+  id: totrans-80
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: one is the initial value of the carry
+  id: totrans-81
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 其中一个是携带的初始值
 - en: ''
+  id: totrans-82
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: ''
+  id: totrans-83
   prefs:
   - PREF_BQ
   - PREF_IND
   type: TYPE_NORMAL
 - en: The next 2 are the arrays over which the scan operates.
+  id: totrans-84
   prefs:
   - PREF_BQ
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 接下来的两个是扫描操作的数组。
 - en: XLA_call
+  id: totrans-85
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: XLA_call
 - en: The call primitive arises from JIT compilation, and it encapsulates a sub-jaxpr
     along with parameters that specify the backend and the device on which the computation
     should run. For example
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: '`call` 原语来源于 JIT 编译，它封装了一个子 `jaxpr` 和指定计算应在哪个后端和设备上运行的参数。例如'
 - en: '[PRE14]'
+  id: totrans-87
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: XLA_pmap
+  id: totrans-88
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: XLA_pmap
 - en: If you use the `jax.pmap()` transformation, the function to be mapped is captured
     using the `xla_pmap` primitive. Consider this example
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果使用 `jax.pmap()` 变换，要映射的函数是使用 `xla_pmap` 原语捕获的。考虑这个例子
 - en: '[PRE15]'
+  id: totrans-90
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: The `xla_pmap` primitive specifies the name of the axis (parameter `axis_name`)
     and the body of the function to be mapped as the `call_jaxpr` parameter. The value
     of this parameter is a Jaxpr with 2 input variables.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: '`xla_pmap` 原语指定了轴的名称（参数 `axis_name`）和要映射为 `call_jaxpr` 参数的函数体。此参数的值是一个具有 2
+    个输入变量的 Jaxpr。'
 - en: The parameter `in_axes` specifies which of the input variables should be mapped
     and which should be broadcast. In our example, the value of `extra` is broadcast
     and the value of `arr` is mapped.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 参数 `in_axes` 指定了应该映射哪些输入变量和哪些应该广播。在我们的例子中，`extra` 的值被广播，`arr` 的值被映射。
