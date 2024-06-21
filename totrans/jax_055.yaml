@@ -1,0 +1,524 @@
+- en: Control autodiff’s saved values with jax.checkpoint (aka jax.remat)
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/notebooks/autodiff_remat.html`](https://jax.readthedocs.io/en/latest/notebooks/autodiff_remat.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: TL;DR
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Use the `jax.checkpoint` decorator (aliased as `jax.remat`) with `jax.grad`
+    to control which intermediates are saved on the forward pass versus recomputed
+    on the backward pass, trading off memory and FLOPs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Don’t miss the practical notes for a discussion about how `jax.checkpoint`
+    interacts with `jax.jit`.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Without using `jax.checkpoint`, the forward pass of `jax.grad(f)(x)` saves,
+    for use on the backward pass, the values of Jacobian coefficients and other intermediates.
+    We call these saved values *residuals*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'By applying `jax.checkpoint` to sub-functions, as a decorator or at specific
+    application sites, we force JAX not to save any of that sub-function’s residuals.
+    Instead, only the inputs of a `jax.checkpoint`-decorated function might be saved,
+    and any residuals consumed on the backward pass are re-computed from those inputs
+    as needed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here the values of two `sin` applications are saved because they are arguments
+    in subsequent applications of the `jax.checkpoint`-decorated `g` function, and
+    inputs to a `jax.checkpoint`-decorated function may be saved. But no values of
+    `cos` applications are saved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To control which values are saveable without having to edit the definition
+    of the function to be differentiated, you can use a rematerialization *policy*.
+    Here is an example that saves only the results of `dot` operations with no batch
+    dimensions (since they are often FLOP-bound, and hence worth saving rather than
+    recomputing):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can also use policies to refer to intermediate values you name using `jax.ad_checkpoint.checkpoint_name`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When playing around with these toy examples, we can get a closer look at what’s
+    going on using the `print_fwd_bwd` utility defined in this notebook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s think step by step
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You might want to first (re)read [the Autodiff Cookbook Part 1](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fundamentals of `jax.checkpoint`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In both `jax.linearize` and `jax.vjp` there is flexibility in how and when some
+    values are computed. Different choices can trade off memory use against FLOPs.
+    JAX provides control over these choices with `jax.checkpoint`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One such choice is whether to perform Jacobian coefficient computations on
+    the forward pass, as soon as the inputs are available, or on the backward pass,
+    just before the coefficients are needed. Consider the example of `sin_vjp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another valid implementation would compute the value of `jnp.cos(x)` on the
+    backward pass rather than on the forward pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: For this particular function, the amount of memory used by the two versions
+    is the same, though we’ve reduced the FLOPs for the primal computation (i.e. the
+    forward pass) and increased the FLOPs for the cotangent computation (i.e. the
+    backward pass).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There’s another choice when it comes to function composition. Recall our VJP
+    rule for a composition of two functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An alternative is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In words, this alternative implementation doesn’t compute `g_vjp`, or the residual
+    values in its closure, on the forward pass. Instead it only computes them in the
+    backward pass `f_bwd2`. That means `f_vjp_checkpoint` requires less memory: if
+    `g` and `h` each required similar amounts of memory for their residuals, each
+    much larger than `x`, then the function produced by `f_vjp_checkpoint(x)` requires
+    half the memory as that of `f_vjp(x)`!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cost we pay is redundant work: in `f_bwd2` we must re-evaluate `g(x)` as
+    part of `jax.vjp(g, x)` just to discard its value (in the underscore variable
+    on the line `_, g_vjp = jax.vjp(g, x)`).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can get this VJP behavior in autodiff � without having to write VJP functions
+    directly � by instead using `jax.checkpoint` in an alternative definition of the
+    original function `f`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In other words, we apply `jax.checkpoint` to `g`, the first stage of `f`, rather
+    than to `f` itself. This way, when we evaluate `jax.grad(f_checkpoint)(x)`, we’d
+    get a computation like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: run the forward pass of `g`, discarding residual values;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: run the forward pass of `h`, saving residuals;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: run the backward pass of `h`, consuming residuals from step 2;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: re-run the forward pass of `g`, saving residuals;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: run the backward pass of `g`, consuming residuals from step 4.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'That is, by evaluating `jax.grad(f_checkpoint)(x)` we’d get the same computation
+    as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: In general, `jax.checkpoint(foo)` is a new function which has the same input-output
+    behavior as `foo`, but behaves differently under autodiff, particularly under
+    `jax.linearize` and `jax.vjp` (and their wrappers, like `jax.grad`) but not `jax.jvp`.
+    When differentiated, only the input to a `jax.checkpoint`-differentiated function
+    is stored on the forward pass; on the backward pass, residuals (i.e. intermediates
+    from `foo` and its Jacobian coefficient values needed for the backward pass) are
+    recomputed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Notice that if `f = lambda x: h(g(x))` is the function we want to differentiate,
+    i.e. if we want to apply `jax.grad(f)`, we don’t get any memory savings by applying
+    `jax.checkpoint` to `f` itself. That’s because evaluating `jax.grad(jax.checkpoint(f))(x)`
+    would lead to a computation like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: run the forward pass, discarding all residuals;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: immediately re-run the forward pass, saving residuals;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: run the backward pass, consuming residuals from step 2.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'That is, in code we’d have something like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We also wouldn’t get any memory savings by applying `jax.checkpoint` to `h`,
+    the second stage of `f`. That’s because evaluating `jax.grad(lambda x: jax.checkpoint(h)(g(x)))`
+    would lead to a computation like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: run the forward pass of `g`, saving residuals;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: run the forward pass of `h`, discarding residuals;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: immediately re-run the forward pass of `h`, saving residuals;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: run the backward pass of `h`, consuming residuals from step 3;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: run the backward pass of `g`, consuming residuals from step 1.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'That is, in code we’d have something like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Slightly more generally, if we had a chain composition of functions, like `f
+    = lambda x: f3(f2(f1(x)))`, and we were interested in evaluating `jax.grad(f)`,
+    we could say that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: we shouldn’t apply `jax.checkpoint` to the whole function `f`, since that wouldn’t
+    save any memory (and will perform wasteful recomputation);
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: we shouldn’t apply `jax.checkpoint` to the last sub-function `f3`, since that
+    wouldn’t save any memory (and will perform wasteful recomputation);
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'we could apply `jax.checkpoint` to `f1`, `f2`, or their composition `lambda
+    x: f2(f1(x))`, since any of those might save memory and would express different
+    memory/recompute tradeoffs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Custom policies for what’s saveable
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As shown so far, using `jax.checkpoint` switches from one extreme to another:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: without `jax.checkpoint`, JAX’s autodiff tends to compute everything possible
+    on the forward pass and store it for the backward pass;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: with a `jax.checkpoint` decorator, we instead compute as little as possible
+    on the forward pass and recompute values as needed on the backward pass.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To operate between these two extremes, saving some things and not others, we
+    can carefully place `jax.checkpoint` decorators on sub-functions. But that requires
+    editing the function to be differentiated, e.g. model code, which may be inconvenient.
+    It can also be hard to experiment with variations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So an alternative is to use the `policy` argument to `jax.checkpoint`. A policy
+    is a callable (i.e. a function) which takes as input a type-level specification
+    of a first order primitive application and returns a boolean indicating whether
+    the corresponding output value(s) are allowed to be saved as residuals (or instead
+    must be recomputed in the (co)tangent computation as needed). To write robust
+    code, a policy should be selected from the attributes on `jax.checkpoint_policies`,
+    like `jax.checkpoint_policies.dots_with_no_batch_dims_saveable`, since the API
+    for writing custom policy callables is considered internal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, consider this function to be differentiated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instead of saving so many values on the forward pass, perhaps we only want
+    to save the results of matrix multiplications with no batch dimension (since they
+    may be FLOP- rather than memory-bound). We can do that using the policy `jax.checkpoint_policies.dots_with_no_batch_dims_saveable`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice also that by providing a policy, we didn’t need to edit the code defining
+    `loss`, `predict`, or `layer`. That is particularly convenient if we want to experiment
+    with policies in calling code (e.g. a training script) without changing library
+    code (e.g. the neural network library).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some policies can refer to values named with `jax.ad_checkpoint.checkpoint_name`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'By itself, `checkpoint_name` is just an identity function. But because some
+    policy functions know to look for them, we can use the names to control whether
+    certain values output by `checkpoint_name` are considered saveable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Another policy which refers to names is `jax.checkpoint_policies.save_only_these_names`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some of the policies are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`everything_saveable` (the default strategy, as if `jax.checkpoint` were not
+    being used at all)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nothing_saveable` (i.e. rematerialize everything, as if a custom policy were
+    not being used at all)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`dots_saveable` or its alias `checkpoint_dots`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`dots_with_no_batch_dims_saveable` or its alias `checkpoint_dots_with_no_batch_dims`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`save_anything_but_these_names` (save any values except for the output of `checkpoint_name`
+    with any of the names given)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`save_any_names_but_these` (save only named values, i.e. any outputs of `checkpoint_name`,
+    except for those with the names given)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`save_only_these_names` (save only named values, and only among the names given)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Policies only indicate what is saveable; a value is only saved if it’s actually
+    needed by the backward pass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Advanced: recursive `jax.checkpoint`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: By applying `jax.checkpoint` in the right way, there are many tradeoffs between
+    memory usage and (re)computation that can be expressed. One surprising example
+    is *recursive* checkpointing, where we apply `jax.checkpoint` to a function which
+    itself calls `jax.checkpoint`-decorated functions in a way so that memory usage
+    from the chain composition of \(D\) functions scales like \(\mathcal{O}(\log_2
+    D)\) rather than \(\mathcal{O}(D)\).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a toy example, consider the chain composition of multiple `jnp.sin` functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In general, the number of stored residuals scales linearly with the length
+    of the chain:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'But we can apply `jax.checkpoint` recursively to improve the scaling:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cost here, as usual, is recomputation: in particular, we end up performing
+    \(\mathcal{O}(\log_2 D)\) times as many FLOPs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Practical notes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When differentiated functions are staged out to XLA for compilation, for example
+    by applying `jax.jit` to a function which contains a `jax.grad` call, XLA will
+    automatically optimize the computation, including decisions about when to compute
+    or rematerialize values. As a result, **`jax.checkpoint` often isn’t needed for
+    differentiated functions under a `jax.jit`**. XLA will optimize things for you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One exception is when using staged-out control flow, like `jax.lax.scan`. Automatic
+    compiler optimizations across multiple control flow primitives, e.g. across a
+    forward-pass `scan` and the corresponding backward-pass `scan`, typically aren’t
+    aren’t as thorough. As a result, it’s often a good idea to use `jax.checkpoint`
+    on the body function passed to `jax.lax.scan`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, one common pattern in large [Transformer models](https://en.wikipedia.org/wiki/Transformer_(machine_learning_model))
+    is to express the architecture as a `jax.lax.scan` over layers so as to reduce
+    compilation times. That is, using a simple fully-connected network as an analogy,
+    instead of writing something like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We would instead iterate over the layer application with `jax.lax.scan`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This scan-over-layers version reduces compile times, but by foiling some compiler
+    optimizations it can lead to inefficient computation of gradients. To mitigate
+    the issue, we would use `jax.checkpoint` on the scanned function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: By using `jax.checkpoint` this way, we’re manually controlling which values
+    JAX’s autodiff saves between the forward and backward passes, and hence not relying
+    on XLA optimizations to choose for us.
+  prefs: []
+  type: TYPE_NORMAL

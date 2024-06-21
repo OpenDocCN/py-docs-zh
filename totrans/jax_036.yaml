@@ -1,0 +1,656 @@
+- en: JAX Errors
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/errors.html`](https://jax.readthedocs.io/en/latest/errors.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This page lists a few of the errors you might encounter when using JAX, along
+    with representative examples of how one might fix them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: This error occurs when a JAX Tracer object is used in a context where a concrete
+    value is required (see Different kinds of JAX values for more on what a Tracer
+    is). In some situations, it can be easily fixed by marking problematic values
+    as static; in others, it may indicate that your program is doing operations that
+    are not directly supported by JAX’s JIT compilation model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traced value where static value is expected
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One common cause of this error is using a traced value where a static value
+    is required. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This can often be fixed by marking the problematic argument as static:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Shape depends on Traced Value
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Such an error may also arise when a shape in your JIT-compiled computation
+    depends on the values within a traced quantity. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is an example of an operation that is incompatible with JAX’s JIT compilation
+    model, which requires array sizes to be known at compile-time. Here the size of
+    the returned array depends on the contents of x, and such code cannot be JIT compiled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In many cases it is possible to work around this by modifying the logic used
+    in the function; for example here is code with a similar issue:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And here is how you might express the same operation in a way that avoids creation
+    of a dynamically-sized index array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: To understand more subtleties having to do with tracers vs. regular values,
+    and concrete vs. abstract values, you may want to read Different kinds of JAX
+    values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**tracer** (*core.Tracer*)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**context** ([*str*](https://docs.python.org/3/library/stdtypes.html#str "(in
+    Python v3.12)"))'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: This error occurs when a PRNG key is reused in an unsafe manner. Key reuse is
+    checked only when jax_debug_key_reuse is set to True.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is a simple example of code that would lead to such an error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This sort of key reuse is problematic because the JAX PRNG is stateless, and
+    keys must be manually split; For more information on this see [Sharp Bits: Random
+    Numbers](https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#random-numbers).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**message** ([*str*](https://docs.python.org/3/library/stdtypes.html#str "(in
+    Python v3.12)"))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: This error occurs when a program attempts to use non-concrete boolean indices
+    in a traced indexing operation. Under JIT compilation, JAX arrays must have static
+    shapes (i.e. shapes that are known at compile-time) and so boolean masks must
+    be used carefully. Some logic implemented via boolean masking is simply not possible
+    in a `jax.jit()` function; in other cases, the logic can be re-expressed in a
+    JIT-compatible way, often using the three-argument version of `where()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Following are a few examples of when this error might arise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Constructing arrays via boolean masking
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This most commonly arises when attempting to create an array via a boolean
+    mask within a JIT context. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: This function is attempting to return only the positive values in the input
+    array; the size of this returned array cannot be determined at compile-time unless
+    x is marked as static, and so operations like this cannot be performed under JIT
+    compilation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reexpressible Boolean Logic
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although creating dynamically sized arrays is not supported directly, in many
+    cases it is possible to re-express the logic of the computation in terms of a
+    JIT-compatible operation. For example, here is another function that fails under
+    JIT for the same reason:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this case, however, the problematic array is only an intermediate value,
+    and we can instead express the same logic in terms of the JIT-compatible three-argument
+    version of `jax.numpy.where()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: This pattern of replacing boolean masking with three-argument `where()` is a
+    common solution to this sort of problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Boolean indexing into JAX arrays
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The other situation where this error often arises is when using boolean indices,
+    such as with `.at[...].set(...)`. Here is a simple example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function is attempting to set values smaller than zero to a scalar fill
+    value. As above, this can be addressed by re-expressing the logic in terms of
+    `where()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**tracer** (*core.Tracer*)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: This error occurs when a program attempts to convert a JAX Tracer object into
+    a standard NumPy array (see Different kinds of JAX values for more on what a Tracer
+    is). It typically occurs in one of a few situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using non-JAX functions in JAX transformations
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This error can occur if you attempt to use a non-JAX library like `numpy` or
+    `scipy` inside a JAX transformation (`jit()`, `grad()`, `jax.vmap()`, etc.). For
+    example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this case, you can fix the issue by using `jax.numpy.sin()` in place of
+    `numpy.sin()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: See also [External Callbacks](https://jax.readthedocs.io/en/latest/notebooks/external_callbacks.html)
+    for options for calling back to host-side computations from transformed JAX code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Indexing a numpy array with a tracer
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If this error arises on a line that involves array indexing, it may be that
+    the array being indexed `x` is a standard numpy.ndarray while the indices `idx`
+    are traced JAX arrays. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Depending on the context, you may fix this by converting the numpy array into
+    a JAX array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'or by declaring the index as a static argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: To understand more subtleties having to do with tracers vs. regular values,
+    and concrete vs. abstract values, you may want to read Different kinds of JAX
+    values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**tracer** (*core.Tracer*)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: This error occurs when a traced value in JAX is used in a context where a boolean
+    value is expected (see Different kinds of JAX values for more on what a Tracer
+    is).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The boolean cast may be an explicit (e.g. `bool(x)`) or implicit, through use
+    of control flow (e.g. `if x > 0` or `while x`), use of Python boolean operators
+    (e.g. `z = x and y`, `z = x or y`, `z = not x`) or functions that use them (e.g.
+    `z = max(x, y)`, `z = min(x, y)` etc.).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In some situations, this problem can be easily fixed by marking traced values
+    as static; in others, it may indicate that your program is doing operations that
+    are not directly supported by JAX’s JIT compilation model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traced value used in control flow
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One case where this often arises is when a traced value is used in Python control
+    flow. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We could mark both inputs `x` and `y` as static, but that would defeat the
+    purpose of using `jax.jit()` here. Another option is to re-express the if statement
+    in terms of the three-term `jax.numpy.where()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: For more complicated control flow including loops, see Control flow operators.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Control flow on traced values
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another common cause of this error is if you inadvertently trace over a boolean
+    flag. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here because the flag `normalize` is traced, it cannot be used in Python control
+    flow. In this situation, the best solution is probably to mark this value as static:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: For more on `static_argnums`, see the documentation of `jax.jit()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using non-JAX aware functions
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another common cause of this error is using non-JAX aware functions within
+    JAX code. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this case, the error occurs because Python’s built-in `min` function is
+    not compatible with JAX transforms. This can be fixed by replacing it with `jnp.minumum`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: To understand more subtleties having to do with tracers vs. regular values,
+    and concrete vs. abstract values, you may want to read Different kinds of JAX
+    values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**tracer** (*core.Tracer*)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: This error can occur when a JAX Tracer object is used in a context where a Python
+    integer is expected (see Different kinds of JAX values for more on what a Tracer
+    is). It typically occurs in a few situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Passing a tracer in place of an integer
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This error can occur if you attempt to pass a traced value to a function that
+    requires a static integer argument; for example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When this happens, the solution is often to mark the problematic argument as
+    static:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An alternative is to apply the transformation to a closure that encapsulates
+    the arguments to be protected, either manually as below or by using [`functools.partial()`](https://docs.python.org/3/library/functools.html#functools.partial
+    "(in Python v3.12)"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Note a new closure is created at every invocation, which defeats the compilation
+    caching mechanism, which is why static_argnums is preferred.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Indexing a list with a Tracer
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This error can occur if you attempt to index a Python list with a traced quantity.
+    For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Depending on the context, you can generally fix this either by converting the
+    list to a JAX array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'or by declaring the index as a static argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: To understand more subtleties having to do with tracers vs. regular values,
+    and concrete vs. abstract values, you may want to read Different kinds of JAX
+    values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**tracer** (*core.Tracer*)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: This error occurs when you use a JAX value that has leaked out of a function.
+    What does it mean to leak a value? If you use a JAX transformation on a function
+    `f` that stores, in some scope outside of `f`, a reference to an intermediate
+    value, that value is considered to have been leaked. Leaking values is a side
+    effect. (Read more about avoiding side effects in [Pure Functions](https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#pure-functions))
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'JAX detects leaks when you then use the leaked value in another operation later
+    on, at which point it raises an `UnexpectedTracerError`. To fix this, avoid side
+    effects: if a function computes a value needed in an outer scope, return that
+    value from the transformed function explicitly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifically, a `Tracer` is JAX’s internal representation of a function’s intermediate
+    values during transformations, e.g. within `jit()`, `pmap()`, `vmap()`, etc. Encountering
+    a `Tracer` outside of a transformation implies a leak.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Life-cycle of a leaked value
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider the following example of a transformed function which leaks a value
+    to an outer scope:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this example we leak a Traced value from an inner transformed scope to an
+    outer scope. We get an `UnexpectedTracerError` when the leaked value is used,
+    not when the value is leaked.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This example also demonstrates the life-cycle of a leaked value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A function is transformed (in this case, by `jit()`)
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The transformed function is called (initiating an abstract trace of the function
+    and turning `x` into a `Tracer`)
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The intermediate value `y`, which will later be leaked, is created (an intermediate
+    value of a traced function is also a `Tracer`)
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The value is leaked (appended to a list in an outer scope, escaping the function
+    through a side-channel)
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The leaked value is used, and an UnexpectedTracerError is raised.
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The UnexpectedTracerError message tries to point to these locations in your
+    code by including information about each stage. Respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The name of the transformed function (`side_effecting`) and which transform
+    kicked off the trace `jit()`).
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: A reconstructed stack trace of where the leaked Tracer was created, which includes
+    where the transformed function was called. (`When the Tracer was created, the
+    final 5 stack frames were...`).
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: From the reconstructed stack trace, the line of code that created the leaked
+    Tracer.
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The leak location is not included in the error message because it is difficult
+    to pin down! JAX can only tell you what the leaked value looks like (what shape
+    it has and where it was created) and what boundary it was leaked over (the name
+    of the transformation and the name of the transformed function).
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The current error’s stack trace points to where the value is used.
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The error can be fixed by the returning the value out of the transformed function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Leak checker
+  prefs: []
+  type: TYPE_NORMAL
+- en: As discussed in point 2 and 3 above, JAX shows a reconstructed stack trace which
+    points to where the leaked value was created. This is because JAX only raises
+    an error when the leaked value is used, not when the value is leaked. This is
+    not the most useful place to raise this error, because you need to know the location
+    where the Tracer was leaked to fix the error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To make this location easier to track down, you can use the leak checker. When
+    the leak checker is enabled, an error is raised as soon as a `Tracer` is leaked.
+    (To be more exact, it will raise an error when the transformed function from which
+    the `Tracer` is leaked returns)
+  prefs: []
+  type: TYPE_NORMAL
+- en: To enable the leak checker you can use the `JAX_CHECK_TRACER_LEAKS` environment
+    variable or the `with jax.checking_leaks()` context manager.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that this tool is experimental and may report false positives. It works
+    by disabling some JAX caches, so it will have a negative effect on performance
+    and should only be used when debugging.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**msg** ([*str*](https://docs.python.org/3/library/stdtypes.html#str "(in Python
+    v3.12)"))'
+  prefs: []
+  type: TYPE_NORMAL

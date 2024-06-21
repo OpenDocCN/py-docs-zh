@@ -1,0 +1,1066 @@
+- en: SPMD multi-device parallelism with shard_map
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/notebooks/shard_map.html`](https://jax.readthedocs.io/en/latest/notebooks/shard_map.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`shard_map` is a single-program multiple-data (SPMD) multi-device parallelism
+    API to map a function over shards of data. Mapped function applications, or *instances*,
+    communicate with each other via explicit collective communication operations.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`shard_map` is complementary to, and composable with, the automatic compiler-based
+    parallelization built into `jit`. With `jit` you write code as if for a single
+    device, and [the compiler can automatically partition computation over multiple
+    devices](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html),
+    generating per-device code and communication collectives behind the scenes. With
+    `shard_map` you take control, writing your own partitioned code and explicit collectives.
+    Or you can do a bit of both: take manual control across groups of devices while
+    leaving within-group device partitioning up to the compiler. The two approaches
+    can be mixed, matched, and composed as needed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re familiar with `pmap`, think of `shard_map` as an evolution. It’s more
+    expressive, performant, and composable with other JAX APIs. It even works eagerly,
+    for easier debugging! (For more, see [a detailed comparison to `pmap`.](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html#why-don-t-pmap-or-xmap-already-solve-this))
+  prefs: []
+  type: TYPE_NORMAL
+- en: By reading this tutorial, you’ll learn how to use `shard_map` to get full control
+    over your multi-device code. You’ll see in detail how it composes with `jax.jit`’s
+    automatic parallelization and `jax.grad`’s automatic differentiation. We’ll also
+    give some basic examples of neural network parallelization strategies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ll assume this tutorial is being run in an environment with eight devices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: So, let’s see a `shard_map`!
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Without further ado, here’s a toy example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function computes a matrix multiply in parallel by performing local block
+    matrix multiplies followed by a collective sum operation. We can check the result
+    is correct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The result is sharded along its rows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: At a high level, `shard_map` is kind of like `vmap` or `pmap`, in that we’re
+    mapping a function over pieces of array data, but notice that
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`shard_map` slices up inputs into blocks (and the output is formed by concatenating
+    result blocks), keeping the rank the same, whereas `vmap` would reduce the rank
+    by mapping away an axis;'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: the `mesh` argument lets us control precise device placement of computation
+    and results;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: we’re mapping over multiple data axes at once, and setting up multiple axis
+    names for collectives (both `'x'` and `'y'` here);
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: since we’re not using `jax.jit` yet, everything is eagerly evaluated, and we
+    can even `print` intermediate values for debugging.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The above code is performing the same computation as this `jax.jit` automatic
+    parallelization code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can think of `shard_map` as performing a `device_put` or `with_sharding_constraint`
+    on its inputs according to its `mesh` and `in_specs` arguments, so the blocks
+    over which `matmul_basic` operates are the same as in `matmul_reference`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Slow down, start with the basics!
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Rank-reducing vs rank-preserving maps
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We can think of `vmap` and `pmap` as unstacking each array input along an axis
+    (e.g. unpacking a 2D matrix into its 1D rows), applying its body function to each
+    piece, and stacking the results back together, at least when collectives aren’t
+    involved:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: For example, if `xs` had shape `f32[8,5]` then each `x` would have shape `f32[5]`,
+    and if each `f(x)` had shape `f32[3,7]` then the final stacked result `vmap(f)(xs)`
+    would have shape `f32[8,3,7]`. That is, each application of the body function
+    `f` takes as argument inputs with one fewer axis than the corresponding argument
+    to `vmap(f)`. We can say these are *rank-reducing maps* with unstacking/stacking
+    of inputs/outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The number of logical applications of `f`, or *instances* of `f`, is determined
+    by the size of the input axis being mapped over: for example, if we map over an
+    input axis of size 8, semantically we get 8 logical applications of the function.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In contrast, `shard_map` does not have this rank-reducing behavior. Instead,
+    we can think of it as slicing (or “unconcatenating”) along input axes into blocks,
+    applying the body function, and concatenating the results back together (again
+    when collectives aren’t involved):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Recall that `jnp.split` slices its input into equally-sized blocks with the
+    same rank, so that if in the above example `y` had shape `f32[8,5]` then each
+    `y_blk` would have shape `f32[2,5]`, and if each `f(y_blk)` had shape `f32[3,7]`
+    then the final concatenated result `shard_map(f, ...)(y)` would have shape `f32[12,7]`.
+    So `shard_map` maps over *shards*, or blocks, of its inputs. We can say it’s a
+    *rank-preserving map* with unconcatenating/concatenating of its inputs/outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The number of logical applications of `f` is determined by the mesh size, not
+    by any input axis size: for example, if we have a mesh of total size 4 (i.e. over
+    4 devices) then semantically we get 4 logical applications of the function, corresponding
+    to the 4 devices physically computing them.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Controlling how each input is split (unconcatenated) and tiled with `in_specs`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Each of the `in_specs` identifies some of the corresponding input array’s axes
+    with mesh axes by name using `PartitionSpec`s, representing how to split (or unconcatenate)
+    that input into the blocks to which the body function is applied. That identification
+    determines the shard sizes; when an input axis is identified with a mesh axis,
+    the input is split (unconcatenated) along that logical axis into a number of pieces
+    equal to the corresponding mesh axis size. (It’s an error if the corresponding
+    mesh axis size does not evenly divide the input array axis size.) If an input’s
+    pspec does not mention a mesh axis name, then there’s no splitting over that mesh
+    axis. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, because the input pspec did not mention the mesh axis name `'j'`, no input
+    array axis is split over that mesh axis; similarly, because the second axis of
+    the input array is not identified with (and hence split over) any mesh axis, application
+    of `f1` gets a full view of the input along that axis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When a mesh axis is not mentioned in an input pspec, we can always rewrite
+    to a less efficient program where all mesh axes are mentioned but the caller performs
+    a `jnp.tile`, for example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In other words, because each input pspec can mention each mesh axis name zero
+    or one times, rather than having to mention each name exactly once, we can say
+    that in addition to the `jnp.split` built into its input, `shard_map` also has
+    a `jnp.tile` built into its input, at least logically (though the tiling may not
+    need to be carried out physically, depending on the arguments’ physical sharding
+    layout). The tiling to use is not unique; we could also have tiled along the first
+    axis, and used the pspec `P(('j', 'i'), None)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Physical data movement is possible on inputs, as each device needs to have a
+    copy of the appropriate data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Controlling how each output assembled by concatenation, block transposition,
+    and untiling using `out_specs`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Analogously to the input side, each of the `out_specs` identifies some of the
+    corresponding output array’s axes with mesh axes by name, representing how the
+    output blocks (one for each application of the body function, or equivalently
+    one for each physical device) should be assembled back together to form the final
+    output value. For example, in both the `f1` and `f2` examples above the `out_specs`
+    indicate we should form the final output by concatenating together the block results
+    along both axes, resulting in both cases an array `y` of shape `(12, 24)`. (It’s
+    an error if an output shape of the body function, i.e. an output block shape,
+    has a rank too small for the concatenation described by the corresponding output
+    pspec.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When a mesh axis name is not mentioned in an output pspec, it represents an
+    un-tiling: when the user writes an output pspec which does not mention one of
+    the mesh axis names, they promise that the output blocks are equal along that
+    mesh axis, and so only one block along that axis is used in the output (rather
+    than concatenating all the blocks together along that mesh axis). For example,
+    using the same mesh as above:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The body function closing over an array value is equivalent to passing it as
+    an augment with a corresponding input pspec of P(None, None). As another example,
+    following more closely to the other examples above:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The result has a second axis size of 6, half the size of the input’s second
+    axis. In this case, the un-tile expressed by not mentioning the mesh axis name
+    `''j''` in the output pspec was safe because of the collective `psum`, which ensures
+    each output block is equal along the corresponding mesh axis. Here are two more
+    examples where we vary which mesh axes are mentioned in the output pspec:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: On the physical side, not mentioning a mesh axis name in an output pspec assembles
+    an `Array` from the output device buffers with replicated layout along that mesh
+    axis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is no runtime check that the output blocks are actually equal along a
+    mesh axis to be un-tiled along, or equivalently that the corresponding physical
+    buffers have equal values and thus can be interpreted as a replicated layout for
+    a single logical array. But we can provide a static check mechanism which raises
+    an error on all potentially-incorrect programs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because the `out_specs` can mention mesh axis names zero or one times, and because
+    they can be mentioned in any order, we can say that in addition to the `jnp.concatenate`
+    built into its output, `shard_map` also has both an *untile* and a *block transpose*
+    built into its output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Physical data movement is not possible on outputs, no matter the output pspec.
+    Instead, `out_specs` just encodes how to assemble the block outputs into `Array`s,
+    or physically how to interpret the buffers across devices as the physical layout
+    of a single logical `Array`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: API Specification
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'where:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: communication collectives like `psum` in the body of `f` can mention the axis
+    names of `mesh`;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`mesh` encodes devices arranged in an array and with associated axis names,
+    just like it does for `sharding.NamedSharding`;'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`in_specs` and `out_specs` are `PartitionSpec`s which can affinely mention
+    axis names from `mesh` to express slicing/unconcatenation and concatenation of
+    inputs and outputs, respectively, with unmentioned names corresponding to replication
+    and untiling (assert-replicated-so-give-me-one-copy), respectively;'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`auto` is an optional set of axis names corresponding to the subset of names
+    of `mesh` to treat automatically in the body, as in the caller, rather than manually;'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`check_rep` is an optional boolean indicating whether to check statically for
+    any replication errors in `out_specs`, and also whether to enable a related automatic
+    differentiation optimization (see [JEP](https://jax.readthedocs.io/en/latest/jep/17111-shmap-transpose.html)).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The shapes of the arguments passed to `f` have the same ranks as the arguments
+    passed to `shard_map`-of-`f`, and the shape of an argument to `f` is computed
+    from the shape `shape` of the corresponding argument to `shard_map`-of-`f` and
+    the corresponding `PartitionSpec` `spec` as roughly `tuple(sz // (1 if n is None
+    else mesh.shape[n]) for sz, n in zip(shape, spec))`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collectives tutorial
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'A `shard_map` need not be a pure map: function applications can communicate
+    with each other via *collectives*, using axis names defined in the `mesh` argument.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recall that `shard_map` maps a function over shards, or blocks, of input data,
+    so that this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Computes the same values, evaluating applications of `f` to the same argument
+    values, as this reference function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: We call these applications of `f` to different argument shards *function instances*.
+    Each function instance is executed on a different device (or subset of devices).
+  prefs: []
+  type: TYPE_NORMAL
+- en: These reference semantics work when `f` has no communication collectives in
+    it. But what if we want the function instances to communicate, corresponding to
+    having cross-device communication? That is, what are the reference semantics when
+    `f` contains a collective? Say `f` has just one collective, and is of the form
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'where we’re assuming there’s only one mesh axis we’re mapping over, and `axis_name`
+    is the corresponding name for it. Then the reference semantics would look more
+    like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that `collective_ref` might depend on all the `z_blocks`. That is, while
+    `f_part1` and `f_part2` are mapped over blocks independently, a collective introduces
+    some amount of cross-block dependence. Physically, that means communication across
+    devices. Exactly what communication happens, and what values are computed, depend
+    on the collective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`psum`'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The simplest collective may be `jax.lax.psum`, which computes an all-reduce-sum
+    along a device mesh axis (or multiple axes). Here’s a toy example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Illustration of a psum computation.](img/931361580e53b1b6d260185b850fb92f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: The prints show that each function application starts with its own chunk of
+    the argument value `x_block`. After the `psum`, each function application has
+    the same value of `y_block`, computed by summing the applications’ `x_block` values
+    together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the case where there’s a single axis name in the computation, we could say
+    that the `collective_ref` reference implementation for `psum` is
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice also that because `f1` returns `y_block`, the result of a `psum` over
+    `'i'`, we can use `out_specs=P()` so the caller gets a single logical copy of
+    the result value, rather than a tiled result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When there is more than one mesh axis, we can perform a `psum` over each one
+    separately, or over multiple axes at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: By applying a `psum` over mesh axis `'i'`, we get values of `y_block` which
+    are equal along axis ‘`i'`, but not axis `'j'`. (So we can use `out_specs=P(None,
+    'j')` to get a single logical result along that axis.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we apply the `psum` over both axes, the `y_block` value is equal along both
+    axes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: In machine learning, we often use `psum` to compute total losses or, when we
+    have a `grad` inside the `shard_map`ped function body, total gradients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the sequel, we’ll see how `psum` can be implemented in terms of other primitives,
+    which gives some intuition about its communication cost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`all_gather`'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Another fundamental operation is gathering array shards along an axis, so that
+    each function application has a full copy of the data along that axis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Illustration of an all_gather computation.](img/ec65cb3ece67fc37d896ecfb7adae327.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: The prints show that each function application again starts with its own chunk
+    of the argument value `x_block`. After the `all_gather`, they have a common value,
+    computed by concatenating the values of `x_block`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: (Notice that we actually can’t set `out_specs=P()` here. For technical reasons
+    related to automatic differentiation, we consider the output of `all_gather` not
+    to be guaranteed invariant across devices. If we wanted it to be guaranteed invariant,
+    we could use `jax.lax.all_gather_invariant`, or in this case we could just avoid
+    doing the `all_gather` in the function body and instead just use `out_specs=P('i')`
+    to perform the concatenation.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When `tiled=False` (the default), results are stacked along a new axis instead
+    of concatenated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: We could write the `collective_ref` reference semantics function for `all_gather`
+    as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: In deep learning, we might use `all_gather`s on parameters in fully sharded
+    data parallelism (FSDP).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`psum_scatter`'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `jax.lax.psum_scatter` collective is a bit less intuitive. It’s like `psum`
+    except each function instance gets only one shard of the result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Illustration of a psum_scatter computation.](img/5f72573ffc461c26ed22dc45fe810e1d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: As shown by the prints, each resulting `y_block` has a smaller size than the
+    argument `x_block`, unlike with `psum`. Moreover, compared to `psum`, here each
+    `y_block` only represents a slice of the sum of the `x_block`s across function
+    instances. (Even though each function instance gets only one shard of the sum,
+    the final output `y` is the same as in the `psum` example because here we use
+    `out_specs=P('i')` to concatenate each function instance’s output.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In terms of what values are computed, a `collective_ref` reference implementation
+    might look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It’s not captured in the semantics reference implementation, but `psum_scatter`
+    is useful because these results can be computed more efficiently, with less communication,
+    than a full `psum`. In fact, one way to think of `psum_scatter` is as “the first
+    half of a `psum`, before an `all_gather`”. That is, one way to implement `psum`
+    is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indeed, this implementation is often used on both TPU and GPU!
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reason `psum_scatter` can require about half the communication as a full
+    `psum` is illustrated the `ppermute` section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another intuition is that we can use `psum_scatter` to implement a distributed
+    matrix multiplication with inputs and outputs sharded over the same axis. In machine
+    learning, `psum_scatter` can be used in tensor-parallel matrix multiplies or fully-sharded
+    data parallel gradient accumulation, as shown in the examples to follow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`ppermute`'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `jax.lax.ppermute` collective provides the most direct way for function
+    instances to send data to one another. Given a mesh axis and a list of `(source_index,
+    destination_index)` pairs representing indices along that mesh axis, `ppermute`
+    sends its argument value from each source function instance to each destination:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this case, with just two function instances, each instance’s value of `y_block`
+    is the other’s value of `x_block`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Source indices and destination indices can’t be repeated. If an index does not
+    appear as a destination, then the value of the corresponding function instance’s
+    result is an array of zeros.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A `collective_ref` reference implementation could look like
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Other collectives can be implemented efficiently, in terms of total communication,
+    using `ppermute`s where each function passes data only to its neighbors. For example,
+    we could implement `psum_scatter` using a sequence of `ppermute`s and local additions
+    this way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Illustration of a psum_scatter implementation.](img/c94992ab8c119394f2df5936638f799b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Or, with a numerical example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Illustration of a psum_scatter implementation.](img/c705081a80eb07f99df90b32d8c3e0ab.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Intuitively, on each iteration each function instance sends ‘up’ the value
+    it received on the previous iteration, and reduces (adds) the value it receives
+    this iteration. In code, it might look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: On TPU, there are higher-dimensional variants of this algorithm to exploit multiple
+    bidirectional physical mesh axes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Notice that `psum_scatter` is the transpose of `all_gather`. Indeed, a way
+    to implement `all_gather` in terms of `ppermute` looks like the reverse of the
+    above process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Illustration of an all_gather implementation.](img/ad90205decf32098ca6aaa8799d8853c.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In deep learning, we might use `ppermute` when implementing SPMD pipeline parallelism,
+    where we divide our network along its depth into stages and evaluate the applications
+    of stages in parallel. Or we might use `ppermute` in parallelizing the evaluation
+    of convolutional layers, where we shard over spatial axes and thus devices must
+    communicate “halos” to each other. Or it may be used under-the-hood in tensor-parallel
+    matrix multiplies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`all_to_all`'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A final collective is `all_to_all`, which is essentially a block matrix transpose
+    operating along one positional axis and one cross-device axis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Illustration of an all_to_all computation.](img/c50a4e367be0e5f102e6c82c1a02c1da.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `split_axis` argument indicates which positional axis should be sharded
+    and partitioned across the mesh axis. The `concat_axis` argument indicates the
+    axis along which the communicated results should be concatenated or stacked.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When `tiled=False` (the default), the `split_axis` axis size must equal the
+    size of the mesh axis named `axis_name`, and a new axis of that size is created
+    at position `concat_axis` for the stacked results. When `tiled=True`, the `split_axis`
+    axis size need only be evenly divisible by the size of the mesh axis, and results
+    are concatenated along the existing axis `concat_axis`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `collective_ref` reference semantics when `split_axis=0` and `concat_axis=0`
+    might look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: In deep learning, we might use `all_to_all` in mixture-of-expert routing, where
+    we first sort our local batch of examples according to which expert they should
+    go to, then apply an `all_to_all` to redistribute examples to experts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Toy examples
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: How might we use `shard_map` and collective communication in practice? These
+    examples, while simple, give some idea.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Matrix multiplies
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Parallelizing matrix multiplication is central in scaling up deep learning models,
+    both for training and for inference. When `jax.jit` automatically parallelizes
+    matrix multiplication, it can use one of several different strategies, depending
+    on matrix sizes, hardware details, and other factors. How might we write some
+    of those parallelized routines more explicitly using `shard_map`? And how can
+    we optimize them to get better compute/communication overlap and thus improve
+    FLOP utilization?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Example 1: `all-gather` on one side'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Consider performing a matrix multiplication where we shard the left-hand side
+    argument (can think: parameters) on its leading (non-contracting) dimension:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And wee shard the right-hand side argument (can think: activations) on its
+    contracting dimension, with a similar sharding for the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To perform this matrix multiplication, we can first all-gather the right-hand
+    side and then perform local matrix multiplies against the sharded left-hand side:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That’s great, but we’re not getting any compute/communication overlap here:
+    before we can start the matmul, we need the `all_gather` to complete. Here’s a
+    profile using the same code, but on larger example shapes (`(8192, 8192)` for
+    `lhs` and `(8192, 1024)` for `rhs`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Profile of an all-gather matmul without overlap.](img/e3d458832dd99012b0f2d265902e1230.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We can get compute/communication overlap if instead of calling `all_gather`
+    we basically inline our above implementation of `all_gather` in terms of `ppermute`,
+    then interleave steps of the gather permutation with local matrix multiplies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This implementation allows overlap between communication and computation, and
+    also avoids gathering a large intermediate onto each device. But on TPU it uses
+    only half the interconnect bandwidth by permuting in only one direction along
+    the ring. To permute bidirectionally, we just split the blocks in half and send
+    each half in each direction:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![Profile of an all-gather matmul with overlap.](img/d7543b8af3d8962ebb005907a96fec45.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In practice, to reduce compile times we would probably roll this into a `jax.lax.fori_loop`.
+    We might also have additional axes of parallelism involved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example 2: `psum_scatter` the result'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Another sharding we might start with has both `lhs` and `rhs` sharded along
+    their contracting dimensions, with the output sharded like `rhs` again:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here we can use a `reduce_scatter` to perform the contraction sum over shards:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'But the scattering communication must wait for the entire local matrix multiply
+    to finish before it can start. To get communication/computation overlap, we can
+    inline an implementation of `psum_scatter` in terms of `ppermute`, then interleave
+    the communication steps with local matrix multiplies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As in the previous example, to fully utilize interconnects on TPU, we’d run
+    a bidirectional version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: Neural networks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We can use `shard_map` to parallelize computation in neural networks, either
+    by itself or in combination with the automatic partitioning in `jax.jit`. This
+    section has a few examples based on this toy neural network and random data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: Compare these examples with the purely [automatic partitioning examples in the
+    “Distributed arrays and automatic partitioning” doc](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html).
+    While in those automatic partitioning examples we don’t need to edit the model
+    functions to use different parallelization strategies, with `shard_map` we often
+    do.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8-way batch data parallelism
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The simplest multi-device parallelism strategy is to shard the batch of inputs
+    and targets over multiple devices, replicate the parameters over those devices,
+    and apply the model in parallel to those shards of data. To evaluate the total
+    loss, the devices need only communicate with a scalar-sized all-reduce-sum at
+    the end. (To evaluate the gradient of the loss, the devices must perform all-reduce-sums
+    of parameter gradients in the backward pass.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can check that the loss and its gradients match the reference (base) model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can print the compiler IR to inspect the gradient computation and verify
+    that the collective all-reduce-sum operations happen where we’d expect: at the
+    end of the forward pass to compute the loss value, and in the backward pass to
+    compute the total parameter gradients.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8-way fully sharded data parallelism (FSDP)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another strategy is to additionally shard the parameters over the devices, all-gathering
+    each one when the full value is needed for the `jnp.dot` or bias addition. Since
+    we only have one full parameter in local device memory at a time, rather than
+    keeping all parameters in all device memories as in the preceding DP example,
+    we free up significant memory that we can use for larger models or larger batch
+    sizes. And because XLA will overlap computation and inter-device communication,
+    the wall-clock time doesn’t suffer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So now we need collectives in two places: the model prediction function `predict`
+    needs to all-gather the parameters before they’re used, and as in the DP case
+    the loss function needs to sum the local losses to compute the total loss.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There’s one other ingredient we need: we don’t want to store the fully gathered
+    parameters from the forward pass for use on the backward pass. Instead, we want
+    to gather them again on the backward pass. We can express that by using `jax.remat`
+    with a [custom policy](https://jax.readthedocs.io/en/latest/notebooks/autodiff_remat.html#custom-policies-for-what-s-saveable)
+    (or a `custom_vjp`), though XLA typically does that rematerialization automatically.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This general [FSDP approach](https://engineering.fb.com/2021/07/15/open-source/fsdp/)
+    is similar to [weight update sharding (WUS)](https://arxiv.org/abs/2004.13336)
+    and [ZeRO-3](https://arxiv.org/abs/1910.02054).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Again we can check that the loss and its gradients match the reference model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: 8-way tensor parallelism (TP)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Usually we don’t use tensor model parallelism by itself, but seeing it in isolation
+    is a good warmup on parallel matrix multiplication. It’s also a good example of
+    using `shard_map` in a library function, called in a larger `jit`-based computation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The parallelization idea is that we’ll keep the data/activations sharded over
+    its feature axis (rather than its batch axis), and we’ll similarly shard weight
+    matrices over their input-feature axis (and biases over their feature axis). Then
+    to perform the parallel matrix multiplication, we’ll perform local matrix multiplications
+    followed by a `psum_scatter` to sum the local results and efficiently scatter
+    the result’s shards.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: FSDP + TP, with `shard_map` at the top level
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We can compose these strategies together, using multiple axes of parallelism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Notice how we have to do *two* collective reductions: one over `''feats''`
+    and one over `''batch''`. In the pure TP example, we didn’t write the `''feats''`
+    reduction explicitly because we only used `shard_map` within `gemm_tp`; in the
+    caller `loss_tp`, the compiler automatically translated our use of `jnp.sum` to
+    perform a `psum` as needed given the sharded result returned by `predict_tp`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: SPMD pipeline parallelism (PP)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: With pipeline parallelism we aim to parallelize the evaluation of layers at
+    different depths in our network. For example, one device might compute the application
+    of the first layer while another device computes the application of the second;
+    when they finish, the first device passes its results to the second while the
+    second passes its results to the device responsible for the third layer, and the
+    process repeats. In general the number of pipeline stages may be different from
+    the number of layers, as each stage may be responsible for multiple layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With SPMD pipelining, we exploit the fact that most layers in the network apply
+    the computation, just with different parameter values. In particular, we can stack
+    together all the parameters except for those for the first and last layers, then
+    use a `shard_map` to map over blocks of those layer parameters, where each block
+    of parameters corresponds to a pipeline stage. We then use the `jax.lax.ppermute`
+    collective to shift data down the parallel pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This particular pipelining strategy is essentially [the GPipe strategy](https://arxiv.org/abs/1811.06965).
+    There are several variants, as well as quite different strategies, and which is
+    appropriate can depend on the speed of the networking between stages and batch
+    sizes. But for this tutorial we’ll focus on just one strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we choose some pipeline parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE

@@ -1,0 +1,474 @@
+- en: How JAX primitives work
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html`](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '![Open in Colab](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/How_JAX_primitives_work.ipynb)
+    ![Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/How_JAX_primitives_work.ipynb)'
+  prefs: []
+  type: TYPE_IMG
+- en: '*necula@google.com*, October 2019.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: JAX implements certain transformations of Python functions, e.g., `jit`, `grad`,
+    `vmap`, or `pmap`. The Python functions to be transformed must be JAX-traceable,
+    which means that as the Python function executes the only operations it applies
+    to the data are either inspections of data attributes such as shape or type, or
+    special operations called JAX primitives. In particular, a JAX-traceable function
+    is sometimes invoked by JAX with abstract arguments. An example of a JAX abstract
+    value is `ShapedArray(float32[2,2])`, which captures the type and the shape of
+    values, but not the concrete data values. JAX primitives know how to operate on
+    both concrete data values and on the JAX abstract values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The JAX-transformed functions must themselves be JAX-traceable functions, to
+    ensure that these transformations can be composed, e.g., `jit(jacfwd(grad(f)))`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are pre-defined JAX primitives corresponding to most XLA operations, e.g.,
+    add, matmul, sin, cos, indexing. JAX comes with an implementation of numpy functions
+    in terms of JAX primitives, which means that Python programs using JAX’s implementation
+    of numpy are JAX-traceable and therefore transformable. Other libraries can be
+    made JAX-traceable by implementing them in terms of JAX primitives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The set of JAX primitives is extensible. Instead of reimplementing a function
+    in terms of pre-defined JAX primitives, one can define a new primitive that encapsulates
+    the behavior of the function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**The goal of this document is to explain the interface that a JAX primitive
+    must support in order to allow JAX to perform all its transformations.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider that we want to add to JAX support for a multiply-add function with
+    three arguments, defined mathematically as “multiply_add(x, y, z) = x * y + z”.
+    This function operates on 3 identically-shaped tensors of floating point values
+    and performs the operations pointwise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using existing primitives
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The easiest way to define new functions is to write them in terms of JAX primitives,
+    or in terms of other functions that are themselves written using JAX primitives,
+    e.g., those defined in the `jax.lax` module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: In order to understand how JAX is internally using the primitives, we add some
+    helpers for tracing function calls.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instead of using `jax.lax` primitives directly, we can use other functions
+    that are already written in terms of those primitives, such as those in `jax.numpy`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that in the process of computing `grad`, JAX invokes `square_add_numpy`
+    and `multiply_add_numpy` with special arguments `ConcreteArray(...)` (described
+    further below in this colab). It is important to remember that a JAX-traceable
+    function must be able to operate not only on concrete arguments but also on special
+    abstract arguments that JAX may use to abstract the function execution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The JAX traceability property is satisfied as long as the function is written
+    in terms of JAX primitives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining new JAX primitives
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The right way to add support for multiply-add is in terms of existing JAX primitives,
+    as shown above. However, in order to demonstrate how JAX primitives work let us
+    pretend that we want to add a new primitive to JAX for the multiply-add functionality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: If we try to call the newly defined functions we get an error, because we have
+    not yet told JAX anything about the semantics of the new primitive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Primal evaluation rules
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: JIT
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If we now try to use `jit` we get a `NotImplementedError`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Abstract evaluation rules
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'In order to JIT the function, and for other transformations as well, JAX first
+    evaluates it abstractly using only the shape and type of the arguments. This abstract
+    evaluation serves multiple purposes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Gets the sequence of JAX primitives that are used in the computation. This sequence
+    will be compiled.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Computes the shape and type of all vectors and operations used in the computation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For example, the abstraction of a vector with 3 elements may be `ShapedArray(float32[3])`,
+    or `ConcreteArray([1., 2., 3.])`. In the latter case, JAX uses the actual concrete
+    value wrapped as an abstract value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we re-attempt to JIT, we see how the abstract evaluation proceeds, but we
+    get another error, about missing the actual XLA compilation rule:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: XLA Compilation rules
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: JAX compilation works by compiling each primitive into a graph of XLA operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the biggest hurdle to adding new functionality to JAX, because the set
+    of XLA operations is limited, and JAX already has pre-defined primitives for most
+    of them. However, XLA includes a `CustomCall` operation that can be used to encapsulate
+    arbitrary functionality defined using C++.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now we succeed to JIT. Notice below that JAX first evaluates the function abstractly,
+    which triggers the `multiply_add_abstract_eval` function, and then compiles the
+    set of primitives it has encountered, including `multiply_add`. At this point
+    JAX invokes `multiply_add_xla_translation`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Below is another use of `jit` where we compile only with respect to the first
+    argument. Notice how the second argument to `square_add_prim` is concrete, which
+    leads in the third argument to `multiply_add_abstract_eval` being `ConcreteArray`.
+    We see that `multiply_add_abstract_eval` may be used with both `ShapedArray` and
+    `ConcreteArray`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Forward differentiation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: JAX implements forward differentiation in the form of a Jacobian-vector product
+    (see the [JAX autodiff cookbook](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html#Jacobian-Matrix-and-Matrix-Jacobian-products)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we attempt now to compute the `jvp` function we get an error because we have
+    not yet told JAX how to differentiate the `multiply_add` primitive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'TO EXPLAIN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why is JAX using ConcreteArray in square_add_prim? There is no abstract evaluation
+    going on here.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Not sure how to explain that multiply_add_prim is invoked with ConcreteValue,
+    yet we do not call the multiply_add_abstract_eval.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: I think it would be useful to show the jaxpr here
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: JIT of forward differentiation
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'We can apply JIT to the forward differentiation function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that first we evaluate `multiply_add_value_and_jvp` abstractly, which
+    in turn evaluates abstractly both the primal and the tangent evaluation (a total
+    of 3 invocations of the `ma` primitive). Then we compile the 3 occurrences of
+    the primitive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reverse differentiation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If we attempt now to use reverse differentiation we see that JAX starts by using
+    the `multiply_add_value_and_jvp` to compute the forward differentiation for abstract
+    values, but then runs into a `NotImplementedError`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When computing the reverse differentiation JAX first does abstract evaluation
+    of the forward differentiation code `multiply_add_value_and_jvp` to obtain a trace
+    of primitives that compute the output tangent. Observe that JAX performs this
+    abstract evaluation with concrete values for the differentiation point, and abstract
+    values for the tangents. Observe also that JAX uses the special abstract tangent
+    value `Zero` for the tangent corresponding to the 3rd argument of `ma`. This reflects
+    the fact that we do not differentiate w.r.t. the 2nd argument to `square_add_prim`,
+    which flows to the 3rd argument to `multiply_add_prim`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observe also that during the abstract evaluation of the tangent we pass the
+    value 0.0 as the tangent for the 3rd argument. This is due to the use of the `make_zero`
+    function in the definition of `multiply_add_value_and_jvp`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above error is because there is a missing piece for JAX to be able to use
+    the forward differentiation code to compute reverse differentiation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transposition
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: As explained above, when computing reverse differentiation JAX obtains a trace
+    of primitives that compute the tangent using forward differentiation. Then, **JAX
+    interprets this trace abstractly backwards** and for each primitive it applies
+    a **transposition** rule.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To understand what is going on, consider for now a simpler example of the function
+    “f(x, y) = x * y + y”. Assume we need to differentiate at the point `(2., 4.)`.
+    JAX will produce the following JVP tangent calculation of `ft` from the tangents
+    of the input `xt` and `yt`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: By construction, the tangent calculation is always linear in the input tangents.
+    The only non-linear operator that may arise in the tangent calculation is multiplication,
+    but then one of the operands is constant.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'JAX will produce the reverse differentiation computation by processing the
+    JVP computation backwards. For each operation in the tangent computation, it accumulates
+    the cotangents of the variables used by the operation, using the cotangent of
+    the result of the operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: One can verify that this computation produces `xct = 4.` and `yct = 3.`, which
+    are the partial derivatives of the function `f`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'JAX knows for each primitive that may appear in a JVP calculation how to transpose
+    it. Conceptually, if the primitive `p(x, y, z)` is linear in the arguments `y`
+    and `z` for a constant value of `x`, e.g., `p(x, y, z) = y*cy + z*cz`, then the
+    transposition of the primitive is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that `p_transpose` takes the cotangent of the output of the primitive
+    and a value corresponding to each argument of the primitive. For the linear arguments,
+    the transposition gets an undefined `_` value, and for the other arguments it
+    gets the actual constants. The transposition returns a cotangent value for each
+    argument of the primitive, with the value `None` returned for the constant arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In particular,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we can complete the run of the `grad`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Notice the two calls to `multiply_add_transpose`. They correspond to the two
+    uses of `multiply_add_prim` in the computation of the `output_tangent` in `multiply_add_value_and_jvp`.
+    The first call to transpose corresponds to the last use of `multiply_add_prim`:
+    `multiply_add_prim(xt, y, ...)` where `y` is the constant 2.0.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: JIT of reverse differentiation
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Notice that the abstract evaluation of the `multiply_add_value_and_jvp` is using
+    only abstract values, while in the absence of JIT we used `ConcreteArray`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Batching
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The batching transformation takes a point-wise computation and turns it into
+    a computation on vectors. If we try it right now, we get a `NotImplementedError`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: We need to tell JAX how to evaluate the batched version of the primitive. In
+    this particular case, the `multiply_add_prim` already operates pointwise for any
+    dimension of input vectors. So the batched version can use the same `multiply_add_prim`
+    implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: JIT of batching
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE

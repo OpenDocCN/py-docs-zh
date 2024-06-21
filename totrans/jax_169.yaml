@@ -1,0 +1,92 @@
+- en: jax.experimental.custom_partitioning module
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/jax.experimental.custom_partitioning.html`](https://jax.readthedocs.io/en/latest/jax.experimental.custom_partitioning.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '## API'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Inserts a CustomCallOp into the XLA graph with custom SPMD lowering rules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The args to `def_partition` are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`propagate_user_sharding`: Callable which takes the sharding of a user (in
+    the dag) and returns a suggestion for a new NamedSharding. The default implementation
+    is just to return the suggested sharding.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`partition`: Callable which takes the SPMD suggested partition shapes and partition
+    specs and returns the mesh, a per-shard lowering function, and the final input
+    and output sharding specs (the SPMD partitioner will repartition the inputs to
+    match). The mesh is returned to allow configuring axis_names for collectives when
+    no mesh is provided.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`infer_sharding_from_operands`: Callable which computes an output `NamedSharding`
+    from the `NamedSharding` chosen for each argument.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`decode_shardings`: When set to True, convert input [PRE2] if possible. This
+    may not be possible if the user does not provide a contextual mesh.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Positional arguments can be specified as static using static_argnums. JAX uses
+    `inspect.signature(fun)` to resolve these positional arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Example
+  prefs: []
+  type: TYPE_NORMAL
+- en: As an example, assume we want to enhance the existing `jax.numpy.fft.fft`. This
+    function computes the discrete Fourier transform of an N-dimensional input along
+    the last dimension, and is batched along the first N-1 dimensions. By default,
+    however, it will ignore the sharding of the input and gather the input on all
+    devices. However, since `jax.numpy.fft.fft` is batched along the first N-1 dimensions,
+    this is unnecessary. We will create a new `my_fft` op that, instead, does not
+    alter the sharding along the first N-1 dimensions, and only gathers the input
+    along the last dimension if needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now create a 2D array sharded along the first axis, pass it through `my_fft`
+    and notice how it is still sharded as expected, and identical to the output of
+    `fft`. However, inspecting the HLO (using `lower(x).compile().runtime_executable().hlo_modules()`)
+    reveals that `my_fft` does not create any all-gather or dynamic-slice, while `fft`
+    does.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because of the logic in `supported_sharding`, `my_fft` also works on 1-dimensional
+    arrays. However, in this case, the HLO of `my_fft` does show a dynamic-slice,
+    since the last dimension is the dimension along which FFTs are calculated and
+    needs to be replicated on all devices before the computation can be done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE

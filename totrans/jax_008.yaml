@@ -1,0 +1,258 @@
+- en: Just-in-time compilation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/jit-compilation.html`](https://jax.readthedocs.io/en/latest/jit-compilation.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: In this section, we will further explore how JAX works, and how we can make
+    it performant. We will discuss the `jax.jit()` transformation, which will perform
+    *Just In Time* (JIT) compilation of a JAX Python function so it can be executed
+    efficiently in XLA.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How JAX transformations work
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the previous section, we discussed that JAX allows us to transform Python
+    functions. JAX accomplishes this by reducing each function into a sequence of
+    primitive operations, each representing one fundamental unit of computation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One way to see the sequence of primitives behind a function is using `jax.make_jaxpr()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Understanding Jaxprs section of the documentation provides more information
+    on the meaning of the above output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Importantly, notice that the jaxpr does not capture the side-effect present
+    in the function: there is nothing in it corresponding to `global_list.append(x)`.
+    This is a feature, not a bug: JAX transformations are designed to understand side-effect-free
+    (a.k.a. functionally pure) code. If *pure function* and *side-effect* are unfamiliar
+    terms, this is explained in a little more detail in [🔪 JAX - The Sharp Bits 🔪:
+    Pure Functions](https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#pure-functions).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Impure functions are dangerous because under JAX transformations they are likely
+    not to behave as intended; they might fail silently, or produce surprising downstream
+    errors like leaked Tracers. Moreover, JAX often can’t detect when side effects
+    are present. (If you want debug printing, use `jax.debug.print()`. To express
+    general side-effects at the cost of performance, see `jax.experimental.io_callback()`.
+    To check for tracer leaks at the cost of performance, use with `jax.check_tracer_leaks()`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When tracing, JAX wraps each argument by a *tracer* object. These tracers then
+    record all JAX operations performed on them during the function call (which happens
+    in regular Python). Then, JAX uses the tracer records to reconstruct the entire
+    function. The output of that reconstruction is the jaxpr. Since the tracers do
+    not record the Python side-effects, they do not appear in the jaxpr. However,
+    the side-effects still happen during the trace itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note: the Python `print()` function is not pure: the text output is a side-effect
+    of the function. Therefore, any `print()` calls will only happen during tracing,
+    and will not appear in the jaxpr:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: See how the printed `x` is a `Traced` object? That’s the JAX internals at work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The fact that the Python code runs at least once is strictly an implementation
+    detail, and so shouldn’t be relied upon. However, it’s useful to understand as
+    you can use it when debugging to print out intermediate values of a computation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A key thing to understand is that a jaxpr captures the function as executed
+    on the parameters given to it. For example, if we have a Python conditional, the
+    jaxpr will only know about the branch we take:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: JIT compiling a function
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As explained before, JAX enables operations to execute on CPU/GPU/TPU using
+    the same code. Let’s look at an example of computing a *Scaled Exponential Linear
+    Unit* ([SELU](https://proceedings.neurips.cc/paper/6698-self-normalizing-neural-networks.pdf)),
+    an operation commonly used in deep learning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The code above is sending one operation at a time to the accelerator. This limits
+    the ability of the XLA compiler to optimize our functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Naturally, what we want to do is give the XLA compiler as much code as possible,
+    so it can fully optimize it. For this purpose, JAX provides the `jax.jit()` transformation,
+    which will JIT compile a JAX-compatible function. The example below shows how
+    to use JIT to speed up the previous function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s what just happened:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We defined `selu_jit` as the compiled version of `selu`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We called `selu_jit` once on `x`. This is where JAX does its tracing – it needs
+    to have some inputs to wrap in tracers, after all. The jaxpr is then compiled
+    using XLA into very efficient code optimized for your GPU or TPU. Finally, the
+    compiled code is executed to satisfy the call. Subsequent calls to `selu_jit`
+    will use the compiled code directly, skipping the python implementation entirely.
+    (If we didn’t include the warm-up call separately, everything would still work,
+    but then the compilation time would be included in the benchmark. It would still
+    be faster, because we run many loops in the benchmark, but it wouldn’t be a fair
+    comparison.)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We timed the execution speed of the compiled version. (Note the use of `block_until_ready()`,
+    which is required due to JAX’s Asynchronous dispatch).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Why can’t we just JIT everything?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: After going through the example above, you might be wondering whether we should
+    simply apply `jax.jit()` to every function. To understand why this is not the
+    case, and when we should/shouldn’t apply `jit`, let’s first check some cases where
+    JIT doesn’t work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The problem in both cases is that we tried to condition the trace-time flow
+    of the program using runtime values. Traced values within JIT, like `x` and `n`
+    here, can only affect control flow via their static attributes: such as `shape`
+    or `dtype`, and not via their values. For more detail on the interaction between
+    Python control flow and JAX, see [🔪 JAX - The Sharp Bits 🔪: Control Flow](https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#control-flow).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One way to deal with this problem is to rewrite the code to avoid conditionals
+    on value. Another is to use special Control flow operators like `jax.lax.cond()`.
+    However, sometimes that is not possible or practical. In that case, you can consider
+    JIT-compiling only part of the function. For example, if the most computationally
+    expensive part of the function is inside the loop, we can JIT-compile just that
+    inner part (though make sure to check the next section on caching to avoid shooting
+    yourself in the foot):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Marking arguments as static
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: If we really need to JIT-compile a function that has a condition on the value
+    of an input, we can tell JAX to help itself to a less abstract tracer for a particular
+    input by specifying `static_argnums` or `static_argnames`. The cost of this is
+    that the resulting jaxpr and compiled artifact depends on the particular value
+    passed, and so JAX will have to re-compile the function for every new value of
+    the specified static input. It is only a good strategy if the function is guaranteed
+    to see a limited set of static values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To specify such arguments when using `jit` as a decorator, a common pattern
+    is to use python’s [`functools.partial()`](https://docs.python.org/3/library/functools.html#functools.partial
+    "(in Python v3.12)"):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: JIT and caching
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: With the compilation overhead of the first JIT call, understanding how and when
+    `jax.jit()` caches previous compilations is key to using it effectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Suppose we define `f = jax.jit(g)`. When we first invoke `f`, it will get compiled,
+    and the resulting XLA code will get cached. Subsequent calls of `f` will reuse
+    the cached code. This is how `jax.jit` makes up for the up-front cost of compilation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we specify `static_argnums`, then the cached code will be used only for the
+    same values of arguments labelled as static. If any of them change, recompilation
+    occurs. If there are many values, then your program might spend more time compiling
+    than it would have executing ops one-by-one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Avoid calling `jax.jit()` on temporary functions defined inside loops or other
+    Python scopes. For most cases, JAX will be able to use the compiled, cached function
+    in subsequent calls to `jax.jit()`. However, because the cache relies on the hash
+    of the function, it becomes problematic when equivalent functions are redefined.
+    This will cause unnecessary compilation each time in the loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE

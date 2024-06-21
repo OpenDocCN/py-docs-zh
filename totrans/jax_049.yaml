@@ -1,0 +1,723 @@
+- en: Distributed arrays and automatic parallelization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html`](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '![Open in Colab](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/Distributed_arrays_and_automatic_parallelization.ipynb)
+    ![Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/Distributed_arrays_and_automatic_parallelization.ipynb)'
+  prefs: []
+  type: TYPE_IMG
+- en: This tutorial discusses parallelism via `jax.Array`, the unified array object
+    model available in JAX v0.4.1 and newer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '⚠️ WARNING: The notebook requires 8 devices to run.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Intro and a quick example
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: By reading this tutorial notebook, you’ll learn about `jax.Array`, a unified
+    datatype for representing arrays, even with physical storage spanning multiple
+    devices. You’ll also learn about how using `jax.Array`s together with `jax.jit`
+    can provide automatic compiler-based parallelization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before we think step by step, here’s a quick example. First, we’ll create a
+    `jax.Array` sharded across multiple devices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we’ll apply a computation to it and visualize how the result values are
+    stored across multiple devices too:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The evaluation of the `jnp.sin` application was automatically parallelized
+    across the devices on which the input values (and output values) are stored:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now let’s look at each of these pieces in more detail!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Sharding` describes how array values are laid out in memory across devices'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Sharding basics, and the `PositionalSharding` subclass
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To parallelize computation across multiple devices, we first must lay out input
+    data across multiple devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In JAX, `Sharding` objects describe distributed memory layouts. They can be
+    used with `jax.device_put` to produce a value with distributed layout.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, here’s a value with a single-device `Sharding`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we’re using the `jax.debug.visualize_array_sharding` function to show
+    where the value `x` is stored in memory. All of `x` is stored on a single device,
+    so the visualization is pretty boring!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But we can shard `x` across multiple devices by using `jax.device_put` and
+    a `Sharding` object. First, we make a `numpy.ndarray` of `Devices` using `mesh_utils.create_device_mesh`,
+    which takes hardware topology into account for the `Device` order:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we create a `PositionalSharding` and use it with `device_put`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here `sharding` is a `PositionalSharding` which acts like an array with sets
+    of devices as elements:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: The device numbers here are not in numerical order, because the mesh reflects
+    the underlying toroidal topology of the device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By writing `PositionalSharding(ndarray_of_devices)`, we fix the device order
+    and the initial shape. Then we can reshape it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To use `device_put` with a data array `x`, we can reshape the `sharding` into
+    a shape that is *congruent* with `x.shape`, meaning a shape with the same length
+    as `x.shape` and where each element evenly divides the corresponding element of
+    `x.shape`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For example, we can reshape `sharding` to have shape `(4, 2)`, then use it
+    in a `device_put`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here `y` represents the same *value* as `x`, but its shards (i.e. slices) are
+    stored in different devices’ memories.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Different `PositionalSharding` shapes result in different distributed layouts
+    (i.e. shardings) of the result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: In some cases, we don’t just want to store each slice of `x` in a single device’s
+    memory; we might want to *replicate* some slices, meaning storing copies of a
+    slice’s values in multiple devices’ memories.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With `PositionalSharding`, we can express replication by calling the reducer
+    method `replicate`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here the visualization shows that `x` is sharded two ways along its second dimension
+    (and not sharded along the first dimension), and each of those shards is replicated
+    four ways (i.e. stored in four device memories).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `replicate` method is analogous to the familiar NumPy array reduction methods
+    like `.sum()` and `.prod()`. It operates along an axis performing a set union.
+    So if `sharding` has shape `(4, 2)`, then `sharding.replicate(0, keepdims=True)`
+    has shape `(1, 2)`, and `sharding.replicate(1, keepdims=True)` has shape `(4,
+    1)`. Unlike analogous NumPy methods, `keepdims=True` is actually the default,
+    so reduced-over axes aren’t squeezed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`NamedSharding` gives a way to express shardings with names'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So far we’ve worked with `PositionalSharding`, but there are alternative ways
+    to express shardings. In fact, `Sharding` is an interface, and any class that
+    implements that interface can be used with functions like `device_put`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another convenient way to express sharding is with the `NamedSharding`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can define a helper function to make things simpler:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we use `P(''a'', ''b'')` to express that the first and second axes of
+    `x` should be sharded over the device mesh axes `''a''` and `''b''`, respectively.
+    We can easily switch to `P(''b'', ''a'')` to shard the axes of `x` over different
+    devices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, because `P('a', None)` doesn’t mention the `Mesh` axis name `'b'`, we
+    get replication over the axis `'b'`. The `None` here is just acting as a placeholder
+    to line up against the second axis of the value `x`, without expressing sharding
+    over any mesh axis. (As a shorthand, trailing `None`s can be omitted, so that
+    `P('a', None)` means the same thing as `P('a')`. But it doesn’t hurt to be explicit!)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To shard only over the second axis of `x`, we can use a `None` placeholder
+    in the `PartitionSpec`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For a fixed mesh, we can even partition one logical axis of `x` over multiple
+    device mesh axes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using `NamedSharding` makes it easy to define a device mesh once and give its
+    axes names, then just refer to those names in `PartitionSpec`s for each `device_put`
+    as needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Computation follows data sharding and is automatically parallelized
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With sharded input data, the compiler can give us parallel computation. In
+    particular, functions decorated with `jax.jit` can operate over sharded arrays
+    without copying data onto a single device. Instead, computation follows sharding:
+    based on the sharding of the input data, the compiler decides shardings for intermediates
+    and output values, and parallelizes their evaluation, even inserting communication
+    operations as necessary.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the simplest computation is an elementwise one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here for the elementwise operation `jnp.sin` the compiler chose the output sharding
+    to be the same as the input. Moreover, the compiler automatically parallelized
+    the computation, so that each device computed its output shard from its input
+    shard in parallel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In other words, even though we wrote the `jnp.sin` computation as if a single
+    machine were to execute it, the compiler splits up the computation for us and
+    executes it on multiple devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can do the same for more than just elementwise operations too. Consider
+    a matrix multiplication with sharded inputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here the compiler chose the output sharding so that it could maximally parallelize
+    the computation: without needing communication, each device already has the input
+    shards it needs to compute its output shard.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How can we be sure it’s actually running in parallel? We can do a simple timing
+    experiment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Even copying a sharded `Array` produces a result with the sharding of the input:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So computation follows data placement: when we explicitly shard data with `jax.device_put`,
+    and apply functions to that data, the compiler attempts to parallelize the computation
+    and decide the output sharding. This policy for sharded data is a generalization
+    of [JAX’s policy of following explicit device placement](https://jax.readthedocs.io/en/latest/faq.html#controlling-data-and-computation-placement-on-devices).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When explicit shardings disagree, JAX errors
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'But what if two arguments to a computation are explicitly placed on different
+    sets of devices, or with incompatible device orders? In these ambiguous cases,
+    an error is raised:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: We say arrays that have been explicitly placed or sharded with `jax.device_put`
+    are *committed* to their device(s), and so won’t be automatically moved. See the
+    [device placement FAQ](https://jax.readthedocs.io/en/latest/faq.html#controlling-data-and-computation-placement-on-devices)
+    for more information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When arrays are *not* explicitly placed or sharded with `jax.device_put`, they
+    are placed *uncommitted* on the default device. Unlike committed arrays, uncommitted
+    arrays can be moved and resharded automatically: that is, uncommitted arrays can
+    be arguments to a computation even if other arguments are explicitly placed on
+    different devices.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the output of `jnp.zeros`, `jnp.arange`, and `jnp.array` are uncommitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: Constraining shardings of intermediates in `jit`ted code
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'While the compiler will attempt to decide how a function’s intermediate values
+    and outputs should be sharded, we can also give it hints using `jax.lax.with_sharding_constraint`.
+    Using `jax.lax.with_sharding_constraint` is much like `jax.device_put`, except
+    we use it inside staged-out (i.e. `jit`-decorated) functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: By adding `with_sharding_constraint`, we’ve constrained the sharding of the
+    output. In addition to respecting the annotation on a particular intermediate,
+    the compiler will use annotations to decide shardings for other values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s often a good practice to annotate the outputs of computations, for example
+    based on how the values are ultimately consumed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Examples: neural networks'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**⚠️ WARNING: The following is meant to be a simple demonstration of automatic
+    sharding propagation with `jax.Array`, but it may not reflect best practices for
+    real examples.** For instance, real examples may require more use of `with_sharding_constraint`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can use `jax.device_put` and `jax.jit`’s computation-follows-sharding features
+    to parallelize computation in neural networks. Here are some simple examples,
+    based on this basic neural network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 8-way batch data parallelism
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: 4-way batch data parallelism and 2-way model tensor parallelism
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sharp bits
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Generating random numbers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: JAX comes with a functional, deterministic [random number generator](https://jax.readthedocs.io/en/latest/jep/263-prng.html).
+    It underlies the various sampling functions in the [`jax.random` module](https://jax.readthedocs.io/en/latest/jax.random.html),
+    such as `jax.random.uniform`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: JAX’s random numbers are produced by a counter-based PRNG, so in principle,
+    random number generation should be a pure map over counter values. A pure map
+    is a trivially partitionable operation in principle. It should require no cross-device
+    communication, nor any redundant computation across devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, the existing stable RNG implementation is not automatically partitionable,
+    for historical reasons.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider the following example, where a function draws random uniform numbers
+    and adds them to the input, elementwise:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'On a partitioned input, the function `f` produces output that is also partitioned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'But if we inspect the compiled computation for `f` on this partitioned input,
+    we see that it does involve some communication:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'One way to work around this is to configure JAX with the experimental upgrade
+    flag `jax_threefry_partitionable`. With the flag on, the “collective permute”
+    operation is now gone from the compiled computation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is still partitioned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'One caveat to the `jax_threefry_partitionable` option, however, is that *the
+    random values produced may be different than without the flag set*, even though
+    they were generated by the same random key:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: In `jax_threefry_partitionable` mode, the JAX PRNG remains deterministic, but
+    its implementation is new (and under development). The random values generated
+    for a given key will be the same at a given JAX version (or a given commit on
+    the `main` branch), but may vary across releases.
+  prefs: []
+  type: TYPE_NORMAL

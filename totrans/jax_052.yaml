@@ -1,0 +1,586 @@
+- en: Named axes and easy-to-revise parallelism with xmap
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/notebooks/xmap_tutorial.html`](https://jax.readthedocs.io/en/latest/notebooks/xmap_tutorial.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '***UPDATE:*** `xmap` is deprecated and will be removed in a future release.
+    The recommended ways to do multi-device programming in JAX are using: 1) [`jit`
+    (automatic partitioning of computation and `jax.Array` sharding)](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html);
+    and/or 2) [`shard_map` (manual data sharding)](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html).
+    Learn more in [Why don’t `pmap` or `xmap` already solve this?](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html#why-don-t-pmap-or-xmap-already-solve-this)
+    in the [`shard_map` JEP document](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This tutorial introduces JAX `xmap` (`jax.experimental.maps.xmap`) and the named-axis
+    programming model that comes with it. By reading this, you’ll learn how to write
+    error-avoiding, self-documenting functions using named axes, then control how
+    they’re executed on hardware at any scale, from your laptop CPU to the largest
+    TPU supercomputer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We start with a toy neural network example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From positions to names in a toy neural network
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Presentations on JAX often start with a simple neural network prediction function
+    and loss, written in pure NumPy. Here’s a simple network with one hidden layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can then initialize inputs with the right shapes and compute the loss value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here’s how we might write the same function using named axes. Don’t worry if
+    you can’t follow the API details. They are not important now and we will explain
+    everything step-by-step afterwards. This is just to show you what you can do with
+    xmap before you learn them!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code is simpler: we don’t need to worry about axis order when calling
+    functions like `jnp.dot`, or remember which axis position to reduce over with
+    `logsumexp`, `jnp.sum`, or `jnp.mean`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But the real win is that names let us use `xmap` to control our function’s
+    execution. At its simplest, `xmap` will just vectorize over all named axes, so
+    that the function is executed just like its positional-axis counterpart:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'But on a whim we can decide to parallelize over the batch axis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or we might want to perform model parallelism over the hidden axis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or we might want to do both model and batch data parallelism at once:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: With `xmap`, we can revise our parallelism strategy on a dime, without needing
+    to rewrite our neural network function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preliminaries
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: To better illustrate the new programming model, we make extensive use of custom
+    type annotations in this notebook. The annotations have no effect on how the code
+    evaluates and will be unchecked for now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tensors with named axes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The NumPy programming model is based around nd-arrays. Each nd-array can be
+    associated with a two-component type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: the element type (accessible via the `.dtype` attribute)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: shape (a tuple of integers given by `.shape`).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using our little type annotation language, we will write these types as `dtype[shape_tuple]`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, a 5x7x4 array of 32-bit floating point numbers will be denoted
+    as `f32[(5, 7, 4)]`.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Here is a small example that shows how the annotations can demonstrate the
+    way shapes propagate through a simple NumPy program:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The extension we propose is to add another component of array type: a `named_shape`,
+    mapping axis names (arbitrary hashable objects, with strings being a common choice)
+    to integer sizes. Most importantly, because each axis has a name, their order
+    has no meaning. That is, a named shape of `{''a'': 2, ''b'': 5}` is indistinguishable
+    from a named shape of `{''b'': 5, ''a'': 2}`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is not an entirely new idea. Some good examples of where using named axes
+    has been proposed in the past are: [Mesh TensorFlow](https://github.com/tensorflow/mesh),
+    [Tensor Considered Harmful](http://nlp.seas.harvard.edu/NamedTensor) manifesto
+    as well as the [xarray](http://xarray.pydata.org/en/stable/) and [einops](http://einops.rocks/)
+    packages. Keep in mind that many of those are slightly different in that they
+    do assign an order to the named axes, but they are unordered in JAX.'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: From now on we will allow the type annotations to have two components, the first
+    one still being the value’s `.shape`, while the second one will be the `.named_shape`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: While we don’t modify the meaning of `.ndim` (which is always equal to `len(shape)`)
+    and `.size` (equal to the product of `shape`), we do so solely for backward-compatibility
+    reasons. The true rank of an array that has non-empty named axes is `len(shape)
+    + len(named_shape)`. The true number of elements stored in such an array is equal
+    to the product of sizes of all dimensions, both positional and named.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing and eliminating named axes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: But how does one create such arrays, if all top-level JAX operations work in
+    the NumPy model with purely positional axes? While this constraint could be lifted
+    at some point, for the time being the only way to introduce named axes is to use
+    `xmap`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`xmap` can be thought of as an adapter that takes in arrays with positional
+    axes, makes some of them named (as specified by `in_axes`), and calls the function
+    that it wraps. Once the wrapped function returns arrays, all named axes appearing
+    in those are converted back to positional axes (as specified by `out_axes`).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`in_axes` should have a structure that matches the signature of the `xmap`ped
+    function arguments, except with all places where array arguments would be replaced
+    by an *axis mapping*. There are two ways in which axis mappings can be specified:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'as dictionaries mapping positional axes to axis names (e.g. `{0: ''x'', 2:
+    ''y''}`); and'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: as lists of axis names terminated by the ellipsis object (e.g. `['a', 'b', ...]`),
+    indicating that a prefix of positional dimensions are to be mapped to given names.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`out_axes` are similar, except that their structure has to match the return
+    signature of the `xmap`ped function (but again, with all arrays replaced by axes
+    mappings).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For each array argument, all positional axes mentioned in its respective `in_axes`
+    axis mapping are converted to named axes. For each array result, all named axes
+    are inserted in the positions indicated by its respective `out_axes`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: While this might seem like a handful at first, if you’ve seen code that uses
+    `jnp.einsum` you are already familiar with this approach. The `einsum` function
+    interprets an expression such as `nk,km->nm` assigning names (each letter is considered
+    a separate name) to positional axes, performing necessary broadcasts and reductions,
+    and finally putting back the results in positional axes, according to the order
+    given by the right-hand side of the `->` separator. While `einsum` never lets
+    you interact with named axes directly, they do appear naturally in its implementation.
+    `xmap` is a *generalized einsum* because named axes are now first-class and you
+    get to implement the function that can manipulate them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Continuing this analogy, `xmap(my_func, ...)` from the above example is equivalent
+    to `jnp.einsum('bx->xb')`. But of course not every `xmap`ped function will have
+    an equivalent `einsum`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One more similarity with `einsum` is that whenever a name is reused for multiple
+    axes, they do have to have the same size:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Named axis propagation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We now know how named axes are introduced and eliminated, but what are they
+    good for? How do they propagate throughout the program? Let’s explore a few examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Interactions with positional axes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'First rule: named axes never implicitly interact with positional axes. Any
+    function that’s written without named axes in mind can always be invoked with
+    inputs that have named dimensions. The result is the same as if `vmap` was applied
+    on a per-named-axis basis.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Broadcasting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Secondly, named axes are broadcast *by name*, and every existing NumPy (and
+    almost every JAX) operator implicitly broadcasts the named dimensions. Whenever
+    a standard NumPy function is called with arrays with named axes, the NumPy function
+    determines the positional shape of the result array, while the named shape becomes
+    a union of all named shapes of its inputs. Analyze the following example to understand
+    how the axes propagate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To recap, the named shape of the result of an expression such as `i + j` with
+    `i` having a named shape of `{''a'': 2, ''b'': 3}` and `j` of `{''b'': 3, ''c'':
+    5}` is `{''a'': 2, ''b'': 3, ''c'': 5}`. The `''b''` axis is present in both inputs,
+    so no broadcasting is necessary, while `''a''` and `''c''` occur in only one of
+    the two inputs, causing the other one to get broadcast along the axis missing
+    in its named shape.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: No shape errors can occur when operating over named axes, because `xmap` enforces
+    that a single name is associated with a single size inside its body.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the rule for broadcasting named axes might seem like an arbitrary extension
+    of the NumPy model, it is actually consistent with it.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Broadcasting first looks for pairs of dimensions it considers as equivalent
+    in both operands. For all matched pairs, it asserts that both sizes are equal
+    or one of them is 1\. All unpaired dimensions are carried over to the result.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Now, in the positional world the way NumPy broadcasting chooses to form the
+    pairs is by right-aligning the shapes. But our axes are named, so there is a straightforward
+    way of finding equivalent axes: just check their names for equality!'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Reductions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: But named axes are not only good for batching! In fact, our goal is that named
+    axes should be equivalent to positional axes. In particular, every NumPy function
+    that takes in positional axes as arguments should also accept named axes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The paragraph above is aspirational and the set of NumPy functions that do
+    accept named axes is relatively limited. At the moment named axes are only supported
+    in:'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '`jnp.sum`, `jnp.max`, `jnp.min`'
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Reductions are a good example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`einsum`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Similarly to how we have extended reductions with support for named axes, we’ve
+    also made it possible to contract over named axes using `jnp.einsum`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Operands and results still use a convention of one letter per positional axis,
+    but now it is also possible to mention named axes in curly braces. For example,
+    `n{b,k}` implies that a value will have a single positional dimension `n` and
+    named dimensions `b` and `k` (their order doesn’t matter). Following the usual
+    einsum semantics, any named axes that appear in inputs, but do not appear in an
+    output will be contracted (summed after all multiplications are performed).
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is acceptable to omit a named dimension from *all arguments and the result*
+    in which case it will be treated according to the usual broadcasting semantics.
+    However, it is not acceptable to mention a named axis in one argument that has
+    it in its named shape and skip it in another argument that also has it in its
+    named shape. Of course, skipping it in the arguments that don’t have it is required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'NOTE: This invariant is **unchecked** at the moment (it is still work-in-progress).
+    Such axis skipping will result in undefined behavior.'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: At the moment `jnp.einsum` with named axes only supports two inputs and a single
+    result.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The example above is admittedly no clearer than using `jnp.einsum` directly.
+    But contractions over named axes are a crucial component of larger applications
+    such as Transformer models and this is only meant to be an exercise to show you
+    how the names propagate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collectives
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Finally, all collectives that could have been used with `pmap`ped functions
+    also work with named axes. As we’ll show later, `xmap` can be used as a drop-in
+    replacement for `pmap` that makes programming for multi-dimensional hardware meshes
+    much easier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Parallelism support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: While the new programming paradigm can be nice at times, the killer feature
+    of `xmap` is its ability to parallelize code over supercomputer-scale hardware
+    meshes!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Named axes are the secret sauce that makes all this possible, thanks to the
+    carefully tuned rules that describe their propagation. Good support for partitioning
+    in a purely positional programming model is notoriously difficult. Positional
+    axes are usually disposable and it is hard to keep track of the way axis partitioning
+    propagates through the program. As you’ll see below, named axes enable us to define
+    a straightforward correspondence between their names and hardware resources, making
+    it easy to reason about the way different values end up partitioned.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'In all the previous examples, we haven’t said a word about parallelism and
+    for a good reason. By default `xmap` doesn’t perform any parallelization and vectorizes
+    the computation in the same way `vmap` does (i.e. it still executes on a single
+    device). To partition the computation over multiple accelerators we have to introduce
+    one more concept: *resource axes*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The basic idea is that logical axes (the ones that appear in named shapes) assume
+    that we have abundant hardware and memory, but before the program is to be executed,
+    they have to be placed somewhere. The default (`vmap`-like) evaluation style pays
+    a high memory cost on the default JAX device. By mapping logical axes to (one
+    or more) resource axes through the `axis_resources` argument, we can control how
+    `xmap` evaluates the computation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Both `local_matmul` and `distr_matmul` implement matrix multiplication, but
+    `distr_matmul` will additionally partition the `left` and `right` logical axes
+    over the `x` and `y` resource axes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But… where do those resource names come from?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Well, it depends, but one good choice is… a hardware mesh!
+  prefs: []
+  type: TYPE_NORMAL
+- en: For our purposes a mesh is an nd-array of devices with named axes. But, because
+    NumPy doesn’t support named axes (that’s our extension!), the meshes are represented
+    by a pair of an nd-array of JAX device objects (as obtained from `jax.devices()`
+    or `jax.local_devices()`) and a tuple of resource axis names of length matching
+    the rank of the array.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![How real hardware is represented as an abstract mesh](img/1f28a4882e87ec96f5c8629ec0e857ae.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The mesh axis names are exactly the names of resources that named axes can
+    be mapped to. But just creating a mesh definition won’t make the resource names
+    visible to `distr_matmul`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To introduce the resources in a scope, use the `with Mesh` context manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Anyway, the best part of it is that specifying `axis_resources` **never changes
+    program semantics**. You are free to experiment with different ways of partitioning
+    your computation (just change the assignment of resources to named axes!) and
+    even how the physical devices are organized in the mesh (by changing the construction
+    of the NumPy array of devices). None of those things should have any significant
+    influence on the results you get back (up to, for example, floating point inaccuracy),
+    though of course some of them will achieve significantly better performance than
+    the others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`xmap` doesn’t provide any automatic scheduling options at the moment, because
+    the best schedule often has to be somewhat carefully matched to your program.
+    We’re considering adding support for that in the future, but it will take time.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you map a logical axis to a mesh dimension, the size of that logical axis
+    has to be divisible by the mesh dimension size.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Is my data replicated? Or partitioned? Where is it?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Named axes also give us a neat way of reasoning about partitioning and replication.
+    A value is partitioned over a mesh axis if and only if it has a named axis that
+    has been mapped to that mesh axis in its shape. Otherwise, it will be replicated
+    over all slices along that axis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, assume that we’re in an `xmap` that had `axis_resources={''a'':
+    ''x'', ''b'': ''y''}` specified (i.e. we are running the computation over a 2D
+    mesh with `x` and `y` axes with sizes 2 and 3 respectively). Then:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An array of type `f32[(5, 5), {}]` is completely replicated over the whole mesh.
+    All devices store a local copy of the value.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'An array of type `f32[(6,), {''a'': 8}]` is partitioned over mesh axis `x`,
+    because it has `''a''` in its named shape, and `''a''` is mapped to `x`. It is
+    replicated over mesh axis `y`. To put it differently, all devices in a slice of
+    the mesh with the same `x` coordinate will store a local copy of a chunk of this
+    array. But, mesh slices with different `x` coordinates will store different chunks
+    of the data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'An array of type `f32[(), {''a'': 8, ''c'': 7}]` is partitioned just like in
+    the previous case: split over the `x` mesh axis and replicated over the `y` axis.
+    Named dimensions with no resources specified are no different than positional
+    dimensions when considering partitioning, so `''c''` has no influence on it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'An array of type `f32[(), {''a'': 8, ''b'': 12}]` is completely partitioned
+    over the whole mesh. Every device holds a distinct chunk of the data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![An illustration for the above examples](img/afd219d6adaaded3ec4b6b9f97272976.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This also highlights one restriction: `xmap` won’t complain if you specify
+    `axis_resources={''a'': ''x'', ''b'': ''x''}`, but consider how would an array
+    with type `f32[(2, 8), {''a'': 4, ''b'': 12}]` be partitioned. If the size of
+    the `x` mesh axis is 2, then we only have 2 devices, but we have 4 chunks to place
+    (2 along `''a''` and 2 along `''b''`)! Now we can state it in full: **named axes
+    mapped to the same resources can never both appear in the named shape of a single
+    array**. But they can appear in named shapes of two distinct arrays, such as in
+    this program:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: This program is valid, because `jnp.sum` eliminates the axes that cannot co-occur
+    before the values are added.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the final release of `xmap` will ensure that you don’t accidentally end
+    up doing so, the current implementation *doesn’t verify it*. Violating this restriction
+    will result in *undefined behavior*.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Why `axis_resources` and not a more direct mapping to hardware?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: At this point you might wonder why go through the detour of introducing yet
+    another concept of resource axes in the mix. For as long as you’re interested
+    in partitioning your computations over hardware, there is no good reason, but
+    this mental framework is more flexible than that!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, there is one additional resource we all deal with: time! Just
+    like a computation can be partitioned over multiple hardware devices, e.g. to
+    lower its memory usage, the same thing can be achieved with a single accelerator
+    that evaluates a chunk of the computation in multiple steps.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, while hardware meshes are the only source of resource axes in JAX programs
+    at the moment, we are planning to extend the whole system with other sources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Porting positional code to named code
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section we will go over a few more real examples to show how `xmap`
+    can help you implement and distribute various models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**This section is a work in progress**'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL

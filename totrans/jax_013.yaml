@@ -1,0 +1,469 @@
+- en: Working with pytrees
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/working-with-pytrees.html`](https://jax.readthedocs.io/en/latest/working-with-pytrees.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: JAX has built-in support for objects that look like dictionaries (dicts) of
+    arrays, or lists of lists of dicts, or other nested structures — in JAX these
+    are called pytrees. This section will explain how to use them, provide useful
+    code examples, and point out common “gotchas” and patterns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '## What is a pytree?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A pytree is a container-like structure built out of container-like Python objects
+    — “leaf” pytrees and/or more pytrees. A pytree can include lists, tuples, and
+    dicts. A leaf is anything that’s not a pytree, such as an array, but a single
+    leaf is also a pytree.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the context of machine learning (ML), a pytree can contain:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model parameters
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dataset entries
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reinforcement learning agent observations
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When working with datasets, you can often come across pytrees (such as lists
+    of lists of dicts).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below is an example of a simple pytree. In JAX, you can use `jax.tree.leaves()`,
+    to extract the flattened leaves from the trees, as demonstrated here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Any tree-like structure built out of container-like Python objects can be treated
+    as a pytree in JAX. Classes are considered container-like if they are in the pytree
+    registry, which by default includes lists, tuples, and dicts. Any object whose
+    type is *not* in the pytree container registry will be treated as a leaf node
+    in the tree.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The pytree registry can be extended to include user-defined container classes
+    by registering the class with functions that specify how to flatten the tree;
+    see Custom pytree nodes below.  ## Common pytree functions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: JAX provides a number of utilities to operate over pytrees. These can be found
+    in the `jax.tree_util` subpackage; for convenience many of these have aliases
+    in the `jax.tree` module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Common function: `jax.tree.map`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The most commonly used pytree function is `jax.tree.map()`. It works analogously
+    to Python’s native `map`, but transparently operates over entire pytrees.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`jax.tree.map()` also allows mapping a [N-ary](https://en.wikipedia.org/wiki/N-ary)
+    function over multiple arguments. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using multiple arguments with `jax.tree.map()`, the structure of the inputs
+    must exactly match. That is, lists must have the same number of elements, dicts
+    must have the same keys, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Example of `jax.tree.map` with ML model parameters'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This example demonstrates how pytree operations can be useful when training
+    a simple [multi-layer perceptron (MLP)](https://en.wikipedia.org/wiki/Multilayer_perceptron).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Begin with defining the initial model parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Use `jax.tree.map()` to check the shapes of the initial parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, define the functions for training the MLP model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]  ## Custom pytree nodes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section explains how in JAX you can extend the set of Python types that
+    will be considered *internal nodes* in pytrees (pytree nodes) by using `jax.tree_util.register_pytree_node()`
+    with `jax.tree.map()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Why would you need this? In the previous examples, pytrees were shown as lists,
+    tuples, and dicts, with everything else as pytree leaves. This is because if you
+    define your own container class, it will be considered to be a pytree leaf unless
+    you *register* it with JAX. This is also the case even if your container class
+    has trees inside it. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Accordingly, if you try to use a `jax.tree.map()` expecting the leaves to be
+    elements inside the container, you will get an error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: As a solution, JAX allows to extend the set of types to be considered internal
+    pytree nodes through a global registry of types. Additionally, the values of registered
+    types are traversed recursively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, register a new type using `jax.tree_util.register_pytree_node()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you can traverse the special container structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Modern Python comes equipped with helpful tools to make defining containers
+    easier. Some will work with JAX out-of-the-box, but others require more care.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For instance, a Python `NamedTuple` subclass doesn’t need to be registered
+    to be considered a pytree node type:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Notice that the `name` field now appears as a leaf, because all tuple elements
+    are children. This is what happens when you don’t have to register the class the
+    hard way.  ## Pytrees and JAX transformations'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many JAX functions, like `jax.lax.scan()`, operate over pytrees of arrays. In
+    addition, all JAX function transformations can be applied to functions that accept
+    as input and produce as output pytrees of arrays.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some JAX function transformations take optional parameters that specify how
+    certain input or output values should be treated (such as the `in_axes` and `out_axes`
+    arguments to `jax.vmap()`). These parameters can also be pytrees, and their structure
+    must correspond to the pytree structure of the corresponding arguments. In particular,
+    to be able to “match up” leaves in these parameter pytrees with values in the
+    argument pytrees, the parameter pytrees are often constrained to be tree prefixes
+    of the argument pytrees.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, if you pass the following input to `jax.vmap()` (note that the
+    input arguments to a function are considered a tuple):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'then you can use the following `in_axes` pytree to specify that only the `k2`
+    argument is mapped (`axis=0`), and the rest aren’t mapped over (`axis=None`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: The optional parameter pytree structure must match that of the main input pytree.
+    However, the optional parameters can optionally be specified as a “prefix” pytree,
+    meaning that a single leaf value can be applied to an entire sub-pytree.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, if you have the same `jax.vmap()` input as above, but wish to
+    only map over the dictionary argument, you can use:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, if you want every argument to be mapped, you can write a single
+    leaf value that is applied over the entire argument tuple pytree:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: This happens to be the default `in_axes` value for `jax.vmap()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The same logic applies to other optional parameters that refer to specific
+    input or output values of a transformed function, such as `out_axes` in `jax.vmap()`.  ##
+    Explicit key paths'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In a pytree each leaf has a *key path*. A key path for a leaf is a `list` of
+    *keys*, where the length of the list is equal to the depth of the leaf in the
+    pytree . Each *key* is a [hashable object](https://docs.python.org/3/glossary.html#term-hashable)
+    that represents an index into the corresponding pytree node type. The type of
+    the key depends on the pytree node type; for example, the type of keys for `dict`s
+    is different from the type of keys for `tuple`s.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For built-in pytree node types, the set of keys for any pytree node instance
+    is unique. For a pytree comprising nodes with this property, the key path for
+    each leaf is unique.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'JAX has the following `jax.tree_util.*` methods for working with key paths:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`jax.tree_util.tree_flatten_with_path()`: Works similarly to `jax.tree.flatten()`,
+    but returns key paths.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jax.tree_util.tree_map_with_path()`: Works similarly to `jax.tree.map()`,
+    but the function also takes key paths as arguments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jax.tree_util.keystr()`: Given a general key path, returns a reader-friendly
+    string expression.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, one use case is to print debugging information related to a certain
+    leaf value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To express key paths, JAX provides a few default key types for the built-in
+    pytree node types, namely:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`SequenceKey(idx: int)`: For lists and tuples.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`DictKey(key: Hashable)`: For dictionaries.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`GetAttrKey(name: str)`: For `namedtuple`s and preferably custom pytree nodes
+    (more in the next section)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You are free to define your own key types for your custom nodes. They will work
+    with `jax.tree_util.keystr()` as long as their `__str__()` method is also overridden
+    with a reader-friendly expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE26]  ## Common pytree gotchas'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section covers some of the most common problems (“gotchas”) encountered
+    when using JAX pytrees.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mistaking pytree nodes for leaves
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'A common gotcha to look out for is accidentally introducing *tree nodes* instead
+    of *leaves*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: What happened here is that the `shape` of an array is a tuple, which is a pytree
+    node, with its elements as leaves. Thus, in the map, instead of calling `jnp.ones`
+    on e.g. `(2, 3)`, it’s called on `2` and `3`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The solution will depend on the specifics, but there are two broadly applicable
+    options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rewrite the code to avoid the intermediate `jax.tree.map()`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Convert the tuple into a NumPy array (`np.array`) or a JAX NumPy array (`jnp.array`),
+    which makes the entire sequence a leaf.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Handling of `None` by `jax.tree_util`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`jax.tree_util` functions treat `None` as the absence of a pytree node, not
+    as a leaf:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To treat `None` as a leaf, you can use the `is_leaf` argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Custom pytrees and initialization with unexpected values
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Another common gotcha with user-defined pytree objects is that JAX transformations
+    occasionally initialize them with unexpected values, so that any input validation
+    done at initialization may fail. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the first case with `jax.vmap(...)(tree)`, JAX’s internals use arrays of
+    `object()` values to infer the structure of the tree
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the second case with `jax.jacobian(...)(tree)`, the Jacobian of a function
+    mapping a tree to a tree is defined as a tree of trees.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Potential solution 1:**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `__init__` and `__new__` methods of custom pytree classes should generally
+    avoid doing any array conversion or other input validation, or else anticipate
+    and handle these special cases. For example:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Potential solution 2:**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Structure your custom `tree_unflatten` function so that it avoids calling `__init__`.
+    If you choose this route, make sure that your `tree_unflatten` function stays
+    in sync with `__init__` if and when the code is updated. Example:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE39]  ## Common pytree patterns'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section covers some of the most common patterns with JAX pytrees.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transposing pytrees with `jax.tree.map` and `jax.tree.transpose`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To transpose a pytree (turn a list of trees into a tree of lists), JAX has
+    two functions: {func} `jax.tree.map` (more basic) and `jax.tree.transpose()` (more
+    flexible, complex and verbose).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Option 1:** Use `jax.tree.map()`. Here’s an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Option 2:** For more complex transposes, use `jax.tree.transpose()`, which
+    is more verbose, but allows you specify the structure of the inner and outer pytree
+    for more flexibility. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE

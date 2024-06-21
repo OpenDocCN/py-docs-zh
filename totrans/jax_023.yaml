@@ -1,0 +1,228 @@
+- en: The checkify transformation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/debugging/checkify_guide.html`](https://jax.readthedocs.io/en/latest/debugging/checkify_guide.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '**TL;DR** Checkify lets you add `jit`-able runtime error checking (e.g. out
+    of bounds indexing) to your JAX code. Use the `checkify.checkify` transformation
+    together with the assert-like `checkify.check` function to add runtime checks
+    to JAX code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can also use checkify to automatically add common checks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Functionalizing checks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The assert-like check API by itself is not functionally pure: it can raise
+    a Python Exception as a side-effect, just like assert. So it can’t be staged out
+    with `jit`, `pmap`, `pjit`, or `scan`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'But the checkify transformation functionalizes (or discharges) these effects.
+    A checkify-transformed function returns an error *value* as a new output and remains
+    functionally pure. That functionalization means checkify-transformed functions
+    can be composed with staging/transforms however we like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Why does JAX need checkify?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Under some JAX transformations you can express runtime error checks with ordinary
+    Python assertions, for example when only using `jax.grad` and `jax.numpy`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'But ordinary assertions don’t work inside `jit`, `pmap`, `pjit`, or `scan`.
+    In those cases, numeric computations are staged out rather than evaluated eagerly
+    during Python execution, and as a result numeric values aren’t available:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'JAX transformation semantics rely on functional purity, especially when composing
+    multiple transformations, so how can we provide an error mechanism without disrupting
+    all that? Beyond needing a new API, the situation is trickier still: XLA HLO doesn’t
+    support assertions or throwing errors, so even if we had a JAX API which was able
+    to stage out assertions, how would we lower these assertions to XLA?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You could imagine manually adding run-time checks to your function and plumbing
+    out values representing errors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The error is a regular value computed by the function, and the error is raised
+    outside of `f_checked`. `f_checked` is functionally pure, so we know by construction
+    that it’ll already work with `jit`, pmap, pjit, scan, and all of JAX’s transformations.
+    The only problem is that this plumbing can be a pain!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`checkify` does this rewrite for you: that includes plumbing the error value
+    through the function, rewriting checks to boolean operations and merging the result
+    with the tracked error value, and returning the final error value as an output
+    to the checkified function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: We call this functionalizing or discharging the effect introduced by calling
+    check. (In the “manual” example above the error value is just a boolean. checkify’s
+    error values are conceptually similar but also track error messages and expose
+    throw and get methods; see `jax.experimental.checkify`). `checkify.check` also
+    allows you to add run-time values to your error message by providing them as format
+    arguments to the error message.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You could now manually instrument your code with run-time checks, but `checkify`
+    can also automatically add checks for common errors! Consider these error cases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: By default `checkify` only discharges `checkify.check`s, and won’t do anything
+    to catch errors like the above. But if you ask it to, `checkify` will also instrument
+    your code with checks automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The API for selecting which automatic checks to enable is based on Sets. See
+    `jax.experimental.checkify` for more details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`checkify` under JAX transformations.'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As demonstrated in the examples above, a checkified function can be happily
+    jitted. Here’s a few more examples of `checkify` with other JAX transformations.
+    Note that checkified functions are functionally pure, and should trivially compose
+    with all JAX transformations!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`jit`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You can safely add `jax.jit` to a checkified function, or `checkify` a jitted
+    function, both will work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`vmap`/`pmap`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You can `vmap` and `pmap` checkified functions (or `checkify` mapped functions).
+    Mapping a checkified function will give you a mapped error, which can contain
+    different errors for every element of the mapped dimension.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: However, a checkify-of-vmap will produce a single (unmapped) error!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`pjit`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`pjit` of a checkified function *just works*, you only need to specify an additional
+    `out_axis_resources` of `None` for the error value output.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`grad`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Your gradient computation will also be instrumented if you checkify-of-grad:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that there’s no multiply in `f`, but there is a multiply in its gradient
+    computation (and this is where the NaN is generated!). So use checkify-of-grad
+    to add automatic checks to both forward and backward pass operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`checkify.check`s will only be applied to the primal value of your function.
+    If you want to use a `check` on a gradient value, use a `custom_vjp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Strengths and limitations of `jax.experimental.checkify`
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Strengths
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You can use it everywhere (errors are “just values” and behave intuitively under
+    transformations like other values)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Automatic instrumentation: you don’t need to make local modifications to your
+    code. Instead, `checkify` can instrument all of it!'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Limitations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Adding a lot of runtime checks can be expensive (eg. adding a NaN check to every
+    primitive will add a lot of operations to your computation)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Requires threading error values out of functions and manually throwing the error.
+    If the error is not explicitly thrown, you might miss out on errors!
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Throwing an error value will materialize that error value on the host, meaning
+    it’s a blocking operation which defeats JAX’s async run-ahead.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

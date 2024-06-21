@@ -1,0 +1,511 @@
+- en: Custom operations for GPUs with C++ and CUDA
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/Custom_Operation_for_GPUs.html`](https://jax.readthedocs.io/en/latest/Custom_Operation_for_GPUs.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: JAX ships with a large number of built-in operations, but users occasionally
+    run into a situation where they need a new operation that is not supported by
+    JAX.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To accommodate such scenarios, JAX allows users to define custom operations
+    and this tutorial is to explain how we can define one for GPUs and use it in single-GPU
+    and multi-GPU environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This tutorial contains information from [Extending JAX with custom C++ and CUDA
+    code](https://github.com/dfm/extending-jax) and supposes that you are familiar
+    with [JAX primitive](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: RMS normalization
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: For this tutorial, we are going to add the RMS normalization as a custom operation
+    in JAX. Note that the RMS normalization can be expressed with [`jax.numpy`](https://jax.readthedocs.io/en/latest/jax.numpy.html)
+    directly. However, we are using it as an example to show the process of creating
+    a custom operation for GPUs. The CUDA code in `gpu_ops/rms_norm_kernels.cu` for
+    this operation has been borrowed from [Apex](https://github.com/NVIDIA/apex/blob/master/csrc/layer_norm_cuda_kernel.cu)
+    and adapted to eliminate any dependency on PyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: High-level steps
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This tutorial shows how to write both a custom operation and its gradient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In C: You need to follow these steps in C for each new JAX primitive:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Have CUDA kernel(s).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create a C function that dispatches the CUDA kernel that will be called by XLA.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create a descriptor to convey information needed for the computation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The types, the shapes and other attributes.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Bind C functions to Python
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To create the descriptor and to call the primitive during execution.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In Python: You need to follow these steps in Python:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Define a new JAX primitive (instruction/operation)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Write Python functions to build the graph nodes with the primitive.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Define its abstract evaluation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Define its lowering to MLIR.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Optional] Define the gradient.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Optional] Use [custom_partitioning](https://jax.readthedocs.io/en/latest/jax.experimental.custom_partitioning.html)
+    or [shard_map](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html)
+    functions for fast multi-GPU.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: C code
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: See `gpu_ops` code listing for a complete code listing of C++ and CUDA files.
+    `gpu_ops/rms_norm_kernels.cu` defines the following functions, which are declared
+    with the XLA custom function signature. These functions are responsible for launching
+    RMS normalization kernels with the given `buffers` on the specified `stream`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`stream` is the CUDA stream to be used to execute any kernel on the GPU.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`buffers` has all pointers to input buffers followed by all pointers to output
+    buffers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`opaque` is a buffer for any extra information that is being passed to the
+    custom functions and `opaque_len` is the length of `opaque`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For this tutorial, an `RMSNormDescriptor` object will be passed to these functions
+    as `opaque`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, we need to expose these functions as well as `ElementType` and `RMSNormDescriptor`
+    as a Python module, `gpu_ops`, through `pybind11`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Build `gpu_ops` extension module
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We build the `gpu_ops` Python extension module with the aforementioned code.
+    (See `gpu_ops` code listing for a complete code listing of C++ and CUDA files.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Add RMS normalization to JAX as custom call
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`gpu_ops` is just a Python extension module and we need more work to plug it
+    into JAX.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create primitives
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We first create primitives, `_rms_norm_fwd_p` and `_rms_norm_bwd_p`, which the
+    custom functions can be mapped to. We set the `multiple_results` attribute to
+    `True` for these operations, which means that the operation produces multiple
+    outputs as a tuple. When it is set to `False`, the operation produces a single
+    output without a tuple. For more details, see [How JAX primitives work](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Lowering to MLIR custom call
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To map the custom functions to the new primitives, `_rms_norm_fwd_p` and `_rms_norm_bwd_p`,
+    we need to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Register custom functions as custom call targets with `xla_client.register_custom_call_target`,
+    and
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Register lowering functions that lower the primitives to MLIR custom calls with
+    the registered custom call targets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The functions `_rms_norm_fwd_cuda_lowering` and `_rms_norm_bwd_cuda_lowering`
+    below lower the primitives to MLIR custom call operations with the custom targets
+    from `gpu_ops`. These functions are registered with `jax.interpreters.mlir.register_lowering`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that an `RMSNormDescriptor` object is created in the lowering function,
+    and passed to the custom call as `opaque`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s test it
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Test forward function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Abstract evaluation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The test above failed with `NotImplementedError: Abstract evaluation for ''rms_norm_fwd''
+    not implemented`. Why did the test fail? What does it mean?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As part of the execution, JAX performs abstract evaluation. As JAX has no knowledge
+    about the new primitives, it doesn’t know how to compute the output shapes and
+    output data types, thus can’t evaluate these operations abstractly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We need to provide a function for abstract evaluation of each primitive. These
+    abstract evaluation functions compute the shape and the data type of the outputs,
+    but don’t compute actual values for the operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These functions are passed to `.def_abstract_eval` method to be registered with
+    the corresponding primitives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [How JAX primitives work](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html#abstract-evaluation-rules)
+    for more information on abstract evaluation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s test it again
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Test the forward function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Test the backward function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now let’s test the backward operation using `jax.grad` and `jtu.check_grads`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Differentiation rule
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The backward operation failed with the error `NotImplementedError: Differentiation
+    rule for ''rms_norm_fwd'' not implemented`. It means that, although we have defined
+    `rms_norm_fwd` and `rms_norm_bwd`, JAX doesn’t know the relationship between them.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can teach JAX that `rms_norm_bwd` is the backward operation for `rms_norm_fwd`,
+    using `jax.custom_vjp` and its convention. As the first step, we need to refine
+    the definition of `rms_norm_fwd` and `rms_norm_bwd`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`rms_norm_fwd` now returns an extra output `(invvar, x, weight)` for the residual
+    data and `rms_norm_bwd` takes `eps`, `res`, and `g` as the parameters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the relationship between `rms_norm_fwd` and `rms_norm_bwd` is established
+    through `jax.custom_vjp`, JAX will ensure that the residual data from `rms_norm_fwd`
+    is passed to `rms_norm_bwd` as `res` for backward operation. For non-differentiable
+    parameters such as `eps`, JAX ensures that they are passed to the backward operation
+    before the residual data. That’s why `eps` precedes `res` in the parameter list
+    of `rms_norm_bwd`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that `rms_norm_fwd` returns the residual data, which is not needed for simple
+    RMS normalization operation, we define a wrapper around it, `rms_norm`. It simply
+    calls `rms_norm_fwd` and returns only `output`. Note that `rms_norm` is annotated
+    with `@partial(jax.custom_vjp, nondiff_argnums=(2,))` and we are passing `rms_norm_fwd`
+    and `rms_norm_bwd` to `rms_norm.defvjp`. It teaches JAX that, when `rms_norm`
+    is differentiated, `rms_norm_fwd` is to be used for forward operation, and `rms_norm_bwd`
+    is to be used for backward operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See [Custom derivative rules for JAX-transformable Python functions](https://jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html#use-jax-custom-vjp-to-define-custom-reverse-mode-only-rules)
+    for more information on `jax.custom_vjp`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the refinement we have made, the backward operation test works with a
+    modification: `loss` now calls `rms_norm` instead of `rms_norm_fwd`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s test it on multiple devices
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We are using `jax.experimental.pjit.pjit` for parallel execution on multiple
+    devices, and we produce reference values with sequential execution on a single
+    device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Test the forward function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s first test the forward operation on multiple devices. We are creating
+    a simple 1D mesh and sharding `x` on all devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: The values have been computed correctly for forward operation, however, the
+    generated HLO modules show an `all-gather` operation to replicate `x` on all devices,
+    incurring large communication overhead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As XLA does not have enough knowledge about the custom functions to shard input
+    tensors, it decides to replicate them to produce correct values before making
+    the custom call.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To avoid this duplication, we can:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[custom_partitioning](https://jax.readthedocs.io/en/latest/jax.experimental.custom_partitioning.html):
+    to make it behave like all native JAX operations (but more complicated)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use manual sharding
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[shard_map](https://jax.readthedocs.io/en/latest/jep/14273-shard-map.html):
+    the new replacement for xmap'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[xmap](https://jax.readthedocs.io/en/latest/notebooks/xmap_tutorial.html) (now
+    deprecated)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This example demonstrates the use of custom_partitioning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Shard the forward function with custom_partitioning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We first create a helper function to help with all the JAX/XLA callback registration
+    required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: We define 2 JAX primitives, one inner primitive that map to the real kernel
+    we want to warp in JAX. And an outer primitive that will be used with the custom_partitioning
+    registration and for the gradient. (And if you implement the interface to support
+    vmat, it will also be on the outer primitive).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'JAX custom_partitioning implementation are callbacks from XLA to Python during
+    XLA sharding logic. XLA sharding goes in two phases: a sharding propagation phase
+    and a partition phase. The propagation phase is when XLA plan the sharding to
+    be created. It is the partition phase that create the sharded graph. For XLA to
+    be able to shard our custom operations, it needs us to define 2 extra functions:
+    infer_sharding_from_operands() and partition(). They are used in the first and
+    second phase respectively.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The infer_sharding_from_operands() function must do what its name say: infer
+    the output sharding from the input sharding.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The partition() function will do a few things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: tell which input sharding will be expected. XLA will reshad if needed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tell the final version of the output sharding.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: give a function that will create the new instruction from the sharded inputs.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'See the code comments for more explanation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next we define the primitive for the backward pass of RMSNorm
+  prefs: []
+  type: TYPE_NORMAL
+- en: Shard the backward function with custom_partitioning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Plumbing to establish the forward and backward primitives with a custom_vjp
+    rule as before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With that we have completely defined our custom RMS norm primitive with custom_partitioning.
+    To check for correctness we define the following loss functions: ref_loss is the
+    reference value to compare against, while custom_p_loss uses our new primitive
+    that implements custom_partitioning.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Check for correctness
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now there are no all-gathers in the HLO, sharding is respected and only gradients
+    are accumulated via an all-reduce.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s put it together
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The complete definition of the primitives using custom_partitioning can be
+    found in Custom_Operation_for_GPUs.py and the corresponding C++ code the defines
+    python bindings in addition to the kernel implementations can be found below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`gpu_ops` code listing'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: gpu_ops/kernel_helpers.h
+  prefs: []
+  type: TYPE_NORMAL
+- en: gpu_ops/kernels.h
+  prefs: []
+  type: TYPE_NORMAL
+- en: gpu_ops/pybind11_kernel_helpers.h
+  prefs: []
+  type: TYPE_NORMAL
+- en: gpu_ops/gpu_ops.cpp
+  prefs: []
+  type: TYPE_NORMAL
+- en: gpu_ops/rms_norm_kernels.cu
+  prefs: []
+  type: TYPE_NORMAL

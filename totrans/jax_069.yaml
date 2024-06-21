@@ -1,0 +1,380 @@
+- en: Omnistaging
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/jep/4410-omnistaging.html`](https://jax.readthedocs.io/en/latest/jep/4410-omnistaging.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '*mattjj@* *Sept 25 2020*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is more of an upgrade guide than a design doc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Contents
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: tl;dr
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What is “omnistaging” and why is it useful?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What issues can arise when omnistaging is switched on?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using `jax.numpy` for shape computations
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Side-effects
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Small numerical differences based on XLA optimizations
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dependence on JAX internal APIs that changed
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Triggering XLA compile time bugs
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tl;dr
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: What’s going on?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A change to JAX’s tracing infrastructure called “omnistaging” ([google/jax#3370](https://github.com/google/jax/pull/3370))
+    was switched on in jax==0.2.0\. This change improves memory performance, trace
+    execution time, and simplifies jax internals, but may cause some existing code
+    to break. Breakage is usually a result of buggy code, so long-term it’s best to
+    fix the bugs, but omnistaging can also be disabled as a temporary workaround.
+    And we’re happy to help you with fixes!
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do I know if omnistaging broke my code?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The easiest way to tell if omnistaging is responsible is to disable omnistaging
+    and see if the issues go away. See the What issues can arise when omnistaging
+    is switched on? section below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How can I disable omnistaging for now?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '*Note: this applies to JAX versions 0.2.0 through 0.2.11; omnistaging cannot
+    be disabled in JAX versions 0.2.12 and higher*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is temporarily possible to disable omnistaging by
+  prefs: []
+  type: TYPE_NORMAL
+- en: setting the shell environment variable `JAX_OMNISTAGING` to something falsey;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: setting the boolean flag `jax_omnistaging` to something falsey if your code
+    parses flags with absl;
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'using this statement near the top of your main file:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: How do I fix bugs exposed by omnistaging?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: By far the most common issue with omnistaging is using `jax.numpy` to compute
+    shape values or other trace-time constants. See the code block below for a quick
+    example, and for full details along with other issues see the section What issues
+    can arise when omnistaging is switched on?.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Instead of this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'do this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Instead of thinking of `jax.numpy` as a drop-in replacement for `numpy`, it’s
+    now better to think of using `jax.numpy` operations only when you want to perform
+    a computation on an accelerator (like your GPU).
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is “omnistaging” and why is it useful?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Omnistaging is the name for a JAX core upgrade aimed at staging out more computation
+    from op-by-op Python to XLA, and avoiding any “trace-time constant folding” in
+    `jit`, `pmap`, and control flow primitives. As a result, omnistaging improves
+    JAX’s memory performance (sometimes dramatically) both by reducing fragmentation
+    during tracing and by producing fewer large compile-time constants for XLA. It
+    can also improve tracing performance by eliminating op-by-op execution at tracing
+    time. Further, omnistaging simplifies JAX core internals, fixing many outstanding
+    bugs and setting the stage for important upcoming features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The name “omnistaging” means staging out everything possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Toy example
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: JAX transformations like `jit` and `pmap` stage out computations to XLA. That
+    is, we apply them to functions comprising multiple primitive operations so that
+    rather being executed one at a time from Python the operations are all part of
+    one end-to-end optimized XLA computation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But exactly which operations get staged out? Until omnistaging, JAX staged
+    out computation based on data dependence only. Here’s an example function, followed
+    by the XLA HLO program it stages out *before* the omnistaging change:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that the `add` operation is not staged out. Instead, we only see a multiply.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s the HLO generated from this function *after* the omnistaging change:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Slightly less toy example
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Here’s a less toy example which can arise in practice when we want to create
+    boolean masks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*Before* omnistaging:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `select` operation is staged out, but the operations for constructing the
+    constant `mask` are not. Rather than being staged out, the operations that construct
+    `mask` are executed op-by-op at Python tracing time, and XLA only sees a compile
+    time constant `constant.1` representing the value of `mask`. That’s unfortunate,
+    because if we had staged out the operations for constructing `mask`, XLA could
+    have fused them into the `select` and avoided materializing the result at all.
+    As a result we end up wasting memory with a potentially-large constant, wasting
+    time dispatching multiple un-fused op-by-op XLA computations, and potentially
+    even fragmenting memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: (The `broadcast` that corresponds to the construction of the zeros array for
+    `jnp.zeros_like(x)` is staged out because JAX is lazy about very simple expressions
+    from [google/jax#1668](https://github.com/google/jax/pull/1668). After omnistaging,
+    we can remove that lazy sublanguage and simplify JAX internals.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reason the creation of `mask` is not staged out is that, before omnistaging,
+    `jit` operates based on data dependence. That is, `jit` stages out only those
+    operations in a function that have a data dependence on an argument. Control flow
+    primitives and `pmap` behave similarly. In the case of `select_tril`, the operations
+    to construct the constant `mask` do not have a data dependence on the argument
+    x, so they are not staged out; only the `lax.select` call has a data dependence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With omnistaging all `jax.numpy` calls in the dynamic context of a `jit`-transformed
+    function are staged out to XLA. That is, after omnistaging the computation XLA
+    sees for `select_tril` is
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: What issues can arise when omnistaging is switched on?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As a consequence of staging out all `jax.numpy` operations from Python to XLA
+    when in the dynamic context of a `jit` or `pmap`, some code that worked previously
+    can start raising loud errors. As explained below, these behaviors were already
+    buggy before omnistaging, but omnistaging makes them into hard errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `jax.numpy` for shape computations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Example
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Error message
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Explanation
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: With omnistaging, we can’t use `jax.numpy` for shape computations as in the
+    use of `jnp.prod` above because in the dynamic context of a jit function those
+    operations will be staged out of Python as values to be computed at execution
+    time, yet we need them to be compile-time (and hence trace-time) constants.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before omnistaging, this code wouldn’t have raised an error, but it was a common
+    performance bug: the `jnp.prod` computation would have been executed on the device
+    at tracing time, meaning extra compilation, transfers, synchronization, allocations,
+    and potentially memory fragmentation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Solution
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The solution is simply to use the original `numpy` for shape calculations like
+    these. Not only do we avoid the error, but also we keep the computations on the
+    host (and with lower overheads).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This issue was common enough in code that we tried to make the error message
+    especially good. In addition to the stack trace showing where an abstract tracer
+    value caused a problem (the `jnp.reshape` line in the full stack trace, on omni.py:10),
+    we also explain why this value became a tracer in the first place by pointing
+    to the upstream primitive operation that caused it to become an abstract tracer
+    (the `reduce_prod` from `jnp.prod` on omni.py:9) and to which `jit`-decorated
+    function the tracer belongs (`ex1` on omni.py:6).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Side-effects
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Example
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That last call has repeated randomness but no hard error, because we aren’t
+    re-executing the Python. But if we look at `key`, we see an escaped tracer *when
+    omnistaging is on*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Before omnistaging, the `random.split` call would not be staged out and so we
+    wouldn’t get an escaped tracer. The code would still be buggy in that the jitted
+    function wouldn’t be reproducing the semantics of the original function (because
+    of the repeated use of the same PRNG key), ultimately due to the side effect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With omnistaging on, if we touch `key` again, we’ll get an escaped tracer error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Error message
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Explanation
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The second largest category of omnistaging issues we found had to do with side-effecting
+    code. This code already voided the JAX warranty by transforming effectful functions,
+    but due to pre-omnistaging “trace-time constant folding” behavior, some side effecting
+    functions could nevertheless behave correctly. Omnistaging catches more of these
+    errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Solution
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The solution is to identify JAX-transformed functions that rely on side effects,
+    and to rewrite them not to be effectful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Small numerical differences based on XLA optimizations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Because with omnistaging more computations are being staged out to XLA, rather
+    than some being executed at trace time, that can have the effect of reordering
+    floating point operations. As a result, we’ve seen numerical behaviors change
+    in a way that causes tests with overly tight tolerances to fail when omnistaging
+    is switched on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dependence on JAX internal APIs that changed
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Omnistaging involved some big revisions to JAX’s core code, including removing
+    or changing internal functions. Any code that relies on such internal JAX APIs
+    can break when omnistaging is switched on, either with build errors (from pytype)
+    or runtime errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Triggering XLA compile time bugs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Because omnistaging involves staging out more code to XLA, we’ve seen it trigger
+    pre-existing XLA compile-time bugs on some backends. The best thing to do with
+    these is to report them so we can work with the XLA teams on fixes.
+  prefs: []
+  type: TYPE_NORMAL

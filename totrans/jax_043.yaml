@@ -1,0 +1,486 @@
+- en: Pipelining and BlockSpecs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/pallas/tpu/pipelining.html`](https://jax.readthedocs.io/en/latest/pallas/tpu/pipelining.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: In this guide we’ll cover how memory spaces in TPU work and how to write pipelines
+    in Pallas that overlap memory I/O with compute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: TPU and its memory spaces
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A TPU and its TensorCore consist of memory spaces (where arrays can reside),
+    registers (which temporarily store scalar and array values) and compute units
+    (that do computation with values in registers). Below is a diagram of a TPU in
+    which `x` and `y` are arrays that live in high-bandwidth memory (HBM):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![TPU Memory Space Cartoon.png](img/71731074ed22862fb4718d0bfd933742.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Let’s talk about the components of this diagram in more detail:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Memory spaces**: A TPU has high-bandwidth memory (HBM) which is what we often
+    think of as “device memory”. There is also vector memory (VMEM), a cache meant
+    for storing vector and array values, and scalar memory (SMEM), a cache designed
+    to store scalar values.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Registers**: A TensorCore has two main types of registers: vector registers
+    (VREGs) store array values, and scalar registers (SREGs) store scalar values.
+    Values can be loaded into memory from their respective caches (VMEM for VREGs
+    and SMEM for SREGs).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Compute units**: A TensorCore has a scalar unit, vector unit (VPU) and matrix
+    unit (MXU) that can do numerical computation. Compute units operate on values
+    that live in SREGs and VREGs and output values into those registers as well.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In order to do a vectorized computation on our values `x` and `y` that live
+    in HBM, we need to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Copy the values `x` and `y` into VMEM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Load the values from VMEM into VREGs.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Execute the computation using the VPU or MXU, storing the output in VREGs.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Store the values in the output VREGs into VMEM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Copy the output values in VMEM back to HBM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Let’s implement a Pallas function that does just that!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We’ve written two functions: `add_matrices_kernel` and `add_matrices`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`add_matrices_kernel` operates using `Ref`s that live in VMEM. Loading from
+    a VMEM `Ref` produces a value that lives in VREGs. Values in VREGs behave like
+    `jax.Array`s in that we can use `jnp` and `jax.lax` operations on them to produce
+    new values that live in VREGs. When we produce the values we’d like to return,
+    we store them in the output VMEM `Ref`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `add_matrices` function acts on `jax.Array`s and returns a `jax.Array`.
+    Inside it, we pass `x` and `y` into `pallas_call`. `pallas_call` is responsible
+    for copying `x` and `y` into VMEM and for allocating the VMEM buffers that the
+    kernel operates on (including allocating `z_vmem_ref`, the output VMEM buffer).
+    After the kernel function is finished running, `pallas_call` will also copy the
+    value in `z_vmem_ref` to HBM, resulting in an output `jax.Array`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Constraints of using VMEM/SMEM
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Pallas exposes access to lower level memory spaces like VMEM and SMEM but writing
+    kernels utilizing them adds some considerations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Memory capacity. VMEM and SMEM are *small*! VMEM on v4 TPUs is only 16MiB and
+    SMEM ranges in the tens to hundreds of KiB. If our arrays are too big, we won’t
+    even be able to fit them into VMEM at all. For reference, a `f32[2048, 2048]`
+    array is 16MiB, so our above kernel won’t scale beyond moderately sized arrays.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Memory bandwidth. Copying to/from HBM and VMEM takes a long time, at least compared
+    to most compute instructions. The `add_matrices` function above will likely spend
+    more time copying between HBM and VMEM than actually performing the addition itself.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: With these two constraints in mind, we’ll have to rethink our strategy for getting
+    performance out of our TPUs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Primer: Pipelining'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Pipelining our computation offers a way of dealing with both the memory capacity
+    and bandwidth constraints in one fell swoop. What do we mean by pipelining?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The goal is: *in parallel* copy to/from HBM and VMEM *while* utilizing our
+    compute units. Naively this is difficult because in our program above we copy
+    *all* of `x` and `y` before we start doing any compute with them, creating a dependence
+    between the copy and the compute.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, if we can chunk up our computation into several subcomputations (e.g.
+    when we add two matrices, we can express that as addition of “blocks” of the original
+    matrices together), we can now overlap the copies of one of those subcomputations
+    with the compute of the other. Let’s walk through a simple example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s say we split our arrays `x` and `y` into `x1, x2` and `y1, y2` (for example,
+    split along the leading axis, resulting in two `(256, 512)` arrays for each input.
+    We can now execute the following pipelined computation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Copy `x1` and `y1` into VMEM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Start copying `x2` and `y2` into VMEM
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Load `x1, y1` from VMEM into VREGs.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Execute the `z1 = x1 + y1` using the compute units.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Store `z1` into VMEM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Start copying `z1` from VMEM back into HBM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Wait until `x2, y2` have been copied into VMEM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Load `x2, y2` from VMEM into VREGs.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Execute the `z2 = x2 + y2` using the compute units.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Store `z2` into VMEM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Wait until `z1` is copied into HBM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Start copying `z2` from VMEM back into HBM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Wait until `z2` is copied into HBM.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Any time we are doing compute here, we are asynchronously copying something.
+    This means that some of the time spent copying is not wasted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The two most important numbers for determining how efficient a pipelined computation
+    are a) how many floating point operations (FLOPs) we need to execute and b) how
+    many bytes we need to copy to execute that computation. The ratio of these two
+    (FLOPs/memory usage) is called the *arithmetic intensity* of an operation and
+    determines if our pipeline will be compute bound or memory bound.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pipelining in Pallas
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: How do we implement a pipeline like the one above in Pallas? It seems like a
+    complex sequence of asynchronous data operations and executing kernels that would
+    be a pain to implement manually. Fear not! Pallas offers an API for expressing
+    pipelines without too much boilerplate, namely through `grid`s and `BlockSpec`s.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`grid`, a.k.a. kernels in a loop'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'See how in the above pipelined example, we are executing the same logic multiple
+    times: steps 3-5 and 8-10 both execute the same operations, only on different
+    inputs. The generalized version of this is a loop in which the same kernel is
+    executed multiple times. `pallas_call` provides an option to do exactly that.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The number of iterations in the loop is specified via the `grid` argument to
+    `pallas_call`. Conceptually:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: maps to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Grids can be generalized to be multi-dimensional, corresponding to nested loops.
+    For example,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: is equivalent to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: This generalizes to any tuple of integers (a length `d` grid will correspond
+    to `d` nested loops).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`BlockSpec`, a.k.a. how to chunk up inputs'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The next piece of information we need to provide Pallas in order to automatically
+    pipeline our computation is information on how to chunk it up. Specifically, we
+    need to provide a mapping between *the iteration of the loop* to *which block
+    of our inputs and outputs to be operated on*. A `BlockSpec` is exactly these two
+    pieces of information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First we pick a `block_shape` for our inputs. In the pipelining example above,
+    we had `(512, 512)`-shaped arrays and split them along the leading dimension into
+    two `(256, 512)`-shaped arrays. In this pipeline, our `block_shape` would be `(256,
+    512)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We then provide an `index_map` function that maps the iteration space to the
+    blocks. Specifically, in the aforementioned pipeline, on the 1st iteration we’d
+    like to select `x1` and on the second iteration we’d like to use `x2`. This can
+    be expressed with the following `index_map`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We’d then construct the `BlockSpec`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `BlockSpec`s for `y` and `z` will be the same as the one for `x`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Putting it together
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We provide these arguments to `pallas_call` via `grid`, `in_specs` and `out_specs`
+    (`in_specs` corresponds to the tuple of positional arguments, and `out_specs`
+    corresponds to the output).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: We’ve only added a little bit of code to our original function to add automatic
+    pipelining but the `BlockSpec`s and `grid` do a lot of heavy lifting!
+  prefs: []
+  type: TYPE_NORMAL
+- en: How does it work? Well, the `BlockSpec`s provide enough information to start
+    *prefetching* blocks of our input from HBM into VMEM. For example, if we are starting
+    iteration `i` of our `grid`, we can pass `i + 1` into the `index_map` functions
+    to obtain the blocks needed for the next iteration. We can then start an asynchronous
+    copy for those blocks. Similarly for outputs, we can wait for the outputs of the
+    previous iteration to be copied before starting the copy for the current iteration’s
+    outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parameterizing a pipeline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: It’s common to parameterize the block shapes in our kernel. Block sizes are
+    perhaps the most important parameter to tune when optimizing the performance of
+    Pallas kernels! They give us control over the pipeline (for example, picking smaller
+    blocks adds more iterations to our pipelined loop where each iteration has less
+    work to do).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Furthermore, we could also carve up the inputs and outputs along the 2nd dimension
+    (we are only splitting along the first right now). Let’s write a more general
+    kernel that handles both of these features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Handling reductions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: How would you implement something like `jnp.sum` using `pallas_call`? Specifically,
+    we’d like to pipeline across the reduction dimension.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Take the example of reducing a `(8, 512, 512)`-shaped array to a `(512, 512)`-shaped
+    one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: To do this using `pallas_call`, we could use a grid of size `(8,)` and in each
+    iteration `i` load `x[i]` into VMEM. Then we could add `x[i]` to an output VMEM
+    buffer. Let’s implement this naively first.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Notice how we’ve set up the `BlockSpec`s: we’re loading the entirety of the
+    `(512, 512)` dimension into VMEM (no pipelining there) but selecting the `i`-th
+    dimension of `x` each iteration in the `index_map`. We are using a `None` for
+    that dimension in the block shape, which indicates that we are selecting a singleton
+    dimension from `x` that we would like to squeeze away in the kernel. Therefore,
+    `x_ref` is `(512, 512)`-shaped in VMEM as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`out_spec` uses `lambda i: (0, 0)` as its `index_map`, indicating that `o_ref`
+    is unchanged over the course of the pipeline. This means that we can update its
+    value each iteration by reading from and writing to it. Or can it? Actually there
+    is one catch: *`o_ref` is initially garbage*, meaning we’ll be accumulating into
+    garbage. This will result in the overall function outputting the incorrect value!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore, **whenever we do a reduction in a kernel, we need to make sure to
+    initialize the `Ref` that is storing the reduced value**. We can accomplish this
+    by conditionally writing a value to `out_ref` when we’re on iteration 0\. We can
+    do this with the helper function `pl.when`, a convenience wrapper around `jax.lax.cond`,
+    and `pl.program_id`, which queries which iteration in a grid axis we are in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: This `sum` function now outputs the correct values!
+  prefs: []
+  type: TYPE_NORMAL
+- en: One last thing to note about reductions in Pallas are that **they must be done
+    in the minormost (rightmost) dimensions of our grid** (our grid is 1-dimensional
+    in the above example so we are reducing over its minormost dimension). This is
+    because the pipeline that Pallas generates using the `BlockSpec`s, `grid` and
+    kernel function *does not read outputs back from HBM*. Once you’ve written an
+    output value back to HBM you cannot revisit it. Therefore, you cannot do a reduction
+    across a grid dimension that has any revisiting and therefore all reductions need
+    to happen in the rightmost dimensions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: TPUs in Megacore configuration
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Some TPU chips have two TensorCores but appear as one device to JAX users. This
+    is called “megacore”. The separate TensorCores have their own separate VMEM, VREGs,
+    SMEM, SREGs and compute units but *share HBM*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![TPU Memory Space Cartoon (Megacore).png](img/33da0e860f68c4eaac876c87d0586a95.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Conceptually, TPUs in Megacore behave like very simple GPUs, i.e. they have
+    only two threads. How do we modify our kernels to utilize both TensorCores simultaneously?
+  prefs: []
+  type: TYPE_NORMAL
+- en: The basic idea is that if we have embarrassingly parallel dimensions in our
+    computation, we can split up those dimensions across the TensorCores. We can indicate
+    which dimensions are parallelizable by providing an annotation to `pallas_call`
+    called `dimension_semantics`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`dimension_semantics` should be a tuple of same length as `grid` where each
+    entry is either `"parallel"` or `"arbitrary"`. `"parallel"` indicates to Pallas
+    that the iterations of the for loop corresponding to that dimension can be executed
+    independently without affecting the correctness of the program. `"arbitrary"`
+    indicates to Pallas that there can be no assumptions made about this grid dimension
+    and it therefore cannot be parallelized.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By specifying `dimension_semantics`, we now execute the kernel simultaneously
+    on each TensorCore. Pallas will handle splitting up the grid automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that Megacore is only currently available on TPU `v4` and TPU `v5p`. Supplying
+    `dimension_semantics` annotations is a no-op on other platforms, but *not* specifying
+    it will result in only one TensorCore being used (even if there are more than
+    one available).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Conclusion
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this guide we covered how to express TPU pipelines using `pallas_call`, `grid`
+    and `BlockSpec`s. We covered how to express nested loops via a multi-dimensional
+    grid and how to handle reductions by initialize our accumulators at the beginning
+    of the reduction. We also learned how to handle Megacore by adding annotations
+    to the kernel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Exercises left to the reader:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Try implementing a `sum` kernel that pipelines the other dimensions as well
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Add megacore support to the `add` kernel and the `sum` kernel as well.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

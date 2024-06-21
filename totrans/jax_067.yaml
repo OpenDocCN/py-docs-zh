@@ -1,0 +1,511 @@
+- en: Custom JVP/VJP rules for JAX-transformable functions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/jep/2026-custom-derivatives.html`](https://jax.readthedocs.io/en/latest/jep/2026-custom-derivatives.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This is a design document, explaining some of the thinking behind the design
+    and implementation of `jax.custom_jvp` and `jax.custom_vjp`. For user-oriented
+    documentation, see [the tutorial notebook](https://jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two ways to define differentiation rules in JAX:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: using `jax.custom_jvp` and `jax.custom_vjp` to define custom differentiation
+    rules for Python functions that are already JAX-transformable; and
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: defining new `core.Primitive` instances along with all their transformation
+    rules, for example to call into functions from other systems like solvers, simulators,
+    or general numerical computing systems.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'This document is about #1 only.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Contents
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Goals
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Non-goals
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Main problem descriptions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The vmap-removes-custom-jvp semantics problem
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Python flexibility problem
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Solution idea
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation notes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Goals
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We want **users** to customize the forward- and/or reverse-mode differentiation
+    behavior of their code. This customization
+  prefs: []
+  type: TYPE_NORMAL
+- en: should have a *clear and consistent semantics* in how it works and how it composes
+    with other JAX transformations; and
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: should be *flexible* in supporting use cases and workflows like in [Autograd](https://github.com/hips/autograd)
+    and [PyTorch](https://pytorch.org), including cases involving differentiation
+    of Python control flow and workflows for NaN debugging.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: As **JAX developers** we want to write library functions, like [`logit`](https://github.com/google/jax/blob/01039299304b148b405ef9b9fa5e82bbb527471d/jax/scipy/special.py#L83)
+    and [`expit`](https://github.com/google/jax/blob/01039299304b148b405ef9b9fa5e82bbb527471d/jax/scipy/special.py#L91),
+    that are defined in terms of other primitives, but for the purposes of differentiation
+    have primitive-like behavior in the sense that we want to define custom differentiation
+    rules for them, which may be more numerically stable or performant. In particular,
+    we don’t want to have to specify `vmap` or `jit` rules for functions like `logit`
+    and `expit`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a stretch goal, we’d like to make JAX a great environment for power users
+    looking to add custom differentiation rules for higher-order functions like `fixed_point`,
+    `odeint`, etc.; this design doc won’t solve that problem, but we want to be confident
+    we’re not going to preclude good solutions to that problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: That is, our primary goals are
+  prefs: []
+  type: TYPE_NORMAL
+- en: solve the vmap-removes-custom-jvp semantics problem ([#1249](https://github.com/google/jax/issues/1249)),
+    and
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: allow Python in custom VJPs, e.g. to debug NaNs ([#1275](https://github.com/google/jax/issues/1275)).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Secondary goals are 3\. clean up and simplify user experience (symbolic zeros,
+    kwargs, etc) 4\. make progress towards a world where users can easily add `fixed_point`,
+    `odeint`, `root`, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overall, we want to close [#116](https://github.com/google/jax/issues/116),
+    [#1097](https://github.com/google/jax/issues/1097), [#1249](https://github.com/google/jax/issues/1249),
+    [#1275](https://github.com/google/jax/issues/1275), [#1366](https://github.com/google/jax/issues/1366),
+    [#1723](https://github.com/google/jax/issues/1723), [#1670](https://github.com/google/jax/issues/1670),
+    [#1875](https://github.com/google/jax/issues/1875), [#1938](https://github.com/google/jax/issues/1938),
+    and replace the custom_transforms machinery (from [#636](https://github.com/google/jax/issues/636),
+    [#818](https://github.com/google/jax/issues/818), and others).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Non-goals
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here are objectives we’re **not** aiming to achieve:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `custom_transforms` machinery aimed to provide a transformation-generic
+    mechanism for customizing behavior, in principle (though never really used in
+    practice) allowing users to customize rules for any transformation while somehow
+    inheriting the “transparent” behavior for others. **We are instead only going
+    to solve the customization problem for differentiation (JVP and VJP, separately).**
+    Differentiation is the only case actually requested, and by specializing to differentiation
+    we can reduce complexity and improve flexibility. To control all rules one can
+    just write a primitive.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**We’re not going to prioritize mathematical aesthetics** over flexibility
+    and clarity on the user side, and simplicity on the implementation side. In particular,
+    while the custom VJP signature `a -> (b, CT b --o CT a)` is mathematically pleasing,
+    if it’s hard to implement in a Python mechanism because of the closure in the
+    return type, we’re fine doing something that handles residuals more explicitly.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Serialization support**, of the form where the staged-out serialized program
+    representation can be loaded and further JAX-transformed as opposed to just evaluated,
+    is currently out of scope for these custom JVP/VJP transformation rules. Serialization
+    may be useful not only for researchers who want to save some representation of
+    their computation (and transform it after loading it), but also for future considerations
+    like having jaxpr transformations implemented outside Python, or having jaxprs
+    as an MLIR dialect. By defining this as a non-goal for the purpose of this design,
+    we have fewer constraints on where we can stash Python callables.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Main problem descriptions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The vmap-removes-custom-jvp semantics problem
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The vmap-removes-custom-jvp semantics problem is that vmap does not compose
+    properly with differentiation of functions with `custom_transforms` rules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The last grad-of-vmap line has an unexpected result! In general, applying `vmap`,
+    or really any non-differentiation transformation, has the effect of removing the
+    custom differentiation rule. (Applying `jvp` causes a failure when a custom VJP
+    rule is defined.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: The problem exists because transformations are like rewrites, and the `vmap`
+    transformation effectively rewrites the function to no longer call the newly-introduced
+    primitive for which there is a custom rule (and hence `grad` then doesn’t produce
+    the custom rule’s result). In more detail, the `custom_transforms` machinery sets
+    things up so that evaluating `f(x)` applies the function
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: where `f_primitive` is a new primitive (introduced for every `custom_transforms`
+    function and in fact for every call of the function) to which the custom VJP rule
+    is associated. When we evaluate `grad(f)(x)`, the differentiation machinery encounters
+    `f_primitive` and processes it with the custom rule.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, because `f_primitive` is *transparent* to `vmap`, in the sense that
+    `vmap` operates on (effectively by inlining) the definition of `f_primitive`,
+    the function `vmap(f)` is effectively
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: In words, `vmap` rewrites the function in terms of its underlying primitives
+    and their transformation rules, removing `f_primitive` entirely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More generally, **because `vmap(f)` has semantics defined in terms of calls
+    to f, it is semantically inconsistent to remove the custom derivative rule**.
+    That is, since we define
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: we must have
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: yet this property is not observed when `f` has a custom derivative rule defined,
+    as the custom derivative rule is used in the right-hand version but not the left-hand
+    one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This issue isn’t specific to `vmap`; it applies to all transformations for which
+    the semantics of transforming a function `f` are defined in terms of calls to
+    the function `f`, rather than rewriting it into another function. The `mask` transformation
+    also falls into this class. Differentiation transforms and the hypothetical all-unary-functions-become-cosine
+    transform are not in this class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: (The interaction between additional custom rules, like custom `vmap` rules,
+    is likely to get even more complex, suggesting the problem framing of `custom_transforms`
+    is too broad.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Python flexibility problem
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In JAX, as in [Autograd](https://github.com/hips/autograd) and [PyTorch](https://pytorch.org)
+    but not TF1, differentiation of a Python function is performed while the function
+    is being executed and traced. This behavior delights users for a few reasons.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**First and most importantly, it enables pdb-based workflows, e.g. for inspecting
+    numerics or catching NaNs.** That is, users can employ the standard Python debugger
+    and other Python-native tools to debug their code, even being able to inspect
+    runtime values to understand numerical behavior on examples and to catch fundamentally
+    runtime errors like NaNs. In fact, just while working on the PR corresponding
+    to this design, especially on the `odeint` primitive, I used runtime value inspection
+    to debug issues many times, increasing my confidence that this is a key user workflow
+    in Python. One especially handy trick, which I’ve used in both JAX and Autograd
+    many times, is the ability to insert a debugger breakpoint in a custom VJP rule
+    to enter a debugger at a specific point in the backward pass.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Second, it allows differentiation of Python native control flow.** We’re
+    not sure how often this is used in practice in finalized software artifacts, but
+    when users first poke around JAX or Autograd they’re often impressed by this freedom.
+    There’s a reason we include it at the top of our JAX and Autograd READMEs, slide
+    decks, and demos. Ceding this capability would be a step backward from Autograd.
+    We want JAX to have the best automatic differentiation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, the `custom_transforms` machinery does not provide this Python-support
+    flexibility. That is, because it’s implemented in terms of up-front jaxpr formation
+    from the Python code for both the user function and custom differentiation rules,
+    code like this leads to an abstract value tracing error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Solution idea
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The main idea is that **[dougalm@](https://github.com/dougalm) already solved
+    these problems with `core.call`**. That is, we can frame the task of specifying
+    a custom JVP rule for a user function in terms of a new Python-level call primitive
+    (not to be added to the jaxpr language; see below). This new call primitive has
+    a user Python function associated with it just like `core.call`, but additionally
+    has a second Python callable representing the JVP rule. Let’s refer to this new
+    call primitive as `custom_jvp_call`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Transformations like `vmap` interact with `custom_jvp_call` as with `core.call`:
+    they effectively pass right through it and are applied to the underlying Python
+    callables. Schematically, writing in terms of curried versions of the primitives
+    for convenience, analogously to how `vmap` interacts with `core.call` by applying
+    to the function to be called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'for the new primitive `custom_jvp_call` we simply apply `vmap` to the two functions
+    it entails:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: This behavior means we’ve solved the vmap-removes-custom-jvp semantics problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `jvp` transformation interacts as one might expect: it just calls `f_jvp`,'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Because `custom_jvp_call` acts like `core.call` (and not like `xla.xla_call`)
+    in that it doesn’t raise the abstraction level of its inputs (because it’s not
+    delaying anything or staging anything out), it means we’ve solved the Python flexibility
+    problem: there are no constraints on the user Python function (above the usual
+    functional programming constraints required by `jvp` or `vjp`).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What about evaluation and compilation? These are two ways to “exit” the JAX
+    system, in the sense that no additional transformations can be applied after these
+    steps. As a result, their rules are trivial:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: In words, if a JVP rule hasn’t already rewritten `custom_jvp_call(f, f_jvp)`
+    into `f_jvp`, when we get to the point of evaluation with `eval` or staging out
+    to XLA with `jit`, differentiation is never going to be applied, so we just ignore
+    `f_jvp` and behave just like `core.call`. However, due to the wrinkle discussed
+    next, the partial eval rule for `custom_jvp_call` must be a bit more complex,
+    since partial evaluation isn’t just used to stage out to XLA with `jit`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The only remaining wrinkle has to do with “initial-style” jaxpr-forming primitives,
+    like `lax.scan`, and their transformation rules. These represent a different kind
+    of “staging out to a jaxpr” than that for compilation because we can perform additional
+    transformations on the staged-out jaxpr. That is, when `lax.scan` forms a jaxpr,
+    it does not exit the transformation system, since when we apply a jvp or vmap
+    to a `lax.scan` we need to apply it to the function represented by the jaxpr.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another way to state the wrinkle is that initial-style primitives like `lax.scan`
+    rely on the ability to round-trip to a jaxpr and back to a Python callable while
+    preserving semantics. That must mean preserving custom differentiation rule semantics
+    too.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The solution is to use a bit of dynamic scoping: when we’re staging out to
+    a jaxpr for an initial-style primitive, like those in lax_control_flow.py, we
+    set a bit on the global trace state. When that bit is set, instead of using the
+    final-style `custom_jvp_call` primitive, we use an initial-style `custom_jvp_call_jaxpr`
+    primitive, and trace the functions `f` and `f_jvp` to jaxprs up-front to make
+    initial-style processing easier. The `custom_jvp_call_jaxpr` primitive is otherwise
+    similar to the final-style version.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '(Footnote: while morally we form jaxprs for both `f` and `f_jvp` before binding
+    `custom_jvp_call_jaxpr`, we need to delay the formation of the jaxpr of `f_jvp`
+    because it may call the custom-JVP function and thus eager processing would lead
+    to an infinite recursion. We delay that jaxpr formation in a thunk.)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we gave up on the Python flexibility problem, we could get away with only
+    having `custom_jvp_call_jaxpr` and not having the separate Python-level primitive
+    `custom_jvp_call`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The custom JVP for an `a -> b` function is specified with an `(a, Ta) -> (b,
+    T b)` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '(Interesting autodiff aside: for the rule to apply to higher-order differentiation,
+    one must call `f` in the body of `f_jvp`; that precludes some kinds of work sharing
+    between the internals of `f` and the tangent calculation.)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The custom VJP for an `a -> b` function is specified with an `a -> (b, c)`
+    forward pass function paired with a `(c, CT b) -> CT` a backward pass function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The signature `a -> (b, CT b --o CT a)` is more aesthetically pleasing, but
+    supporting it would make the implementation more complex and might require compromising
+    expressibility desiderata. The basic reason that Python callables are opaque (unless
+    we trace them to a jaxpr eagerly, which places expressiveness constraints), and
+    in this case we may be returning a callable with `vmap` tracers inside its closure
+    that we need to know about during the forward pass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We could add convenience wrappers, for example to define the JVP rule for a
+    single argument at a time (like we do internally for primitives). But because
+    this proposal is complicated enough as it is, I decided against convenience layers;
+    let’s keep things minimal for now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are some other bells and whistles to the API:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inputs and output types `a`, `b`, and `c` can be arbitrary pytrees of jaxtypes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing arguments by name (keyword arguments) is supported when they can be
+    resolved to positions using the `inspect` module. This is a bit of an experiment
+    with Python 3’s improved ability to programmatically inspect argument signatures.
+    I believe it is sound but not complete, which is a fine place to be. (See also
+    [#2069](https://github.com/google/jax/issues/2069).)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Arguments can be marked non-differentiable using `nondiff_argnums`, and as with
+    `jit`’s `static_argnums` these arguments don’t have to be JAX types. We need to
+    set a convention for how these arguments are passed to the rules. For a primal
+    function with type signature `(d, a) -> b` where `d` represents the non-differentiable
+    type, the JVP rule’s signature is `(a, T a, d) -> T b` and the VJP rule’s reverse
+    component signature is `(d, c, CT b) -> CT a`. That is, the non-differentiable
+    arguments are passed in order after `primals` and `tangents` for a custom JVP
+    rule, and passed in order preceding the residuals in a custom VJP rule’s reverse
+    function.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation notes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Updated `jax.experimental.odeint`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Since `odeint` is a pretty complex user of a custom VJP rule, in addition to
+    just updating it to work at all, I wanted to revise it to be a canonical user
+    of the new custom VJP API as a way to test that the API was a good one.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Along the way I made other improvements to the `odeint` implementation:'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: remove raveling/unraveling boilerplate
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: make use of `lax.scan` to remove the index-update logic
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: speed up by 20+% on the simple pendulum benchmark
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Added a custom bind method on each transform for the custom derivative call
+    primitives, `custom_jvp_call` and `custom_vjp_call`. It’s like `core.call_bind`,
+    except we don’t process env traces: those are just errors.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Added `custom_lin` primitive, which gets staged out into linear jaxprs to be
+    transposed when using a custom VJP rule.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Because our reverse-mode autodiff is decomposed into linearization, partial
+    evaluation, and transposition, our custom VJP rules are processed in two separate
+    steps: one during linearization and one during transposition.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The linearization step, i.e. the JVP rule for `custom_vjp_call`, applies `custom_lin`
+    to the tangent values; `custom_lin` carries with it the user’s custom backward-pass
+    function, and as a primitive it only has a transpose rule.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This mechanism is described more in [#636](https://github.com/google/jax/issues/636).
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To prevent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

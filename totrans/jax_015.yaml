@@ -1,0 +1,198 @@
+- en: Stateful Computations
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/stateful-computations.html`](https://jax.readthedocs.io/en/latest/stateful-computations.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'JAX transformations like `jit()`, `vmap()`, `grad()`, require the functions
+    they wrap to be pure: that is, functions whose outputs depend *solely* on the
+    inputs, and which have no side effects such as updating of global state. You can
+    find a discussion of this in [JAX sharp bits: Pure functions](https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#pure-functions).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This constraint can pose some challenges in the context of machine learning,
+    where state may exist in many forms. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model parameters,
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: optimizer state, and
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: stateful layers, such as [BatchNorm](https://en.wikipedia.org/wiki/Batch_normalization).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This section offers some advice of how to properly handle state in a JAX program.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A simple example: Counter'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s start by looking at a simple stateful program: a counter.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The counter’s `n` attribute maintains the counter’s *state* between successive
+    calls of `count`. It is modified as a side effect of calling `count`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s say we want to count fast, so we JIT-compile the `count` method. (In this
+    example, this wouldn’t actually help speed anyway, for many reasons, but treat
+    this as a toy model of JIT-compiling the update of model parameters, where `jit()`
+    makes an enormous difference).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Oh no! Our counter isn’t working. This is because the line
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'in `count` involves a side effect: it modifies the input counter in-place,
+    and so this function is not supported by `jit`. Such side effects are executed
+    only once when the function is first traced, and subsequent calls will not repeat
+    the side effect. So, how do we fix it?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The solution: explicit state'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Part of the problem with our counter was that the returned value didn’t depend
+    on the arguments, meaning a constant was “baked into” the compiled output. But
+    it shouldn’t be a constant – it should depend on the state. Well, then why don’t
+    we make the state into an argument?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this new version of `Counter`, we moved `n` to be an argument of `count`,
+    and added another return value that represents the new, updated, state. To use
+    this counter, we now need to keep track of the state explicitly. But in return,
+    we can now safely `jax.jit` this counter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: A general strategy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We can apply the same process to any stateful method to convert it into a stateless
+    one. We took a class of the form
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: and turned it into a class of the form
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is a common [functional programming](https://en.wikipedia.org/wiki/Functional_programming)
+    pattern, and, essentially, is the way that state is handled in all JAX programs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that the need for a class becomes less clear once we have rewritten it
+    this way. We could just keep `stateless_method`, since the class is no longer
+    doing any work. This is because, like the strategy we just applied, object-oriented
+    programming (OOP) is a way to help programmers understand program state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In our case, the `CounterV2` class is nothing more than a namespace bringing
+    all the functions that use `CounterState` into one location. Exercise for the
+    reader: do you think it makes sense to keep it as a class?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Incidentally, you’ve already seen an example of this strategy in the JAX pseudo-randomness
+    API, `jax.random`, shown in the :ref:`pseudorandom-numbers` section. Unlike Numpy,
+    which manages random state using implicitly updated stateful classes, JAX requires
+    the programmer to work directly with the random generator state – the PRNG key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Simple worked example: Linear Regression'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s apply this strategy to a simple machine learning model: linear regression
+    via gradient descent.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we only deal with one kind of state: the model parameters. But generally,
+    you’ll see many kinds of state being threaded in and out of JAX functions, like
+    optimizer state, layer statistics for batchnorm, and others.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The function to look at carefully is `update`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that we manually pipe the params in and out of the update function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![_images/9d9c2471be1e4c9b8597cfff1433de0fe7ad2ef5b99cc6897ee153d7533d6521.png](img/5b4aeccf88cb97ddf4bb473ef4ec2d12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Taking it further
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The strategy described above is how any JAX program must handle state when using
+    transformations like `jit`, `vmap`, `grad`, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Handling parameters manually seems fine if you’re dealing with two parameters,
+    but what if it’s a neural net with dozens of layers? You might already be getting
+    worried about two things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Are we supposed to initialize them all manually, essentially repeating what
+    we already write in the forward pass definition?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Are we supposed to pipe all these things around manually?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The details can be tricky to handle, but there are examples of libraries that
+    take care of this for you. See [JAX Neural Network Libraries](https://github.com/google/jax#neural-network-libraries)
+    for some examples.
+  prefs: []
+  type: TYPE_NORMAL

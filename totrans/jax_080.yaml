@@ -1,0 +1,152 @@
+- en: Investigating a regression
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/investigating_a_regression.html`](https://jax.readthedocs.io/en/latest/investigating_a_regression.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: So you updated JAX and you hit a speed regression? You have a little bit of
+    time and are ready to investigate this? Let’s first make a JAX issue. But if you
+    can pinpoint the commit that triggered the regression, it will really help us.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This document explains how we identified the commit that caused a [15% performance
+    regression](https://github.com/google/jax/issues/17686).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Steps
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This can be done easily if the reproducer is quick enough. This is a brute force
+    method and not a bisection, but if the reproducer is quick enough, it works well.
+    This makes sure that you always test XLA and JAX commits that are compatible.
+    It also limits XLA recompilation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is a suggested investigation strategy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can do a brute force test of nightly containers between the 2 releases.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Hourly recompilation while keeping XLA and JAX in sync.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Final verification: maybe a manual check of a few commits (or a git bisect).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Nightly investigation.
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This can be done by using [JAX-Toolbox nightly containers](https://github.com/NVIDIA/JAX-Toolbox).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some days, bugs prevent the container from being built, or there are temporary
+    regressions. Just discard those days.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: So you should end up with a specific day or a few days where the regression
+    happens.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To automate this, you need 2 python scripts:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'test_runner.sh: will start the containers and the test.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'test.sh: will install missing dependencies and run the test'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Here are real example scripts used for the issue: https://github.com/google/jax/issues/17686'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'test_runner.sh:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'test.sh:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then you can grep each output to see when the regression happens: `grep MLUPS
+    OUT*`. Here are the results we got:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: This found that 8-24 was good, but 8-26 was bad. On 8-25 there was another issue
+    that prevented from getting results. So we need to investigate hourly between
+    8-24 and 8-26\. There was a smaller slowdown earlier, lets ignore it for this
+    example. It would be only another hourly investigation between those dates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hourly investigation.
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This does a checkout of JAX and XLA at each hour between the 2 dates, rebuilds
+    everything and runs the test. The scripts are structured differently. We start
+    the working container and keep it. Then inside it, we only trigger incremental
+    XLA builds except for the first build. So it is much faster after the first iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'test_runner2.sh:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'test2.sh:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, you can execute the grep command on the new output files to see which hours
+    the issue appeared between.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Final verification
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: With this, you need to check the JAX and XLA history between those hours. Maybe
+    there are a few commits to test. You can use git bisect if you want to be fancy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Can this be improved?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Yes! If it was a crash regression, being able to do a bisect would be useful.
+    But it would be more complicated. If someone want to contribute such instructions,
+    please submit a PR ;)
+  prefs: []
+  type: TYPE_NORMAL
+- en: For speed regressions, a bisect can hide some information. We wouldn’t see as
+    easily that there were two regressions here.
+  prefs: []
+  type: TYPE_NORMAL

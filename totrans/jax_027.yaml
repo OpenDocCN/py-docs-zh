@@ -1,0 +1,424 @@
+- en: Understanding Jaxprs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/jaxpr.html`](https://jax.readthedocs.io/en/latest/jaxpr.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Updated: May 3, 2020 (for commit f1a46fe).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Conceptually, one can think of JAX transformations as first trace-specializing
+    the Python function to be transformed into a small and well-behaved intermediate
+    form that is then interpreted with transformation-specific interpretation rules.
+    One of the reasons JAX can pack so much power into such a small software package
+    is that it starts with a familiar and flexible programming interface (Python with
+    NumPy) and it uses the actual Python interpreter to do most of the heavy lifting
+    to distill the essence of the computation into a simple statically-typed expression
+    language with limited higher-order features. That language is the jaxpr language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Not all Python programs can be processed this way, but it turns out that many
+    scientific computing and machine learning programs can.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we proceed, it is important to point out that not all JAX transformations
+    literally materialize a jaxpr as described above; some, e.g., differentiation
+    or batching, will apply transformations incrementally during tracing. Nevertheless,
+    if one wants to understand how JAX works internally, or to make use of the result
+    of JAX tracing, it is useful to understand jaxprs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A jaxpr instance represents a function with one or more typed parameters (input
+    variables) and one or more typed results. The results depend only on the input
+    variables; there are no free variables captured from enclosing scopes. The inputs
+    and outputs have types, which in JAX are represented as abstract values. There
+    are two related representations in the code for jaxprs, `jax.core.Jaxpr` and `jax.core.ClosedJaxpr`.
+    A `jax.core.ClosedJaxpr` represents a partially-applied `jax.core.Jaxpr`, and
+    is what you obtain when you use `jax.make_jaxpr()` to inspect jaxprs. It has the
+    following fields:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`jaxpr` is a `jax.core.Jaxpr` representing the actual computation content of
+    the function (described below).'
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`consts` is a list of constants.'
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The most interesting part of the ClosedJaxpr is the actual execution content,
+    represented as a `jax.core.Jaxpr` as printed using the following grammar:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'where:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The parameters of the jaxpr are shown as two lists of variables separated by
+    `;`. The first set of variables are the ones that have been introduced to stand
+    for constants that have been hoisted out. These are called the `constvars`, and
+    in a `jax.core.ClosedJaxpr` the `consts` field holds corresponding values. The
+    second list of variables, called `invars`, correspond to the inputs of the traced
+    Python function.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Eqn*` is a list of equations, defining intermediate variables referring to
+    intermediate expressions. Each equation defines one or more variables as the result
+    of applying a primitive on some atomic expressions. Each equation uses only input
+    variables and intermediate variables defined by previous equations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Expr+`: is a list of output atomic expressions (literals or variables) for
+    the jaxpr.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Equations are printed as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'where:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Var+` are one or more intermediate variables to be defined as the output of
+    a primitive invocation (some primitives can return multiple values).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Expr+` are one or more atomic expressions, each either a variable or a literal
+    constant. A special variable `unitvar` or literal `unit`, printed as `*`, represents
+    a value that is not needed in the rest of the computation and has been elided.
+    That is, units are just placeholders.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Param*` are zero or more named parameters to the primitive, printed in square
+    brackets. Each parameter is shown as `Name = Value`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Most jaxpr primitives are first-order (they take just one or more `Expr` as
+    arguments):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The jaxpr primitives are documented in the `jax.lax` module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, here is the jaxpr produced for the function `func1` below
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here there are no constvars, `a` and `b` are the input variables and they correspond
+    respectively to `first` and `second` function parameters. The scalar literal `3.0`
+    is kept inline. The `reduce_sum` primitive has named parameter `axes`, in addition
+    to the operand `e`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that even though execution of a program that calls into JAX builds a jaxpr,
+    Python-level control-flow and Python-level functions execute normally. This means
+    that just because a Python program contains functions and control-flow, the resulting
+    jaxpr does not have to contain control-flow or higher-order features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, when tracing the function `func3` JAX will inline the call to `inner`
+    and the conditional `if second.shape[0] > 4`, and will produce the same jaxpr
+    as before
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Handling PyTrees
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In jaxpr there are no tuple types; instead primitives take multiple inputs and
+    produce multiple outputs. When processing a function that has structured inputs
+    or outputs, JAX will flatten those and in jaxpr they will appear as lists of inputs
+    and outputs. For more details, please see the documentation for PyTrees (Pytrees).
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, the following code produces an identical jaxpr to what we saw before
+    (with two input vars, one for each element of the input tuple)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Constant Vars
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Some values in jaxprs are constants, in that their value does not depend on
+    the jaxpr’s arguments. When these values are scalars they are represented directly
+    in the jaxpr equations; non-scalar array constants are instead hoisted out to
+    the top-level jaxpr, where they correspond to constant variables (“constvars”).
+    These constvars differ from the other jaxpr parameters (“invars”) only as a bookkeeping
+    convention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Higher-order primitives
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: jaxpr includes several higher-order primitives. They are more complicated because
+    they include sub-jaxprs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Conditionals
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'JAX traces through normal Python conditionals. To capture a conditional expression
+    for dynamic execution, one must use the `jax.lax.switch()` and `jax.lax.cond()`
+    constructors, which have the signatures:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Both of these will bind a primitive called `cond` internally. The `cond` primitive
+    in jaxprs reflects the more general signature of `lax.switch()`: it takes an integer
+    denoting the index of the branch to execute (clamped into valid indexing range).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The cond primitive has a number of parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: branches are jaxprs that correspond to the branch functionals. In this example,
+    those functionals each take one input variable, corresponding to `x`.
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: linear is a tuple of booleans that is used internally by the auto-differentiation
+    machinery to encode which of the input parameters are used linearly in the conditional.
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The above instance of the cond primitive takes two operands. The first one (`d`)
+    is the branch index, then `b` is the operand (`arg`) to be passed to whichever
+    jaxpr in `branches` is selected by the branch index.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another example, using `lax.cond()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this case, the boolean predicate is converted to an integer index (0 or 1),
+    and `branches` are jaxprs that correspond to the false and true branch functionals,
+    in that order. Again, each functional takes one input variable, corresponding
+    to `xfalse` and `xtrue` respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following example shows a more complicated situation when the input to the
+    branch functionals is a tuple, and the false branch functional contains a constant
+    `jnp.ones(1)` that is hoisted as a constvar
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: While
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Just like for conditionals, Python loops are inlined during tracing. If you
+    want to capture a loop for dynamic execution, you must use one of several special
+    operations, `jax.lax.while_loop()` (a primitive) and `jax.lax.fori_loop()` (a
+    helper that generates a while_loop primitive):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the above signature, “C” stands for the type of the loop “carry” value. For
+    example, here is an example fori loop
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The while primitive takes 5 arguments: `c a 0 b d`, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 0 constants for `cond_jaxpr` (since `cond_nconsts` is 0)
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 2 constants for `body_jaxpr` (`c`, and `a`)
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 3 parameters for the initial value of carry
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Scan
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'JAX supports a special form of loop over the elements of an array (with statically
+    known shape). The fact that there are a fixed number of iterations makes this
+    form of looping easily reverse-differentiable. Such loops are constructed with
+    the `jax.lax.scan()` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is written in terms of a [Haskell Type Signature](https://wiki.haskell.org/Type_signature):
+    `C` is the type of the scan carry, `A` is the element type of the input array(s),
+    and `B` is the element type of the output array(s).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the example consider the function `func11` below
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `linear` parameter describes for each of the input variables whether they
+    are guaranteed to be used linearly in the body. Once the scan goes through linearization,
+    more arguments will be linear.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The scan primitive takes 4 arguments: `b 0.0 a c`, of which:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: one is the free variable for the body
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: one is the initial value of the carry
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The next 2 are the arrays over which the scan operates.
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: XLA_call
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The call primitive arises from JIT compilation, and it encapsulates a sub-jaxpr
+    along with parameters that specify the backend and the device on which the computation
+    should run. For example
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: XLA_pmap
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you use the `jax.pmap()` transformation, the function to be mapped is captured
+    using the `xla_pmap` primitive. Consider this example
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `xla_pmap` primitive specifies the name of the axis (parameter `axis_name`)
+    and the body of the function to be mapped as the `call_jaxpr` parameter. The value
+    of this parameter is a Jaxpr with 2 input variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The parameter `in_axes` specifies which of the input variables should be mapped
+    and which should be broadcast. In our example, the value of `extra` is broadcast
+    and the value of `arr` is mapped.
+  prefs: []
+  type: TYPE_NORMAL

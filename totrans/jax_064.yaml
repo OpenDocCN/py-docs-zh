@@ -1,0 +1,1230 @@
+- en: 'Autodidax: JAX core from scratch'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/autodidax.html`](https://jax.readthedocs.io/en/latest/autodidax.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Ever want to learn how JAX works, but the implementation seemed impenetrable?
+    Well, you’re in luck! By reading this tutorial, you’ll learn every big idea in
+    JAX’s core system. You’ll even get clued into our weird jargon!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**This is a work-in-progress draft.** There are some important ingredients
+    missing, still to come in parts 5 and 6 (and more?). There are also some simplifications
+    here that we haven’t yet applied to the main system, but we will.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Part 1: Transformations as interpreters: standard evaluation, `jvp`, and `vmap`'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We want to transform functions that look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Think of functions like `sin` and the arithmetic operations underlying the infix
+    operators (`mul`, `add`, and `neg`) as primitive operations, meaning atomic units
+    of processing rather than compositions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: “Transform” means “interpret differently.” Instead of standard interpretation
+    where we apply primitive operations to numerical inputs to produce numerical outputs,
+    we want to override primitive application and let different values flow through
+    our program. For example, we might want to replace the application of every primitive
+    with an application of [its JVP rule](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html),
+    and let primal-tangent pairs flow through our program. Moreover, we want to be
+    able to compose multiple transformations, leading to stacks of interpreters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: JAX core machinery
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We can implement stacks of interpreters and even have them all discharge on
+    the fly as we execute the Python function to be transformed. To start, let’s define
+    these primitives so that we can intercept their application:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: We’ll set up array data types and infix operator methods in a moment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A `Primitive` is just an object with a name, to which we attach our interpretation
+    rules (one for each transformation). The `bind` function is our interception point:
+    it’ll figure out which transformation rule to apply, based on how the arguments
+    are boxed in tracers and what interpreters are active.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The functions that user code calls, like `add` and `sin`, are just wrappers
+    around calls to `bind`. These wrappers let us control how arguments are passed
+    to `bind`, and in particular we follow a handy internal convention: when we call
+    `bind`, we pass values representing array data as positional arguments, and we
+    pass metadata like the `axis` argument to `sum_p` via keyword. This calling convention
+    simplifies some core logic (since e.g. instances of the `Tracer` class to be defined
+    below can only occur in positional arguments to `bind`). The wrappers can also
+    provide docstrings!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We represent active interpreters as a stack. The stack is just a simple `list`,
+    and each element is a container with an integer level (corresponding to the element’s
+    height in the stack), an interpreter type (which we’ll call a `trace_type`), and
+    an optional field for any global data the interpreter needs. We call each element
+    a `MainTrace`, though maybe “Interpreter” would be more descriptive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: When we’re about to apply a transformation, we’ll push another interpreter onto
+    the stack using `new_main`. Then, as we apply primitives in the function, we can
+    think of the `bind` first being interpreted by the trace at the top of the stack
+    (i.e. with the highest level). If that first interpreter itself binds other primitives
+    in its interpretation rule for the primitive, like how the JVP rule of `sin_p`
+    might bind `cos_p` and `mul_p`, then those `bind` calls will be handled by the
+    interpreter at the next level down.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What goes at the bottom of the interpreter stack? At the bottom, we know all
+    the transformation interpreters are finished, and we just want to do standard
+    evaluation. So at the bottom we’ll put an evaluation interpreter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s sketch out the interface for interpreters, which is based on the `Trace`
+    and `Tracer` base classes. A `Tracer` represents a boxed-up value, perhaps carrying
+    some extra context data used by the interpreter. A `Trace` handles boxing up values
+    into `Tracers` and also handles primitive application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first two methods are about boxing up values in `Tracer`s, which are the
+    objects that flow through the Python programs we transform. The last method is
+    the callback we’ll use to interpret primitive application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `Trace` itself doesn’t contain any data, other than a reference to its corresponding
+    `MainTrace` instance. In fact, multiple instances of a `Trace` might be created
+    and discarded during an application of a transformation, whereas only a single
+    `MainTrace` instance is created per application of a transformation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As for `Tracer`s themselves, each one carries an abstract value (and forwards
+    infix operators to it), and the rest is up to the transformation. (The relationship
+    between `Tracer`s and `AbstractValue`s is that there’s one `Tracer` per transformation,
+    and at least one `AbstractValue` per base type, like arrays.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that we actually have two `AbstractValue`s for arrays, representing different
+    levels of abstraction. A `ShapedArray` represents the set of all possible arrays
+    with a given shape and dtype. A `ConcreteArray` represents a singleton set consisting
+    of a single array value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we’ve set up the interpreter stack, the Trace/Tracer API for interpreters,
+    and abstract values, we can come back to implement `bind`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The main action is that we call `find_top_trace` to figure out which interpreter
+    should handle this primitive application. We then call that top trace’s `process_primitive`
+    so that the trace can apply its interpretation rule. The calls to `full_raise`
+    just ensure that the inputs are boxed in the top trace’s `Tracer` instances, and
+    the call to `full_lower` is an optional optimization so that we unbox values out
+    of `Tracer`s as much as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: In words, ignoring the `dynamic_trace` step until Part 3, `find_top_trace` returns
+    the highest-level interpreter associated with the `Tracer`s on its inputs, and
+    otherwise returns the interpreter at the bottom of the stack (which is always
+    an evaluation trace, at least for now). This is a deviation from the description
+    above, where we always start by running the interpreter at the top of the stack
+    and then work our way down, applying every interpreter in the stack. Instead,
+    we’re only applying an interpreter when the input arguments to a primitive bind
+    are boxed in a `Tracer` corresponding to that interpreter. This optimization lets
+    us skip irrelevant transformations, but bakes in an assumption that transformations
+    mostly follow data dependence (except for the special bottom-of-the-stack interpreter,
+    which interprets everything).
+  prefs: []
+  type: TYPE_NORMAL
+- en: An alternative would be to have every interpreter in the stack interpret every
+    operation. That’s worth exploring! JAX is designed around data dependence in large
+    part because that’s so natural for automatic differentiation, and JAX’s roots
+    are in autodiff. But it may be over-fit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The logic in `full_raise` serves to box values into `Tracer`s for a particular
+    `Trace`, calling different methods on the `Trace` based on context: `Trace.pure`
+    is called on non-`Tracer` constants, and `Trace.lift` is called for values that
+    are already `Tracer`s from a lower-level interpreter. These two methods could
+    share the same implementation, but by distinguishing them in the core logic we
+    can provide more information to the `Trace` subclass.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: That’s it for the JAX core! Now we can start adding interpreters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Evaluation interpreter
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We’ll start with the simplest interpreter: the evaluation interpreter that
+    will sit at the bottom of the interpreter stack.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With this interpreter, we can evaluate user functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Woo! Like going around in a big circle. But the point of this indirection is
+    that now we can add some real transformations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Forward-mode autodiff with `jvp`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'First, a few helper functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `Tracer` for forward-mode autodiff carries a primal-tangent pair. The `Trace`
+    applies JVP rules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice both `pure` and `lift` package a value into a `JVPTracer` with the minimal
+    amount of context, which is a zero tangent value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s add some JVP rules for primitives:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we add a transformation API to kick off the trace:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: And with that, we can differentiate!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Pytrees and flattening user functions’ inputs and outputs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A limitation with `jvp_v1` is that it assumes the user function accepts arrays
+    as positional arguments and produces a single array as output. What if it produced
+    a list as output? Or accepted nested containers as inputs? It would be a pain
+    to deal with all the possible containers in inputs and outputs at every layer
+    of the stack. Instead, we can wrap the user function so that the wrapped version
+    accepts arrays as inputs and returns a flat list of arrays as output. The wrapper
+    just needs to unflatten its input, call the user function, and flatten the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s how we’d like to write `jvp`, assuming the user always gives us functions
+    that take arrays as inputs and produces a flat list of arrays as outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To support user functions that have arbitrary containers in the inputs and
+    outputs, here’s how we’d write the user-facing `jvp` wrapper:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that we had to plumb the tree structure of the user function output back
+    to the caller of `flatten_fun`. That information isn’t available until we actually
+    run the user function, so `flatten_fun` just returns a reference to a mutable
+    cell, represented as a thunk. These side-effects are safe because we always run
+    the user function exactly once. (This safe regime is the reason for the “linear”
+    name in `linear_util.py`, in the sense of [linear types](https://en.wikipedia.org/wiki/Substructural_type_system).)
+  prefs: []
+  type: TYPE_NORMAL
+- en: All that remains is to write `tree_flatten`, `tree_unflatten`, and `flatten_fun`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
+    code cell source Hide code cell source</summary>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]</details> <details class="hide above-input"><summary aria-label="Toggle
+    hidden content">Show code cell source Hide code cell source</summary>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]</details>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this pytree-handling `jvp` implementation, we can now handle arbitrary
+    input and output containers. That’ll come in handy with future transformations
+    too!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Vectorized batching with `vmap`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'First, a couple helper functions, one for producing mapped abstract values
+    from unmapped ones (by removing an axis), and one for moving batch dimensions
+    around:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `Tracer` for vectorized batching carries a batched value and an optional
+    integer indicating which axis (if any) is the batch axis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here we’ve implemented the optional `Tracer.full_lower` method, which lets us
+    peel off a batching tracer if it’s not needed because it doesn’t represent a batched
+    value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For `BatchTrace`, analogous to `JVPTrace`, the methods `pure` and `lift` just
+    box a value in a `BatchTracer` with the minimal amount of context, which in this
+    case is a `batch_dim` taking the sentinel value `not_mapped`. Notice we use the
+    `MainTrace`’s interpreter-global data field to store the batch axis size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next we can define batching interpreter rules for each primitive:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we add a transformation API to kick off the trace:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: That’s it for `jvp` and `vmap`!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Part 2: Jaxprs'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The next transformations on the horizon are `jit` for just-in-time compilation
+    and `vjp` for reverse-mode autodiff. (`grad` is just a small wrapper around `vjp`.)
+    Whereas `jvp` and `vmap` only needed each `Tracer` to carry a little bit of extra
+    context, for both `jit` and `vjp` we need much richer context: we need to represent
+    *programs*. That is, we need jaxprs!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Jaxprs are JAX’s internal intermediate representation of programs. They are
+    explicitly typed, functional, first-order, and in ANF form. We need a program
+    representation for `jit` because the purpose of `jit` is to stage computation
+    out of Python. For any computation we want to stage out, we need to be able to
+    represent it as data, and build it up as we trace a Python function. Similarly,
+    `vjp` needs a way to represent the computation for the backward pass of reverse-mode
+    autodiff. We use the same jaxpr program representation for both needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: (Building a program representation is the most [free](https://en.wikipedia.org/wiki/Free_object)
+    kind of trace-transformation, and so except for issues around handling native
+    Python control flow, any transformation could be implemented by first tracing
+    to a jaxpr and then interpreting the jaxpr.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Jaxpr data structures
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The jaxpr term syntax is roughly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The syntax of types is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'How do we represent these as Python data structures? We reuse ShapedArrays
+    to represent types, and we can represent the term syntax with a few Python structs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Type-checking a jaxpr involves checking that there are no unbound variables,
+    that variables are only bound once, and that for each equation the type of the
+    primitive application matches the type of the output binders.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can apply the function represented by a jaxpr to arguments with a simple
+    interpreter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: By using `bind` in the interpreter, this interpreter itself is traceable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building jaxprs with tracing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now that we have jaxprs as a data structure, we need ways to produce these from
+    tracing Python code. In general there are two variants of how we trace to a jaxpr;
+    `jit` uses one and `vjp` uses the other. We’ll start with the one used by `jit`,
+    which is also used by control flow primitives like `lax.cond`, `lax.while_loop`,
+    and `lax.scan`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that we keep as interpreter-global data a builder object, which keeps
+    track of variables, constants, and eqns as we build up the jaxpr.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The rules we need for `JaxprTrace.process_primitive` are essentially typing
+    rules for primitive applications: given the primitive, its parameters, and types
+    for the inputs, the rule must produce a type for the output, which is then packaged
+    with the output `JaxprTracer`. We can use abstract evaluation rules for this same
+    purpose, even though they can be more general (since abstract evaluation rules
+    must accept ConcreteArray inputs, and since they need only return an upper bound
+    on the set of possible outputs, they can produce ConcreteArray outputs as well).
+    We’ll reuse these abstract evaluation rules for the other jaxpr-producing trace
+    machinery, where the potential extra generality is useful.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To check our implementation of jaxprs, we can add a `make_jaxpr` transformation
+    and a pretty-printer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
+    code cell source Hide code cell source</summary>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]</details>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'But there’s a limitation here: because of how `find_top_trace` operates by
+    data dependence, `make_jaxpr_v1` can’t stage out all the primitive operations
+    performed by the Python callable it’s given. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is precisely the issue that [omnistaging](https://github.com/google/jax/pull/3370)
+    fixed. We want to ensure that the `JaxprTrace` started by `make_jaxpr` is always
+    applied, regardless of whether any inputs to `bind` are boxed in corresponding
+    `JaxprTracer` instances. We can achieve this by employing the `dynamic_trace`
+    global defined in Part 1:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using `dynamic_trace` this way is conceptually the same as stashing the current
+    interpreter stack and starting a new one with the `JaxprTrace` at the bottom.
+    That is, no interpreters lower in the stack than the `dynamic_trace` are applied
+    (since `JaxprTrace.process_primitive` doesn’t call `bind`), though if the Python
+    callable being traced to a jaxpr itself uses transformations then those can be
+    pushed onto the interpreter stack above the `JaxprTrace`. But temporarily stashing
+    the interpreter stack would break up the system state. The `dynamic_trace` tag
+    achieves the same goals while keeping the system state simpler.
+  prefs: []
+  type: TYPE_NORMAL
+- en: That’s it for jaxprs! With jaxprs in hand, we can implement the remaining major
+    JAX features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Part 3: `jit`, simplified'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: While `jit` has a transformation-like API in that it accepts a Python callable
+    as an argument, under the hood it’s really a higher-order primitive rather than
+    a transformation. A primitive is *higher-order* when it’s parameterized by a function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On-the-fly (“final style”) and staged (“initial style”) processing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'There are two options for how to handle higher-order primitives. Each requires
+    a different approach to tracing and engenders different tradeoffs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**On-the-fly processing, where `bind` takes a Python callable as an argument.**
+    We defer forming a jaxpr until as late as possible, namely until we’re running
+    the final interpreter at the bottom of the interpreter stack. That way we can
+    swap a `JaxprTrace` in at the bottom of the interpreter stack and thus stage out
+    rather than execute all primitive operations. With this approach, transformations
+    in the stack get applied as we execute the Python callable as usual. This approach
+    can be very tricky to implement, but it’s as general as possible because it allows
+    higher-order primitives not to raise the abstraction level of their arguments
+    and thus allows data-dependent Python control flow. We refer to this approach
+    as using a “final-style higher-order primitive” employing the discharge-at-tracing-time
+    “final-style transformations” we’ve used so far.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Staged processing, where `bind` takes a jaxpr as an argument.** Before we
+    call `bind`, in the primitive wrapper we can just use `make_jaxpr` to form a jaxpr
+    up-front and be done with the Python callable entirely. In this case, `make_jaxpr`
+    puts its `JaxprTrace` at the top of the interpreter stack, and no transformations
+    lower in the stack, which might enter via closed-over Tracers, are applied to
+    the Python callable as we trace it. (Transformations applied within the Python
+    callable are applied as usual, being added to the stack above the JaxprTrace.)
+    Instead, the transformations lower in the stack are later applied to the call
+    primitive, and the call primitive’s rules must then transform the jaxpr itself.
+    Because we trace to a jaxpr up-front, this approach can’t support data-dependent
+    Python control flow, but it is more straightforward to implement. We refer to
+    this kind of higher-order primitive as an “initial-style higher-order primitive”,
+    and say that its jaxpr-processing transformation rules are “initial-style transformation
+    rules.”'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The latter approach fits for `jit` because we don’t need to support data-dependent
+    Python control flow in the user-provided Python callable, as the whole purpose
+    of `jit` is to stage computation out of Python to be executed by XLA. (In contrast,
+    `custom_jvp` is a higher-order primitive in which we want to support data-dependent
+    Python control flow.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Historically, we started using the “initial-style” and “final-style” terminology
+    after reading the [typed tagless final interpreters](http://okmij.org/ftp/tagless-final/index.html)
+    paper, and jokingly referring to JAX as an implementation of “untyped tagful final
+    interpreters.” We don’t claim to carry over (or understand) any deep meaning behind
+    these terms; we loosely use “initial style” to mean “build an AST and then transform
+    it”, and we use “final style” to mean “transform as we trace.” But it’s just imprecise
+    yet sticky jargon.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the initial-style approach, here’s the user-facing `jit` wrapper:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: With any new primitive, we need to give it transformation rules, starting with
+    its evaluation rule. When we evaluate an application of the `xla_call` primitive,
+    we want to stage out the computation to XLA. That involves translating the jaxpr
+    to an XLA HLO program, transferring the argument values to the XLA device, executing
+    the XLA program, and transferring back the results. We’ll cache the XLA HLO compilation
+    so that for each `jit`ted function it only needs to be performed once per argument
+    shape and dtype signature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, some utilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we’ll define the evaluation rule for `xla_call`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The main action is in `xla_callable`, which compiles a jaxpr into an XLA HLO
+    program using `jaxpr_subcomp`, then returns a callable which executes the compiled
+    program:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Notice that `jaxpr_subcomp` has the structure of a simple interpreter. That’s
+    a common pattern: the way we process jaxprs is usually with an interpreter. And
+    as with any interpreter, we need an interpretation rule for each primitive:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: With that, we can now use `jit` to stage out, compile, and execute programs
+    with XLA!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: Instead of implementing `jit` to first trace to a jaxpr and then to lower the
+    jaxpr to XLA HLO, it might appear that we could have skipped the jaxpr step and
+    just lowered to HLO while tracing. That is, perhaps we could have instead implemented
+    `jit` with a `Trace` and `Tracer` that appended to the XLA HLO graph incrementally
+    on each primitive bind. That’s correct for now, but won’t be possible when we
+    introduce compiled SPMD computations because there we must know the number of
+    replicas needed before compiling the program.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We haven’t yet defined any transformation rules for `xla_call_p` other than
+    its evaluation rule. That is, we can’t yet do `vmap`-of-`jit` or `jvp`-of-`jit`
+    or even `jit`-of`-jit`. Instead `jit` has to be at the “top level.” Let’s fix
+    that!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'One piece missing is device memory persistence for arrays. That is, we’ve defined
+    `handle_result` to transfer results back to CPU memory as NumPy arrays, but it’s
+    often preferable to avoid transferring results just to transfer them back for
+    the next operation. We can do that by introducing an `Array` class, which can
+    wrap XLA buffers and otherwise duck-type `numpy.ndarray`s:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
+    code cell source Hide code cell source</summary>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]</details>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Part 4: `linearize` and `vjp` (and `grad`!)'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `linearize` and `vjp` autodiff functions are built on `jvp`, but involve
+    jaxprs as well. That’s because both involve staging out, or delaying, computation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`linearize`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the case of `linearize`, we want to stage out the linear part of a `jvp`
+    computation. That is, in terms of [Haskell-like type signatures](https://wiki.haskell.org/Type_signature),
+    if we have `jvp : (a -> b) -> (a, T a) -> (b, T b)`, then we write `linearize
+    : (a -> b) -> a -> (b, T a -o T b)`, using `T a` to mean “the tangent type of
+    `a`” and using the “lollipop” `-o` rather than the arrow `->` to indicate a *linear*
+    function. We define the semantics of `linearize` in terms of `jvp` too:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: gives the same result for `(y, y_dot)` as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'where the application of `f_lin` does not redo any of the linearization work.
+    We’ll represent the delayed linear part `f_lin : T a -o T b` as a jaxpr.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tangentially, now that we have linear arrows `-o`, we can provide a slightly
+    more informative type for `jvp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here we’re writing `UnrestrictedUse` just to indicate that we have a special
+    pair where the first element can be used in an unrestricted (nonlinear) way. In
+    conjunction with the linear arrow, this notation is just meant to express that
+    the function `jvp f` uses its first input in a nonlinear way but its second input
+    in a linear way, producing a corresponding nonlinear output (which can be used
+    in a nonlinear way) paired with a linear output. This more refined type signature
+    encodes the data dependencies in `jvp f`, which are useful for partial evaluation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To build the `f_lin` jaxpr from a JVP, we need to perform partial evaluation:
+    we evaluate all the primal values as we trace, but stage the tangent computations
+    into a jaxpr. This is our second way to build jaxprs. But where `make_jaxpr` and
+    its underlying `JaxprTrace`/`JaxprTracer` interpreters aim to stage out every
+    primitive bind, this second approach stages out only those primitive binds with
+    a data dependence on tangent inputs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, some utilities:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we’ll write `linearize` by combining `jvp` together with a general partial
+    evaluation transformation, to be added next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now we turn to the general partial evaluation transformation. The goal is to
+    accept a Python callable and a list of inputs, some known and some unknown, and
+    to produce (1) all the outputs which can be computed from the known inputs, together
+    with (2) a jaxpr representing the part of the Python callable’s computation which
+    can only be performed after the remaining inputs are known.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This transformation is tricky to summarize in a type signature. If we assume
+    the input function’s type signature is `(a1, a2) -> (b1, b2)`, where `a1` and
+    `a2` represent the known and unknown inputs, respectively, and where `b1` only
+    has a data dependency on `a1` while `b2` has some data dependency on `a2`, then
+    we might write
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: In words, given values for the inputs of type `a1`, `partial_eval` produces
+    the outputs of type `b1` along with “residual” values of existentially-quantified
+    type `r` representing the intermediates required to complete the computation in
+    the second stage. It also produces a function of type `(r, a2) -> b2` which accepts
+    the residual values as well as the remaining inputs and produces the remaining
+    outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We like to think of partial evaluation as “unzipping” one computation into
+    two. For example, consider this jaxpr:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A jaxpr for the JVP would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we imagine applying partial evaluation to this jaxpr with the first input
+    known and the second unknown, we end up ‘unzipping’ the JVP jaxpr into primal
+    and tangent jaxprs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: This second jaxpr represents the linear computation that we want from `linearize`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, unlike in this jaxpr example, we want the computation on known values
+    to occur while evaluating the input Python callable. That is, rather than forming
+    a jaxpr for the entire function `(a1, a2) -> (b1, b2)`, staging all operations
+    out of Python first before sorting out what can be evaluated now and what must
+    be delayed, we want only to form a jaxpr for those operations that *must* be delayed
+    due to a dependence on unknown inputs. In the context of automatic differentiation,
+    this is the feature that ultimately enables us to handle functions like `grad(lambda
+    x: x**2 if x > 0 else 0.)`. Python control flow works because partial evaluation
+    keeps the primal computation in Python. As a consequence, our `Trace` and `Tracer`
+    subclasses must on the fly sort out what can be evaluated and what must be staged
+    out into a jaxpr.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we start with a `PartialVal` class, which represents a value that can
+    be either known or unknown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Partial evaluation will take a list of `PartialVal`s representing inputs, and
+    return a list of `PartialVal` outputs along with a jaxpr representing the delayed
+    computation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next we need to implement `PartialEvalTrace` and its `PartialEvalTracer`. This
+    interpreter will build a jaxpr on the fly while tracking data dependencies. To
+    do so, it builds a bipartite directed acyclic graph (DAG) between `PartialEvalTracer`
+    nodes, representing staged-out values, and `JaxprRecipe` nodes, representing formulas
+    for how to compute some values from others. One kind of recipe is a `JaxprEqnRecipe`,
+    corresponding to a `JaxprEqn`’s primitive application, but we also have recipe
+    types for constants and lambda binders:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `PartialEvalTrace` contains the logic for constructing the graph of `JaxprRecipe`s
+    and `PartialEvalTracer`s. Each argument corresponds to a `LambdaBindingRecipe`
+    leaf node, and each constant is a `ConstRecipe` leaf node holding a reference
+    to the constant. All other tracers and recipes come from `process_primitive`,
+    which forms tracers with `JaxprEqnRecipe`s.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For most primitives, the `process_primitive` logic is straightforward: if all
+    inputs are known then we can bind the primitive on the known values (evaluating
+    it in Python) and avoid forming tracers corresponding to the output. If instead
+    any input is unknown then we instead stage out into a `JaxprEqnRecipe` representing
+    the primitive application. To build the tracers representing unknown outputs,
+    we need avals, which we get from the abstract eval rules. (Notice that tracers
+    reference `JaxprEqnRecipe`s, and `JaxprEqnRecipe`s reference tracers; we avoid
+    circular garbage by using weakrefs.)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: That `process_primitive` logic applies to most primitives, but `xla_call_p`
+    requires recursive treatment. So we special-case its rule in a `partial_eval_rules`
+    dict.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we can build graph representations of jaxprs with `PartialEvalTrace`,
+    we need a mechanism to convert the graph representation to a standard jaxpr. The
+    jaxpr corresponds to a topological sort of the graph.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
+    code cell source Hide code cell source</summary>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE98]</details>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now we can linearize!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: To handle `linearize`-of-`jit`, we still need to write a partial evaluation
+    rule for `xla_call_p`. Other than tracer bookkeeping, the main task is to perform
+    partial evaluation of a jaxpr, ‘unzipping’ it into two jaxprs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are actually two rules to write: one for trace-time partial evaluation,
+    which we’ll call `xla_call_partial_eval`, and one for partial evaluation of jaxprs,
+    which we’ll call `xla_call_peval_eqn`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With that, we can compose `linearize` and `jit` however we like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`vjp` and `grad`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The `vjp` transformation works a lot like linearize. Its type signature is
+    analogous:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: The only difference is that we transpose the linear part of the computation
+    before returning it, so that it goes from type `T a -o T b` to type `T b -o T
+    a`. That is, we’ll implement `vjp` as, essentially,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since we have the linear computation as a jaxpr, not just a Python callable,
+    we can implement the transpose transformation as a jaxpr interpreter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: We use `UndefPrimal` instances to indicate which arguments with respect to which
+    we want to transpose. These arise because in general, being explicit about closed-over
+    values, we want to transpose functions of type `a -> b -o c` to functions of type
+    `a -> c -o b`. Even more generally, the inputs with respect to which the function
+    is linear could be scattered through the argument list. So we indicate the linear
+    positions using `UndefPrimal`. We register `UndefPrimal` as a pytree node because
+    the pytree mechanism gives a handy way to prune these placeholders out of argument
+    lists.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we can write `eval_jaxpr_transposed`, along with transpose rules for
+    all primitives which can be linear in at least one argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we can linearize and transpose, we can finally write `grad`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s something of a compositionality stress test:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Part 5: the control flow primitives `cond`'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Next we’ll add higher-order primitives for staged-out control flow. These resemble
+    `jit` from Part 3, another higher-order primitive, but differ in that they are
+    parameterized by multiple callables rather than just one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding `cond`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We introduce a `cond` primitive to represent conditional application of one
+    function or another inside a jaxpr. We write the type of `cond` as `Bool -> (a
+    -> b) -> (a -> b) -> a -> b`. In words, `cond` takes a boolean representing the
+    predicate and two functions of equal types. Depending on the value of the predicate,
+    it applies one function or the other to its final argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Python, we represent it as a function which itself takes two functions as
+    arguments. As with `jit`, the first step is to call `make_jaxpr` on its callable
+    arguments to turn them into jaxprs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: We require `true_jaxpr` and `false_jaxpr` to have the same type, but because
+    they might close over different constants (and because jaxprs can only represent
+    closed terms, i.e. can’t have free variables and are instead closure-converted)
+    we need to use the helper `_join_jaxpr_consts` to make consistent the input binder
+    lists of the two jaxprs. (To be more economical we could try to identify pairs
+    of constants with the same shapes, but instead we just concatenate the lists of
+    constants.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next we can turn to adding interpreter rules for `cond`. Its evaluation rule
+    is simple:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For its JVP and vmap rules, we only need to call the same `jvp_jaxpr` and `vmap_jaxpr`
+    utilities we created for `jit`, followed by another pass of `_join_jaxpr_consts`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that we’re not currently supporting the case where the predicate value
+    itself is batched. In mainline JAX, we handle this case by transforming the conditional
+    to a [select primitive](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.select.html).
+    That transformation is semantically correct so long as `true_fun` and `false_fun`
+    do not involve any side-effecting primitives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another thing not represented here, but present in the mainline JAX, is that
+    applying transformations to two jaxprs of equal type might result in jaxprs of
+    different types. For example, applying the mainline JAX version of `vmap_jaxpr`
+    to the identity-function jaxpr
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE129]'
+  prefs: []
+  type: TYPE_PRE
+- en: would result in a jaxpr with a batched output, of type `[float32[10]] -> [float32[10]]`
+    if the batch size were 10, while applying it to the zero-function jaxpr
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE130]'
+  prefs: []
+  type: TYPE_PRE
+- en: would result in a jaxpr with an unbatched output, of type `[float32[10]] ->
+    [float32[]]`. This is an optimization, aimed at not batching values unnecessarily.
+    But it means that in `cond` we’d need an extra step of joining the two transformed
+    jaxprs to have consistent output types. We don’t need this step here because we
+    chose `vmap_jaxpr` always to batch all outputs over the leading axis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next we can turn to abstract evaluation and XLA lowering rules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE131]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE132]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE133]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally, to support reverse-mode automatic differentiation, we need partial
+    evaluation and transposition rules. For partial evaluation, we need to introduce
+    another jaxpr-munging utility, `_join_jaxpr_res`, to handle the fact that applying
+    partial evaluation to `true_fun` and `false_fun` will in general result in distinct
+    residuals. We use `_join_jaxpr_res` to make the output types of the transformed
+    jaxprs consistent (while `_join_jaxpr_consts` dealt with input types).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE134]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE135]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE136]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE137]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE138]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE139]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Transposition is a fairly straightforward application of `transpose_jaxpr`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE140]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE141]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE142]'
+  prefs: []
+  type: TYPE_PRE
+- en: <details class="hide above-input"><summary aria-label="Toggle hidden content">Show
+    code cell source Hide code cell source</summary>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE143]</details>'
+  prefs: []
+  type: TYPE_NORMAL

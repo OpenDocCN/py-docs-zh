@@ -1,0 +1,205 @@
+- en: Introduction to debugging
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/debugging.html`](https://jax.readthedocs.io/en/latest/debugging.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This section introduces you to a set of built-in JAX debugging methods — `jax.debug.print()`,
+    `jax.debug.breakpoint()`, and `jax.debug.callback()` — that you can use with various
+    JAX transformations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s begin with `jax.debug.print()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: JAX `debug.print` for high-level
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**TL;DR** Here is a rule of thumb:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use `jax.debug.print()` for traced (dynamic) array values with `jax.jit()`,
+    `jax.vmap()` and others.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use Python [`print()`](https://docs.python.org/3/library/functions.html#print
+    "(in Python v3.12)") for static values, such as dtypes and array shapes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Recall from Just-in-time compilation that when transforming a function with
+    `jax.jit()`, the Python code is executed with abstract tracers in place of your
+    arrays. Because of this, the Python [`print()`](https://docs.python.org/3/library/functions.html#print
+    "(in Python v3.12)") function will only print this tracer value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Python’s `print` executes at trace-time, before the runtime values exist. If
+    you want to print the actual runtime values, you can use `jax.debug.print()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly, within `jax.vmap()`, using Python’s `print` will only print the
+    tracer; to print the values being mapped over, use `jax.debug.print()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s the result with `jax.lax.map()`, which is a sequential map rather than
+    a vectorization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice the order is different, as `jax.vmap()` and `jax.lax.map()` compute the
+    same results in different ways. When debugging, the evaluation order details are
+    exactly what you may need to inspect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Below is an example with `jax.grad()`, where `jax.debug.print()` only prints
+    the forward pass. In this case, the behavior is similar to Python’s [`print()`](https://docs.python.org/3/library/functions.html#print
+    "(in Python v3.12)"), but it’s consistent if you apply `jax.jit()` during the
+    call.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Sometimes, when the arguments don’t depend on one another, calls to `jax.debug.print()`
+    may print them in a different order when staged out with a JAX transformation.
+    If you need the original order, such as `x: ...` first and then `y: ...` second,
+    add the `ordered=True` parameter.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: To learn more about `jax.debug.print()` and its Sharp Bits, refer to Advanced
+    debugging.
+  prefs: []
+  type: TYPE_NORMAL
+- en: JAX `debug.breakpoint` for `pdb`-like debugging
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**TL;DR** Use `jax.debug.breakpoint()` to pause the execution of your JAX program
+    to inspect values.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To pause your compiled JAX program during certain points during debugging, you
+    can use `jax.debug.breakpoint()`. The prompt is similar to Python `pdb`, and it
+    allows you to inspect the values in the call stack. In fact, `jax.debug.breakpoint()`
+    is an application of `jax.debug.callback()` that captures information about the
+    call stack.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To print all available commands during a `breakpoint` debugging session, use
+    the `help` command. (Full debugger commands, the Sharp Bits, its strengths and
+    limitations are covered in Advanced debugging.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is an example of what a debugger session might look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![JAX debugger](img/fee2c7fc0abba538525eb7922811ec87.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'For value-dependent breakpointing, you can use runtime conditionals like `jax.lax.cond()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: JAX `debug.callback` for more control during debugging
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Both `jax.debug.print()` and `jax.debug.breakpoint()` are implemented using
+    the more flexible `jax.debug.callback()`, which gives greater control over the
+    host-side logic executed via a Python callback. It is compatible with `jax.jit()`,
+    `jax.vmap()`, `jax.grad()` and other transformations (refer to the Flavors of
+    callback table in External callbacks for more information).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This callback is compatible with other transformations, including `jax.vmap()`
+    and `jax.grad()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: This can make `jax.debug.callback()` useful for general-purpose debugging.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can learn more about `jax.debug.callback()` and other kinds of JAX callbacks
+    in External callbacks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next steps
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Check out the Advanced debugging to learn more about debugging in JAX.
+  prefs: []
+  type: TYPE_NORMAL

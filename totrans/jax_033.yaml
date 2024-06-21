@@ -1,0 +1,716 @@
+- en: Exporting and serializing staged-out computations
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/export/export.html`](https://jax.readthedocs.io/en/latest/export/export.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'The Ahead-of-time lowering and compilation APIs produce objects that can be
+    used for debugging or for compilation and execution in the same process. Sometimes
+    you want to serialize a lowered JAX function for compilation and execution in
+    a separate process, perhaps at a later time. This would allow you to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: compile and execute the function in another process or machine without requiring
+    access to the JAX program, and without having to repeat the staging-out and lowering,
+    e.g., in an inference system.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: trace and lower a function on a machine that does not have access to the accelerator
+    for which you want to later compile and execute the function.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: archive a snapshot of a JAX function, e.g., to be able to reproduce later your
+    results. **Note:** check out the compatibility guarantees for this use case.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Here is an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Serialization is broken down into two stages:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: exporting to produce an `jax.export.Exported` object that contains the StableHLO
+    for the lowered function along with the metadata necessary to call it from another
+    JAX function. We have plans to add code to generate `Exported` objects from TensorFlow,
+    and to use `Exported` objects from TensorFlow and PyTorch.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: the actual serialization to a byte array using the flatbuffers format. See Interoperation
+    with TensorFlow for an alternative serialization to TensorFlow graph that can
+    be used for interoperation with TensorFlow.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Support for reverse-mode AD
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Serialization can optionally support higher-order reverse-mode AD. This is
+    done by serializing the `jax.vjp()` of the primal function along with the primal
+    function, up to a user-specified order (default is 0, meaning that the rehydrated
+    function cannot be differentiated):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the VJP function is computed lazily while serializing, when the JAX
+    program is still available. This means that it respects all features of JAX VJP,
+    e.g., `jax.custom_vjp()` and `jax.remat()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the rehydrated function does not support any other transformations,
+    e.g., forward-mode AD (jvp), or `jax.vmap()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compatibility guarantees
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You should not use the raw StableHLO that is obtained from just lowering (`jax.jit(f).lower(1.).compiler_ir()`)
+    for archival and for compilation in another process, for several reasons.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the compilation may use a different version of the compiler, supporting
+    a different version of StableHLO. The `jax.export` module takes care of this by
+    using the [portable-artifact feature of StableHLO](https://github.com/openxla/stablehlo/blob/main/docs/compatibility.md)
+    to deal with the possible evolution of the StableHLO opset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compatibility guarantees for custom calls
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Second, the raw StableHLO may contain custom calls referencing C++ functions.
+    JAX uses custom calls for lowering of a small number of primitives, e.g., linear
+    algebra primitives, sharding annotations, or Pallas kernels. These do not fall
+    under the compatibility guarantees for StableHLO. The C++ implementations of these
+    functions change rarely, but they can change.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`jax.export` makes the following export compatibility guarantees: A JAX exported
+    artifact can be compiled and executed by a compiler and JAX runtime system that
+    are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**up to 6 months newer** than the version of JAX used for exporting (we say
+    that JAX export offers **6 months backward compatibility**). This is useful if
+    we want to archive the exported artifact to be compiled and executed later.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**up to 3 weeks older** than the version of JAX used for exporting (we say
+    that JAX export offers **3 weeks forward compatibility**). This is useful if we
+    want to compile and run an exported artifact with a consumer that was built and
+    deployed before the export, e.g., an inference system that is already deployed
+    when the exporting is done.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: (The particular compatibility window lengths are the same that JAX [promised
+    for jax2tf](https://github.com/google/jax/blob/main/jax/experimental/jax2tf/README.md#usage-saved-model),
+    and are based on [TensorFlow Compatibility](https://www.tensorflow.org/guide/versions#graph_and_checkpoint_compatibility_when_extending_tensorflow).
+    The terminology “backward compatibility” is from the perspective of the consumer,
+    e.g., the inference system.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: What **matters is when the exporting and consuming components were built**,
+    not the time when the exporting and the compilation happen. For external JAX users,
+    it is [possible to run JAX and jaxlib at different versions](https://jax.readthedocs.io/en/latest/jep/9419-jax-versioning.html#how-are-jax-and-jaxlib-versioned);
+    what matters is when the jaxlib release was built.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To reduce chances of incompatibility, internal JAX users should:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**rebuild and redeploy consumer systems as frequently as possible**.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'and external users should:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: run the exporting and consumer systems with the same version of jaxlib, whenever
+    possible, and
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: export for archival **with the latest released version of jaxlib**.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The compatibility guarantees do not apply if you bypass the `jax.export` APIs
+    to obtain the StableHLO code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Only a subset of custom calls are guaranteed stable and have compatibility guarantees
+    ([see list](https://github.com/search?q=repo%3Agoogle%2Fjax%20_CUSTOM_CALL_TARGETS_GUARANTEED_STABLE&amp;type=code)).
+    We continuously add more custom call targets to the allowed list along with backwards
+    compatibility tests. If you try to serialize code that invokes other custom call
+    targets you will get an error during exporting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you want to disable this safety check for a specific custom call, e.g.,
+    with target `my_target`, you can add `export.DisabledSafetyCheck.custom_call("my_target")`
+    to the `disabled_checks` parameter of the `export` method, as in the following
+    example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Cross-platform and multi-platform export
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'JAX lowering is platform specific for a small number of JAX primitives. By
+    default, the code is lowered and exported for the accelerator present on the exporting
+    machine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: There is a safety check that will be raise an error when trying to compile an
+    `Exported` object on a machine that does not have the accelerator for which the
+    code was exported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can specify explicitly for what platforms the code should be exported. This
+    allows you to specify a different accelerator than you have available at export
+    time, and it even allows you to specify multi-platform lexport to obtain an `Exported`
+    object that can be compiled and executed on multiple platforms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: For multi-platform export, the StableHLO will contain multiple lowerings but
+    only for those primitives that require it, so the resulting module size should
+    be only marginally larger than the size of a module with default export. As an
+    extreme case, when serializing a module without any primitives with platform-specific
+    lowering, you will get the same StableHLO as for the single-plaform export.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Shape polymorphic export
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When used in JIT mode, JAX will trace and lower a function separately for each
+    combination of input shapes. When exporting, it is possible in some cases to use
+    dimension variables for some input dimensions in order to obtain an exported artifact
+    that can be used with multiple combinations of input shapes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See the Shape polymorphism documentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Device polymorphic export
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: An exported artifact may contain sharding annotations for inputs, outputs and
+    for some intermediates, but these annotations do not refer directly to the actual
+    physical devices that existed at exporting time. Instead, the sharding annotations
+    refer to logical devices. This means that you can compile and run the exported
+    artifacts on different physical devices that were used for exporting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It is an error to try to invoke an exported artifact with a different number
+    of devices than it was exported for:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are helper functions to shard the inputs for calling an exported artifacts
+    using a new mesh constructed at the call site:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As a special facility, if a function was exported for 1 device and if it contains
+    no sharding annotations, then it can be invoked on an argument of the same shape
+    but sharded on multiple devices, and the compiler will shard the function appropriately:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]python'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> import jax'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> from jax import export'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> from jax.sharding import Mesh, NamedSharding'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> from jax.sharding import PartitionSpec as P'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> def f(x):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '...   return jnp.cos(x)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> arg = jnp.arange(4)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> exp = export.export(jax.jit(f))(arg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> exp.in_avals'
+  prefs: []
+  type: TYPE_NORMAL
+- en: (ShapedArray(int32[4]),)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> exp.nr_devices'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '1'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> # Prepare the mesh for calling `exp`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> calling_mesh = Mesh(jax.local_devices()[:4], ("b",))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> # Shard the arg according to what `exp` expects.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> sharded_arg = jax.device_put(arg,'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '...                              NamedSharding(calling_mesh, P("b")))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> res = exp.call(sharded_arg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '>>> from jax import export'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> exp: export.Exported = export.export(jnp.cos)(1.)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> exp.calling_convention_version'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '9'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '>>> from jax import export'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> (export.minimum_supported_calling_convention_version, export.maximum_supported_calling_convention_version)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: (9, 9)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> from jax._src import config'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '>>> with config.jax_export_calling_convention_version(9):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '...  exp = export.export(jnp.cos)(1.)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '...  exp.calling_convention_version'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '9'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: func public main(
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'platform_index: i32 {jax.global_constant="_platform_index"},'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'token_in: token,'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'arg: f32[?, ?]) {'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: arg_w = hlo.get_dimension_size(arg, 0)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: dim1 = hlo.get_dimension_size(arg, 1)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: arg_h = hlo.floordiv(dim1, 2)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'call _check_shape_assertions(arg)  # See below'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: token = new_token()
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: token_out, res = call _wrapped_jax_export_main(platform_index,
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: arg_h,
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: arg_w,
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: token_in,
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: arg)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: return token_out, res
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '}'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: func private _wrapped_jax_export_main(
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'platform_index: i32 {jax.global_constant="_platform_index"},'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'arg_h: i32 {jax.global_constant="h"},'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'arg_w: i32 {jax.global_constant="w"},'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'arg_token: stablehlo.token {jax.token=True},'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'arg: f32[?, ?]) -> (stablehlo.token, ...)'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'func private _check_shape_assertions(arg: f32[?, ?]) {'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '# Check that w is >= 1'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: arg_w = hlo.get_dimension_size(arg, 0)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: custom_call @shape_assertion(arg_w >= 1, arg_w,
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: error_message="Dimension variable 'w' must have integer value >= 1\. Found {0}")
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '# Check that dim1 is even'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: dim1 = hlo.get_dimension_size(arg, 1)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: custom_call @shape_assertion(dim1 % 2 == 0, dim1,
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: error_message="Dimension variable 'h' must have integer value >= 1\. Found non-zero
+    remainder {0}")
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '# Check that h >= 1'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: arg_h = hlo.floordiv(dim1, 2)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: custom_call @shape_assertion(arg_h >= 1, arg_h,
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: error_message=""Dimension variable 'h' must have integer value >= 1\. Found
+    {0}")
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '```'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '### Calling convention versions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We list here a history of the calling convention version numbers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Version 1 used MHLO & CHLO to serialize the code, not supported anymore.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Version 2 supports StableHLO & CHLO. Used from October 2022\. Not supported
+    anymore.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Version 3 supports platform checking and multiple platforms. Used from February
+    2023\. Not supported anymore.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Version 4 supports StableHLO with compatibility guarantees. This is the earliest
+    version at the time of the JAX native serialization launch. Used in JAX from March
+    15, 2023 (cl/516885716). Starting with March 28th, 2023 we stopped using `dim_args_spec`
+    (cl/520033493). The support for this version was dropped on October 17th, 2023
+    (cl/573858283).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Version 5 adds support for `call_tf_graph`. This is currently used for some
+    specialized use cases. Used in JAX from May 3rd, 2023 (cl/529106145).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Version 6 adds support for the `disabled_checks` attribute. This version mandates
+    a non-empty `platforms` attribute. Supported by XlaCallModule since June 7th,
+    2023 and available in JAX since June 13th, 2023 (JAX 0.4.13).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Version 7 adds support for `stablehlo.shape_assertion` operations and for `shape_assertions`
+    specified in `disabled_checks`. See [Errors in presence of shape polymorphism](https://github.com/google/jax/blob/main/jax/experimental/jax2tf/README.md#errors-in-presence-of-shape-polymorphism).
+    Supported by XlaCallModule since July 12th, 2023 (cl/547482522), available in
+    JAX serialization since July 20th, 2023 (JAX 0.4.14), and the default since August
+    12th, 2023 (JAX 0.4.15).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Version 8 adds support for the `jax.uses_shape_polymorphism` module attribute
+    and enables the shape refinement pass only when the attribute is present. Supported
+    by XlaCallModule since July 21st, 2023 (cl/549973693), available in JAX since
+    July 26th, 2023 (JAX 0.4.14), and the default since October 21st, 2023 (JAX 0.4.20).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Version 9 adds support for effects. See the docstring for `export.Exported`
+    for the precise calling convention. In this calling convention version we also
+    tag the platform index and the dimension variables arguments with `jax.global_constant`
+    attributes. Supported by XlaCallModule since October 27th, 2023, available in
+    JAX since October 20th, 2023 (JAX 0.4.20), and the default since February 1st,
+    2024 (JAX 0.4.24). This is the only supported version as of 27th of March, 2024.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Migration guide from jax.experimental.export
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'On June 14, 2024 we deprecated the `jax.experimental.export` APIs in favor
+    of `jax.export` APIs. There have been some minor changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`jax.experimental.export.export`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The old function used to allow any Python callable, or the result of `jax.jit`.
+    Now only the latter is accepted. You have to manually apply `jax.jit` to the function
+    to export before calling `export`.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The old `lowering_parameters` kwarg is now named `platforms`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jax.experimental.export.default_lowering_platform()` is now at `jax.export.default_export_platform()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jax.experimental.export.call` is now a method of the `jax.export.Exported`
+    object. Instead of `export.call(exp)` you should use `exp.call`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jax.experimental.export.serialize` is now a method of the `jax.export.Exported`
+    object. Instead of `export.serialize(exp)` you should use `exp.serialize()`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The configuration flag `--jax-serialization-version` is deprecated. Use `--jax-export-calling-convention-version`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The value `jax.experimental.export.minimum_supported_serialization_version`
+    is now at `jax.export.minimum_supported_calling_convention_version`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The following fields of `jax.export.Exported` have been renamed
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`uses_shape_polymorphism` is now `uses_global_constants`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`mlir_module_serialization_version` is now `calling_convention_version`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`lowering_platforms` is now `platforms`.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL

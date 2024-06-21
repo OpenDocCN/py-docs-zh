@@ -1,0 +1,351 @@
+- en: Introduction to sharded computation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/sharded-computation.html`](https://jax.readthedocs.io/en/latest/sharded-computation.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This tutorial serves as an introduction to device parallelism for Single-Program
+    Multi-Data (SPMD) code in JAX. SPMD is a parallelism technique where the same
+    computation, such as the forward pass of a neural network, can be run on different
+    input data (for example, different inputs in a batch) in parallel on different
+    devices, such as several GPUs or Google TPUs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The tutorial covers three modes of parallel computation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Automatic parallelism via `jax.jit()`*: The compiler chooses the optimal computation
+    strategy (a.k.a. “the compiler takes the wheel”).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Semi-automated parallelism* using `jax.jit()` and `jax.lax.with_sharding_constraint()`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Fully manual parallelism with manual control using `jax.experimental.shard_map.shard_map()`*:
+    `shard_map` enables per-device code and explicit communication collectives'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using these schools of thought for SPMD, you can transform a function written
+    for one device into a function that can run in parallel on multiple devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you are running these examples in a Google Colab notebook, make sure that
+    your hardware accelerator is the latest Google TPU by checking your notebook settings:
+    **Runtime** > **Change runtime type** > **Hardware accelerator** > **TPU v2**
+    (which provides eight devices to work with).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Key concept: Data sharding'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Key to all of the distributed computation approaches below is the concept of
+    *data sharding*, which describes how data is laid out on the available devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How can JAX can understand how the data is laid out across devices? JAX’s datatype,
+    the `jax.Array` immutable array data structure, represents arrays with physical
+    storage spanning one or multiple devices, and helps make parallelism a core feature
+    of JAX. The `jax.Array` object is designed with distributed data and computation
+    in mind. Every `jax.Array` has an associated `jax.sharding.Sharding` object, which
+    describes which shard of the global data is required by each global device. When
+    you create a `jax.Array` from scratch, you also need to create its `Sharding`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the simplest cases, arrays are sharded on a single device, as demonstrated
+    below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For a more visual representation of the storage layout, the `jax.debug` module
+    provides some helpers to visualize the sharding of an array. For example, `jax.debug.visualize_array_sharding()`
+    displays how the array is stored in memory of a single device:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: To create an array with a non-trivial sharding, you can define a `jax.sharding`
+    specification for the array and pass this to `jax.device_put()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, define a `NamedSharding`, which specifies an N-dimensional grid of devices
+    with named axes, where `jax.sharding.Mesh` allows for precise device placement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Passing this `Sharding` object to `jax.device_put()`, you can obtain a sharded
+    array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The device numbers here are not in numerical order, because the mesh reflects
+    the underlying toroidal topology of the device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 1\. Automatic parallelism via `jit`
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Once you have sharded data, the easiest way to do parallel computation is to
+    simply pass the data to a `jax.jit()`-compiled function! In JAX, you need to only
+    specify how you want the input and output of your code to be partitioned, and
+    the compiler will figure out how to: 1) partition everything inside; and 2) compile
+    inter-device communications.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The XLA compiler behind `jit` includes heuristics for optimizing computations
+    across multiple devices. In the simplest of cases, those heuristics boil down
+    to *computation follows data*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To demonstrate how auto-parallelization works in JAX, below is an example that
+    uses a `jax.jit()`-decorated staged-out function: it’s a simple element-wise function,
+    where the computation for each shard will be performed on the device associated
+    with that shard, and the output is sharded in the same way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: As computations get more complex, the compiler makes decisions about how to
+    best propagate the sharding of the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, you sum along the leading axis of `x`, and visualize how the result values
+    are stored across multiple devices (with `jax.debug.visualize_array_sharding()`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The result is partially replicated: that is, the first two elements of the
+    array are replicated on devices `0` and `6`, the second on `1` and `7`, and so
+    on.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2\. Semi-automated sharding with constraints
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: If you’d like to have some control over the sharding used within a particular
+    computation, JAX offers the `with_sharding_constraint()` function. You can use
+    `jax.lax.with_sharding_constraint()` (in place of (func}`jax.device_put()`) together
+    with `jax.jit()` for more control over how the compiler constraints how the intermediate
+    values and outputs are distributed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, suppose that within `f_contract` above, you’d prefer the output
+    not to be partially-replicated, but rather to be fully sharded across the eight
+    devices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: This gives you a function with the particular output sharding you’d like.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3\. Manual parallelism with `shard_map`
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the automatic parallelism methods explored above, you can write a function
+    as if you’re operating on the full dataset, and `jit` will split that computation
+    across multiple devices. By contrast, with `jax.experimental.shard_map.shard_map()`
+    you write the function that will handle a single shard of data, and `shard_map`
+    will construct the full function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`shard_map` works by mapping a function across a particular *mesh* of devices
+    (`shard_map` maps over shards). In the example below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As before, `jax.sharding.Mesh` allows for precise device placement, with the
+    axis names parameter for logical and physical axis names.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `in_specs` argument determines the shard sizes. The `out_specs` argument
+    identifies how the blocks are assembled back together.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Note:** `jax.experimental.shard_map.shard_map()` code can work inside `jax.jit()`
+    if you need it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The function you write only “sees” a single batch of the data, which you can
+    check by printing the device local shape:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because each of your functions only “sees” the device-local part of the data,
+    it means that aggregation-like functions require some extra thought.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, here’s what a `shard_map` of a `jax.numpy.sum()` looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Your function `f` operates separately on each shard, and the resulting summation
+    reflects this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you want to sum across shards, you need to explicitly request it using collective
+    operations like `jax.lax.psum()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because the output no longer has a sharded dimension, set `out_specs=P()` (recall
+    that the `out_specs` argument identifies how the blocks are assembled back together
+    in `shard_map`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comparing the three approaches
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: With these concepts fresh in our mind, let’s compare the three approaches for
+    a simple neural network layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Start by defining your canonical function like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can automatically run this in a distributed manner using `jax.jit()` and
+    passing appropriately sharded data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you shard the leading axis of both `x` and `weights` in the same way, then
+    the matrix multiplication will automatically happen in parallel:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, you can use `jax.lax.with_sharding_constraint()` in the function
+    to automatically distribute unsharded inputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, you can do the same thing with `shard_map`, using `jax.lax.psum()`
+    to indicate the cross-shard collective required for the matrix product:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next steps
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This tutorial serves as a brief introduction of sharded and parallel computation
+    in JAX.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To learn about each SPMD method in-depth, check out these docs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Distributed arrays and automatic parallelization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SPMD multi-device parallelism with shard_map
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

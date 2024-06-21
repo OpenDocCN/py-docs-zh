@@ -1,0 +1,397 @@
+- en: jax.debug.print and jax.debug.breakpoint
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/debugging/print_breakpoint.html`](https://jax.readthedocs.io/en/latest/debugging/print_breakpoint.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The `jax.debug` package offers some useful tools for inspecting values inside
+    of JIT-ted functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Debugging with `jax.debug.print` and other debugging callbacks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**TL;DR** Use `jax.debug.print()` to print traced array values to stdout in
+    `jit`- and `pmap`-decorated functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: With some transformations, like `jax.grad` and `jax.vmap`, you can use Python’s
+    builtin `print` function to print out numerical values. But `print` won’t work
+    with `jax.jit` or `jax.pmap` because those transformations delay numerical evaluation.
+    So use `jax.debug.print` instead!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Semantically, `jax.debug.print` is roughly equivalent to the following Python
+    function
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: except that it can be staged out and transformed by JAX. See the `API reference`
+    for more details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that `fmt` cannot be an f-string because f-strings are formatted immediately,
+    whereas for `jax.debug.print`, we’d like to delay formatting until later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When to use “*debug*” print?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You should use `jax.debug.print` for dynamic (i.e. traced) array values within
+    JAX transformations like `jit`, `vmap`, and others. For printing of static values
+    (like array shapes or dtypes), you can use a normal Python `print` statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why “*debug*” print?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the name of debugging, `jax.debug.print` can reveal information about *how*
+    computations are evaluated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that the printed results are in different orders!
+  prefs: []
+  type: TYPE_NORMAL
+- en: By revealing these inner-workings, the output of `jax.debug.print` doesn’t respect
+    JAX’s usual semantics guarantees, like that `jax.vmap(f)(xs)` and `jax.lax.map(f,
+    xs)` compute the same thing (in different ways). Yet these evaluation order details
+    are exactly what we might want to see when debugging!
+  prefs: []
+  type: TYPE_NORMAL
+- en: So use `jax.debug.print` for debugging, and not when semantics guarantees are
+    important.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More examples of `jax.debug.print`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In addition to the above examples using `jit` and `vmap`, here are a few more
+    to have in mind.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Printing under `jax.pmap`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: When `jax.pmap`-ed, `jax.debug.print`s might be reordered!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Printing under `jax.grad`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Under a `jax.grad`, `jax.debug.print`s will only print on the forward pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: This behavior is similar to how Python’s builtin `print` works under a `jax.grad`.
+    But by using `jax.debug.print` here, the behavior is the same even if the caller
+    applies a `jax.jit`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To print on the backward pass, just use a `jax.custom_vjp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Printing in other transformations
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '`jax.debug.print` also works in other transformations like `xmap` and `pjit`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: More control with `jax.debug.callback`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In fact, `jax.debug.print` is a thin convenience wrapper around `jax.debug.callback`,
+    which can be used directly for greater control over string formatting, or even
+    the kind of output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Semantically, `jax.debug.callback` is roughly equivalent to the following Python
+    function
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: As with `jax.debug.print`, these callbacks should only be used for debugging
+    output, like printing or plotting. Printing and plotting are pretty harmless,
+    but if you use it for anything else its behavior might surprise you under transformations.
+    For example, it’s not safe to use `jax.debug.callback` for timing operations,
+    since callbacks might be reordered and asynchronous (see below).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sharp bits
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Like most JAX APIs, `jax.debug.print` can cut you if you’re not careful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ordering of printed results
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'When distinct calls to `jax.debug.print` involve arguments which don’t depend
+    on one another, they might be reordered when staged out, e.g. by `jax.jit`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Why? Under the hood, the compiler gets a functional representation of the staged-out
+    computation, where the imperative order of the Python function is lost and only
+    data dependence remains. This change is invisible to users with functionally pure
+    code, but in the presence of side-effects like printing, it’s noticeable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To preserve the original order of `jax.debug.print`s as written in your Python
+    function, you can use `jax.debug.print(..., ordered=True)`, which will ensure
+    the relative order of prints is preserved. But using `ordered=True` will raise
+    an error under `jax.pmap` and other JAX transformations involving parallelism,
+    since ordering can’t be guaranteed under parallel execution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Asynchronous callbacks
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Depending on the backend, `jax.debug.print`s may happen asynchronously, i.e.
+    not in your main program thread. This means that values could be printed to your
+    screen even after your JAX function has returned a value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To block on the `jax.debug.print`s in a function, you can call `jax.effects_barrier()`,
+    which will wait until any remaining side-effects in the function have completed
+    as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Performance impacts
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Unnecessary materialization
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: While `jax.debug.print` was designed to have a minimal performance footprint,
+    it can interfere with compiler optimizations and potentially affect the memory
+    profile of your JAX programs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this example, we are printing intermediate values in between a linear layer
+    and the activation function. Compilers like XLA can perform fusion optimizations,
+    which might avoid materializing `logits` in memory. But when we use `jax.debug.print`
+    on `logits`, we are forcing those intermediates to be materialized, potentially
+    slowing down the program and increasing memory usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Furthermore, when using `jax.debug.print` with `jax.pjit`, a global synchronization
+    occurs that will materialize values on a single device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Callback overhead
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '`jax.debug.print` inherently incurs communication between an accelerator and
+    its host. The underlying mechanism differs from backend to backend (e.g. GPU vs
+    TPU) but in all cases, we’ll need to copy the printed values from device to host.
+    In the CPU case, this overhead is smaller.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Furthermore, when using `jax.debug.print` with `jax.pjit`, a global synchronization
+    occurs that adds some overhead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Strengths and limitations of `jax.debug.print`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Strengths
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Print debugging is simple and intuitive
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jax.debug.callback` can be used for other innocuous side-effects'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Limitations
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Adding print statements is a manual process
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Can have performance impacts
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Interactive inspection with `jax.debug.breakpoint()`
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**TL;DR** Use `jax.debug.breakpoint()` to pause the execution of your JAX program
+    to inspect values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![JAX debugger](img/fee2c7fc0abba538525eb7922811ec87.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '`jax.debug.breakpoint()` is actually just an application of `jax.debug.callback(...)`
+    that captures information about the call stack. It has the same transformation
+    behaviors as `jax.debug.print` as a result (e.g. `vmap`-ing `jax.debug.breakpoint()`
+    unrolls it across the mapped axis).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Usage
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Calling `jax.debug.breakpoint()` in a compiled JAX function will pause your
+    program when it hits the breakpoint. You’ll be presented with a `pdb`-like prompt
+    that allows you to inspect the values in the call stack. Unlike `pdb`, you will
+    not be able to step through the execution, but you are allowed to resume it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Debugger commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`help` - prints out available commands'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`p` - evaluates an expression and prints its result'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pp` - evaluates an expression and pretty-prints its result'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`u(p)` - go up a stack frame'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`d(own)` - go down a stack frame'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`w(here)/bt` - print out a backtrace'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`l(ist)` - print out code context'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`c(ont(inue))` - resumes the execution of the program'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`q(uit)/exit` - exits the program (does not work on TPU)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Examples
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Usage with `jax.lax.cond`
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: When combined with `jax.lax.cond`, the debugger can become a useful tool for
+    detecting `nan`s or `inf`s.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sharp bits
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Because `jax.debug.breakpoint` is a just an application of `jax.debug.callback`,
+    it has the same sharp bits as `jax.debug.print`, with a few more caveats:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`jax.debug.breakpoint` materializes *even more* intermediates than `jax.debug.print`
+    because it forces materialization of all values in the call stack'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jax.debug.breakpoint` has more runtime overhead than a `jax.debug.print` because
+    it has to potentially copy all the intermediate values in a JAX program from device
+    to host.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Strengths and limitations of `jax.debug.breakpoint()`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Strengths
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Simple, intuitive and (somewhat) standard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Can inspect many values at the same time, up and down the call stack
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Limitations
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Need to potentially use many breakpoints to pinpoint the source of an error
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Materializes many intermediates
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

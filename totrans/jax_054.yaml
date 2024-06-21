@@ -1,0 +1,890 @@
+- en: Custom derivative rules for JAX-transformable Python functions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html`](https://jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '![Open in Colab](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/Custom_derivative_rules_for_Python_code.ipynb)
+    ![Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/Custom_derivative_rules_for_Python_code.ipynb)'
+  prefs: []
+  type: TYPE_IMG
+- en: '*mattjj@ Mar 19 2020, last updated Oct 14 2020*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two ways to define differentiation rules in JAX:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: using `jax.custom_jvp` and `jax.custom_vjp` to define custom differentiation
+    rules for Python functions that are already JAX-transformable; and
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: defining new `core.Primitive` instances along with all their transformation
+    rules, for example to call into functions from other systems like solvers, simulators,
+    or general numerical computing systems.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'This notebook is about #1\. To read instead about #2, see the [notebook on
+    adding primitives](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For an introduction to JAX’s automatic differentiation API, see [The Autodiff
+    Cookbook](https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html).
+    This notebook assumes some familiarity with [jax.jvp](https://jax.readthedocs.io/en/latest/jax.html#jax.jvp)
+    and [jax.grad](https://jax.readthedocs.io/en/latest/jax.html#jax.grad), and the
+    mathematical meaning of JVPs and VJPs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: TL;DR
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Custom JVPs with `jax.custom_jvp`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Custom VJPs with `jax.custom_vjp`
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Example problems
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To get an idea of what problems `jax.custom_jvp` and `jax.custom_vjp` are meant
+    to solve, let’s go over a few examples. A more thorough introduction to the `jax.custom_jvp`
+    and `jax.custom_vjp` APIs is in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Numerical stability
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: One application of `jax.custom_jvp` is to improve the numerical stability of
+    differentiation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Say we want to write a function called `log1pexp`, which computes \(x \mapsto
+    \log ( 1 + e^x )\). We can write that using `jax.numpy`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since it’s written in terms of `jax.numpy`, it’s JAX-transformable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'But there’s a numerical stability problem lurking here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: That doesn’t seem right! After all, the derivative of \(x \mapsto \log (1 +
+    e^x)\) is \(x \mapsto \frac{e^x}{1 + e^x}\), and so for large values of \(x\)
+    we’d expect the value to be about 1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can get a bit more insight into what’s going on by looking at the jaxpr
+    for the gradient computation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Stepping through how the jaxpr would be evaluated, we can see that the last
+    line would involve multiplying values that floating point math will round to 0
+    and \(\infty\), respectively, which is never a good idea. That is, we’re effectively
+    evaluating `lambda x: (1 / (1 + jnp.exp(x))) * jnp.exp(x)` for large `x`, which
+    effectively turns into `0. * jnp.inf`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instead of generating such large and small values, hoping for a cancellation
+    that floats can’t always provide, we’d rather just express the derivative function
+    as a more numerically stable program. In particular, we can write a program that
+    more closely evaluates the equal mathematical expression \(1 - \frac{1}{1 + e^x}\),
+    with no cancellation in sight.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This problem is interesting because even though our definition of `log1pexp`
+    could already be JAX-differentiated (and transformed with `jit`, `vmap`, …), we’re
+    not happy with the result of applying standard autodiff rules to the primitives
+    comprising `log1pexp` and composing the result. Instead, we’d like to specify
+    how the whole function `log1pexp` should be differentiated, as a unit, and thus
+    arrange those exponentials better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is one application of custom derivative rules for Python functions that
+    are already JAX transformable: specifying how a composite function should be differentiated,
+    while still using its original Python definition for other transformations (like
+    `jit`, `vmap`, …).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s a solution using `jax.custom_jvp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s a `defjvps` convenience wrapper to express the same thing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Enforcing a differentiation convention
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A related application is to enforce a differentiation convention, perhaps at
+    a boundary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider the function \(f : \mathbb{R}_+ \to \mathbb{R}_+\) with \(f(x) = \frac{x}{1
+    + \sqrt{x}}\), where we take \(\mathbb{R}_+ = [0, \infty)\). We might implement
+    \(f\) as a program like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As a mathematical function on \(\mathbb{R}\) (the full real line), \(f\) is
+    not differentiable at zero (because the limit defining the derivative doesn’t
+    exist from the left). Correspondingly, autodiff produces a `nan` value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: But mathematically if we think of \(f\) as a function on \(\mathbb{R}_+\) then
+    it is differentiable at 0 [Rudin’s Principles of Mathematical Analysis Definition
+    5.1, or Tao’s Analysis I 3rd ed. Definition 10.1.1 and Example 10.1.6]. Alternatively,
+    we might say as a convention we want to consider the directional derivative from
+    the right. So there is a sensible value for the Python function `grad(f)` to return
+    at `0.0`, namely `1.0`. By default, JAX’s machinery for differentiation assumes
+    all functions are defined over \(\mathbb{R}\) and thus doesn’t produce `1.0` here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can use a custom JVP rule! In particular, we can define the JVP rule in terms
+    of the derivative function \(x \mapsto \frac{\sqrt{x} + 2}{2(\sqrt{x} + 1)²}\)
+    on \(\mathbb{R}_+\),
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s the convenience wrapper version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Gradient clipping
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: While in some cases we want to express a mathematical differentiation computation,
+    in other cases we may even want to take a step away from mathematics to adjust
+    the computation autodiff performs. One canonical example is reverse-mode gradient
+    clipping.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For gradient clipping, we can use `jnp.clip` together with a `jax.custom_vjp`
+    reverse-mode-only rule:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![../_images/deaae0f99458d9656c1888a740e8fddef86e7a2a68deda903918a80e0b7597be.png](img/db04498f1c15c9de087b25ad2925e897.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![../_images/8b564451d0b054ab4486979b76183ae8af108a4d106652226651c16843285dde.png](img/fb08b3bfb2e8954bf4b93b2246d79f03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Python debugging
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another application that is motivated by development workflow rather than numerics
+    is to set a `pdb` debugger trace in the backward pass of reverse-mode autodiff.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When trying to track down the source of a `nan` runtime error, or just examine
+    carefully the cotangent (gradient) values being propagated, it can be useful to
+    insert a debugger at a point in the backward pass that corresponds to a specific
+    point in the primal computation. You can do that with `jax.custom_vjp`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ll defer an example until the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implicit function differentiation of iterative implementations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This example gets pretty deep in the mathematical weeds!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another application for `jax.custom_vjp` is reverse-mode differentiation of
+    functions that are JAX-transformable (by `jit`, `vmap`, …) but not efficiently
+    JAX-differentiable for some reason, perhaps because they involve `lax.while_loop`.
+    (It’s not possible to produce an XLA HLO program that efficiently computes the
+    reverse-mode derivative of an XLA HLO While loop because that would require a
+    program with unbounded memory use, which isn’t possible to express in XLA HLO,
+    at least without side-effecting interactions through infeed/outfeed.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, consider this `fixed_point` routine which computes a fixed point
+    by iteratively applying a function in a `while_loop`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is an iterative procedure for numerically solving the equation \(x = f(a,
+    x)\) for \(x\), by iterating \(x_{t+1} = f(a, x_t)\) until \(x_{t+1}\) is sufficiently
+    close to \(x_t\). The result \(x^*\) depends on the parameters \(a\), and so we
+    can think of there being a function \(a \mapsto x^*(a)\) that is implicitly defined
+    by equation \(x = f(a, x)\).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can use `fixed_point` to run iterative procedures to convergence, for example
+    running Newton’s method to calculate square roots while only executing adds, multiplies,
+    and divides:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can `vmap` or `jit` the function as well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can’t apply reverse-mode automatic differentiation because of the `while_loop`,
+    but it turns out we wouldn’t want to anyway: instead of differentiating through
+    the implementation of `fixed_point` and all its iterations, we can exploit the
+    mathematical structure to do something that is much more memory-efficient (and
+    FLOP-efficient in this case, too!). We can instead use the implicit function theorem
+    [Prop A.25 of Bertsekas’s Nonlinear Programming, 2nd ed.], which guarantees (under
+    some conditions) the existence of the mathematical objects we’re about to use.
+    In essence, we linearize at the solution and solve those linear equations iteratively
+    to compute the derivatives we want.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider again the equation \(x = f(a, x)\) and the function \(x^*\). We want
+    to evaluate vector-Jacobian products like \(v^\mathsf{T} \mapsto v^\mathsf{T}
+    \partial x^*(a_0)\).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At least in an open neighborhood around the point \(a_0\) at which we want
+    to differentiate, let’s assume that the equation \(x^*(a) = f(a, x^*(a))\) holds
+    for all \(a\). Since the two sides are equal as functions of \(a\), their derivatives
+    must be equal as well, so let’s differentiate both sides:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: \(\qquad \partial x^*(a) = \partial_0 f(a, x^*(a)) + \partial_1 f(a, x^*(a))
+    \partial x^*(a)\).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting \(A = \partial_1 f(a_0, x^*(a_0))\) and \(B = \partial_0 f(a_0, x^*(a_0))\),
+    we can write the quantity we’re after more simply as
+  prefs: []
+  type: TYPE_NORMAL
+- en: \(\qquad \partial x^*(a_0) = B + A \partial x^*(a_0)\),
+  prefs: []
+  type: TYPE_NORMAL
+- en: or, by rearranging,
+  prefs: []
+  type: TYPE_NORMAL
+- en: \(\qquad \partial x^*(a_0) = (I - A)^{-1} B\).
+  prefs: []
+  type: TYPE_NORMAL
+- en: That means we can evaluate vector-Jacobian products like
+  prefs: []
+  type: TYPE_NORMAL
+- en: \(\qquad v^\mathsf{T} \partial x^*(a_0) = v^\mathsf{T} (I - A)^{-1} B = w^\mathsf{T}
+    B\),
+  prefs: []
+  type: TYPE_NORMAL
+- en: where \(w^\mathsf{T} = v^\mathsf{T} (I - A)^{-1}\), or equivalently \(w^\mathsf{T}
+    = v^\mathsf{T} + w^\mathsf{T} A\), or equivalently \(w^\mathsf{T}\) is the fixed
+    point of the map \(u^\mathsf{T} \mapsto v^\mathsf{T} + u^\mathsf{T} A\). That
+    last characterization gives us a way to write the VJP for `fixed_point` in terms
+    of a call to `fixed_point`! Moreover, after expanding \(A\) and \(B\) back out,
+    we can see we need only to evaluate VJPs of \(f\) at \((a_0, x^*(a_0))\).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s the upshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can check our answers by differentiating `jnp.sqrt`, which uses a totally
+    different implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: A limitation to this approach is that the argument `f` can’t close over any
+    values involved in differentiation. That is, you might notice that we kept the
+    parameter `a` explicit in the argument list of `fixed_point`. For this use case,
+    consider using the low-level primitive `lax.custom_root`, which allows for deriviatives
+    in closed-over variables with custom root-finding functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basic usage of `jax.custom_jvp` and `jax.custom_vjp` APIs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Use `jax.custom_jvp` to define forward-mode (and, indirectly, reverse-mode)
+    rules
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Here’s a canonical basic example of using `jax.custom_jvp`, where the comments
+    use [Haskell-like type signatures](https://wiki.haskell.org/Type_signature):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: In words, we start with a primal function `f` that takes inputs of type `a`
+    and produces outputs of type `b`. We associate with it a JVP rule function `f_jvp`
+    that takes a pair of inputs representing the primal inputs of type `a` and the
+    corresponding tangent inputs of type `T a`, and produces a pair of outputs representing
+    the primal outputs of type `b` and tangent outputs of type `T b`. The tangent
+    outputs should be a linear function of the tangent inputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can also use `f.defjvp` as a decorator, as in
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Even though we defined only a JVP rule and no VJP rule, we can use both forward-
+    and reverse-mode differentiation on `f`. JAX will automatically transpose the
+    linear computation on tangent values from our custom JVP rule, computing the VJP
+    as efficiently as if we had written the rule by hand:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: For automatic transposition to work, the JVP rule’s output tangents must be
+    linear as a function of the input tangents. Otherwise a transposition error is
+    raised.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Multiple arguments work like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `defjvps` convenience wrapper lets us define a JVP for each argument separately,
+    and the results are computed separately then summed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s a `defjvps` example with multiple arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As a shorthand, with `defjvps` you can pass a `None` value to indicate that
+    the JVP for a particular argument is zero:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: Calling a `jax.custom_jvp` function with keyword arguments, or writing a `jax.custom_jvp`
+    function definition with default arguments, are both allowed so long as they can
+    be unambiguously mapped to positional arguments based on the function signature
+    retrieved by the standard library `inspect.signature` mechanism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When you’re not performing differentiation, the function `f` is called just
+    as if it weren’t decorated by `jax.custom_jvp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The custom JVP rule is invoked during differentiation, whether forward or reverse:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that `f_jvp` calls `f` to compute the primal outputs. In the context
+    of higher-order differentiation, each application of a differentiation transform
+    will use the custom JVP rule if and only if the rule calls the original `f` to
+    compute the primal outputs. (This represents a kind of fundamental tradeoff, where
+    we can’t make use of intermediate values from the evaluation of `f` in our rule
+    *and also* have the rule apply in all orders of higher-order differentiation.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can use Python control flow with `jax.custom_jvp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: Use `jax.custom_vjp` to define custom reverse-mode-only rules
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'While `jax.custom_jvp` suffices for controlling both forward- and, via JAX’s
+    automatic transposition, reverse-mode differentiation behavior, in some cases
+    we may want to directly control a VJP rule, for example in the latter two example
+    problems presented above. We can do that with `jax.custom_vjp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: In words, we again start with a primal function `f` that takes inputs of type
+    `a` and produces outputs of type `b`. We associate with it two functions, `f_fwd`
+    and `f_bwd`, which describe how to perform the forward- and backward-passes of
+    reverse-mode autodiff, respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The function `f_fwd` describes the forward pass, not only the primal computation
+    but also what values to save for use on the backward pass. Its input signature
+    is just like that of the primal function `f`, in that it takes a primal input
+    of type `a`. But as output it produces a pair, where the first element is the
+    primal output `b` and the second element is any “residual” data of type `c` to
+    be stored for use by the backward pass. (This second output is analogous to [PyTorch’s
+    save_for_backward mechanism](https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html).)
+  prefs: []
+  type: TYPE_NORMAL
+- en: The function `f_bwd` describes the backward pass. It takes two inputs, where
+    the first is the residual data of type `c` produced by `f_fwd` and the second
+    is the output cotangents of type `CT b` corresponding to the output of the primal
+    function. It produces an output of type `CT a` representing the cotangents corresponding
+    to the input of the primal function. In particular, the output of `f_bwd` must
+    be a sequence (e.g. a tuple) of length equal to the number of arguments to the
+    primal function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So multiple arguments work like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: Calling a `jax.custom_vjp` function with keyword arguments, or writing a `jax.custom_vjp`
+    function definition with default arguments, are both allowed so long as they can
+    be unambiguously mapped to positional arguments based on the function signature
+    retrieved by the standard library `inspect.signature` mechanism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As with `jax.custom_jvp`, the custom VJP rule comprised by `f_fwd` and `f_bwd`
+    is not invoked if differentiation is not applied. If function is evaluated, or
+    transformed with `jit`, `vmap`, or other non-differentiation transformations,
+    then only `f` is called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE97]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE98]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE99]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Forward-mode autodiff cannot be used on the** `jax.custom_vjp` **function**
+    and will raise an error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you want to use both forward- and reverse-mode, use `jax.custom_jvp` instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can use `jax.custom_vjp` together with `pdb` to insert a debugger trace
+    in the backward pass:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE104]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE105]'
+  prefs: []
+  type: TYPE_PRE
+- en: More features and details
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Working with `list` / `tuple` / `dict` containers (and other pytrees)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You should expect standard Python containers like lists, tuples, namedtuples,
+    and dicts to just work, along with nested versions of those. In general, any [pytrees](https://jax.readthedocs.io/en/latest/pytrees.html)
+    are permissible, so long as their structures are consistent according to the type
+    constraints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s a contrived example with `jax.custom_jvp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE106]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE107]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE108]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE109]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE110]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And an analogous contrived example with `jax.custom_vjp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE111]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE112]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE113]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE114]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE115]'
+  prefs: []
+  type: TYPE_PRE
+- en: Handling non-differentiable arguments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Some use cases, like the final example problem, call for non-differentiable
+    arguments like function-valued arguments to be passed to functions with custom
+    differentiation rules, and for those arguments to also be passed to the rules
+    themselves. In the case of `fixed_point`, the function argument `f` was such a
+    non-differentiable argument. A similar situation arises with `jax.experimental.odeint`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`jax.custom_jvp` with `nondiff_argnums`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Use the optional `nondiff_argnums` parameter to `jax.custom_jvp` to indicate
+    arguments like these. Here’s an example with `jax.custom_jvp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE116]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE117]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE118]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE119]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE120]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Notice the gotcha here: no matter where in the argument list these parameters
+    appear, they’re placed at the *start* of the signature of the corresponding JVP
+    rule. Here’s another example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE121]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE122]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE123]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE124]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE125]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`jax.custom_vjp` with `nondiff_argnums`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'A similar option exists for `jax.custom_vjp`, and, similarly, the convention
+    is that the non-differentiable arguments are passed as the first arguments to
+    the `_bwd` rule, no matter where they appear in the signature of the original
+    function. The signature of the `_fwd` rule remains unchanged - it is the same
+    as the signature of the primal function. Here’s an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE126]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE127]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE128]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE129]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE130]'
+  prefs: []
+  type: TYPE_PRE
+- en: See `fixed_point` above for another usage example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**You don’t need to use** `nondiff_argnums` **with array-valued arguments**,
+    for example ones with integer dtype. Instead, `nondiff_argnums` should only be
+    used for argument values that don’t correspond to JAX types (essentially don’t
+    correspond to array types), like Python callables or strings. If JAX detects that
+    an argument indicated by `nondiff_argnums` contains a JAX Tracer, then an error
+    is raised. The `clip_gradient` function above is a good example of not using `nondiff_argnums`
+    for integer-dtype array arguments.'
+  prefs: []
+  type: TYPE_NORMAL

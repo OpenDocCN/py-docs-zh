@@ -1,0 +1,480 @@
+- en: jax.experimental.host_callback module
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/jax.experimental.host_callback.html`](https://jax.readthedocs.io/en/latest/jax.experimental.host_callback.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Primitives for calling Python functions on the host from JAX accelerator code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: The host_callback APIs are deprecated as of March 20, 2024. The functionality
+    is subsumed by the [new JAX external callbacks](https://jax.readthedocs.io/en/latest/notebooks/external_callbacks.html)
+    See [google/jax#20385](https://github.com/google/jax/issues/20385).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This module introduces the host callback functions `call()`, `id_tap()`, and
+    `id_print()`, that send their arguments from the device to the host and invoke
+    user-defined Python functions on the host, optionally returning results back to
+    the device computation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We show below how these functions can be used. We start with `call()`, and we
+    discuss examples of calling from JAX to arbitrary Python functions on the CPU,
+    e.g., to use NumPy CPU custom kernels. Then we show uses of `id_tap()` and `id_print()`,
+    which have the restriction that they cannot return values from the host to the
+    device. These primitives are generally faster because they are executed asynchronously
+    with the device code. In particular, they can be used to tap into and to debug
+    JAX code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `call()` to call a host function and return results to device
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Use `call()` to invoke a computation on the host and return NumPy arrays to
+    the device computation. Host computation is useful, e.g., when a device computation
+    needs some data that requires I/O on the host, or it needs a library that is available
+    on the host and you do not want to code it in JAX. For example, eigen decomposition
+    for general matrices in JAX does not work on TPU. We can call the Numpy implementation
+    from any JAX accelerator computation, using a host computation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `call()` function and the Python host function both take a single argument
+    and return a single result, but those can be pytrees. Note that we must tell the
+    `call()` what shape and dtype to expect from the host invocation, using the `result_shape`
+    keyword argument. This is important because the device code is compiled with that
+    expectation. There will be an error raised at runtime if the actual invocation
+    produces a different result shape. In general, **such errors and also exceptions
+    raised by the host computation may be difficult to debug**. See the Debugging
+    section below. This is a problem for `call()` but not for `id_tap()` because for
+    the latter the device code does not expect a returned value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `call()` API can be used inside a jit or pmap computation or inside cond/scan/while
+    control flow. When used inside `jax.pmap()`, there will be separate calls to the
+    host from each of the participating devices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that `call()` does not support any JAX transformations, but as we show
+    below one can make use of the existing support for [Custom differentiation in
+    JAX](https://jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `id_tap()` to call a Python function on the host, with no returned values
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `id_tap()` and `id_print()` are special cases of `call()`, when you just
+    want the side effects of your Python callback. These functions have the advantage
+    that once the arguments have been sent to the host, the device computation can
+    proceed without waiting for the Python callback to return. For `id_tap()` you
+    can specify your Python callback to be called, while `id_print()` uses a built-in
+    callback that prints the arguments to stdout on the host. The Python function
+    passed to `id_tap()` takes two positional arguments (the value tapped from the
+    device computation along with a `transforms` tuple, described below). Optionally,
+    the function may be passed a keyword argument `device` with the Device from which
+    the value was tapped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A few examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above examples can all be adapted to use `id_print()` instead, with the
+    difference that `id_print()` prints on the host the positional argument, along
+    with any additional kwargs and the automatic kwarg `transforms`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `barrier_wait()` to wait until all callbacks have executed
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'If your Python callbacks have side-effects you may need to wait until the computation
+    has finished to ensure that the side-effects have been observed. You can use the
+    `barrier_wait()` function for that purpose:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that `barrier_wait()` will start one tiny computation with one tap on each
+    of the jax.local_devices() and will wait for all these taps to be received.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An alternative to using `barrier_wait()` is to just wait for the end of the
+    computation, if all the callbacks are `call()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Behavior under parallelization transformations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In presence of `jax.pmap()` the code will run on multiple devices and each
+    device will tap its values independently. It may be helpful to use the `tap_with_device`
+    option for `id_print()` or `id_tap()`, so that you see which device is sending
+    which data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: When using `jax.pmap()` with multiple devices on multiple hosts, every host
+    will receive callbacks from all of its local devices, with an operand that corresponds
+    to each device slice. For a `call()`, the callback must return to each device
+    only the slice of the result that pertains to the corresponding device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using the experimental `pjit.pjit()` the code will run on multiple devices
+    on different shards of the input. The current implementation of host callbacks
+    will ensure that a single device will collect and outfeed the entire operand,
+    in a single callback. The callback function is supposed to return the entire array,
+    which will then be sent in a single infeed to the same device that issued the
+    outfeed. This device is then responsible for sending the required shards to the
+    other devices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the collection of the operand on one device may result in OOM if the
+    operand was sharded across devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using `pjit.pjit()` with multiple devices on multiple hosts, only the host
+    for the device 0 (w.r.t. the mesh) will receive the callback, with the operand
+    collected from all participating devices on all hosts. For a `call()`, the callback
+    must return the entire array for all devices on all hosts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Behavior under JAX autodiff transformations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'When used under a JAX autodiff transformation, the host callback functions
+    operate on the primal values only. Consider the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: (You can see these examples tested in host_callback_test.HostCallbackTapTest.test_tap_transforms.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When used under `jax.jvp()` there will be one callback with the primal values
+    only:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly for `jax.grad()`, we get a callback from the forward computation
+    only:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you want to invoke the callback on the tangents during a `jax.jvp()`, you
+    can use a custom_jvp. For example, you can define a function that does nothing
+    interesting except that its custom_jvp will print the tangents:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then you use this function in the places where you want to tap the tangents:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can do a similar thing for the cotangents during `jax.grad()`. This time
+    you must be careful to use in the rest of the computation the values whose cotangents
+    you want to tap. Hence we make the `print_cotangents` return its argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you use `ad_checkpoint.checkpoint()` to rematerialize the residuals for
+    the backward pass, then the callbacks from the primal computation will be called
+    twice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The callbacks are, in order from: the primal computation of the inner `power3`,
+    the primal computation of the outer `power3`, and the rematerialization of the
+    residuals for the inner `power3`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Behavior under jax.vmap
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The host callback functions `id_print()` and `id_tap()` support the vectorization
+    transformation `jax.vmap()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For `jax.vmap()` the arguments to the callback are batched, and the callback
+    function is passed an additional special `transforms` containing a list of transformation
+    descriptors in the form `("batch", {"batch_dims": ...})`, where `` ...` `` denotes
+    the batched dimensions for the tapped values (one entry per argument, ` None`
+    denotes an argument that was broadcast).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'jax.vmap(power3)(np.array([2., 3.])) # transforms: [(‘batch’, {‘batch_dims’:
+    (0, 0)})] what: x,x² : ([2., 3.], [4., 9.])'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: See documentation for `id_tap()`, `id_print()`, and `call()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more usage example, see tests/host_callback_test.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `call()` to call a TensorFlow function, with reverse-mode autodiff support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Another possible use for host computation is to invoke a library written for
+    another framework, such as TensorFlow. In this case it becomes interesting to
+    support JAX autodiff for host callbacks by deferring to the autodiff mechanism
+    in TensorFlow, using the `jax.custom_vjp()` mechanism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is relatively easy to do, once one understands both the JAX custom VJP
+    and the TensorFlow autodiff mechanisms. The code for how this can be done is shown
+    in the `call_tf_full_ad` function in [host_callback_to_tf_test.py](https://github.com/google/jax/blob/main/tests/host_callback_to_tf_test.py).
+    This example supports arbitrary higher-order differentiation as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that if you just want to call TensorFlow functions from JAX, you can also
+    use the [jax2tf.call_tf function](https://github.com/google/jax/blob/main/jax/experimental/jax2tf/call_tf.py).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `call()` to call a JAX function on another device, with reverse-mode autodiff
+    support
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: It should not be surprising that we can use host computation to invoke a JAX
+    computation on another device. The arguments are sent from the accelerator to
+    the host, and then to the outside device on which the JAX host computation will
+    run, and then the results are sent back to the original accelerator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code for how this can be done is shown in the `call_jax_other_device function`
+    in [host_callback_test.py](https://github.com/google/jax/blob/main/tests/host_callback_test.py).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Low-level details and debugging
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The host callback functions will be executed for each device in the order in
+    which the send operations were performed on the device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The host callback functions for multiple devices may be interleaved. The data
+    from the devices is received by separate threads managed by the JAX runtime (one
+    thread per device). The runtime maintains a buffer of configurable size (see the
+    flag `--jax_host_callback_max_queue_byte_size`). When the buffer is full, all
+    the receiving threads are paused which eventually pauses the computation on devices.
+    The runtime has one additional thread for each device to invoke the Python user
+    functions with the received data. If the processing of the callbacks is slow,
+    it may actually lead to the runtime buffer filling up, and eventually pausing
+    the computation on the devices when they need to send something. For more details
+    on the outfeed receiver runtime mechanism see [runtime code](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/python/outfeed_receiver.cc).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In order to pause the execution until all data from computations already started
+    on devices has arrived and has been processed, use `barrier_wait()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exceptions from the user-defined callback functions are logged along with their
+    stack traces, but the receiving threads are not stopped. Instead the last exception
+    is recorded and the subsequent `barrier_wait()` will raise `CallbackException`
+    if any exception had occurred in one of the tap functions. This exception will
+    include the text and the stack trace of the last exception encountered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One further complication arises for callback functions that must return results
+    to the call origin device, such as `call()`. This is handled differently on CPU/GPU
+    devices compared to TPU devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On CPU/GPU devices, in order to avoid the device computation being stuck waiting
+    for a result that will never arrive, in case of any error during the processing
+    of the callback (whether raised by the user-code itself or due to a mismatch of
+    the returned value and the expected return_shape) we send the device a “fake”
+    result of shape `int8[12345]`. This will make the device computation abort because
+    the received data is different than the one that it expects. On CPU the runtime
+    will crash with a distinctive error message:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`` ` Check failed: buffer->length() == buffer_length (12345 vs. ...) ` ``'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On GPU, the failure is more user-friendly and will be surfaced to the Python
+    program as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`` ` RET_CHECK failure ... Mismatch between infeed source buffer shape s8[12345]
+    ... ` ``'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To debug the underlying cause for these messages, see the Debugging section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On TPU devices, there is currently no shape check for infeed, so we take the
+    safer route of not sending this fake result in case of errors. This means that
+    the computation will hang, and no exception will be raised (but any exceptions
+    in the callback functions will still appear in the logs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The current implementation uses the outfeed mechanism provided by XLA. The mechanism
+    itself is quite primitive in the sense that a receiver must know exactly the shape
+    of each incoming packet, and how many packets are expected. This makes it hard
+    to use for multiple kinds of data in the same computation, and it is practically
+    impossible to use it under conditionals or in loops of non-constant iteration
+    count. Furthermore, code that uses the outfeed mechanism directly cannot be transformed
+    by JAX. All these limitations are addressed by the host callback functions. The
+    tapping API introduced here makes it easy to share the outfeed mechanism for multiple
+    purposes, while supporting all transformations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Note that after you have used the host callback functions, you cannot use
+    lax.outfeed directly**. You may want to `stop_outfeed_receiver()` if you later
+    need to use lax.outfeed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since the actual calls to your callback functions are made from the C++ receiver,
+    it may be hard to debug the calls. In particular, the stack trace will not include
+    the calling code. You can use the flag `jax_host_callback_inline` (or the environment
+    variable `JAX_HOST_CALLBACK_INLINE`) to ensure that the calls to the callbacks
+    are inlined. This works only if the calls are outside a staging context (`jit()`
+    or a control-flow primitive).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The C++ [receiver](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/python/outfeed_receiver.cc)
+    is started automatically on the first call to `id_tap()`. In order to stop it
+    properly, upon start an `atexit` handler is registered to call `barrier_wait()`
+    with the logging name “at_exit”.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are a few environment variables that you can use to turn on logging for
+    the C++ outfeed [receiver backend](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/python/outfeed_receiver.cc).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`TF_CPP_MIN_LOG_LEVEL=0`: will turn on INFO logging, needed for all below.'
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`TF_CPP_MIN_VLOG_LEVEL=3`: will make all VLOG logging up to level 3 behave
+    like INFO logs. This may be too much, but you will see which modules are logging
+    relevant info, and then you can select which modules to log from.'
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`TF_CPP_VMODULE=<module_name>=3` (the module name can be either C++ or Python,
+    without the extension).'
+  prefs:
+  - PREF_BQ
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You should also use the `--verbosity=2` flag so that you see the logs from Python.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, you can try to enable logging in the `host_callback` module: `TF_CPP_MIN_LOG_LEVEL=0
+    TF_CPP_VMODULE=host_callback=3 python tests/host_callback_test.py --verbosity=2
+    HostCallbackIdTapTest.test_tap_jit_simple`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you want to enable logging in lower-level implementation modules try: `TF_CPP_MIN_LOG_LEVEL=0
+    TF_CPP_VMODULE=outfeed_receiver=3,host_callback=3,outfeed_receiver_py=3,outfeed_thunk=3,infeed_thunk=3,cpu_transfer_manager=3,cpu_runtime=3,xfeed_manager=3,pjrt_client=3
+    python tests/host_callback_test.py --verbosity=2 HostCallbackIdTapTest.test_tap_jit_simple`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: (For bazel tests use –test_arg=–vmodule=…
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Still to do:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: More performance tests.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Explore implementation with outside compilation for TPU.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Explore implementation with XLA CustomCall for CPU and GPU.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '| `id_tap`(tap_func, arg, *[, result, ...]) | Host-callback tap primitive,
+    like identity function with a call to `tap_func`. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `id_print`(arg, *[, result, tap_with_device, ...]) | Like `id_tap()` with
+    a printing tap function. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `call`(callback_func, arg, *[, result_shape, ...]) | Make a call to the host,
+    and expect a result. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `barrier_wait`([logging_name]) | Blocks the calling thread until all current
+    outfeed is processed. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `CallbackException` | Signals that some callback function had exceptions.
+    |'
+  prefs: []
+  type: TYPE_TB

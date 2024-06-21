@@ -1,0 +1,950 @@
+- en: 🔪 JAX - The Sharp Bits 🔪
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html`](https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '![Open in Colab](https://colab.research.google.com/github/google/jax/blob/main/docs/notebooks/Common_Gotchas_in_JAX.ipynb)
+    ![Open in Kaggle](https://kaggle.com/kernels/welcome?src=https://github.com/google/jax/blob/main/docs/notebooks/Common_Gotchas_in_JAX.ipynb)'
+  prefs: []
+  type: TYPE_IMG
+- en: '*levskaya@ mattjj@*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When walking about the countryside of Italy, the people will not hesitate to
+    tell you that **JAX** has [*“una anima di pura programmazione funzionale”*](https://www.sscardapane.it/iaml-backup/jax-intro/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**JAX** is a language for **expressing** and **composing** **transformations**
+    of numerical programs. **JAX** is also able to **compile** numerical programs
+    for CPU or accelerators (GPU/TPU). JAX works great for many numerical and scientific
+    programs, but **only if they are written with certain constraints** that we describe
+    below.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 🔪 Pure functions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'JAX transformation and compilation are designed to work only on Python functions
+    that are functionally pure: all the input data is passed through the function
+    parameters, all the results are output through the function results. A pure function
+    will always return the same result if invoked with the same inputs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here are some examples of functions that are not functionally pure for which
+    JAX behaves differently than the Python interpreter. Note that these behaviors
+    are not guaranteed by the JAX system; the proper way to use JAX is to use it only
+    on functionally pure Python functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A Python function can be functionally pure even if it actually uses stateful
+    objects internally, as long as it does not read or write external state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: It is not recommended to use iterators in any JAX function you want to `jit`
+    or in any control-flow primitive. The reason is that an iterator is a python object
+    which introduces state to retrieve the next element. Therefore, it is incompatible
+    with JAX functional programming model. In the code below, there are some examples
+    of incorrect attempts to use iterators with JAX. Most of them return an error,
+    but some give unexpected results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 🔪 In-Place Updates
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In Numpy you’re used to doing this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: If we try to update a JAX device array in-place, however, we get an **error**!
+    (☉_☉)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Allowing mutation of variables in-place makes program analysis and transformation
+    difficult. JAX requires that programs are pure functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instead, JAX offers a *functional* array update using the [`.at` property on
+    JAX arrays](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.ndarray.at.html#jax.numpy.ndarray.at).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ️⚠️ inside `jit`’d code and `lax.while_loop` or `lax.fori_loop` the **size**
+    of slices can’t be functions of argument *values* but only functions of argument
+    *shapes* – the slice start indices have no such restriction. See the below **Control
+    Flow** Section for more information on this limitation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Array updates: `x.at[idx].set(y)`'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For example, the update above can be written as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: JAX’s array update functions, unlike their NumPy versions, operate out-of-place.
+    That is, the updated array is returned as a new array and the original array is
+    not modified by the update.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: However, inside **jit**-compiled code, if the **input value** `x` of `x.at[idx].set(y)`
+    is not reused, the compiler will optimize the array update to occur *in-place*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Array updates with other operations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Indexed array updates are not limited simply to overwriting values. For example,
+    we can perform indexed addition as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: For more details on indexed array updates, see the [documentation for the `.at`
+    property](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.ndarray.at.html#jax.numpy.ndarray.at).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 🔪 Out-of-Bounds Indexing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In Numpy, you are used to errors being thrown when you index an array outside
+    of its bounds, like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, raising an error from code running on an accelerator can be difficult
+    or impossible. Therefore, JAX must choose some non-error behavior for out of bounds
+    indexing (akin to how invalid floating point arithmetic results in `NaN`). When
+    the indexing operation is an array index update (e.g. `index_add` or `scatter`-like
+    primitives), updates at out-of-bounds indices will be skipped; when the operation
+    is an array index retrieval (e.g. NumPy indexing or `gather`-like primitives)
+    the index is clamped to the bounds of the array since **something** must be returned.
+    For example, the last value of the array will be returned from this indexing operation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you would like finer-grained control over the behavior for out-of-bound
+    indices, you can use the optional parameters of [`ndarray.at`](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.ndarray.at.html);
+    for example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that due to this behavior for index retrieval, functions like `jnp.nanargmin`
+    and `jnp.nanargmax` return -1 for slices consisting of NaNs whereas Numpy would
+    throw an error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note also that, as the two behaviors described above are not inverses of each
+    other, reverse-mode automatic differentiation (which turns index updates into
+    index retrievals and vice versa) [will not preserve the semantics of out of bounds
+    indexing](https://github.com/google/jax/issues/5760). Thus it may be a good idea
+    to think of out-of-bounds indexing in JAX as a case of [undefined behavior](https://en.wikipedia.org/wiki/Undefined_behavior).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '🔪 Non-array inputs: NumPy vs. JAX'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'NumPy is generally happy accepting Python lists or tuples as inputs to its
+    API functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'JAX departs from this, generally returning a helpful error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is a deliberate design choice, because passing lists or tuples to traced
+    functions can lead to silent performance degradation that might otherwise be difficult
+    to detect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, consider the following permissive version of `jnp.sum` that allows
+    list inputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is what we would expect, but this hides potential performance issues
+    under the hood. In JAX’s tracing and JIT compilation model, each element in a
+    Python list or tuple is treated as a separate JAX variable, and individually processed
+    and pushed to device. This can be seen in the jaxpr for the `permissive_sum` function
+    above:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Each entry of the list is handled as a separate input, resulting in a tracing
+    & compilation overhead that grows linearly with the size of the list. To prevent
+    surprises like this, JAX avoids implicit conversions of lists and tuples to arrays.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you would like to pass a tuple or list to a JAX function, you can do so
+    by first explicitly converting it to an array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 🔪 Random Numbers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*If all scientific papers whose results are in doubt because of bad `rand()`s
+    were to disappear from library shelves, there would be a gap on each shelf about
+    as big as your fist.* - Numerical Recipes'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: RNGs and State
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You’re used to *stateful* pseudorandom number generators (PRNGs) from numpy
+    and other libraries, which helpfully hide a lot of details under the hood to give
+    you a ready fountain of pseudorandomness:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Underneath the hood, numpy uses the [Mersenne Twister](https://en.wikipedia.org/wiki/Mersenne_Twister)
+    PRNG to power its pseudorandom functions. The PRNG has a period of \(2^{19937}-1\)
+    and at any point can be described by **624 32-bit unsigned ints** and a **position**
+    indicating how much of this “entropy” has been used up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This pseudorandom state vector is automagically updated behind the scenes every
+    time a random number is needed, “consuming” 2 of the uint32s in the Mersenne twister
+    state vector:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: The problem with magic PRNG state is that it’s hard to reason about how it’s
+    being used and updated across different threads, processes, and devices, and it’s
+    *very easy* to screw up when the details of entropy production and consumption
+    are hidden from the end user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Mersenne Twister PRNG is also known to have a [number](https://cs.stackexchange.com/a/53475)
+    of problems, it has a large 2.5kB state size, which leads to problematic [initialization
+    issues](https://dl.acm.org/citation.cfm?id=1276928). It [fails](http://www.pcg-random.org/pdf/toms-oneill-pcg-family-v1.02.pdf)
+    modern BigCrush tests, and is generally slow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: JAX PRNG
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: JAX instead implements an *explicit* PRNG where entropy production and consumption
+    are handled by explicitly passing and iterating PRNG state. JAX uses a modern
+    [Threefry counter-based PRNG](https://github.com/google/jax/blob/main/docs/jep/263-prng.md)
+    that’s **splittable**. That is, its design allows us to **fork** the PRNG state
+    into new PRNGs for use with parallel stochastic generation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The random state is described by a special array element that we call a **key**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: JAX’s random functions produce pseudorandom numbers from the PRNG state, but
+    **do not** change the state!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Reusing the same state will cause **sadness** and **monotony**, depriving the
+    end user of **lifegiving chaos**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instead, we **split** the PRNG to get usable **subkeys** every time we need
+    a new pseudorandom number:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We propagate the **key** and make new **subkeys** whenever we need a new random
+    number:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can generate more than one **subkey** at a time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 🔪 Control Flow
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: ✔ python control_flow + autodiff ✔
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you just want to apply `grad` to your python functions, you can use regular
+    python control-flow constructs with no problems, as if you were using [Autograd](https://github.com/hips/autograd)
+    (or Pytorch or TF Eager).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: python control flow + JIT
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Using control flow with `jit` is more complicated, and by default it has more
+    constraints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This works:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So does this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'But this doesn’t, at least by default:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**What gives!?**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we `jit`-compile a function, we usually want to compile a version of the
+    function that works for many different argument values, so that we can cache and
+    reuse the compiled code. That way we don’t have to re-compile on each function
+    evaluation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, if we evaluate an `@jit` function on the array `jnp.array([1.,
+    2., 3.], jnp.float32)`, we might want to compile code that we can reuse to evaluate
+    the function on `jnp.array([4., 5., 6.], jnp.float32)` to save on compile time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To get a view of your Python code that is valid for many different argument
+    values, JAX traces it on *abstract values* that represent sets of possible inputs.
+    There are [multiple different levels of abstraction](https://github.com/google/jax/blob/main/jax/_src/abstract_arrays.py),
+    and different transformations use different abstraction levels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, `jit` traces your code on the `ShapedArray` abstraction level, where
+    each abstract value represents the set of all array values with a fixed shape
+    and dtype. For example, if we trace using the abstract value `ShapedArray((3,),
+    jnp.float32)`, we get a view of the function that can be reused for any concrete
+    value in the corresponding set of arrays. That means we can save on compile time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But there’s a tradeoff here: if we trace a Python function on a `ShapedArray((),
+    jnp.float32)` that isn’t committed to a specific concrete value, when we hit a
+    line like `if x < 3`, the expression `x < 3` evaluates to an abstract `ShapedArray((),
+    jnp.bool_)` that represents the set `{True, False}`. When Python attempts to coerce
+    that to a concrete `True` or `False`, we get an error: we don’t know which branch
+    to take, and can’t continue tracing! The tradeoff is that with higher levels of
+    abstraction we gain a more general view of the Python code (and thus save on re-compilations),
+    but we require more constraints on the Python code to complete the trace.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The good news is that you can control this tradeoff yourself. By having `jit`
+    trace on more refined abstract values, you can relax the traceability constraints.
+    For example, using the `static_argnums` argument to `jit`, we can specify to trace
+    on concrete values of some arguments. Here’s that example function again:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s another example, this time involving a loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: In effect, the loop gets statically unrolled. JAX can also trace at *higher*
+    levels of abstraction, like `Unshaped`, but that’s not currently the default for
+    any transformation
+  prefs: []
+  type: TYPE_NORMAL
+- en: ️⚠️ **functions with argument-**value** dependent shapes**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'These control-flow issues also come up in a more subtle way: numerical functions
+    we want to **jit** can’t specialize the shapes of internal arrays on argument
+    *values* (specializing on argument **shapes** is ok). As a trivial example, let’s
+    make a function whose output happens to depend on the input variable `length`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`static_argnums` can be handy if `length` in our example rarely changes, but
+    it would be disastrous if it changed a lot!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lastly, if your function has global side-effects, JAX’s tracer can cause weird
+    things to happen. A common gotcha is trying to print arrays inside **jit**’d functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: Structured control flow primitives
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'There are more options for control flow in JAX. Say you want to avoid re-compilations
+    but still want to use control flow that’s traceable, and that avoids un-rolling
+    large loops. Then you can use these 4 structured control flow primitives:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`lax.cond` *differentiable*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`lax.while_loop` **fwd-mode-differentiable**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`lax.fori_loop` **fwd-mode-differentiable** in general; **fwd and rev-mode
+    differentiable** if endpoints are static.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`lax.scan` *differentiable*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cond`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'python equivalent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`jax.lax` provides two other functions that allow branching on dynamic predicates:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`lax.select`](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.select.html)
+    is like a batched version of `lax.cond`, with the choices expressed as pre-computed
+    arrays rather than as functions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`lax.switch`](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.switch.html)
+    is like `lax.cond`, but allows switching between any number of callable choices.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In addition, `jax.numpy` provides several numpy-style interfaces to these functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[`jnp.where`](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.where.html)
+    with three arguments is the numpy-style wrapper of `lax.select`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`jnp.piecewise`](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.piecewise.html)
+    is a numpy-style wrapper of `lax.switch`, but switches on a list of boolean conditions
+    rather than a single scalar index.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[`jnp.select`](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.select.html)
+    has an API similar to `jnp.piecewise`, but the choices are given as pre-computed
+    arrays rather than as functions. It is implemented in terms of multiple calls
+    to `lax.select`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`while_loop`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'python equivalent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`fori_loop`'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'python equivalent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: \[\begin{split} \begin{array} {r|rr} \hline \ \textrm{construct} & \textrm{jit}
+    & \textrm{grad} \\ \hline \ \textrm{if} & ❌ & ✔ \\ \textrm{for} & ✔* & ✔\\ \textrm{while}
+    & ✔* & ✔\\ \textrm{lax.cond} & ✔ & ✔\\ \textrm{lax.while_loop} & ✔ & \textrm{fwd}\\
+    \textrm{lax.fori_loop} & ✔ & \textrm{fwd}\\ \textrm{lax.scan} & ✔ & ✔\\ \hline
+    \end{array} \end{split}\]
+  prefs: []
+  type: TYPE_NORMAL
+- en: \(\ast\) = argument-**value**-independent loop condition - unrolls the loop
+  prefs: []
+  type: TYPE_NORMAL
+- en: 🔪 Dynamic Shapes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'JAX code used within transforms like `jax.jit`, `jax.vmap`, `jax.grad`, etc.
+    requires all output arrays and intermediate arrays to have static shape: that
+    is, the shape cannot depend on values within other arrays.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, if you were implementing your own version of `jnp.nansum`, you
+    might start with something like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Outside JIT and other transforms, this works as expected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you attempt to apply `jax.jit` or another transform to this function, it
+    will error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The problem is that the size of `x_without_nans` is dependent on the values
+    within `x`, which is another way of saying its size is *dynamic*. Often in JAX
+    it is possible to work-around the need for dynamically-sized arrays via other
+    means. For example, here it is possible to use the three-argument form of `jnp.where`
+    to replace the NaN values with zeros, thus computing the same result while avoiding
+    dynamic shapes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE91]'
+  prefs: []
+  type: TYPE_PRE
+- en: Similar tricks can be played in other situations where dynamically-shaped arrays
+    occur.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 🔪 NaNs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Debugging NaNs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If you want to trace where NaNs are occurring in your functions or gradients,
+    you can turn on the NaN-checker by:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: setting the `JAX_DEBUG_NANS=True` environment variable;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: adding `jax.config.update("jax_debug_nans", True)` near the top of your main
+    file;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: adding `jax.config.parse_flags_with_absl()` to your main file, then set the
+    option using a command-line flag like `--jax_debug_nans=True`;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This will cause computations to error-out immediately on production of a NaN.
+    Switching this option on adds a nan check to every floating point type value produced
+    by XLA. That means values are pulled back to the host and checked as ndarrays
+    for every primitive operation not under an `@jit`. For code under an `@jit`, the
+    output of every `@jit` function is checked and if a nan is present it will re-run
+    the function in de-optimized op-by-op mode, effectively removing one level of
+    `@jit` at a time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There could be tricky situations that arise, like nans that only occur under
+    a `@jit` but don’t get produced in de-optimized mode. In that case you’ll see
+    a warning message print out but your code will continue to execute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If the nans are being produced in the backward pass of a gradient evaluation,
+    when an exception is raised several frames up in the stack trace you will be in
+    the backward_pass function, which is essentially a simple jaxpr interpreter that
+    walks the sequence of primitive operations in reverse. In the example below, we
+    started an ipython repl with the command line `env JAX_DEBUG_NANS=True ipython`,
+    then ran this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE92]'
+  prefs: []
+  type: TYPE_PRE
+- en: The nan generated was caught. By running `%debug`, we can get a post-mortem
+    debugger. This also works with functions under `@jit`, as the example below shows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE93]'
+  prefs: []
+  type: TYPE_PRE
+- en: When this code sees a nan in the output of an `@jit` function, it calls into
+    the de-optimized code, so we still get a clear stack trace. And we can run a post-mortem
+    debugger with `%debug` to inspect all the values to figure out the error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⚠️ You shouldn’t have the NaN-checker on if you’re not debugging, as it can
+    introduce lots of device-host round-trips and performance regressions!
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⚠️ The NaN-checker doesn’t work with `pmap`. To debug nans in `pmap` code, one
+    thing to try is replacing `pmap` with `vmap`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 🔪 Double (64bit) precision
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: At the moment, JAX by default enforces single-precision numbers to mitigate
+    the Numpy API’s tendency to aggressively promote operands to `double`. This is
+    the desired behavior for many machine-learning applications, but it may catch
+    you by surprise!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE94]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE95]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE96]'
+  prefs: []
+  type: TYPE_PRE
+- en: To use double-precision numbers, you need to set the `jax_enable_x64` configuration
+    variable **at startup**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are a few ways to do this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can enable 64-bit mode by setting the environment variable `JAX_ENABLE_X64=True`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'You can manually set the `jax_enable_x64` configuration flag at startup:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE97]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: You can parse command-line flags with `absl.app.run(main)`
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE98]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: If you want JAX to run absl parsing for you, i.e. you don’t want to do `absl.app.run(main)`,
+    you can instead use
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE99]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Note that #2-#4 work for *any* of JAX’s configuration options.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can then confirm that `x64` mode is enabled:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE100]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE101]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE102]'
+  prefs: []
+  type: TYPE_PRE
+- en: Caveats
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: ⚠️ XLA doesn’t support 64-bit convolutions on all backends!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 🔪 Miscellaneous Divergences from NumPy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: While `jax.numpy` makes every attempt to replicate the behavior of numpy’s API,
+    there do exist corner cases where the behaviors differ. Many such cases are discussed
+    in detail in the sections above; here we list several other known places where
+    the APIs diverge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For binary operations, JAX’s type promotion rules differ somewhat from those
+    used by NumPy. See [Type Promotion Semantics](https://jax.readthedocs.io/en/latest/type_promotion.html)
+    for more details.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When performing unsafe type casts (i.e. casts in which the target dtype cannot
+    represent the input value), JAX’s behavior may be backend dependent, and in general
+    may diverge from NumPy’s behavior. Numpy allows control over the result in these
+    scenarios via the `casting` argument (see [`np.ndarray.astype`](https://numpy.org/devdocs/reference/generated/numpy.ndarray.astype.html));
+    JAX does not provide any such configuration, instead directly inheriting the behavior
+    of [XLA:ConvertElementType](https://www.tensorflow.org/xla/operation_semantics#convertelementtype).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Here is an example of an unsafe cast with differing results between NumPy and
+    JAX:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE103]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: This sort of mismatch would typically arise when casting extreme values from
+    floating to integer types or vice versa.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Fin.
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: If something’s not covered here that has caused you weeping and gnashing of
+    teeth, please let us know and we’ll extend these introductory *advisos*!
+  prefs: []
+  type: TYPE_NORMAL

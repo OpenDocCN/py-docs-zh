@@ -1,0 +1,298 @@
+- en: JAX PRNG Design
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/jep/263-prng.html`](https://jax.readthedocs.io/en/latest/jep/263-prng.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: We want a PRNG design that
+  prefs: []
+  type: TYPE_NORMAL
+- en: is **expressive** in that it is convenient to use and it doesn’t constrain the
+    user’s ability to write numerical programs with exactly the behavior that they
+    want,
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: enables **reproducible** program execution in a backend-independent way,
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: has semantics that are **invariant to `@jit` compilation boundaries and device
+    backends**,
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: enables **vectorization for generating array values** using SIMD hardware,
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: is **parallelizable** in that it doesn’t add sequencing constraints between
+    random function calls that otherwise would have no data dependence,
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: scales to **multi-replica, multi-core, and distributed computation**,
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**fits with JAX and XLA semantics** and design philosophies (which are ultimately
+    motivated by other practical concerns).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: As a corollary of these we believe the design should be functional. Another
+    corollary is that, at least given current hardware constraints, we’re going to
+    do the PRNG in software.
+  prefs: []
+  type: TYPE_NORMAL
+- en: TLDR **JAX PRNG = [Threefry counter PRNG](http://www.thesalmons.org/john/random123/papers/random123sc11.pdf)
+    + a functional array-oriented [splitting model](https://dl.acm.org/citation.cfm?id=2503784)**
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Contents
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Three programming models and toy example programs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Design
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: More realistic example user programs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tradeoffs and alternatives
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Three programming models and toy example programs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here’s a toy example of a **stateful global** PRNG like the one often used
+    in Numpy programs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: To achieve reproducibility here we would need to control the order of evaluation
+    for bar() and baz() even though there is no explicit data dependence from one
+    to the other. This kind of sequencing requirement stemming from reproducibility
+    (#2) violates parallelizability (#5) and doesn’t fit with JAX or XLA’s functional
+    semantics (#6) in which subexpressions can be evaluated in any order. Even if
+    we didn’t require reproducibility and thus allowed any evaluation order, parallelization
+    across calls (#5) would still be made difficult by the need to update shared state.
+    Moreover, because the same PRNG state would need to be accessed and maintained
+    in both Python and any compiled code, this model would likely lead to engineering
+    challenges to achieve compilation invariance (#3) and scaling to multiple replicas
+    (#6). Finally, the expressiveness is limited (#1) because there is no way for
+    foo() to call bar() or baz() without affecting its own (implicit) PRNG state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Whether the model supports vectorization (#4) depends on some additional details.
+    In Numpy, PRNG vectorization is limited by a *sequential-equivalent guarantee*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: To allow for vectorization (#4) within primitive PRNG function calls that generate
+    arrays (e.g. to rand() with a shape argument), we drop this sequential-equivalent
+    guarantee. This vectorization can be supported by any of the three programming
+    models discussed in this section, though it motivates the implementation in terms
+    of a counter-based PRNG as described in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The stateful PRNG user programming model is not promising. Here’s an example
+    of a functional model but lacking a key ingredient that we call splitting:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This model explicitly threads the PRNG state through all functions (primitive
+    or non-primitive) that generate random values: that is, every random function
+    must both accept and return the state. Now there is an explicit data dependence
+    between the call to baz() and the call to bar() in foo(), so the data flow (and
+    hence sequencing) is made explicit and fits with JAX’s existing semantics (#7),
+    unlike in the previous model. This explicit threading can also make the semantics
+    invariant to compilation boundaries (#3).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Explicit threading is inconvenient for the programmer. But worse, it hasn’t
+    actually improved the expressiveness (#1): there is still no way for foo() to
+    call into bar() or baz() while maintaining its own PRNG state. Without knowledge
+    of their callers or the subroutines they call, functions must defensively pass
+    in and return the rng state everywhere. Moreover, it also doesn’t improve the
+    prospects for parallelization (#5) or scaling to multiple replicas (#6) because
+    everything is still sequential, even if the sequencing is made explicit in the
+    functional programming sense.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In short, making the code functional by explicitly threading state isn’t enough
+    to achieve our expressiveness (#1) and performance (#5, #6) goals.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The key problem in both the previous models is that there’s too much sequencing.
+    To reduce the amount of sequential dependence we use **functional [splittable](https://dl.acm.org/citation.cfm?id=2503784)
+    PRNGs**. Splitting is a mechanism to ‘fork’ a new PRNG state into two PRNG states
+    while maintaining the usual desirable PRNG properties (the two new streams are
+    computationally parallelizable and produce independent random values, i.e. they
+    behave like [multistreams](http://www.thesalmons.org/john/random123/papers/random123sc11.pdf)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Some points to notice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'there is no sequential dependence between the calls to bar() and baz() and
+    they can be evaluated in either order without affecting the value of the result,
+    which solves the remaining performance goals (#5, #6),'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: functions do not need to return updated versions of PRNGs and it is straightforward
+    to call a random subroutine without affecting existing PRNG states, improving
+    the expressiveness (#1) from the other functional model.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The example doesn’t show it, but as a consequence of the choice (2) the only
+    way to advance the PRNG state is to call split(). That is, we have two ways to
+    achieve (1), and they differ in whether they burden the user program with explicit
+    calls to split(), as in the above example, or instead burden the user program
+    with explicit threading. We prefer the former, i.e. the version with explicit
+    splitting, because we can easily implement the explicit-threading version in terms
+    of it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Design
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We can use the *counter-based PRNG* design, and in particular the Threefry
+    hash function, as described in [Parallel random numbers: as easy as 1, 2, 3](http://www.thesalmons.org/john/random123/papers/random123sc11.pdf).
+    We use the counter to achieve efficient vectorization: for a given key we can
+    generate an array of values in a vectorized fashion by mapping the hash function
+    over a range of integers [k + 1, …, k + sample_size]. We use the key together
+    with the hash function to implement [splittable PRNGs](https://dl.acm.org/citation.cfm?id=2503784):
+    that is, splitting is a way to generate two new keys from an existing one.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Surprisingly, drawing a sample is very similar to splitting! The key is the
+    difference in the type of the output (even though the types are identified): in
+    one case the value is to be used in forming random samples of interest (e.g. turning
+    random bits into a Float representing a random normal) while in the other case
+    the value is to be used as a key for further hashing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The asymmetry in the hash function arguments, of type Key and Count, is that
+    the latter is trivial and computationally cheap to advance by an arbitrary amount,
+    since we just need to increase the integer value, while the former is only advanced
+    by hashing. That’s why we use the count argument for vectorization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More realistic example user programs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here’s what a training loop on the host might look like when the step requires
+    a PRNG (maybe for dropout or for VAE training):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that we’re burdening the user with explicit splitting of the rng, but
+    the rng does not need to be returned from the code at all.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s how we can use this PRNG model with the stax neural net builder library
+    to implement dropout:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The rng value here is just the key used for the hash, not a special object.
+    The rng argument is passed to every apply_fun, and so it needs to be handled in
+    the serial and parallel combinators with splitting:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here we’re using a simple extended version of split that can produce multiple
+    copies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tradeoffs and alternatives
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We’re not exploiting any device hardware PRNG
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We don’t currently have enough control over the hardware PRNG’s state for all
+    backends.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Even if we did, it would be backend-dependent and we might have to introduce
+    sequential dependencies between random calls to ensure deterministic ordering
+    and hence reproducibility.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We don’t know of any workloads for which the software PRNG should become a bottleneck.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We could consider providing an additional API that allows access to a hardware
+    PRNG for users who want to give up other desiderata (like strict reproducibility).
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We give up the sequential equivalent guarantee, in which creating a random array
+    in one call produces the same values as creating the flattened array one random
+    element at a time.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This property is likely incompatible with vectorization (a high priority).
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We don’t know of any users or examples for which this property is important.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Users could write a layer on top of this API to provide this guarantee.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We can’t follow the `numpy.random` API exactly.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL

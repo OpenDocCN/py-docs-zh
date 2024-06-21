@@ -1,0 +1,393 @@
+- en: jax.Array migration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 原文：[`jax.readthedocs.io/en/latest/jax_array_migration.html`](https://jax.readthedocs.io/en/latest/jax_array_migration.html)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '**yashkatariya@**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: TL;DR
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: JAX switched its default array implementation to the new `jax.Array` as of version
+    0.4.1. This guide explains the reasoning behind this, the impact it might have
+    on your code, and how to (temporarily) switch back to the old behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What’s going on?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`jax.Array` is a unified array type that subsumes `DeviceArray`, `ShardedDeviceArray`,
+    and `GlobalDeviceArray` types in JAX. The `jax.Array` type helps make parallelism
+    a core feature of JAX, simplifies and unifies JAX internals, and allows us to
+    unify jit and pjit. If your code doesn’t mention `DeviceArray` vs `ShardedDeviceArray`
+    vs `GlobalDeviceArray`, no changes are needed. But code that depends on details
+    of these separate classes may need to be tweaked to work with the unified jax.Array'
+  prefs: []
+  type: TYPE_NORMAL
+- en: After the migration is complete `jax.Array` will be the only type of array in
+    JAX.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This doc explains how to migrate existing codebases to `jax.Array`. For more
+    information on using `jax.Array` and JAX parallelism APIs, see the [Distributed
+    arrays and automatic parallelization](https://jax.readthedocs.io/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html)
+    tutorial.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to enable jax.Array?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You can enable `jax.Array` by:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: setting the shell environment variable `JAX_ARRAY` to something true-like (e.g.,
+    `1`);
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: setting the boolean flag `jax_array` to something true-like if your code parses
+    flags with absl;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'using this statement at the top of your main file:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: How do I know if jax.Array broke my code?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The easiest way to tell if `jax.Array` is responsible for any problems is to
+    disable `jax.Array` and see if the issues go away.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How can I disable jax.Array for now?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Through **March 15, 2023** it will be possible to disable jax.Array by:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: setting the shell environment variable `JAX_ARRAY` to something falsey (e.g.,
+    `0`);
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: setting the boolean flag `jax_array` to something falsey if your code parses
+    flags with absl;
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'using this statement at the top of your main file:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Why create jax.Array?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Currently JAX has three types; `DeviceArray`, `ShardedDeviceArray` and `GlobalDeviceArray`.
+    `jax.Array` merges these three types and cleans up JAX’s internals while adding
+    new parallelism features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also introduce a new `Sharding` abstraction that describes how a logical
+    Array is physically sharded out across one or more devices, such as TPUs or GPUs.
+    The change also upgrades, simplifies and merges the parallelism features of `pjit`
+    into `jit`. Functions decorated with `jit` will be able to operate over sharded
+    arrays without copying data onto a single device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Features you get with `jax.Array`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: C++ `pjit` dispatch path
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Op-by-op parallelism (even if the array distributed across multiple devices
+    across multiple hosts)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Simpler batch data parallelism with `pjit`/`jit`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ways to create `Sharding`s that are not necessarily consisting of a mesh and
+    partition spec. Can fully utilize the flexibility of OpSharding if you want or
+    any other Sharding that you want.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: and many more
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: What issues can arise when jax.Array is switched on?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: New public type named jax.Array
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All `isinstance(..., jnp.DeviceArray)` or `isinstance(.., jax.xla.DeviceArray)`
+    and other variants of `DeviceArray` should be switched to using `isinstance(...,
+    jax.Array)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since `jax.Array` can represent DA, SDA and GDA, you can differentiate those
+    3 types in `jax.Array` via:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`x.is_fully_addressable and len(x.sharding.device_set) == 1` – this means that
+    `jax.Array` is like a DA'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`x.is_fully_addressable and (len(x.sharding.device_set) > 1` – this means that
+    `jax.Array` is like a SDA'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`not x.is_fully_addressable` – this means that `jax.Array` is like a GDA and
+    spans across multiple processes'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For `ShardedDeviceArray`, you can move `isinstance(..., pxla.ShardedDeviceArray)`
+    to `isinstance(..., jax.Array) and x.is_fully_addressable and len(x.sharding.device_set)
+    > 1`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In general it is not possible to differentiate a `ShardedDeviceArray` on 1 device
+    from any other kind of single-device Array.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GDA’s API name changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: GDA’s `local_shards` and `local_data` have been deprecated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Please use `addressable_shards` and `addressable_data` which are compatible
+    with `jax.Array` and `GDA`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating jax.Array
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All JAX functions will output `jax.Array` when the `jax_array` flag is True.
+    If you were using `GlobalDeviceArray.from_callback` or `make_sharded_device_array`
+    or `make_device_array` functions to explicitly create the respective JAX data
+    types, you will need to switch them to use `jax.make_array_from_callback()` or
+    `jax.make_array_from_single_device_arrays()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**For GDA:**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`GlobalDeviceArray.from_callback(shape, mesh, pspec, callback)` can become
+    `jax.make_array_from_callback(shape, jax.sharding.NamedSharding(mesh, pspec),
+    callback)` in a 1:1 switch.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you were using the raw GDA constructor to create GDAs, then do this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`GlobalDeviceArray(shape, mesh, pspec, buffers)` can become `jax.make_array_from_single_device_arrays(shape,
+    jax.sharding.NamedSharding(mesh, pspec), buffers)`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**For SDA:**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`make_sharded_device_array(aval, sharding_spec, device_buffers, indices)` can
+    become `jax.make_array_from_single_device_arrays(shape, sharding, device_buffers)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To decide what the sharding should be, it depends on why you were creating
+    the SDAs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If it was created to give as an input to `pmap`, then sharding can be: `jax.sharding.PmapSharding(devices,
+    sharding_spec)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If it was created to give as an input to `pjit`, then sharding can be `jax.sharding.NamedSharding(mesh,
+    pspec)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Breaking change for pjit after switching to jax.Array for host local inputs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**If you are exclusively using GDA arguments to pjit, you can skip this section!
+    🎉**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With `jax.Array` enabled, all inputs to `pjit` must be globally shaped. This
+    is a breaking change from the previous behavior where `pjit` would concatenate
+    process-local arguments into a global value; this concatenation no longer occurs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why are we making this breaking change? Each array now says explicitly how its
+    local shards fit into a global whole, rather than leaving it implicit. The more
+    explicit representation also unlocks additional flexibility, for example the use
+    of non-contiguous meshes with `pjit` which can improve efficiency on some TPU
+    models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Running **multi-process pjit computation** and passing host-local inputs when
+    `jax.Array` is enabled can lead to an error similar to this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Mesh = `{''x'': 2, ''y'': 2, ''z'': 2}` and host local input shape == `(4,)`
+    and pspec = `P((''x'', ''y'', ''z''))`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since `pjit` doesn’t lift host local shapes to global shapes with `jax.Array`,
+    you get the following error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note: You will only see this error if your host local shape is smaller than
+    the shape of the mesh.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The error makes sense because you can’t shard dimension 0, 8 ways when the value
+    on dimension `0` is `4`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How can you migrate if you still pass host local inputs to `pjit`? We are providing
+    transitional APIs to help you migrate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note: You don’t need these utilities if you run your pjitted computation on
+    a single process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`host_local_array_to_global_array` is a type cast that looks at a value with
+    only local shards and changes its local shape to the shape that `pjit` would have
+    previously assumed if that value was passed before the change.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Passing in fully replicated inputs i.e. same shape on each process with `P(None)`
+    as `in_axis_resources` is still supported. In this case you do not have to use
+    `host_local_array_to_global_array` because the shape is already global.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: FROM_GDA and jax.Array
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you were using `FROM_GDA` in `in_axis_resources` argument to `pjit`, then
+    with `jax.Array` there is no need to pass anything to `in_axis_resources` as `jax.Array`
+    will follow **computation follows sharding** semantics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you have PartitionSpecs mixed in with `FROM_GDA` for inputs like numpy arrays,
+    etc, then use `host_local_array_to_global_array` to convert them to `jax.Array`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you had this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'then you can replace it with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: live_buffers replaced with live_arrays
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`live_buffers` attribute on jax `Device` has been deprecated. Please use `jax.live_arrays()`
+    instead which is compatible with `jax.Array`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Handling of host local inputs to pjit like batch, etc
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you are passing host local inputs to `pjit` in a **multi-process environment**,
+    then please use `multihost_utils.host_local_array_to_global_array` to convert
+    the batch to a global `jax.Array` and then pass that to `pjit`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most common example of such a host local input is a **batch of input data**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This will work for any host local input (not just a batch of input data).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: See the pjit section above for more details about this change and more examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'RecursionError: Recursively calling jit'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This happens when some part of your code has `jax.Array` disabled and then you
+    enable it only for some other part. For example, if you use some third_party code
+    which has `jax.Array` disabled and you get a `DeviceArray` from that library and
+    then you enable `jax.Array` in your library and pass that `DeviceArray` to JAX
+    functions, it will lead to a RecursionError.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This error should go away when `jax.Array` is enabled by default so that all
+    libraries return `jax.Array` unless they explicitly disable it.
+  prefs: []
+  type: TYPE_NORMAL
