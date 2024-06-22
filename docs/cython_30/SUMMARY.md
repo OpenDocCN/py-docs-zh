@@ -1,3 +1,4 @@
++   [Cython 3.0 中文文档](README.md)
 +   [Cython 3.0 文档](cython30_01.md)
 +   [入门](cython30_02.md)
 +   [Cython - 概述](cython30_03.md)
@@ -39,4 +40,3 @@
 +   [调试你的 Cython 程序](cython30_39.md)
 +   [用于 NumPy 用户的 Cython](cython30_40.md)
 +   [Pythran 作为 Numpy 后端](cython30_41.md)
-+   [Cython 3.0 中文文档](cython30_README.md)
