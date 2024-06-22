@@ -1,6 +1,6 @@
 # Numba 0.44 中文文档
 
-![](docs/img/logo.png)
+![](img/logo.png)
 
 > 原文：[Numba documentation](http://numba.pydata.org/numba-doc/latest/index.html/)
 > 
@@ -15,7 +15,7 @@
 
 ## 贡献指南
 
-项目当前处于校对阶段，请查看[贡献指南](CONTRIBUTING.md)，并在[整体进度](https://github.com/apachecn/numba-doc-zh/issues/1)中领取任务。
+项目当前处于校对阶段，请查看贡献指南，并在[整体进度](https://github.com/apachecn/numba-doc-zh/issues/1)中领取任务。
 
 > 请您勇敢地去翻译和改进翻译。虽然我们追求卓越，但我们并不要求您做到十全十美，因此请不要担心因为翻译上犯错——在大部分情况下，我们的服务器已经记录所有的翻译，因此您不必担心会因为您的失误遭到无法挽回的破坏。（改编自维基百科）
 
