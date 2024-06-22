@@ -81,7 +81,7 @@ Note
 
 ## `__next__()`方法
 
-希望实现迭代器接口的扩展类型应该定义一个名为`__next__()`的方法，而不是下一个方法。 Python 系统将自动提供调用`__next__()`的下一个方法。 _NOT_ 是否明确地给你的类型一个`next()`方法，否则可能会发生坏事。
+希望实现迭代器接口的扩展类型应该定义一个名为`__next__()`的方法，而不是下一个方法。 Python 系统将自动提供调用`__next__()`的下一个方法。 *NOT* 是否明确地给你的类型一个`next()`方法，否则可能会发生坏事。
 
 ## 特殊方法表
 
@@ -96,19 +96,19 @@ Note
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="41%"></colgroup> 
 | 名称 | 参数 | 返回类型 | 描述 |
 | --- | --- | --- | --- |
-| __cinit__ | 自我，...... |  | 基本初始化（没有直接的 Python 等价物） |
-| __ 在里面 __ | self, … |   | 进一步初始化 |
-| __dealloc__ | 自 |   | 基本的释放（没有直接的 Python 等价物） |
-| __cmp__ | x，y | INT | 3 路比较（仅限 Python 2） |
-| __str__ | self | 宾语 | STR（个体经营） |
-| __repr__ | self | object | 再版（个体经营） |
-| __hash__ | self | Py_hash_t | 散列函数（返回 32/64 位整数） |
-| __ 呼叫 __ | self, … | object | 自（…） |
-| __iter__ | self | object | 返回序列的迭代器 |
-| __getattr__ | 自我，名字 | object | 获取属性 |
-| __getattribute__ | self, name | object | 无条件地获取属性 |
-| __setattr__ | 自我，名字，val |   | 设置属性 |
-| __delattr__ | self, name |   | 删除属性 |
+| *_cinit_* | 自我，...... |  | 基本初始化（没有直接的 Python 等价物） |
+| **在里面** | self, … |   | 进一步初始化 |
+| *_dealloc_* | 自 |   | 基本的释放（没有直接的 Python 等价物） |
+| *_cmp_* | x，y | INT | 3 路比较（仅限 Python 2） |
+| *_str_* | self | 宾语 | STR（个体经营） |
+| *_repr_* | self | object | 再版（个体经营） |
+| *_hash_* | self | Py_hash_t | 散列函数（返回 32/64 位整数） |
+| **呼叫** | self, … | object | 自（…） |
+| *_iter_* | self | object | 返回序列的迭代器 |
+| *_getattr_* | 自我，名字 | object | 获取属性 |
+| *_getattribute_* | self, name | object | 无条件地获取属性 |
+| *_setattr_* | 自我，名字，val |   | 设置属性 |
+| *_delattr_* | self, name |   | 删除属性 |
 
 ### 丰富的比较运算符
 
@@ -119,13 +119,13 @@ Note
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="43%"></colgroup> 
 | Name | Parameters | Return type | Description |
 | --- | --- | --- | --- |
-| __eq__ | 自我，是的 | object | 自我== y |
-| __ne__ | self, y | object | self！= y（如果没有，则回退到`__eq__`） |
-| __lt__ | self, y | object | 自我＆lt; ÿ |
-| __gt__ | self, y | object | 自我＆gt; ÿ |
-| __le__ | self, y | object | 自我＆lt; = y |
-| __ge__ | self, y | object | 自我＆gt; = y |
-| __richcmp__ | self，y，int op | object | 为上述所有内容加入了丰富的比较方法（没有直接的 Python 等价物） |
+| *_eq_* | 自我，是的 | object | 自我== y |
+| *_ne_* | self, y | object | self！= y（如果没有，则回退到`__eq__`） |
+| *_lt_* | self, y | object | 自我＆lt; ÿ |
+| *_gt_* | self, y | object | 自我＆gt; ÿ |
+| *_le_* | self, y | object | 自我＆lt; = y |
+| *_ge_* | self, y | object | 自我＆gt; = y |
+| *_richcmp_* | self，y，int op | object | 为上述所有内容加入了丰富的比较方法（没有直接的 Python 等价物） |
 
 ### 算术运算符
 
@@ -134,25 +134,25 @@ Note
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="41%"></colgroup> 
 | Name | Parameters | Return type | Description |
 | --- | --- | --- | --- |
-| __ 加 __ | x, y | object | 二进制 &lt;cite&gt;+&lt;/cite&gt; 运算符 |
-| __sub__ | x, y | object | 二进制 &lt;cite&gt;-&lt;/cite&gt; 运算符 |
-| __mul__ | x, y | object | &lt;cite&gt;*&lt;/cite&gt; 运算符 |
-| __div__ | x, y | object | &lt;cite&gt;/&lt;/cite&gt; 运算符用于旧式划分 |
-| __floordiv__ | x, y | object | &lt;cite&gt;//&lt;/cite&gt; 运算符 |
-| __truediv__ | x, y | object | &lt;cite&gt;/&lt;/cite&gt; 运算符用于新式划分 |
-| __mod__ | x, y | object | &lt;cite&gt;％&lt;/cite&gt;运算符 |
-| __divmod__ | x, y | object | 组合 div 和 mod |
-| __pow__ | x，y，z | object | &lt;cite&gt;**&lt;/cite&gt; 运算符或 pow（x，y，z） |
-| __neg__ | self | object | 一元 &lt;cite&gt;-&lt;/cite&gt; 运算符 |
-| __pos__ | self | object | 一元 &lt;cite&gt;+&lt;/cite&gt; 运算符 |
-| __abs__ | self | object | 绝对值 |
-| __nonzero__ | self | int | 转换为布尔值 |
-| __ 倒置 __ | self | object | &lt;cite&gt;〜&lt;/cite&gt;运算符 |
-| __lshift__ | x, y | object | &lt;cite&gt;＆lt;＆lt;&lt;/cite&gt; 运营商 |
-| __rshift__ | x, y | object | &lt;cite&gt;＆gt;＆gt;&lt;/cite&gt; 运营商 |
-| __ 和 __ | x, y | object | &lt;cite&gt;＆amp;&lt;/cite&gt; 运营商 |
-| __ 要么 __ | x, y | object | &lt;cite&gt;&#124;&lt;/cite&gt; 运营商 |
-| __xor__ | x, y | object | &lt;cite&gt;^&lt;/cite&gt; 运算符 |
+| **加** | x, y | object | 二进制 &lt;cite&gt;+&lt;/cite&gt; 运算符 |
+| *_sub_* | x, y | object | 二进制 &lt;cite&gt;-&lt;/cite&gt; 运算符 |
+| *_mul_* | x, y | object | &lt;cite&gt;*&lt;/cite&gt; 运算符 |
+| *_div_* | x, y | object | &lt;cite&gt;/&lt;/cite&gt; 运算符用于旧式划分 |
+| *_floordiv_* | x, y | object | &lt;cite&gt;//&lt;/cite&gt; 运算符 |
+| *_truediv_* | x, y | object | &lt;cite&gt;/&lt;/cite&gt; 运算符用于新式划分 |
+| *_mod_* | x, y | object | &lt;cite&gt;％&lt;/cite&gt;运算符 |
+| *_divmod_* | x, y | object | 组合 div 和 mod |
+| *_pow_* | x，y，z | object | &lt;cite&gt;**&lt;/cite&gt; 运算符或 pow（x，y，z） |
+| *_neg_* | self | object | 一元 &lt;cite&gt;-&lt;/cite&gt; 运算符 |
+| *_pos_* | self | object | 一元 &lt;cite&gt;+&lt;/cite&gt; 运算符 |
+| *_abs_* | self | object | 绝对值 |
+| *_nonzero_* | self | int | 转换为布尔值 |
+| **倒置** | self | object | &lt;cite&gt;〜&lt;/cite&gt;运算符 |
+| *_lshift_* | x, y | object | &lt;cite&gt;＆lt;＆lt;&lt;/cite&gt; 运营商 |
+| *_rshift_* | x, y | object | &lt;cite&gt;＆gt;＆gt;&lt;/cite&gt; 运营商 |
+| **和** | x, y | object | &lt;cite&gt;＆amp;&lt;/cite&gt; 运营商 |
+| **要么** | x, y | object | &lt;cite&gt;&#124;&lt;/cite&gt; 运营商 |
+| *_xor_* | x, y | object | &lt;cite&gt;^&lt;/cite&gt; 运算符 |
 
 ### 数字转换
 
@@ -161,11 +161,11 @@ Note
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="41%"></colgroup> 
 | Name | Parameters | Return type | Description |
 | --- | --- | --- | --- |
-| __int__ | self | object | 转换为整数 |
-| __ 长 __ | self | object | 转换为长整数 |
-| __ 浮动 __ | self | object | 转换为浮动 |
-| __oct__ | self | object | 转换为八进制 |
-| __hex__ | self | object | 转换为十六进制 |
+| *_int_* | self | object | 转换为整数 |
+| **长** | self | object | 转换为长整数 |
+| **浮动** | self | object | 转换为浮动 |
+| *_oct_* | self | object | 转换为八进制 |
+| *_hex_* | self | object | 转换为十六进制 |
 | __index__（仅限 2.5+） | self | object | 转换为序列索引 |
 
 ### 就地算术运算符
@@ -175,19 +175,19 @@ Note
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="41%"></colgroup> 
 | Name | Parameters | Return type | Description |
 | --- | --- | --- | --- |
-| __ 我加 __ | 自我，x | object | &lt;cite&gt;+ =&lt;/cite&gt; 运算符 |
-| __isub__ | self, x | object | &lt;cite&gt;- =&lt;/cite&gt; 运算符 |
-| __imul__ | self, x | object | &lt;cite&gt;* =&lt;/cite&gt; 运算符 |
-| __idiv__ | self, x | object | &lt;cite&gt;/ =&lt;/cite&gt; 运算符用于旧式划分 |
-| __ifloordiv__ | self, x | object | &lt;cite&gt;// =&lt;/cite&gt; 运算符 |
-| __truediv__ | self, x | object | &lt;cite&gt;/ =&lt;/cite&gt; 运算符用于新式划分 |
-| __imod__ | self, x | object | &lt;cite&gt;％=&lt;/cite&gt; 运算符 |
-| __pow__ | x, y, z | object | &lt;cite&gt;** =&lt;/cite&gt; 运算符 |
-| __ilshift__ | self, x | object | &lt;cite&gt;＆lt;＆lt; =&lt;/cite&gt; 运算符 |
-| __irshift__ | self, x | object | &lt;cite&gt;＆gt;＆gt; =&lt;/cite&gt; 运算符 |
-| __ 我和 __ | self, x | object | &lt;cite&gt;＆amp; =&lt;/cite&gt; 运算符 |
-| __ior__ | self, x | object | &lt;cite&gt;&#124; =&lt;/cite&gt; 运算符 |
-| __ixor__ | self, x | object | &lt;cite&gt;^ =&lt;/cite&gt; 运算符 |
+| **我加** | 自我，x | object | &lt;cite&gt;+ =&lt;/cite&gt; 运算符 |
+| *_isub_* | self, x | object | &lt;cite&gt;- =&lt;/cite&gt; 运算符 |
+| *_imul_* | self, x | object | &lt;cite&gt;* =&lt;/cite&gt; 运算符 |
+| *_idiv_* | self, x | object | &lt;cite&gt;/ =&lt;/cite&gt; 运算符用于旧式划分 |
+| *_ifloordiv_* | self, x | object | &lt;cite&gt;// =&lt;/cite&gt; 运算符 |
+| *_truediv_* | self, x | object | &lt;cite&gt;/ =&lt;/cite&gt; 运算符用于新式划分 |
+| *_imod_* | self, x | object | &lt;cite&gt;％=&lt;/cite&gt; 运算符 |
+| *_pow_* | x, y, z | object | &lt;cite&gt;** =&lt;/cite&gt; 运算符 |
+| *_ilshift_* | self, x | object | &lt;cite&gt;＆lt;＆lt; =&lt;/cite&gt; 运算符 |
+| *_irshift_* | self, x | object | &lt;cite&gt;＆gt;＆gt; =&lt;/cite&gt; 运算符 |
+| **我和** | self, x | object | &lt;cite&gt;＆amp; =&lt;/cite&gt; 运算符 |
+| *_ior_* | self, x | object | &lt;cite&gt;&#124; =&lt;/cite&gt; 运算符 |
+| *_ixor_* | self, x | object | &lt;cite&gt;^ =&lt;/cite&gt; 运算符 |
 
 ### 序列和映射
 
@@ -196,14 +196,14 @@ Note
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="41%"></colgroup> 
 | Name | Parameters | Return type | Description |
 | --- | --- | --- | --- |
-| __len__ | self | Py_ssize_t | LEN（个体经营） |
-| __getitem__ | self, x | object | 自[X] |
-| __setitem__ | 自我，x，y |   | self [x] = y |
-| __delitem__ | self, x |   | del self [x] |
-| __getslice__ | self，Py_ssize_t i，Py_ssize_t j | object | 自[I：j]的 |
-| __setslice__ | self，Py_ssize_t i，Py_ssize_t j，x |   | 自我[i：j] = x |
-| __delslice__ | self, Py_ssize_t i, Py_ssize_t j |   | del self [i：j] |
-| __contains__ | self, x | int | x 在自我中 |
+| *_len_* | self | Py_ssize_t | LEN（个体经营） |
+| *_getitem_* | self, x | object | 自[X] |
+| *_setitem_* | 自我，x，y |   | self [x] = y |
+| *_delitem_* | self, x |   | del self [x] |
+| *_getslice_* | self，Py_ssize_t i，Py_ssize_t j | object | 自[I：j]的 |
+| *_setslice_* | self，Py_ssize_t i，Py_ssize_t j，x |   | 自我[i：j] = x |
+| *_delslice_* | self, Py_ssize_t i, Py_ssize_t j |   | del self [i：j] |
+| *_contains_* | self, x | int | x 在自我中 |
 
 ### 迭代器
 
@@ -212,25 +212,25 @@ Note
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="41%"></colgroup> 
 | Name | Parameters | Return type | Description |
 | --- | --- | --- | --- |
-| __ 下一个 __ | self | object | 获取下一个项目（在 Python 中称为 next） |
+| **下一个** | self | object | 获取下一个项目（在 Python 中称为 next） |
 
 ### 缓冲接口[  [**PEP 3118** ](https://www.python.org/dev/peps/pep-3118)]（没有 Python 当量 - 见注 1）
 
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="41%"></colgroup> 
 | Name | Parameters | Return type | Description |
 | --- | --- | --- | --- |
-| __getbuffer__ | self，Py_buffer &lt;cite&gt;* view&lt;/cite&gt; ，int flags |   |   |
-| __releasebuffer__ | self，Py_buffer &lt;cite&gt;* view&lt;/cite&gt; |   |   |
+| *_getbuffer_* | self，Py_buffer &lt;cite&gt;* view&lt;/cite&gt; ，int flags |   |   |
+| *_releasebuffer_* | self，Py_buffer &lt;cite&gt;* view&lt;/cite&gt; |   |   |
 
 ### 缓冲接口[遗留]（没有 Python 等价物 - 见注 1）
 
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="41%"></colgroup> 
 | Name | Parameters | Return type | Description |
 | --- | --- | --- | --- |
-| __getreadbuffer__ | self，Py_ssize_t i，void &lt;cite&gt;** p&lt;/cite&gt; |   |   |
-| __getwritebuffer__ | self, Py_ssize_t i, void &lt;cite&gt;**p&lt;/cite&gt; |   |   |
-| __getsegcount__ | self，Py_ssize_t &lt;cite&gt;* p&lt;/cite&gt; |   |   |
-| __getcharbuffer__ | self，Py_ssize_t i，char &lt;cite&gt;** p&lt;/cite&gt; |   |   |
+| *_getreadbuffer_* | self，Py_ssize_t i，void &lt;cite&gt;** p&lt;/cite&gt; |   |   |
+| *_getwritebuffer_* | self, Py_ssize_t i, void &lt;cite&gt;**p&lt;/cite&gt; |   |   |
+| *_getsegcount_* | self，Py_ssize_t &lt;cite&gt;* p&lt;/cite&gt; |   |   |
+| *_getcharbuffer_* | self，Py_ssize_t i，char &lt;cite&gt;** p&lt;/cite&gt; |   |   |
 
 ### 描述符对象（见注 2）
 
@@ -239,9 +239,9 @@ Note
 <colgroup><col width="18%"> <col width="30%"> <col width="10%"> <col width="41%"></colgroup> 
 | Name | Parameters | Return type | Description |
 | --- | --- | --- | --- |
-| __ 得到 __ | 自我，实例，阶级 | object | 获取属性的值 |
-| __ 组 __ | 自我，实例，价值 |   | 设置属性值 |
-| __ 删除 __ | 自我，实例 |   | Delete attribute |
+| **得到** | 自我，实例，阶级 | object | 获取属性的值 |
+| **组** | 自我，实例，价值 |   | 设置属性值 |
+| **删除** | 自我，实例 |   | Delete attribute |
 
 Note
 

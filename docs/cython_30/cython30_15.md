@@ -623,4 +623,4 @@ MessageBoxW(NULL, u"Hello Cython \u263a", title, 0)
 
 CPython 3.3 已经转移到 unicode 字符串（  [**PEP 393** ](https://www.python.org/dev/peps/pep-0393)）的灵活内部表示，使得所有 [`Py_UNICODE`](https://docs.python.org/3/c-api/unicode.html#c.Py_UNICODE "(in Python v3.7)") 相关 API 被弃用，效率低下。
 
-CPython 3.3 更改的一个结果是`unicode`字符串的 [`len()`](https://docs.python.org/3/library/functions.html#len "(in Python v3.7)") 总是在 _ 代码点 _（“字符”）中测量，而 Windows API 期望 UTF-16 的数量 _ 代码单元 _（每个代理单独计算）。要始终获得代码单元的数量，请直接调用 [`PyUnicode_GetSize()`](https://docs.python.org/3/c-api/unicode.html#c.PyUnicode_GetSize "(in Python v3.7)") 。
+CPython 3.3 更改的一个结果是`unicode`字符串的 [`len()`](https://docs.python.org/3/library/functions.html#len "(in Python v3.7)") 总是在 *代码点*（“字符”）中测量，而 Windows API 期望 UTF-16 的数量 *代码单元*（每个代理单独计算）。要始终获得代码单元的数量，请直接调用 [`PyUnicode_GetSize()`](https://docs.python.org/3/c-api/unicode.html#c.PyUnicode_GetSize "(in Python v3.7)") 。

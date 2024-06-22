@@ -15,7 +15,7 @@ class MathFunction(object):
 
 ```
 
-然而，基于 Python 所谓的“内置类型”，Cython 支持第二种类：_ 扩展类型 _，由于用于声明的关键字，有时也称为“cdef 类”。与 Python 类相比，它们受到一定限制，但通常比通用 Python 类更高效，速度更快。主要区别在于它们使用 C 结构来存储它们的字段和方法而不是 Python 字典。这允许他们在他们的字段中存储任意 C 类型，而不需要 Python 包装器，并且可以直接在 C 级访问字段和方法，而无需通过 Python 字典查找。
+然而，基于 Python 所谓的“内置类型”，Cython 支持第二种类：*扩展类型*，由于用于声明的关键字，有时也称为“cdef 类”。与 Python 类相比，它们受到一定限制，但通常比通用 Python 类更高效，速度更快。主要区别在于它们使用 C 结构来存储它们的字段和方法而不是 Python 字典。这允许他们在他们的字段中存储任意 C 类型，而不需要 Python 包装器，并且可以直接在 C 级访问字段和方法，而无需通过 Python 字典查找。
 
 普通的 Python 类可以从 cdef 类继承，但不能从其他方面继承。 Cython 需要知道完整的继承层次结构，以便布局它们的 C 结构，并将其限制为单继承。另一方面，普通的 Python 类可以从 Cython 代码和纯 Python 代码中继承任意数量的 Python 类和扩展类型。
 
@@ -97,7 +97,7 @@ print(integrate(SinOfSquareFunction(), 0, 1, 10000))
 > *   以同样的方式，如果参数`f`没有被输入，但只是作为 Python 对象传递，那么将使用较慢的 Python 调度。
 > *   由于参数是打字的，我们需要检查它是否是`None`。在 Python 中，当查找`evaluate`方法时，这会导致`AttributeError`，但 Cython 会尝试访问`None`的（不兼容的）内部结构，就像它是`Function`一样，导致崩溃或数据损坏。
 
-有一个 _ 编译器指令 _ `nonecheck`，它会以降低速度为代价启用此检查。以下是编译器指令用于动态打开或关闭`nonecheck`的方法：
+有一个 *编译器指令* `nonecheck`，它会以降低速度为代价启用此检查。以下是编译器指令用于动态打开或关闭`nonecheck`的方法：
 
 ```py
 # cython: nonecheck=True

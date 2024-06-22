@@ -89,7 +89,7 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 
 它们的接口和用法与相应的低级 C 函数相同。
 
-需要记住的一件重要事情是，`malloc()`或 [`PyMem_Malloc()`](https://docs.python.org/3/c-api/memory.html#c.PyMem_Malloc "(in Python v3.7)") _ 获得的内存块必须手动释放 _，并相应调用`free()`或 [`PyMem_Free()`](https://docs.python.org/3/c-api/memory.html#c.PyMem_Free "(in Python v3.7)") 当它们不再使用时（_ 必须 _ 总是使用匹配类型的自由函数）。否则，在 python 进程退出之前，它们不会被回收。这称为内存泄漏。
+需要记住的一件重要事情是，`malloc()`或 [`PyMem_Malloc()`](https://docs.python.org/3/c-api/memory.html#c.PyMem_Malloc "(in Python v3.7)") *获得的内存块必须手动释放*，并相应调用`free()`或 [`PyMem_Free()`](https://docs.python.org/3/c-api/memory.html#c.PyMem_Free "(in Python v3.7)") 当它们不再使用时（*必须* 总是使用匹配类型的自由函数）。否则，在 python 进程退出之前，它们不会被回收。这称为内存泄漏。
 
 如果一块内存需要比`try..finally`块可以管理的更长的生命周期，另一个有用的习惯是将其生命周期与 Python 对象联系起来以利用 Python 运行时的内存管理，例如：
 

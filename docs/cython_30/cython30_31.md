@@ -392,7 +392,7 @@ y = 2.0/foo[0]
 
 ```
 
-请注意，如果有一个 _ 指针 _ 到 C ++对象，则必须进行解除引用以避免执行指针算术而不是对对象本身进行算术运算：
+请注意，如果有一个 *指针* 到 C ++对象，则必须进行解除引用以避免执行指针算术而不是对对象本身进行算术运算：
 
 ```py
 cdef Foo* foo_ptr = new Foo()
@@ -550,7 +550,7 @@ print(cpp_strings[1])   # b'is'
 可以使用以下强制措施：
 
 <colgroup><col width="35%"> <col width="31%"> <col width="33%"></colgroup> 
-| Python type =＆gt; | _C ++类型 _ | =＆GT; Python 类型 |
+| Python type =＆gt; | *C ++类型 * | =＆GT; Python 类型 |
 | --- | --- | --- |
 | 字节 | 的 std :: string | bytes |
 | 迭代 | 的 std ::矢量 | 名单 |
@@ -696,7 +696,7 @@ Cython 支持使用标准`Type&`语法声明左值引用。但请注意，没有
 
 ### `auto`关键字
 
-虽然 Cython 没有`auto`关键字，但是没有用`cdef`显式输入的 Cython 局部变量是从 _ 右侧的类型中推断出所有 _ 的分配（参见`infer_types` 编译指令 ）。在处理返回复杂，嵌套，模板化类型的函数时，这尤其方便，例如：
+虽然 Cython 没有`auto`关键字，但是没有用`cdef`显式输入的 Cython 局部变量是从 *右侧的类型中推断出所有* 的分配（参见`infer_types` 编译指令 ）。在处理返回复杂，嵌套，模板化类型的函数时，这尤其方便，例如：
 
 ```py
 cdef vector[int] v = ...

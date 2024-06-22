@@ -141,7 +141,7 @@ print(sh.width)
 
 ```
 
-这需要使用局部变量并在赋值时执行类型测试。如果 _ 知道 _，`quest()`的返回值将是`Shrubbery`类型，你可以使用强制转换来写：
+这需要使用局部变量并在赋值时执行类型测试。如果 *知道*，`quest()`的返回值将是`Shrubbery`类型，你可以使用强制转换来写：
 
 ```py
 print( (<Shrubbery>quest()).width )
@@ -433,7 +433,7 @@ fast_penguin = Penguin.__new__(Penguin, 'wheat')  # note: not calling __init__()
 
 ```
 
-请注意，通过`__new__()`的路径将 _ 而非 _ 调用类型的`__init__()`方法（再次，如 Python 所知）。因此，在上面的示例中，第一个实例化将打印`eating!`，但第二个实例化不会打印`eating!`。这只是`__cinit__()`方法比扩展类型的正常`__init__()`方法更安全和更可取的原因之一。
+请注意，通过`__new__()`的路径将 *而非* 调用类型的`__init__()`方法（再次，如 Python 所知）。因此，在上面的示例中，第一个实例化将打印`eating!`，但第二个实例化不会打印`eating!`。这只是`__cinit__()`方法比扩展类型的正常`__init__()`方法更安全和更可取的原因之一。
 
 第二个性能改进适用于经常连续创建和删除的类型，以便它们可以从空闲列表中受益。 Cython 为此提供了装饰器`@cython.freelist(N)`，它为给定类型创建了一个静态大小的`N`实例空闲列表。例：
 
@@ -497,7 +497,7 @@ cdef class WrapperClass:
  Setting ``owner`` flag to ``True`` causes
  the extension type to ``free`` the structure pointed to by ``_ptr``
  when the wrapper object is deallocated."""
-        # Call to __new__ bypasses __init__ constructor
+        # Call to __new_*bypasses*_init__ constructor
         cdef WrapperClass wrapper = WrapperClass.__new__(WrapperClass)
         wrapper._ptr = _ptr
         wrapper.ptr_owner = owner
@@ -520,7 +520,7 @@ cdef class WrapperClass:
 
 如果需要，可以从同一指针创建多个 Python 对象，这些指针指向相同的内存中数据，尽管在解除分配时必须小心，如上所示。此外，`ptr_owner`标志可用于控制哪个`WrapperClass`对象拥有指针并负责解除分配 - 在示例中默认设置为`False`，可以通过调用`from_ptr(ptr, owner=True)`来启用。
 
-GIL 必须 _ 而不是 _ 在`__dealloc__`中释放，或者如果是，则使用另一个锁定，在这种情况下，或者在多次解除分配时可能发生竞争条件。
+GIL 必须 *而不是* 在`__dealloc__`中释放，或者如果是，则使用另一个锁定，在这种情况下，或者在多次解除分配时可能发生竞争条件。
 
 作为对象构造函数的一部分，`__cinit__`方法具有 Python 签名，这使得它无法接受`my_c_struct`指针作为参数。
 
@@ -578,7 +578,7 @@ Note
 
 ```
 
-调用`make_cycle`时，会创建一个参考循环，因为`x`引用`y`，反之亦然。即使在`make_cycle`返回后无法访问`x`或`y`，两者的引用计数均为 1，因此不会立即取消分配。在常规时间，垃圾收集器运行，它会注意到参考周期（使用`tp_traverse`插槽）并将其中断。打破引用循环意味着在循环中获取一个对象并将其中的所有引用移除到其他 Python 对象（我​​们称之为 _ 清除 _ 一个对象）。清除与解除分配几乎相同，只是实际对象尚未释放。对于上例中的`x`，`x`的属性将从`x`中删除。
+调用`make_cycle`时，会创建一个参考循环，因为`x`引用`y`，反之亦然。即使在`make_cycle`返回后无法访问`x`或`y`，两者的引用计数均为 1，因此不会立即取消分配。在常规时间，垃圾收集器运行，它会注意到参考周期（使用`tp_traverse`插槽）并将其中断。打破引用循环意味着在循环中获取一个对象并将其中的所有引用移除到其他 Python 对象（我​​们称之为 *清除* 一个对象）。清除与解除分配几乎相同，只是实际对象尚未释放。对于上例中的`x`，`x`的属性将从`x`中删除。
 
 请注意，在参考周期中只清除一个对象就足够了，因为在清除一个对象后不再有一个周期。一旦循环中断，通常基于 refcount 的释放将实际从内存中删除对象。清除在`tp_clear`插槽中实现。正如我们刚刚解释的那样，循环中的一个对象实现`tp_clear`就足够了。
 
@@ -595,7 +595,7 @@ Note
 
 现在假设我们删除了最后的`L`。然后`L`解除分配`L[0]`，解除分配`L[0][0]`，依此类推，直到达到`2**20`的递归深度。这种解除分配是在 C 中完成的，这种深度递归可能会溢出 C 调用堆栈，从而导致 Python 崩溃。
 
-CPython 发明了一种称为 _ 垃圾桶 _ 的机制。它通过延迟一些解除分配来限制解除分配的递归深度。
+CPython 发明了一种称为 *垃圾桶* 的机制。它通过延迟一些解除分配来限制解除分配的递归深度。
 
 默认情况下，Cython 扩展类型不使用垃圾桶，但可以通过将`trashcan`指令设置为`True`来启用它。例如：
 

@@ -681,7 +681,7 @@ Write line tracing hooks for Python profilers or coverage reporting into the com
 
 `infer_types` (True / False)
 
-Infer types of untyped variables in function bodies. Default is None, indicating that only safe (semantically-unchanging) inferences are allowed. In particular, inferring _integral_ types for variables _used in arithmetic expressions_ is considered unsafe (due to possible overflow) and must be explicitly requested.
+Infer types of untyped variables in function bodies. Default is None, indicating that only safe (semantically-unchanging) inferences are allowed. In particular, inferring *integral*types for variables*used in arithmetic expressions* is considered unsafe (due to possible overflow) and must be explicitly requested.
 
 `language_level` (2/3/3str)
 

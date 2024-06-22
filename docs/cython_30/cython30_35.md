@@ -275,9 +275,9 @@ Cython 支持  [**PEP 3120** ](https://www.python.org/dev/peps/pep-3120)和  [**
 
 而不是像 [Pyrex 文档](https://www.cosc.canterbury.ac.nz/greg.ewing/python/Pyrex/version/Doc/Manual/special_methods.html)中所解释的那样引入新关键字`typecheck`，只要 [`isinstance()`](https://docs.python.org/3/library/functions.html#isinstance "(in Python v3.7)") 与扩展类型一起使用，Cython 就会发出（非欺骗性和更快速）的类型检查第二个参数。
 
-## 来自 __future__ 指令
+## 来自 *_future_* 指令
 
-Cython 支持多种`from __future__ import ...`指令，即`absolute_import`，`unicode_literals`，`print_function`和`division`。
+Cython 支持多种`from *_future_* import ...`指令，即`absolute_import`，`unicode_literals`，`print_function`和`division`。
 
 始终启用语句。
 

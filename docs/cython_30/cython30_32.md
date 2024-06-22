@@ -53,7 +53,7 @@ ctypedef fused my_fused_type:
 
 ```
 
-这声明了一个名为`my_fused_type`的新类型，它可以是和`int` _ 或 _ a `double`。或者，声明可以写成：
+这声明了一个名为`my_fused_type`的新类型，它可以是和`int` *或* a `double`。或者，声明可以写成：
 
 ```py
 my_fused_type = cython.fused_type(cython.int, cython.float)
@@ -280,7 +280,7 @@ def increment(double_or_object x):
 
 ## __signatures__
 
-最后，来自`def`或`cpdef`函数的函数对象具有 __signatures__ 属性，该属性将签名字符串映射到实际的专用函数。这可能对检查有用。列出的签名字符串也可以用作融合函数的索引，但索引格式可能会在 Cython 版本之间发生变化：
+最后，来自`def`或`cpdef`函数的函数对象具有 *_signatures_* 属性，该属性将签名字符串映射到实际的专用函数。这可能对检查有用。列出的签名字符串也可以用作融合函数的索引，但索引格式可能会在 Cython 版本之间发生变化：
 
 ```py
 specialized_function = fused_function["MyExtensionClass|int|float"]
